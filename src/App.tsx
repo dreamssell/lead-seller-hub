@@ -4,6 +4,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { AuthProvider } from "@/contexts/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import Dashboard from "./pages/Dashboard";
 import ChatPage from "./pages/ChatPage";
 import CallsPage from "./pages/CallsPage";
@@ -15,6 +17,7 @@ import PipelinePage from "./pages/PipelinePage";
 import SettingsPage from "./pages/SettingsPage";
 import APIKeysPage from "./pages/APIKeysPage";
 import ProfilePage from "./pages/ProfilePage";
+import AuthCallbackPage from "./pages/AuthCallbackPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,20 +29,26 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/chat" element={<ChatPage />} />
-            <Route path="/calls" element={<CallsPage />} />
-            <Route path="/tickets" element={<TicketsPage />} />
-            <Route path="/team" element={<TeamPage />} />
-            <Route path="/ai-agents" element={<AIAgentsPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/pipeline" element={<PipelinePage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/api-keys" element={<APIKeysPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <AuthProvider>
+            <Routes>
+              {/* Rota pública — recebe tokens da página externa */}
+              <Route path="/auth/callback" element={<AuthCallbackPage />} />
+
+              {/* Rotas protegidas */}
+              <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
+              <Route path="/calls" element={<ProtectedRoute><CallsPage /></ProtectedRoute>} />
+              <Route path="/tickets" element={<ProtectedRoute><TicketsPage /></ProtectedRoute>} />
+              <Route path="/team" element={<ProtectedRoute><TeamPage /></ProtectedRoute>} />
+              <Route path="/ai-agents" element={<ProtectedRoute><AIAgentsPage /></ProtectedRoute>} />
+              <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
+              <Route path="/pipeline" element={<ProtectedRoute><PipelinePage /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+              <Route path="/api-keys" element={<ProtectedRoute><APIKeysPage /></ProtectedRoute>} />
+              <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
     </ThemeProvider>
