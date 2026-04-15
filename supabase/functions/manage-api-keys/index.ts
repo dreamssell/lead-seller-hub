@@ -32,20 +32,24 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Verify JWT
+    // Verify JWT using getClaims
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await createClient(
+    const userClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    ).auth.getUser();
+      { global: { headers: { Authorization: authHeader } } }
+    );
 
-    if (userError || !user) {
+    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+
+    if (claimsError || !claimsData?.claims) {
       return new Response(JSON.stringify({ error: "Token inválido" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const user = { id: claimsData.claims.sub };
 
     // Check admin role
     const { data: isAdmin } = await supabaseAdmin.rpc("has_role", {

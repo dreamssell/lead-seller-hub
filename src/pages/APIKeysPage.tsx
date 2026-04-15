@@ -46,6 +46,11 @@ export default function APIKeysPage() {
 
   const createKey = async () => {
     if (!newKeyName.trim()) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Faça login para gerenciar chaves.' });
+      return;
+    }
     setCreating(true);
     try {
       const { data, error } = await supabase.functions.invoke('manage-api-keys', {
