@@ -149,7 +149,7 @@
   }
 
   .service-card {
-    @apply glass-card p-6 hover:shadow-xl transition-all duration-300 cursor-pointer group;
+    @apply glass-card p-6 hover:shadow-xl transition-all duration-300 cursor-pointer;
   }
 
   .service-card:hover {
