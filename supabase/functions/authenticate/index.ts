@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     }
 
     // Monta a URL de redirect com os tokens para a plataforma
-    const platformUrl = Deno.env.get("PLATFORM_URL") || "https://id-preview--12ffc7ed-fdc7-4baf-9184-2fc1869c926f.lovable.app";
+    const platformUrl = Deno.env.get("PLATFORM_URL") || "https://hub.leadseller.com.br";
     const redirectUrl = `${platformUrl}/auth/callback?access_token=${authData.session.access_token}&refresh_token=${authData.session.refresh_token}`;
 
     return new Response(
