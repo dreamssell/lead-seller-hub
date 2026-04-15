@@ -12,7 +12,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 // URL da página externa de login — ajuste conforme necessário
-const EXTERNAL_LOGIN_URL = import.meta.env.VITE_EXTERNAL_LOGIN_URL || 'https://hub.leadseller.com.br/';
+const EXTERNAL_LOGIN_URL = import.meta.env.VITE_EXTERNAL_LOGIN_URL || 'https://leadseller.com.br';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
