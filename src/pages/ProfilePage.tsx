@@ -1,9 +1,11 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { UserCircle, Mail, Phone, Lock, Camera, Save } from 'lucide-react';
+import { UserCircle, Mail, Phone, Lock, Camera, Save, LogOut } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { useState } from 'react';
 
 export default function ProfilePage() {
+  const { signOut } = useAuth();
   const [form, setForm] = useState({
     name: 'João Silva',
     email: 'joao@leadseller.com',
@@ -71,6 +73,13 @@ export default function ProfilePage() {
             <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium border border-border text-foreground hover:bg-secondary transition-colors">
               <Lock className="w-4 h-4" />
               Alterar Senha
+            </button>
+            <button
+              onClick={signOut}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-destructive text-destructive-foreground hover:opacity-90 transition-opacity"
+            >
+              <LogOut className="w-4 h-4" />
+              Sair
             </button>
           </div>
         </motion.div>

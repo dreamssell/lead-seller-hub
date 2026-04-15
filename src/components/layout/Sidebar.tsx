@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard,
   MessageSquare,
@@ -12,6 +13,7 @@ import {
   UserCircle,
   Headphones,
   BarChart3,
+  LogOut,
 } from 'lucide-react';
 
 const navSections = [
@@ -46,6 +48,7 @@ const navSections = [
 export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { signOut } = useAuth();
 
   return (
     <aside className="w-64 h-screen flex flex-col border-r border-border bg-sidebar shrink-0 overflow-y-auto">
@@ -90,7 +93,15 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-border">
+      <div className="px-3 py-3 border-t border-border space-y-2">
+        <motion.button
+          onClick={signOut}
+          className="sidebar-item w-full text-destructive hover:bg-destructive/10"
+          whileTap={{ scale: 0.98 }}
+        >
+          <LogOut className="w-4 h-4 shrink-0" />
+          <span>Sair</span>
+        </motion.button>
         <p className="text-[10px] text-muted-foreground text-center">© 2026 Lead Seller v1.0</p>
       </div>
     </aside>
