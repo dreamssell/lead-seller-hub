@@ -1,21 +1,28 @@
 import { motion } from 'framer-motion';
 import { LucideIcon, ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface ServiceCardProps {
   icon: LucideIcon;
   title: string;
   description: string;
   color: string;
+  path?: string;
   delay?: number;
 }
 
-export function ServiceCard({ icon: Icon, title, description, color, delay = 0 }: ServiceCardProps) {
+export function ServiceCard({ icon: Icon, title, description, color, path, delay = 0 }: ServiceCardProps) {
+  const navigate = useNavigate();
   return (
-    <motion.div
-      className="service-card group"
+    <motion.button
+      type="button"
+      onClick={() => path && navigate(path)}
+      className="service-card group text-left w-full"
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay }}
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.99 }}
     >
       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${color}`}>
         <Icon className="w-6 h-6" />
@@ -26,6 +33,6 @@ export function ServiceCard({ icon: Icon, title, description, color, delay = 0 }
         <span>Acessar</span>
         <ArrowRight className="w-3 h-3" />
       </div>
-    </motion.div>
+    </motion.button>
   );
 }
