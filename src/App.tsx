@@ -18,6 +18,9 @@ import SettingsPage from "./pages/SettingsPage";
 import APIKeysPage from "./pages/APIKeysPage";
 import ProfilePage from "./pages/ProfilePage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
+import WhatsAppPage from "./pages/WhatsAppPage";
+import VideoCallsPage from "./pages/VideoCallsPage";
+import AutomationsPage from "./pages/AutomationsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -46,6 +49,9 @@ const App = () => (
               <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
               <Route path="/api-keys" element={<ProtectedRoute><APIKeysPage /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+              <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppPage /></ProtectedRoute>} />
+              <Route path="/video" element={<ProtectedRoute><VideoCallsPage /></ProtectedRoute>} />
+              <Route path="/automations" element={<ProtectedRoute><AutomationsPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>

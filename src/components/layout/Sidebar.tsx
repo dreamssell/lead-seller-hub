@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
+import logo from '@/assets/logo.png';
 import {
   LayoutDashboard,
   MessageSquare,
@@ -55,9 +56,7 @@ export function Sidebar() {
       {/* Brand */}
       <div className="px-5 py-5 border-b border-border">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <Headphones className="w-4 h-4 text-primary-foreground" />
-          </div>
+          <img src={logo} alt="Lead Seller" className="w-9 h-9 object-contain shrink-0" />
           <div>
             <h1 className="text-base font-bold text-foreground leading-tight">Lead Seller</h1>
             <p className="text-[10px] text-muted-foreground font-medium tracking-wide uppercase">Omnichannel Platform</p>
