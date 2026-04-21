@@ -98,6 +98,45 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_connections: {
+        Row: {
+          created_at: string
+          display_name: string
+          id: string
+          last_checked_at: string | null
+          last_error: string | null
+          metadata: Json
+          phone_number: string | null
+          provider: Database["public"]["Enums"]["whatsapp_provider"]
+          status: Database["public"]["Enums"]["whatsapp_status"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          id?: string
+          last_checked_at?: string | null
+          last_error?: string | null
+          metadata?: Json
+          phone_number?: string | null
+          provider: Database["public"]["Enums"]["whatsapp_provider"]
+          status?: Database["public"]["Enums"]["whatsapp_status"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          id?: string
+          last_checked_at?: string | null
+          last_error?: string | null
+          metadata?: Json
+          phone_number?: string | null
+          provider?: Database["public"]["Enums"]["whatsapp_provider"]
+          status?: Database["public"]["Enums"]["whatsapp_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -113,6 +152,8 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "atendente" | "closer"
+      whatsapp_provider: "uaz" | "meta"
+      whatsapp_status: "disconnected" | "connecting" | "connected" | "error"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -241,6 +282,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "atendente", "closer"],
+      whatsapp_provider: ["uaz", "meta"],
+      whatsapp_status: ["disconnected", "connecting", "connected", "error"],
     },
   },
 } as const
