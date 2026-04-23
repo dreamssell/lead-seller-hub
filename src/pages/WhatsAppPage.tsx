@@ -1,48 +1,192 @@
+import { useEffect, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Globe, MessageCircle, Phone, QrCode, CheckCircle2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { CheckCircle2, Loader2, Plug, RefreshCw, ShieldCheck, XCircle } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+type Provider = 'uaz' | 'meta';
+type Status = 'disconnected' | 'connecting' | 'connected' | 'error';
+
+interface Connection {
+  id: string;
+  provider: Provider;
+  display_name: string;
+  phone_number: string | null;
+  status: Status;
+  last_checked_at: string | null;
+  last_error: string | null;
+  metadata: Record<string, any>;
+}
+
+const PROVIDER_DEFAULTS: Record<Provider, { url: string; tokenLabel: string; extraLabel?: string; description: string; docs: string }> = {
+  uaz: {
+    url: 'https://api.uazapi.dev',
+    tokenLabel: 'Token da Instância',
+    description: 'Conexão via UAZ API — ideal para WhatsApp não oficial com QR Code.',
+    docs: 'https://docs.uazapi.com',
+  },
+  meta: {
+    url: 'https://graph.facebook.com/v21.0',
+    tokenLabel: 'Access Token',
+    extraLabel: 'Phone Number ID',
+    description: 'Integração oficial via Meta Cloud API (WhatsApp Business Platform).',
+    docs: 'https://developers.facebook.com/docs/whatsapp/cloud-api',
+  },
+};
+
+function statusBadge(status: Status) {
+  const map: Record<Status, { label: string; cls: string; icon: any }> = {
+    connected: { label: 'Conectado', cls: 'text-success border-success/30', icon: CheckCircle2 },
+    connecting: { label: 'Conectando...', cls: 'text-primary border-primary/30', icon: Loader2 },
+    error: { label: 'Erro', cls: 'text-destructive border-destructive/30', icon: XCircle },
+    disconnected: { label: 'Desconectado', cls: 'text-muted-foreground border-border', icon: Plug },
+  };
+  const { label, cls, icon: Icon } = map[status];
+  return (
+    <Badge variant="outline" className={cls}>
+      <Icon className={`w-3 h-3 mr-1 ${status === 'connecting' ? 'animate-spin' : ''}`} />
+      {label}
+    </Badge>
+  );
+}
+
+function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => void }) {
+  const defaults = PROVIDER_DEFAULTS[conn.provider];
+  const [url, setUrl] = useState<string>(conn.metadata?.url ?? defaults.url);
+  const [token, setToken] = useState<string>(conn.metadata?.token ?? '');
+  const [extra, setExtra] = useState<string>(conn.metadata?.phone_number_id ?? '');
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const metadata: Record<string, any> = { ...(conn.metadata ?? {}), url, token };
+    if (conn.provider === 'meta') metadata.phone_number_id = extra;
+    const { error } = await supabase
+      .from('whatsapp_connections')
+      .update({ metadata })
+      .eq('id', conn.id);
+    setSaving(false);
+    if (error) {
+      toast.error('Erro ao salvar', { description: error.message });
+      return;
+    }
+    toast.success('Configuração salva');
+    onSaved();
+  };
+
+  const handleTest = async () => {
+    setTesting(true);
+    const payload: Record<string, any> = { provider: conn.provider, url, token };
+    if (conn.provider === 'meta') payload.phone_number_id = extra;
+    const { data, error } = await supabase.functions.invoke('whatsapp-status', { body: payload });
+    setTesting(false);
+    if (error) {
+      toast.error('Falha ao testar', { description: error.message });
+    } else if (data?.error) {
+      toast.error('Conexão falhou', { description: data.error });
+    } else if (data?.connected) {
+      toast.success('Conectado!', { description: data.phone ?? '' });
+    } else {
+      toast.warning('Provedor respondeu, mas não está conectado');
+    }
+    onSaved();
+  };
+
+  return (
+    <Card className="glass-card">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              {conn.provider === 'meta' ? <ShieldCheck className="w-5 h-5 text-primary" /> : <Plug className="w-5 h-5 text-primary" />}
+              {conn.display_name}
+            </CardTitle>
+            <CardDescription className="mt-1">{defaults.description}</CardDescription>
+          </div>
+          {statusBadge(conn.status)}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor={`${conn.id}-url`}>URL da API</Label>
+          <Input id={`${conn.id}-url`} value={url} onChange={(e) => setUrl(e.target.value)} placeholder={defaults.url} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={`${conn.id}-token`}>{defaults.tokenLabel}</Label>
+          <Input id={`${conn.id}-token`} type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Cole o token do cliente" />
+        </div>
+        {conn.provider === 'meta' && (
+          <div className="space-y-2">
+            <Label htmlFor={`${conn.id}-extra`}>{defaults.extraLabel}</Label>
+            <Input id={`${conn.id}-extra`} value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="Ex: 123456789012345" />
+          </div>
+        )}
+
+        <Separator />
+
+        <div className="text-xs text-muted-foreground space-y-1">
+          {conn.phone_number && <p>📱 Número: <span className="font-medium text-foreground">{conn.phone_number}</span></p>}
+          {conn.last_checked_at && <p>🕒 Última verificação: {new Date(conn.last_checked_at).toLocaleString('pt-BR')}</p>}
+          {conn.last_error && <p className="text-destructive">⚠️ {conn.last_error}</p>}
+          <a href={defaults.docs} target="_blank" rel="noreferrer" className="text-primary hover:underline">Ver documentação →</a>
+        </div>
+
+        <div className="flex flex-wrap gap-2 pt-2">
+          <Button onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            Salvar configuração
+          </Button>
+          <Button variant="outline" onClick={handleTest} disabled={testing}>
+            {testing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+            Testar conexão
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function WhatsAppPage() {
-  return (
-    <AppLayout title="WhatsApp Business" subtitle="Integração oficial para mensagens e chamadas de áudio">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        <Card className="glass-card">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm">Status da Conexão</CardTitle>
-              <Badge variant="outline" className="text-success border-success/30">Conectado</Badge>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <CheckCircle2 className="w-4 h-4 text-success" />
-              <span>+55 11 99999-0000</span>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="glass-card">
-          <CardHeader className="pb-3"><CardTitle className="text-sm">Mensagens (24h)</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-bold">1.847</p></CardContent>
-        </Card>
-        <Card className="glass-card">
-          <CardHeader className="pb-3"><CardTitle className="text-sm">Taxa de Resposta</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-bold">94%</p></CardContent>
-        </Card>
-      </div>
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [loading, setLoading] = useState(true);
 
-      <Card className="glass-card">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Globe className="w-5 h-5 text-primary" /> Configuração da API</CardTitle>
-          <CardDescription>Vincule um novo número ou gere QR Code para conectar o WhatsApp Business.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          <Button><QrCode className="w-4 h-4 mr-2" /> Gerar QR Code</Button>
-          <Button variant="outline"><MessageCircle className="w-4 h-4 mr-2" /> Templates de Mensagem</Button>
-          <Button variant="outline"><Phone className="w-4 h-4 mr-2" /> Configurar Áudio</Button>
-        </CardContent>
-      </Card>
+  const load = async () => {
+    const { data, error } = await supabase
+      .from('whatsapp_connections')
+      .select('*')
+      .order('provider');
+    if (error) {
+      toast.error('Erro ao carregar conexões', { description: error.message });
+    } else {
+      setConnections((data ?? []) as Connection[]);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  return (
+    <AppLayout title="WhatsApp Business" subtitle="Escolha o provedor e configure a integração por cliente">
+      {loading ? (
+        <div className="flex items-center justify-center py-20 text-muted-foreground">
+          <Loader2 className="w-5 h-5 mr-2 animate-spin" /> Carregando...
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {connections.map((c) => (
+            <ConnectionCard key={c.id} conn={c} onSaved={load} />
+          ))}
+        </div>
+      )}
     </AppLayout>
   );
 }
