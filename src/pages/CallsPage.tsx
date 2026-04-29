@@ -36,8 +36,19 @@ import {
   UserPlus,
   Calendar as CalendarIcon,
   Star,
+  Cloud,
+  Brain,
+  Sparkles,
+  CheckCircle2,
+  AlertCircle,
+  Bot,
+  Target,
+  Zap,
+  Award,
+  Lightbulb,
+  RefreshCw,
 } from 'lucide-react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
