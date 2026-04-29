@@ -36,8 +36,19 @@ import {
   UserPlus,
   Calendar as CalendarIcon,
   Star,
+  Cloud,
+  Brain,
+  Sparkles,
+  CheckCircle2,
+  AlertCircle,
+  Bot,
+  Target,
+  Zap,
+  Award,
+  Lightbulb,
+  RefreshCw,
 } from 'lucide-react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -155,6 +166,36 @@ export default function CallsPage() {
   const [newBlock, setNewBlock] = useState('');
   const [blockReason, setBlockReason] = useState('');
 
+  // Google Drive
+  const [gdriveOpen, setGdriveOpen] = useState(false);
+  const [gdriveConfig, setGdriveConfig] = useState({
+    connected: false,
+    email: '',
+    folder: '/LeadSeller/Gravacoes-VoIP',
+    autoSync: true,
+    syncOnlyRated: false,
+    deleteAfterSync: false,
+    organizeByDate: true,
+    organizeByAgent: true,
+    lastSync: '—',
+  });
+
+  const handleConnectGdrive = () => {
+    setGdriveConfig((c) => ({ ...c, connected: true, email: 'admin@leadseller.app', lastSync: 'agora' }));
+    toast({ title: 'Google Drive conectado', description: 'Sincronização automática ativada.' });
+  };
+
+  const handleDisconnectGdrive = () => {
+    setGdriveConfig((c) => ({ ...c, connected: false, email: '' }));
+    toast({ title: 'Google Drive desconectado' });
+  };
+
+  const handleSyncNow = () => {
+    setGdriveConfig((c) => ({ ...c, lastSync: 'agora' }));
+    toast({ title: 'Sincronização iniciada', description: `${filteredRecordings.length} gravações serão enviadas.` });
+  };
+
+
   const [sipConfig, setSipConfig] = useState({
     server: 'sip.leadseller.app',
     port: '5060',
@@ -257,6 +298,10 @@ export default function CallsPage() {
           <TabsTrigger value="history">Histórico</TabsTrigger>
           <TabsTrigger value="recordings">Gravações</TabsTrigger>
           <TabsTrigger value="reports">Relatórios</TabsTrigger>
+          <TabsTrigger value="insights" className="gap-1.5">
+            <Sparkles className="w-3.5 h-3.5" />
+            Análises
+          </TabsTrigger>
           <TabsTrigger value="stats">Estatísticas</TabsTrigger>
           <TabsTrigger value="queues">Filas & IVR</TabsTrigger>
           <TabsTrigger value="blocked">Bloqueados</TabsTrigger>
@@ -343,9 +388,20 @@ export default function CallsPage() {
                 </div>
               </div>
             </div>
-            <div className="flex justify-end gap-2 mt-4">
+            <div className="flex flex-wrap justify-end gap-2 mt-4">
               <Button variant="outline" onClick={() => { setRecAgent('Todos'); setRecFrom(''); setRecTo(''); setRecSearch(''); }}>
                 Limpar filtros
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setGdriveOpen(true)}
+                className="gap-2 border-primary/30 text-primary hover:bg-primary/5"
+              >
+                <Cloud className="w-4 h-4" />
+                Google Drive
+                {gdriveConfig.connected && (
+                  <span className="ml-1 w-2 h-2 rounded-full bg-success animate-pulse" />
+                )}
               </Button>
               <Button onClick={handleBulkDownload} className="gap-2">
                 <Download className="w-4 h-4" />
@@ -569,6 +625,268 @@ export default function CallsPage() {
               </TableBody>
             </Table>
           </motion.div>
+        </TabsContent>
+
+        {/* Análises Inteligentes */}
+        <TabsContent value="insights" className="space-y-4">
+          {/* Header */}
+          <motion.div
+            className="glass-card p-5 bg-gradient-to-br from-primary/5 via-transparent to-purple-500/5 border-primary/20"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Brain className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                    Análises Inteligentes
+                    <Badge variant="secondary" className="text-[10px] gap-1">
+                      <Sparkles className="w-2.5 h-2.5" /> IA
+                    </Badge>
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Insights gerados por IA com base nas gravações, métricas e atendimentos da equipe.
+                  </p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" className="gap-2">
+                <RefreshCw className="w-3.5 h-3.5" /> Atualizar análise
+              </Button>
+            </div>
+          </motion.div>
+
+          {/* Score geral */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { label: 'Score da Equipe', value: '8.7', sub: 'Excelente', icon: Award, color: 'text-success', bg: 'from-success/10' },
+              { label: 'Eficiência IA', value: '94%', sub: '+8% vs mês anterior', icon: Bot, color: 'text-primary', bg: 'from-primary/10' },
+              { label: 'Conversão', value: '32%', sub: 'Meta: 30%', icon: Target, color: 'text-amber-500', bg: 'from-amber-500/10' },
+              { label: 'Satisfação (CSAT)', value: '4.6', sub: '/ 5.0', icon: Star, color: 'text-success', bg: 'from-success/10' },
+            ].map((k, i) => (
+              <motion.div
+                key={k.label}
+                className={`glass-card p-5 bg-gradient-to-br ${k.bg} to-transparent`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+              >
+                <k.icon className={`w-5 h-5 mb-3 ${k.color}`} />
+                <p className="text-2xl font-bold text-foreground">{k.value}</p>
+                <p className="text-xs text-muted-foreground mt-1">{k.label}</p>
+                <p className="text-[10px] text-muted-foreground/70 mt-1">{k.sub}</p>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Insights principais */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <motion.div className="glass-card p-5" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="flex items-center gap-2 mb-4">
+                <Lightbulb className="w-4 h-4 text-amber-500" />
+                <h3 className="text-sm font-semibold">Principais Descobertas</h3>
+              </div>
+              <div className="space-y-3">
+                {[
+                  { icon: CheckCircle2, color: 'text-success', text: 'Atendentes que fazem perguntas abertas têm 38% mais conversão.' },
+                  { icon: AlertCircle, color: 'text-amber-500', text: 'Picos de chamadas perdidas entre 12h-13h. Considere reforço na equipe.' },
+                  { icon: CheckCircle2, color: 'text-success', text: 'IA resolveu 67% dos tickets sem necessidade de transferência humana.' },
+                  { icon: AlertCircle, color: 'text-destructive', text: '3 atendentes com TMA acima do dobro da meta. Recomendado treinamento.' },
+                  { icon: Zap, color: 'text-primary', text: 'Chamadas com tom positivo nos primeiros 30s convertem 2.3x mais.' },
+                ].map((insight, i) => (
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-secondary/40">
+                    <insight.icon className={`w-4 h-4 mt-0.5 shrink-0 ${insight.color}`} />
+                    <p className="text-sm text-foreground/90">{insight.text}</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+
+            {/* Humano vs IA */}
+            <motion.div className="glass-card p-5" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="flex items-center gap-2 mb-4">
+                <Users className="w-4 h-4 text-muted-foreground" />
+                <h3 className="text-sm font-semibold">Humano vs IA</h3>
+              </div>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={[
+                  { metric: 'Resolução 1ª', humano: 72, ia: 67 },
+                  { metric: 'CSAT', humano: 88, ia: 82 },
+                  { metric: 'TMA (s)', humano: 45, ia: 12 },
+                  { metric: 'Conversão', humano: 28, ia: 35 },
+                  { metric: 'Custo idx', humano: 100, ia: 22 },
+                ]}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="metric" stroke="hsl(var(--muted-foreground))" fontSize={10} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                  <Tooltip contentStyle={{ background: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="humano" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="ia" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </motion.div>
+          </div>
+
+          {/* Análise por atendente humano */}
+          <motion.div className="glass-card overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-muted-foreground" />
+                <h3 className="text-sm font-semibold">Análise por atendente humano</h3>
+              </div>
+              <Badge variant="secondary">Atualizado há 2 min</Badge>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Atendente</TableHead>
+                  <TableHead>Score IA</TableHead>
+                  <TableHead>Tom de voz</TableHead>
+                  <TableHead>Empatia</TableHead>
+                  <TableHead>Pontos fortes</TableHead>
+                  <TableHead>Recomendação</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[
+                  { name: 'João Silva', score: 9.2, tom: 'Positivo', empatia: 95, fortes: 'Escuta ativa, fechamento', rec: 'Manter ritmo' },
+                  { name: 'Maria Costa', score: 8.4, tom: 'Neutro', empatia: 82, fortes: 'Conhecimento técnico', rec: 'Treinar tom mais caloroso' },
+                  { name: 'Pedro Alves', score: 7.1, tom: 'Negativo', empatia: 68, fortes: 'Velocidade', rec: 'Workshop de empatia' },
+                ].map((a) => (
+                  <TableRow key={a.name}>
+                    <TableCell className="font-medium text-sm">{a.name}</TableCell>
+                    <TableCell>
+                      <Badge variant={a.score >= 9 ? 'default' : a.score >= 8 ? 'secondary' : 'destructive'}>
+                        {a.score}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">{a.tom}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Progress value={a.empatia} className="h-1.5 w-20" />
+                        <span className="text-xs text-muted-foreground">{a.empatia}%</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{a.fortes}</TableCell>
+                    <TableCell className="text-xs text-foreground">{a.rec}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </motion.div>
+
+          {/* Atendentes IA */}
+          <motion.div className="glass-card overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bot className="w-4 h-4 text-primary" />
+                <h3 className="text-sm font-semibold">Performance dos Agentes de IA</h3>
+              </div>
+              <Badge className="bg-primary/10 text-primary border-primary/20">
+                <Sparkles className="w-3 h-3 mr-1" /> 3 ativos
+              </Badge>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Agente IA</TableHead>
+                  <TableHead>Atendimentos</TableHead>
+                  <TableHead>Resolução</TableHead>
+                  <TableHead>Transferências</TableHead>
+                  <TableHead>CSAT</TableHead>
+                  <TableHead>Economia estimada</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[
+                  { name: 'Sofia (Suporte N1)', calls: 412, res: 78, trans: 22, csat: 4.5, save: 'R$ 4.820' },
+                  { name: 'Lucas (Pré-venda)', calls: 287, res: 65, trans: 35, csat: 4.3, save: 'R$ 3.150' },
+                  { name: 'Marina (Pós-venda)', calls: 198, res: 84, trans: 16, csat: 4.7, save: 'R$ 2.470' },
+                ].map((a) => (
+                  <TableRow key={a.name}>
+                    <TableCell className="font-medium text-sm flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Bot className="w-3.5 h-3.5 text-primary" />
+                      </div>
+                      {a.name}
+                    </TableCell>
+                    <TableCell className="text-sm">{a.calls}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Progress value={a.res} className="h-1.5 w-16" />
+                        <span className="text-xs">{a.res}%</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{a.trans}%</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                        <span className="text-sm">{a.csat}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm font-medium text-success">{a.save}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </motion.div>
+
+          {/* Resultados da empresa */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <motion.div className="glass-card p-5 lg:col-span-2" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="flex items-center gap-2 mb-4">
+                <TrendingUp className="w-4 h-4 text-success" />
+                <h3 className="text-sm font-semibold">Resultados da empresa (últimos 30 dias)</h3>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {[
+                  { label: 'Receita gerada', value: 'R$ 187.450', delta: '+24%', positive: true },
+                  { label: 'Ticket médio', value: 'R$ 1.342', delta: '+8%', positive: true },
+                  { label: 'Negócios fechados', value: '139', delta: '+18', positive: true },
+                  { label: 'Custo por lead', value: 'R$ 22,40', delta: '-12%', positive: true },
+                  { label: 'Churn rate', value: '2.4%', delta: '-0.8pp', positive: true },
+                  { label: 'NPS', value: '72', delta: '+5', positive: true },
+                ].map((r) => (
+                  <div key={r.label} className="p-3 rounded-lg bg-secondary/40">
+                    <p className="text-xs text-muted-foreground">{r.label}</p>
+                    <p className="text-lg font-bold text-foreground mt-1">{r.value}</p>
+                    <p className={`text-[10px] mt-0.5 ${r.positive ? 'text-success' : 'text-destructive'}`}>
+                      {r.delta} vs período anterior
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+
+            <motion.div
+              className="glass-card p-5 bg-gradient-to-br from-primary/10 to-transparent border-primary/20"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="w-4 h-4 text-primary" />
+                <h3 className="text-sm font-semibold">Recomendações da IA</h3>
+              </div>
+              <div className="space-y-2.5">
+                {[
+                  'Aumentar capacidade da IA Sofia em 30% — está com fila acumulada nas tardes.',
+                  'Programa de mentoria João → Pedro pode elevar score do time em ~12%.',
+                  'Reativar campanha "Win-back" — leads de Mar/26 com alta probabilidade.',
+                  'Implementar follow-up automático em 24h — projeção: +R$ 28k/mês.',
+                ].map((rec, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs text-foreground/90">
+                    <div className="w-5 h-5 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
+                      {i + 1}
+                    </div>
+                    <p>{rec}</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </div>
         </TabsContent>
 
         {/* Estatísticas */}
@@ -858,6 +1176,104 @@ export default function CallsPage() {
               )}
             </AnimatePresence>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Google Drive */}
+      <Dialog open={gdriveOpen} onOpenChange={setGdriveOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Cloud className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <DialogTitle>Integração com Google Drive</DialogTitle>
+                <DialogDescription className="mt-0.5">
+                  Salve e sincronize automaticamente todas as gravações VoIP.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {!gdriveConfig.connected ? (
+              <div className="flex flex-col items-center text-center py-6 px-4 rounded-xl bg-secondary/40 border border-dashed border-border">
+                <Cloud className="w-12 h-12 text-muted-foreground/50 mb-3" />
+                <p className="text-sm font-medium text-foreground">Conecte sua conta Google</p>
+                <p className="text-xs text-muted-foreground mt-1 mb-4 max-w-xs">
+                  Autorize o acesso ao Drive para enviar suas gravações automaticamente.
+                </p>
+                <Button onClick={handleConnectGdrive} className="gap-2">
+                  <Cloud className="w-4 h-4" />
+                  Conectar Google Drive
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between p-3 rounded-lg bg-success/5 border border-success/20">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-success" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Conectado</p>
+                      <p className="text-xs text-muted-foreground">{gdriveConfig.email}</p>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={handleDisconnectGdrive} className="text-destructive">
+                    Desconectar
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="gd-folder" className="text-xs">Pasta de destino</Label>
+                  <Input
+                    id="gd-folder"
+                    value={gdriveConfig.folder}
+                    onChange={(e) => setGdriveConfig({ ...gdriveConfig, folder: e.target.value })}
+                    placeholder="/LeadSeller/Gravacoes-VoIP"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  {[
+                    { key: 'autoSync', label: 'Sincronização automática', desc: 'Enviar gravações assim que forem criadas' },
+                    { key: 'syncOnlyRated', label: 'Apenas gravações avaliadas', desc: 'Sincronizar só com avaliação ≥ 3 estrelas' },
+                    { key: 'organizeByDate', label: 'Organizar por data', desc: 'Criar subpastas /AAAA/MM/DD' },
+                    { key: 'organizeByAgent', label: 'Organizar por atendente', desc: 'Criar subpasta com nome do atendente' },
+                    { key: 'deleteAfterSync', label: 'Excluir após sincronizar', desc: 'Liberar espaço local após upload' },
+                  ].map((opt) => (
+                    <div key={opt.key} className="flex items-center justify-between p-3 rounded-lg bg-secondary/40">
+                      <div className="pr-3">
+                        <p className="text-sm font-medium">{opt.label}</p>
+                        <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                      </div>
+                      <Switch
+                        checked={gdriveConfig[opt.key as keyof typeof gdriveConfig] as boolean}
+                        onCheckedChange={(v) => setGdriveConfig({ ...gdriveConfig, [opt.key]: v })}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+                  <span>Última sincronização:</span>
+                  <span className="font-medium text-foreground">{gdriveConfig.lastSync}</span>
+                </div>
+              </>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setGdriveOpen(false)}>
+              Fechar
+            </Button>
+            {gdriveConfig.connected && (
+              <Button onClick={handleSyncNow} className="gap-2">
+                <RefreshCw className="w-4 h-4" />
+                Sincronizar agora
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </AppLayout>
