@@ -166,6 +166,36 @@ export default function CallsPage() {
   const [newBlock, setNewBlock] = useState('');
   const [blockReason, setBlockReason] = useState('');
 
+  // Google Drive
+  const [gdriveOpen, setGdriveOpen] = useState(false);
+  const [gdriveConfig, setGdriveConfig] = useState({
+    connected: false,
+    email: '',
+    folder: '/LeadSeller/Gravacoes-VoIP',
+    autoSync: true,
+    syncOnlyRated: false,
+    deleteAfterSync: false,
+    organizeByDate: true,
+    organizeByAgent: true,
+    lastSync: '—',
+  });
+
+  const handleConnectGdrive = () => {
+    setGdriveConfig((c) => ({ ...c, connected: true, email: 'admin@leadseller.app', lastSync: 'agora' }));
+    toast({ title: 'Google Drive conectado', description: 'Sincronização automática ativada.' });
+  };
+
+  const handleDisconnectGdrive = () => {
+    setGdriveConfig((c) => ({ ...c, connected: false, email: '' }));
+    toast({ title: 'Google Drive desconectado' });
+  };
+
+  const handleSyncNow = () => {
+    setGdriveConfig((c) => ({ ...c, lastSync: 'agora' }));
+    toast({ title: 'Sincronização iniciada', description: `${filteredRecordings.length} gravações serão enviadas.` });
+  };
+
+
   const [sipConfig, setSipConfig] = useState({
     server: 'sip.leadseller.app',
     port: '5060',
