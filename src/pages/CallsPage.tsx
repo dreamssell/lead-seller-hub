@@ -384,9 +384,20 @@ export default function CallsPage() {
                 </div>
               </div>
             </div>
-            <div className="flex justify-end gap-2 mt-4">
+            <div className="flex flex-wrap justify-end gap-2 mt-4">
               <Button variant="outline" onClick={() => { setRecAgent('Todos'); setRecFrom(''); setRecTo(''); setRecSearch(''); }}>
                 Limpar filtros
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setGdriveOpen(true)}
+                className="gap-2 border-primary/30 text-primary hover:bg-primary/5"
+              >
+                <Cloud className="w-4 h-4" />
+                Google Drive
+                {gdriveConfig.connected && (
+                  <span className="ml-1 w-2 h-2 rounded-full bg-success animate-pulse" />
+                )}
               </Button>
               <Button onClick={handleBulkDownload} className="gap-2">
                 <Download className="w-4 h-4" />
