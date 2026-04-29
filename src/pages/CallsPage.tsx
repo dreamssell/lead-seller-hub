@@ -1178,6 +1178,104 @@ export default function CallsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Modal Google Drive */}
+      <Dialog open={gdriveOpen} onOpenChange={setGdriveOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Cloud className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <DialogTitle>Integração com Google Drive</DialogTitle>
+                <DialogDescription className="mt-0.5">
+                  Salve e sincronize automaticamente todas as gravações VoIP.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {!gdriveConfig.connected ? (
+              <div className="flex flex-col items-center text-center py-6 px-4 rounded-xl bg-secondary/40 border border-dashed border-border">
+                <Cloud className="w-12 h-12 text-muted-foreground/50 mb-3" />
+                <p className="text-sm font-medium text-foreground">Conecte sua conta Google</p>
+                <p className="text-xs text-muted-foreground mt-1 mb-4 max-w-xs">
+                  Autorize o acesso ao Drive para enviar suas gravações automaticamente.
+                </p>
+                <Button onClick={handleConnectGdrive} className="gap-2">
+                  <Cloud className="w-4 h-4" />
+                  Conectar Google Drive
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between p-3 rounded-lg bg-success/5 border border-success/20">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-success" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Conectado</p>
+                      <p className="text-xs text-muted-foreground">{gdriveConfig.email}</p>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={handleDisconnectGdrive} className="text-destructive">
+                    Desconectar
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="gd-folder" className="text-xs">Pasta de destino</Label>
+                  <Input
+                    id="gd-folder"
+                    value={gdriveConfig.folder}
+                    onChange={(e) => setGdriveConfig({ ...gdriveConfig, folder: e.target.value })}
+                    placeholder="/LeadSeller/Gravacoes-VoIP"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  {[
+                    { key: 'autoSync', label: 'Sincronização automática', desc: 'Enviar gravações assim que forem criadas' },
+                    { key: 'syncOnlyRated', label: 'Apenas gravações avaliadas', desc: 'Sincronizar só com avaliação ≥ 3 estrelas' },
+                    { key: 'organizeByDate', label: 'Organizar por data', desc: 'Criar subpastas /AAAA/MM/DD' },
+                    { key: 'organizeByAgent', label: 'Organizar por atendente', desc: 'Criar subpasta com nome do atendente' },
+                    { key: 'deleteAfterSync', label: 'Excluir após sincronizar', desc: 'Liberar espaço local após upload' },
+                  ].map((opt) => (
+                    <div key={opt.key} className="flex items-center justify-between p-3 rounded-lg bg-secondary/40">
+                      <div className="pr-3">
+                        <p className="text-sm font-medium">{opt.label}</p>
+                        <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                      </div>
+                      <Switch
+                        checked={gdriveConfig[opt.key as keyof typeof gdriveConfig] as boolean}
+                        onCheckedChange={(v) => setGdriveConfig({ ...gdriveConfig, [opt.key]: v })}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+                  <span>Última sincronização:</span>
+                  <span className="font-medium text-foreground">{gdriveConfig.lastSync}</span>
+                </div>
+              </>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setGdriveOpen(false)}>
+              Fechar
+            </Button>
+            {gdriveConfig.connected && (
+              <Button onClick={handleSyncNow} className="gap-2">
+                <RefreshCw className="w-4 h-4" />
+                Sincronizar agora
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
