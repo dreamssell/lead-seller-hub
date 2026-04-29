@@ -298,6 +298,10 @@ export default function CallsPage() {
           <TabsTrigger value="history">Histórico</TabsTrigger>
           <TabsTrigger value="recordings">Gravações</TabsTrigger>
           <TabsTrigger value="reports">Relatórios</TabsTrigger>
+          <TabsTrigger value="insights" className="gap-1.5">
+            <Sparkles className="w-3.5 h-3.5" />
+            Análises
+          </TabsTrigger>
           <TabsTrigger value="stats">Estatísticas</TabsTrigger>
           <TabsTrigger value="queues">Filas & IVR</TabsTrigger>
           <TabsTrigger value="blocked">Bloqueados</TabsTrigger>
