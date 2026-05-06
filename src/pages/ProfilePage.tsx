@@ -107,12 +107,27 @@ export default function ProfilePage() {
           animate={{ opacity: 1, y: 0 }}
         >
           <div className="relative">
-            <div className="w-20 h-20 rounded-2xl bg-primary/20 flex items-center justify-center">
-              <span className="text-2xl font-bold text-primary">{initials}</span>
+            <div className="w-20 h-20 rounded-2xl bg-primary/20 flex items-center justify-center overflow-hidden">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-2xl font-bold text-primary">{initials}</span>
+              )}
             </div>
-            <button className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-lg">
-              <Camera className="w-3.5 h-3.5" />
+            <button
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={uploadingAvatar}
+              className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-lg disabled:opacity-50"
+            >
+              {uploadingAvatar ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
             </button>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => e.target.files?.[0] && handleAvatarUpload(e.target.files[0])}
+            />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-foreground">{form.name || 'Sem nome'}</h3>
