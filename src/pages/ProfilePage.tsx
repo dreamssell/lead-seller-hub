@@ -10,6 +10,9 @@ export default function ProfilePage() {
   const { signOut, user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -23,7 +26,7 @@ export default function ProfilePage() {
       setLoading(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('display_name, phone, role_label')
+        .select('display_name, phone, role_label, avatar_url')
         .eq('user_id', user.id)
         .maybeSingle();
 
@@ -37,9 +40,33 @@ export default function ProfilePage() {
         phone: data?.phone ?? '',
         role: data?.role_label ?? 'Atendente',
       });
+      setAvatarUrl(data?.avatar_url ?? null);
       setLoading(false);
     })();
   }, [user]);
+
+  const handleAvatarUpload = async (file: File) => {
+    if (!user) return;
+    setUploadingAvatar(true);
+    const ext = file.name.split('.').pop();
+    const path = `${user.id}/${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+    if (upErr) {
+      setUploadingAvatar(false);
+      toast({ title: 'Erro no upload', description: upErr.message, variant: 'destructive' });
+      return;
+    }
+    const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+    const url = pub.publicUrl;
+    const { error: updErr } = await supabase.from('profiles').update({ avatar_url: url }).eq('user_id', user.id);
+    setUploadingAvatar(false);
+    if (updErr) {
+      toast({ title: 'Erro ao salvar', description: updErr.message, variant: 'destructive' });
+      return;
+    }
+    setAvatarUrl(url);
+    toast({ title: 'Foto atualizada' });
+  };
 
   const handleSave = async () => {
     if (!user) return;
