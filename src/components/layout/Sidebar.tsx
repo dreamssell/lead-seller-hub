@@ -46,13 +46,22 @@ const navSections = [
   },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  onNavigate?: () => void;
+}
+
+export function Sidebar({ onNavigate }: SidebarProps = {}) {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = useAuth();
 
+  const go = (path: string) => {
+    navigate(path);
+    onNavigate?.();
+  };
+
   return (
-    <aside className="w-64 h-screen flex flex-col border-r border-border bg-sidebar shrink-0 overflow-y-auto">
+    <aside className="w-64 h-full flex flex-col border-r border-border bg-sidebar shrink-0 overflow-y-auto">
       {/* Brand */}
       <div className="px-5 py-5 border-b border-border">
         <div className="flex items-center gap-2.5">
@@ -77,7 +86,7 @@ export function Sidebar() {
                 return (
                   <motion.button
                     key={item.path}
-                    onClick={() => navigate(item.path)}
+                    onClick={() => go(item.path)}
                     className={`sidebar-item w-full ${isActive ? 'active' : ''}`}
                     whileTap={{ scale: 0.98 }}
                   >

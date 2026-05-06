@@ -2,7 +2,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
 import { UserCircle, Mail, Phone, Lock, Camera, Save, LogOut, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
@@ -10,6 +10,9 @@ export default function ProfilePage() {
   const { signOut, user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -23,7 +26,7 @@ export default function ProfilePage() {
       setLoading(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('display_name, phone, role_label')
+        .select('display_name, phone, role_label, avatar_url')
         .eq('user_id', user.id)
         .maybeSingle();
 
@@ -37,9 +40,33 @@ export default function ProfilePage() {
         phone: data?.phone ?? '',
         role: data?.role_label ?? 'Atendente',
       });
+      setAvatarUrl(data?.avatar_url ?? null);
       setLoading(false);
     })();
   }, [user]);
+
+  const handleAvatarUpload = async (file: File) => {
+    if (!user) return;
+    setUploadingAvatar(true);
+    const ext = file.name.split('.').pop();
+    const path = `${user.id}/${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+    if (upErr) {
+      setUploadingAvatar(false);
+      toast({ title: 'Erro no upload', description: upErr.message, variant: 'destructive' });
+      return;
+    }
+    const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+    const url = pub.publicUrl;
+    const { error: updErr } = await supabase.from('profiles').update({ avatar_url: url }).eq('user_id', user.id);
+    setUploadingAvatar(false);
+    if (updErr) {
+      toast({ title: 'Erro ao salvar', description: updErr.message, variant: 'destructive' });
+      return;
+    }
+    setAvatarUrl(url);
+    toast({ title: 'Foto atualizada' });
+  };
 
   const handleSave = async () => {
     if (!user) return;
@@ -80,12 +107,27 @@ export default function ProfilePage() {
           animate={{ opacity: 1, y: 0 }}
         >
           <div className="relative">
-            <div className="w-20 h-20 rounded-2xl bg-primary/20 flex items-center justify-center">
-              <span className="text-2xl font-bold text-primary">{initials}</span>
+            <div className="w-20 h-20 rounded-2xl bg-primary/20 flex items-center justify-center overflow-hidden">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-2xl font-bold text-primary">{initials}</span>
+              )}
             </div>
-            <button className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-lg">
-              <Camera className="w-3.5 h-3.5" />
+            <button
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={uploadingAvatar}
+              className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-lg disabled:opacity-50"
+            >
+              {uploadingAvatar ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
             </button>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => e.target.files?.[0] && handleAvatarUpload(e.target.files[0])}
+            />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-foreground">{form.name || 'Sem nome'}</h3>
