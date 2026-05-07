@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -150,7 +150,13 @@ export default function CallsPage() {
   const [inCall, setInCall] = useState(false);
   const [muted, setMuted] = useState(false);
   const [onHold, setOnHold] = useState(false);
-  const [sipStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connected');
+  const [sipStatus, setSipStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
+  const [sipMessage, setSipMessage] = useState<string>('');
+  const sipRef = useRef<any>(null);
+
+  // Estatísticas - filtros
+  const [statsPeriod, setStatsPeriod] = useState('7d');
+  const [statsRankPeriod, setStatsRankPeriod] = useState('30d');
 
   // Filtros gravações
   const [recAgent, setRecAgent] = useState('Todos');
@@ -196,14 +202,21 @@ export default function CallsPage() {
   };
 
 
-  const [sipConfig, setSipConfig] = useState({
-    server: 'sip.leadseller.app',
-    port: '5060',
-    username: '',
-    password: '',
-    displayName: '',
-    transport: 'TLS',
-    autoRecord: true,
+  const [sipConfig, setSipConfig] = useState(() => {
+    try {
+      const stored = localStorage.getItem('sipConfig');
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return {
+      server: 'sipv2.wavoip.com',
+      port: '5060',
+      wsUri: 'wss://sipv2.wavoip.com:7443',
+      username: '',
+      password: '',
+      displayName: 'Lead Seller',
+      transport: 'WSS',
+      autoRecord: true,
+    };
   });
 
   const filteredRecordings = useMemo(() => {
@@ -236,8 +249,75 @@ export default function CallsPage() {
   };
 
   const handleSaveSip = () => {
+    try { localStorage.setItem('sipConfig', JSON.stringify(sipConfig)); } catch {}
     toast({ title: 'Configuração SIP salva', description: 'As credenciais foram atualizadas.' });
   };
+
+  const handleTestSip = async () => {
+    if (!sipConfig.server || !sipConfig.username || !sipConfig.password) {
+      toast({ title: 'Preencha servidor, usuário e senha', variant: 'destructive' });
+      return;
+    }
+    setSipStatus('connecting');
+    setSipMessage('Conectando ao servidor SIP via WebSocket...');
+    try {
+      // @ts-ignore
+      const JsSIP = (await import('jssip')).default;
+      try { sipRef.current?.stop?.(); } catch {}
+      const wsUri = sipConfig.wsUri || `wss://${sipConfig.server}:7443`;
+      const socket = new JsSIP.WebSocketInterface(wsUri);
+      const ua = new JsSIP.UA({
+        sockets: [socket],
+        uri: `sip:${sipConfig.username}@${sipConfig.server}`,
+        password: sipConfig.password,
+        display_name: sipConfig.displayName || undefined,
+        register: true,
+        session_timers: false,
+      });
+      sipRef.current = ua;
+
+      const cleanup = () => {
+        try { ua.stop(); } catch {}
+      };
+
+      const timeout = setTimeout(() => {
+        setSipStatus('disconnected');
+        setSipMessage('Timeout: o servidor não respondeu em 15s. Verifique URL WSS e firewall.');
+        toast({ title: 'Falha na conexão SIP', description: 'Timeout ao registrar', variant: 'destructive' });
+        cleanup();
+      }, 15000);
+
+      ua.on('connected', () => setSipMessage('WebSocket conectado, registrando...'));
+      ua.on('disconnected', (e: any) => {
+        clearTimeout(timeout);
+        setSipStatus('disconnected');
+        setSipMessage(`Desconectado: ${e?.reason || 'verifique URL WSS'}`);
+      });
+      ua.on('registered', () => {
+        clearTimeout(timeout);
+        setSipStatus('connected');
+        setSipMessage(`Registrado com sucesso em ${sipConfig.server} como ${sipConfig.username}`);
+        toast({ title: 'Conexão SIP estabelecida', description: 'Pronto para fazer chamadas.' });
+      });
+      ua.on('registrationFailed', (e: any) => {
+        clearTimeout(timeout);
+        setSipStatus('disconnected');
+        setSipMessage(`Falha no registro: ${e?.cause || 'credenciais inválidas'}`);
+        toast({ title: 'Falha no registro SIP', description: e?.cause || 'Credenciais inválidas', variant: 'destructive' });
+        cleanup();
+      });
+
+      ua.start();
+    } catch (err: any) {
+      setSipStatus('disconnected');
+      setSipMessage(`Erro: ${err?.message || err}`);
+      toast({ title: 'Erro ao testar SIP', description: String(err?.message || err), variant: 'destructive' });
+    }
+  };
+
+  useEffect(() => {
+    return () => { try { sipRef.current?.stop?.(); } catch {} };
+  }, []);
 
   const handleDownloadRecording = (r: typeof recordings[0]) => {
     toast({ title: 'Download iniciado', description: `${r.contact} • ${r.duration}` });
@@ -890,7 +970,47 @@ export default function CallsPage() {
         </TabsContent>
 
         {/* Estatísticas */}
-        <TabsContent value="stats">
+        <TabsContent value="stats" className="space-y-4">
+          {/* Filtros */}
+          <motion.div className="glass-card p-5" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+            <div className="flex items-center gap-2 mb-3">
+              <Filter className="w-4 h-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold">Filtros</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Período (estatísticas)</Label>
+                <Select value={statsPeriod} onValueChange={setStatsPeriod}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="today">Hoje</SelectItem>
+                    <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                    <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                    <SelectItem value="90d">Últimos 90 dias</SelectItem>
+                    <SelectItem value="year">Este ano</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Período (rankings)</Label>
+                <Select value={statsRankPeriod} onValueChange={setStatsRankPeriod}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                    <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                    <SelectItem value="quarter">Trimestre</SelectItem>
+                    <SelectItem value="year">Ano</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end">
+                <Button variant="outline" className="gap-2 w-full">
+                  <RefreshCw className="w-3.5 h-3.5" /> Atualizar
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { label: 'Chamadas realizadas', value: '23', icon: PhoneOutgoing, color: 'text-primary' },
@@ -898,18 +1018,122 @@ export default function CallsPage() {
               { label: 'Tempo médio', value: '8:45', icon: Clock, color: 'text-foreground' },
               { label: 'Gravações salvas', value: '34', icon: Mic, color: 'text-amber-500' },
             ].map((s, i) => (
-              <motion.div
-                key={s.label}
-                className="glass-card p-5"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-              >
+              <motion.div key={s.label} className="glass-card p-5" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                 <s.icon className={`w-5 h-5 mb-3 ${s.color}`} />
                 <p className="text-2xl font-bold text-foreground">{s.value}</p>
                 <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
               </motion.div>
             ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Ranking Vendedores */}
+            <motion.div className="glass-card overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Award className="w-4 h-4 text-amber-500" />
+                  <h3 className="text-sm font-semibold">Ranking — Vendedores Campeões</h3>
+                </div>
+                <Badge variant="secondary" className="capitalize">{statsRankPeriod}</Badge>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">#</TableHead>
+                    <TableHead>Vendedor</TableHead>
+                    <TableHead>Vendas</TableHead>
+                    <TableHead>Receita</TableHead>
+                    <TableHead className="w-[140px]">Conversão</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[
+                    { name: 'João Silva', sales: 47, revenue: 'R$ 184k', conv: 38 },
+                    { name: 'Maria Costa', sales: 41, revenue: 'R$ 162k', conv: 34 },
+                    { name: 'Pedro Alves', sales: 33, revenue: 'R$ 128k', conv: 29 },
+                    { name: 'Ana Ribeiro', sales: 28, revenue: 'R$ 109k', conv: 25 },
+                    { name: 'Lucas Mendes', sales: 22, revenue: 'R$ 87k', conv: 21 },
+                  ].map((v, i) => (
+                    <TableRow key={v.name}>
+                      <TableCell>
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                          i === 0 ? 'bg-amber-500/20 text-amber-600' :
+                          i === 1 ? 'bg-slate-400/20 text-slate-500' :
+                          i === 2 ? 'bg-orange-700/20 text-orange-700' : 'bg-secondary text-muted-foreground'
+                        }`}>{i + 1}</div>
+                      </TableCell>
+                      <TableCell className="font-medium text-sm">{v.name}</TableCell>
+                      <TableCell className="text-sm">{v.sales}</TableCell>
+                      <TableCell className="text-sm font-semibold">{v.revenue}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Progress value={v.conv} className="h-1.5" />
+                          <span className="text-xs text-muted-foreground w-9">{v.conv}%</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </motion.div>
+
+            {/* Ranking IA */}
+            <motion.div className="glass-card overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Brain className="w-4 h-4 text-primary" />
+                  <h3 className="text-sm font-semibold">Ranking — Agentes IA</h3>
+                </div>
+                <Badge variant="secondary" className="capitalize">{statsRankPeriod}</Badge>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">#</TableHead>
+                    <TableHead>Agente IA</TableHead>
+                    <TableHead>Atendimentos</TableHead>
+                    <TableHead>CSAT</TableHead>
+                    <TableHead className="w-[140px]">Resolução</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[
+                    { name: 'Agente de Vendas IA', calls: 312, csat: 4.8, res: 92 },
+                    { name: 'Suporte Técnico IA', calls: 287, csat: 4.6, res: 88 },
+                    { name: 'Qualificador de Leads IA', calls: 245, csat: 4.7, res: 85 },
+                    { name: 'Agente de Atendimento IA', calls: 198, csat: 4.5, res: 81 },
+                    { name: 'Cobrança IA', calls: 142, csat: 4.3, res: 76 },
+                  ].map((a, i) => (
+                    <TableRow key={a.name}>
+                      <TableCell>
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                          i === 0 ? 'bg-amber-500/20 text-amber-600' :
+                          i === 1 ? 'bg-slate-400/20 text-slate-500' :
+                          i === 2 ? 'bg-orange-700/20 text-orange-700' : 'bg-secondary text-muted-foreground'
+                        }`}>{i + 1}</div>
+                      </TableCell>
+                      <TableCell className="font-medium text-sm flex items-center gap-2">
+                        <Bot className="w-3.5 h-3.5 text-primary" />
+                        {a.name}
+                      </TableCell>
+                      <TableCell className="text-sm">{a.calls}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                          <span className="text-sm">{a.csat}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Progress value={a.res} className="h-1.5" />
+                          <span className="text-xs text-muted-foreground w-9">{a.res}%</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </motion.div>
           </div>
         </TabsContent>
 
@@ -1059,7 +1283,27 @@ export default function CallsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="transport">Transporte</Label>
-                <Input id="transport" value={sipConfig.transport} onChange={(e) => setSipConfig({ ...sipConfig, transport: e.target.value })} />
+                <Select value={sipConfig.transport} onValueChange={(v) => setSipConfig({ ...sipConfig, transport: v })}>
+                  <SelectTrigger id="transport"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="WSS">WSS (WebSocket Seguro)</SelectItem>
+                    <SelectItem value="WS">WS (WebSocket)</SelectItem>
+                    <SelectItem value="TLS">TLS</SelectItem>
+                    <SelectItem value="UDP">UDP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="wsUri">WebSocket URI (obrigatório para conexão real no navegador)</Label>
+                <Input
+                  id="wsUri"
+                  placeholder="wss://sipv2.wavoip.com:7443"
+                  value={sipConfig.wsUri || ''}
+                  onChange={(e) => setSipConfig({ ...sipConfig, wsUri: e.target.value })}
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Para Wavoip use <code className="text-primary">wss://sipv2.wavoip.com:7443</code>. Navegadores só conectam SIP via WebSocket (WSS).
+                </p>
               </div>
               <div className="md:col-span-2 flex items-center justify-between p-3 rounded-lg bg-secondary/50">
                 <div>
@@ -1069,8 +1313,29 @@ export default function CallsPage() {
                 <Switch checked={sipConfig.autoRecord} onCheckedChange={(v) => setSipConfig({ ...sipConfig, autoRecord: v })} />
               </div>
             </div>
+
+            {/* Status do teste */}
+            {(sipMessage || sipStatus !== 'disconnected') && (
+              <div className={`mt-4 p-3 rounded-lg border text-xs ${
+                sipStatus === 'connected' ? 'bg-success/10 border-success/30 text-success' :
+                sipStatus === 'connecting' ? 'bg-amber-500/10 border-amber-500/30 text-amber-600' :
+                'bg-destructive/10 border-destructive/30 text-destructive'
+              }`}>
+                <div className="flex items-center gap-2 font-medium mb-1">
+                  {sipStatus === 'connected' ? <CheckCircle2 className="w-3.5 h-3.5" /> :
+                    sipStatus === 'connecting' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> :
+                    <AlertCircle className="w-3.5 h-3.5" />}
+                  Status: {sipStatus === 'connected' ? 'Conectado' : sipStatus === 'connecting' ? 'Conectando...' : 'Desconectado'}
+                </div>
+                {sipMessage && <p className="opacity-80">{sipMessage}</p>}
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 mt-5">
-              <Button variant="outline">Testar conexão</Button>
+              <Button variant="outline" onClick={handleTestSip} disabled={sipStatus === 'connecting'} className="gap-2">
+                {sipStatus === 'connecting' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
+                Testar conexão
+              </Button>
               <Button onClick={handleSaveSip} className="gap-2">
                 <Save className="w-4 h-4" />
                 Salvar configuração
