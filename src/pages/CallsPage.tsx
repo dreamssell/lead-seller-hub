@@ -150,7 +150,13 @@ export default function CallsPage() {
   const [inCall, setInCall] = useState(false);
   const [muted, setMuted] = useState(false);
   const [onHold, setOnHold] = useState(false);
-  const [sipStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connected');
+  const [sipStatus, setSipStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
+  const [sipMessage, setSipMessage] = useState<string>('');
+  const sipRef = useRef<any>(null);
+
+  // Estatísticas - filtros
+  const [statsPeriod, setStatsPeriod] = useState('7d');
+  const [statsRankPeriod, setStatsRankPeriod] = useState('30d');
 
   // Filtros gravações
   const [recAgent, setRecAgent] = useState('Todos');
