@@ -970,7 +970,47 @@ export default function CallsPage() {
         </TabsContent>
 
         {/* Estatísticas */}
-        <TabsContent value="stats">
+        <TabsContent value="stats" className="space-y-4">
+          {/* Filtros */}
+          <motion.div className="glass-card p-5" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+            <div className="flex items-center gap-2 mb-3">
+              <Filter className="w-4 h-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold">Filtros</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Período (estatísticas)</Label>
+                <Select value={statsPeriod} onValueChange={setStatsPeriod}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="today">Hoje</SelectItem>
+                    <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                    <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                    <SelectItem value="90d">Últimos 90 dias</SelectItem>
+                    <SelectItem value="year">Este ano</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Período (rankings)</Label>
+                <Select value={statsRankPeriod} onValueChange={setStatsRankPeriod}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                    <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                    <SelectItem value="quarter">Trimestre</SelectItem>
+                    <SelectItem value="year">Ano</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end">
+                <Button variant="outline" className="gap-2 w-full">
+                  <RefreshCw className="w-3.5 h-3.5" /> Atualizar
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { label: 'Chamadas realizadas', value: '23', icon: PhoneOutgoing, color: 'text-primary' },
@@ -978,18 +1018,122 @@ export default function CallsPage() {
               { label: 'Tempo médio', value: '8:45', icon: Clock, color: 'text-foreground' },
               { label: 'Gravações salvas', value: '34', icon: Mic, color: 'text-amber-500' },
             ].map((s, i) => (
-              <motion.div
-                key={s.label}
-                className="glass-card p-5"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-              >
+              <motion.div key={s.label} className="glass-card p-5" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                 <s.icon className={`w-5 h-5 mb-3 ${s.color}`} />
                 <p className="text-2xl font-bold text-foreground">{s.value}</p>
                 <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
               </motion.div>
             ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Ranking Vendedores */}
+            <motion.div className="glass-card overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Award className="w-4 h-4 text-amber-500" />
+                  <h3 className="text-sm font-semibold">Ranking — Vendedores Campeões</h3>
+                </div>
+                <Badge variant="secondary" className="capitalize">{statsRankPeriod}</Badge>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">#</TableHead>
+                    <TableHead>Vendedor</TableHead>
+                    <TableHead>Vendas</TableHead>
+                    <TableHead>Receita</TableHead>
+                    <TableHead className="w-[140px]">Conversão</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[
+                    { name: 'João Silva', sales: 47, revenue: 'R$ 184k', conv: 38 },
+                    { name: 'Maria Costa', sales: 41, revenue: 'R$ 162k', conv: 34 },
+                    { name: 'Pedro Alves', sales: 33, revenue: 'R$ 128k', conv: 29 },
+                    { name: 'Ana Ribeiro', sales: 28, revenue: 'R$ 109k', conv: 25 },
+                    { name: 'Lucas Mendes', sales: 22, revenue: 'R$ 87k', conv: 21 },
+                  ].map((v, i) => (
+                    <TableRow key={v.name}>
+                      <TableCell>
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                          i === 0 ? 'bg-amber-500/20 text-amber-600' :
+                          i === 1 ? 'bg-slate-400/20 text-slate-500' :
+                          i === 2 ? 'bg-orange-700/20 text-orange-700' : 'bg-secondary text-muted-foreground'
+                        }`}>{i + 1}</div>
+                      </TableCell>
+                      <TableCell className="font-medium text-sm">{v.name}</TableCell>
+                      <TableCell className="text-sm">{v.sales}</TableCell>
+                      <TableCell className="text-sm font-semibold">{v.revenue}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Progress value={v.conv} className="h-1.5" />
+                          <span className="text-xs text-muted-foreground w-9">{v.conv}%</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </motion.div>
+
+            {/* Ranking IA */}
+            <motion.div className="glass-card overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Brain className="w-4 h-4 text-primary" />
+                  <h3 className="text-sm font-semibold">Ranking — Agentes IA</h3>
+                </div>
+                <Badge variant="secondary" className="capitalize">{statsRankPeriod}</Badge>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">#</TableHead>
+                    <TableHead>Agente IA</TableHead>
+                    <TableHead>Atendimentos</TableHead>
+                    <TableHead>CSAT</TableHead>
+                    <TableHead className="w-[140px]">Resolução</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[
+                    { name: 'Agente de Vendas IA', calls: 312, csat: 4.8, res: 92 },
+                    { name: 'Suporte Técnico IA', calls: 287, csat: 4.6, res: 88 },
+                    { name: 'Qualificador de Leads IA', calls: 245, csat: 4.7, res: 85 },
+                    { name: 'Agente de Atendimento IA', calls: 198, csat: 4.5, res: 81 },
+                    { name: 'Cobrança IA', calls: 142, csat: 4.3, res: 76 },
+                  ].map((a, i) => (
+                    <TableRow key={a.name}>
+                      <TableCell>
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                          i === 0 ? 'bg-amber-500/20 text-amber-600' :
+                          i === 1 ? 'bg-slate-400/20 text-slate-500' :
+                          i === 2 ? 'bg-orange-700/20 text-orange-700' : 'bg-secondary text-muted-foreground'
+                        }`}>{i + 1}</div>
+                      </TableCell>
+                      <TableCell className="font-medium text-sm flex items-center gap-2">
+                        <Bot className="w-3.5 h-3.5 text-primary" />
+                        {a.name}
+                      </TableCell>
+                      <TableCell className="text-sm">{a.calls}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                          <span className="text-sm">{a.csat}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Progress value={a.res} className="h-1.5" />
+                          <span className="text-xs text-muted-foreground w-9">{a.res}%</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </motion.div>
           </div>
         </TabsContent>
 
