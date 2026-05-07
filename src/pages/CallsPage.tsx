@@ -249,8 +249,75 @@ export default function CallsPage() {
   };
 
   const handleSaveSip = () => {
+    try { localStorage.setItem('sipConfig', JSON.stringify(sipConfig)); } catch {}
     toast({ title: 'Configuração SIP salva', description: 'As credenciais foram atualizadas.' });
   };
+
+  const handleTestSip = async () => {
+    if (!sipConfig.server || !sipConfig.username || !sipConfig.password) {
+      toast({ title: 'Preencha servidor, usuário e senha', variant: 'destructive' });
+      return;
+    }
+    setSipStatus('connecting');
+    setSipMessage('Conectando ao servidor SIP via WebSocket...');
+    try {
+      // @ts-ignore
+      const JsSIP = (await import('jssip')).default;
+      try { sipRef.current?.stop?.(); } catch {}
+      const wsUri = sipConfig.wsUri || `wss://${sipConfig.server}:7443`;
+      const socket = new JsSIP.WebSocketInterface(wsUri);
+      const ua = new JsSIP.UA({
+        sockets: [socket],
+        uri: `sip:${sipConfig.username}@${sipConfig.server}`,
+        password: sipConfig.password,
+        display_name: sipConfig.displayName || undefined,
+        register: true,
+        session_timers: false,
+      });
+      sipRef.current = ua;
+
+      const cleanup = () => {
+        try { ua.stop(); } catch {}
+      };
+
+      const timeout = setTimeout(() => {
+        setSipStatus('disconnected');
+        setSipMessage('Timeout: o servidor não respondeu em 15s. Verifique URL WSS e firewall.');
+        toast({ title: 'Falha na conexão SIP', description: 'Timeout ao registrar', variant: 'destructive' });
+        cleanup();
+      }, 15000);
+
+      ua.on('connected', () => setSipMessage('WebSocket conectado, registrando...'));
+      ua.on('disconnected', (e: any) => {
+        clearTimeout(timeout);
+        setSipStatus('disconnected');
+        setSipMessage(`Desconectado: ${e?.reason || 'verifique URL WSS'}`);
+      });
+      ua.on('registered', () => {
+        clearTimeout(timeout);
+        setSipStatus('connected');
+        setSipMessage(`Registrado com sucesso em ${sipConfig.server} como ${sipConfig.username}`);
+        toast({ title: 'Conexão SIP estabelecida', description: 'Pronto para fazer chamadas.' });
+      });
+      ua.on('registrationFailed', (e: any) => {
+        clearTimeout(timeout);
+        setSipStatus('disconnected');
+        setSipMessage(`Falha no registro: ${e?.cause || 'credenciais inválidas'}`);
+        toast({ title: 'Falha no registro SIP', description: e?.cause || 'Credenciais inválidas', variant: 'destructive' });
+        cleanup();
+      });
+
+      ua.start();
+    } catch (err: any) {
+      setSipStatus('disconnected');
+      setSipMessage(`Erro: ${err?.message || err}`);
+      toast({ title: 'Erro ao testar SIP', description: String(err?.message || err), variant: 'destructive' });
+    }
+  };
+
+  useEffect(() => {
+    return () => { try { sipRef.current?.stop?.(); } catch {} };
+  }, []);
 
   const handleDownloadRecording = (r: typeof recordings[0]) => {
     toast({ title: 'Download iniciado', description: `${r.contact} • ${r.duration}` });
