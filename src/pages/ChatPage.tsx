@@ -18,9 +18,9 @@ const channels: Array<{
   key: ChannelKey; name: string; icon: any; color: string; bg: string; leads: number; open: number;
 }> = [
   { key: 'whatsapp', name: 'WhatsApp', icon: MessageCircle, color: 'text-emerald-500', bg: 'bg-emerald-500/10', leads: 142, open: 18 },
-  { key: 'instagram', name: 'Instagram', icon: Instagram, color: 'text-pink-500', bg: 'bg-pink-500/10', leads: 87, open: 12 },
-  { key: 'facebook', name: 'Facebook', icon: Facebook, color: 'text-blue-500', bg: 'bg-blue-500/10', leads: 64, open: 9 },
-  { key: 'linkedin', name: 'LinkedIn', icon: Linkedin, color: 'text-sky-600', bg: 'bg-sky-500/10', leads: 31, open: 4 },
+  { key: 'instagram', name: 'Instagram', icon: Camera, color: 'text-pink-500', bg: 'bg-pink-500/10', leads: 87, open: 12 },
+  { key: 'facebook', name: 'Facebook', icon: ThumbsUp, color: 'text-blue-500', bg: 'bg-blue-500/10', leads: 64, open: 9 },
+  { key: 'linkedin', name: 'LinkedIn', icon: Briefcase, color: 'text-sky-600', bg: 'bg-sky-500/10', leads: 31, open: 4 },
   { key: 'widget', name: 'Widget de Site', icon: Globe, color: 'text-violet-500', bg: 'bg-violet-500/10', leads: 53, open: 7 },
 ];
 
