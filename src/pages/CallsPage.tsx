@@ -1283,7 +1283,27 @@ export default function CallsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="transport">Transporte</Label>
-                <Input id="transport" value={sipConfig.transport} onChange={(e) => setSipConfig({ ...sipConfig, transport: e.target.value })} />
+                <Select value={sipConfig.transport} onValueChange={(v) => setSipConfig({ ...sipConfig, transport: v })}>
+                  <SelectTrigger id="transport"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="WSS">WSS (WebSocket Seguro)</SelectItem>
+                    <SelectItem value="WS">WS (WebSocket)</SelectItem>
+                    <SelectItem value="TLS">TLS</SelectItem>
+                    <SelectItem value="UDP">UDP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="wsUri">WebSocket URI (obrigatório para conexão real no navegador)</Label>
+                <Input
+                  id="wsUri"
+                  placeholder="wss://sipv2.wavoip.com:7443"
+                  value={sipConfig.wsUri || ''}
+                  onChange={(e) => setSipConfig({ ...sipConfig, wsUri: e.target.value })}
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Para Wavoip use <code className="text-primary">wss://sipv2.wavoip.com:7443</code>. Navegadores só conectam SIP via WebSocket (WSS).
+                </p>
               </div>
               <div className="md:col-span-2 flex items-center justify-between p-3 rounded-lg bg-secondary/50">
                 <div>
@@ -1293,8 +1313,29 @@ export default function CallsPage() {
                 <Switch checked={sipConfig.autoRecord} onCheckedChange={(v) => setSipConfig({ ...sipConfig, autoRecord: v })} />
               </div>
             </div>
+
+            {/* Status do teste */}
+            {(sipMessage || sipStatus !== 'disconnected') && (
+              <div className={`mt-4 p-3 rounded-lg border text-xs ${
+                sipStatus === 'connected' ? 'bg-success/10 border-success/30 text-success' :
+                sipStatus === 'connecting' ? 'bg-amber-500/10 border-amber-500/30 text-amber-600' :
+                'bg-destructive/10 border-destructive/30 text-destructive'
+              }`}>
+                <div className="flex items-center gap-2 font-medium mb-1">
+                  {sipStatus === 'connected' ? <CheckCircle2 className="w-3.5 h-3.5" /> :
+                    sipStatus === 'connecting' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> :
+                    <AlertCircle className="w-3.5 h-3.5" />}
+                  Status: {sipStatus === 'connected' ? 'Conectado' : sipStatus === 'connecting' ? 'Conectando...' : 'Desconectado'}
+                </div>
+                {sipMessage && <p className="opacity-80">{sipMessage}</p>}
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 mt-5">
-              <Button variant="outline">Testar conexão</Button>
+              <Button variant="outline" onClick={handleTestSip} disabled={sipStatus === 'connecting'} className="gap-2">
+                {sipStatus === 'connecting' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
+                Testar conexão
+              </Button>
               <Button onClick={handleSaveSip} className="gap-2">
                 <Save className="w-4 h-4" />
                 Salvar configuração
