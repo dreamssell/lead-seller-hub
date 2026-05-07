@@ -202,14 +202,21 @@ export default function CallsPage() {
   };
 
 
-  const [sipConfig, setSipConfig] = useState({
-    server: 'sip.leadseller.app',
-    port: '5060',
-    username: '',
-    password: '',
-    displayName: '',
-    transport: 'TLS',
-    autoRecord: true,
+  const [sipConfig, setSipConfig] = useState(() => {
+    try {
+      const stored = localStorage.getItem('sipConfig');
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return {
+      server: 'sipv2.wavoip.com',
+      port: '5060',
+      wsUri: 'wss://sipv2.wavoip.com:7443',
+      username: '',
+      password: '',
+      displayName: 'Lead Seller',
+      transport: 'WSS',
+      autoRecord: true,
+    };
   });
 
   const filteredRecordings = useMemo(() => {
