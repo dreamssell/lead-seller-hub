@@ -61,6 +61,12 @@ export default function SettingsPage() {
   const [pwd, setPwd] = useState({ current: '', next: '', confirm: '' });
   const [changingPwd, setChangingPwd] = useState(false);
 
+  // Profile
+  const [profile, setProfile] = useState({ display_name: '', phone: '', role_label: 'Atendente', avatar_url: null as string | null });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -74,6 +80,55 @@ export default function SettingsPage() {
       setLoading(false);
     })();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('display_name, phone, role_label, avatar_url')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (data) setProfile({
+        display_name: data.display_name ?? '',
+        phone: data.phone ?? '',
+        role_label: data.role_label ?? 'Atendente',
+        avatar_url: data.avatar_url ?? null,
+      });
+    })();
+  }, [user]);
+
+  const saveProfile = async () => {
+    if (!user) return;
+    setSavingProfile(true);
+    const { error } = await supabase.from('profiles').update({
+      display_name: profile.display_name,
+      phone: profile.phone,
+      role_label: profile.role_label,
+    }).eq('user_id', user.id);
+    setSavingProfile(false);
+    if (error) toast({ title: 'Erro ao salvar perfil', description: error.message, variant: 'destructive' });
+    else toast({ title: 'Perfil atualizado' });
+  };
+
+  const uploadAvatar = async (file: File) => {
+    if (!user) return;
+    setUploadingAvatar(true);
+    const ext = file.name.split('.').pop();
+    const path = `${user.id}/${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+    if (upErr) {
+      setUploadingAvatar(false);
+      toast({ title: 'Erro no upload', description: upErr.message, variant: 'destructive' });
+      return;
+    }
+    const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+    const url = pub.publicUrl;
+    await supabase.from('profiles').update({ avatar_url: url }).eq('user_id', user.id);
+    setProfile((p) => ({ ...p, avatar_url: url }));
+    setUploadingAvatar(false);
+    toast({ title: 'Foto atualizada' });
+  };
 
   const saveCompany = async () => {
     setSaving(true);
