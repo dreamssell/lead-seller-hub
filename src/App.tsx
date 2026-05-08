@@ -56,7 +56,7 @@ const App = () => (
               <Route path="/automations" element={<ProtectedRoute><AutomationsPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
-            <VoipProvider>
+            </VoipProvider>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
