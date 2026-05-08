@@ -108,7 +108,10 @@ export default function SettingsPage() {
     }).eq('user_id', user.id);
     setSavingProfile(false);
     if (error) toast({ title: 'Erro ao salvar perfil', description: error.message, variant: 'destructive' });
-    else toast({ title: 'Perfil atualizado' });
+    else {
+      window.dispatchEvent(new Event('profile:updated'));
+      toast({ title: 'Perfil atualizado' });
+    }
   };
 
   const uploadAvatar = async (file: File) => {
