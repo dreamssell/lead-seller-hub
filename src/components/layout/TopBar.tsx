@@ -1,6 +1,10 @@
 import { Sun, Moon, Bell, Search, Menu, Globe, LogIn, CalendarPlus } from 'lucide-react';
 import { useThemeContext } from '@/contexts/ThemeContext';
 import { motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
