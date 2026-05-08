@@ -122,9 +122,10 @@ export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center ml-1 shrink-0">
-          <span className="text-xs font-bold text-primary">LS</span>
-        </div>
+        <Avatar className="w-8 h-8 ml-1 shrink-0 ring-2 ring-primary/20">
+          <AvatarImage src={avatarUrl || undefined} alt={displayName} />
+          <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">{initials}</AvatarFallback>
+        </Avatar>
       </div>
     </header>
   );
