@@ -1,6 +1,6 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { Bell, Shield, Globe, Webhook, Building2, Loader2, Save, Upload, Lock, Smartphone } from 'lucide-react';
+import { Bell, Shield, Globe, Webhook, Building2, Loader2, Save, Upload, Lock, Smartphone, UserCircle, Camera, Mail, Phone } from 'lucide-react';
 import { useThemeContext } from '@/contexts/ThemeContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -61,6 +61,12 @@ export default function SettingsPage() {
   const [pwd, setPwd] = useState({ current: '', next: '', confirm: '' });
   const [changingPwd, setChangingPwd] = useState(false);
 
+  // Profile
+  const [profile, setProfile] = useState({ display_name: '', phone: '', role_label: 'Atendente', avatar_url: null as string | null });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -74,6 +80,55 @@ export default function SettingsPage() {
       setLoading(false);
     })();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('display_name, phone, role_label, avatar_url')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (data) setProfile({
+        display_name: data.display_name ?? '',
+        phone: data.phone ?? '',
+        role_label: data.role_label ?? 'Atendente',
+        avatar_url: data.avatar_url ?? null,
+      });
+    })();
+  }, [user]);
+
+  const saveProfile = async () => {
+    if (!user) return;
+    setSavingProfile(true);
+    const { error } = await supabase.from('profiles').update({
+      display_name: profile.display_name,
+      phone: profile.phone,
+      role_label: profile.role_label,
+    }).eq('user_id', user.id);
+    setSavingProfile(false);
+    if (error) toast({ title: 'Erro ao salvar perfil', description: error.message, variant: 'destructive' });
+    else toast({ title: 'Perfil atualizado' });
+  };
+
+  const uploadAvatar = async (file: File) => {
+    if (!user) return;
+    setUploadingAvatar(true);
+    const ext = file.name.split('.').pop();
+    const path = `${user.id}/${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+    if (upErr) {
+      setUploadingAvatar(false);
+      toast({ title: 'Erro no upload', description: upErr.message, variant: 'destructive' });
+      return;
+    }
+    const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+    const url = pub.publicUrl;
+    await supabase.from('profiles').update({ avatar_url: url }).eq('user_id', user.id);
+    setProfile((p) => ({ ...p, avatar_url: url }));
+    setUploadingAvatar(false);
+    toast({ title: 'Foto atualizada' });
+  };
 
   const saveCompany = async () => {
     setSaving(true);
@@ -143,14 +198,74 @@ export default function SettingsPage() {
   return (
     <AppLayout title="Configurações" subtitle="Personalize sua plataforma">
       <div className="max-w-4xl space-y-6">
-        <Tabs defaultValue="company" className="w-full">
+        <Tabs defaultValue="profile" className="w-full">
           <TabsList className="w-full overflow-x-auto flex-wrap h-auto justify-start">
+            <TabsTrigger value="profile"><UserCircle className="w-4 h-4 mr-2" />Perfil</TabsTrigger>
             <TabsTrigger value="company"><Building2 className="w-4 h-4 mr-2" />Empresa</TabsTrigger>
             <TabsTrigger value="appearance"><Globe className="w-4 h-4 mr-2" />Aparência</TabsTrigger>
             <TabsTrigger value="notifications"><Bell className="w-4 h-4 mr-2" />Notificações</TabsTrigger>
             <TabsTrigger value="security"><Shield className="w-4 h-4 mr-2" />Segurança</TabsTrigger>
             <TabsTrigger value="webhooks"><Webhook className="w-4 h-4 mr-2" />Webhooks</TabsTrigger>
           </TabsList>
+
+          {/* Profile */}
+          <TabsContent value="profile">
+            <motion.div className="glass-card p-6 space-y-5" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
+                <div className="relative">
+                  <div className="w-24 h-24 rounded-2xl bg-primary/10 border border-border flex items-center justify-center overflow-hidden">
+                    {profile.avatar_url ? (
+                      <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <UserCircle className="w-12 h-12 text-muted-foreground" />
+                    )}
+                  </div>
+                  <button
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={uploadingAvatar}
+                    className="absolute -bottom-1 -right-1 w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-lg disabled:opacity-50"
+                  >
+                    {uploadingAvatar ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                  </button>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => e.target.files?.[0] && uploadAvatar(e.target.files[0])}
+                  />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-foreground">Foto de Perfil</h3>
+                  <p className="text-xs text-muted-foreground">PNG ou JPG. Recomendado quadrada, mínimo 256×256.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Nome de exibição</Label>
+                  <Input value={profile.display_name} onChange={(e) => setProfile({ ...profile, display_name: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Cargo / Função</Label>
+                  <Input value={profile.role_label} onChange={(e) => setProfile({ ...profile, role_label: e.target.value })} />
+                </div>
+                <div>
+                  <Label className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" />E-mail</Label>
+                  <Input value={user?.email ?? ''} disabled />
+                </div>
+                <div>
+                  <Label className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" />Telefone</Label>
+                  <Input value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+                </div>
+              </div>
+
+              <Button onClick={saveProfile} disabled={savingProfile}>
+                {savingProfile ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                Salvar Perfil
+              </Button>
+            </motion.div>
+          </TabsContent>
 
           {/* Company */}
           <TabsContent value="company">

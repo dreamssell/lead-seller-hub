@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_agents: {
+        Row: {
+          channels: string[]
+          created_at: string
+          created_by: string
+          description: string | null
+          fallback_message: string | null
+          id: string
+          is_active: boolean
+          knowledge_base: string | null
+          max_tokens: number
+          model: string
+          name: string
+          provider: string
+          system_prompt: string
+          temperature: number
+          updated_at: string
+        }
+        Insert: {
+          channels?: string[]
+          created_at?: string
+          created_by: string
+          description?: string | null
+          fallback_message?: string | null
+          id?: string
+          is_active?: boolean
+          knowledge_base?: string | null
+          max_tokens?: number
+          model?: string
+          name: string
+          provider?: string
+          system_prompt?: string
+          temperature?: number
+          updated_at?: string
+        }
+        Update: {
+          channels?: string[]
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          fallback_message?: string | null
+          id?: string
+          is_active?: boolean
+          knowledge_base?: string | null
+          max_tokens?: number
+          model?: string
+          name?: string
+          provider?: string
+          system_prompt?: string
+          temperature?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       api_keys: {
         Row: {
           created_at: string
