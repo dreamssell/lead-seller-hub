@@ -127,6 +127,7 @@ export default function SettingsPage() {
     await supabase.from('profiles').update({ avatar_url: url }).eq('user_id', user.id);
     setProfile((p) => ({ ...p, avatar_url: url }));
     setUploadingAvatar(false);
+    window.dispatchEvent(new Event('profile:updated'));
     toast({ title: 'Foto atualizada' });
   };
 
