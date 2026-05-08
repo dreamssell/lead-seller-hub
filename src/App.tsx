@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { VoipProvider } from "@/contexts/VoipContext";
 import Dashboard from "./pages/Dashboard";
 import ChatPage from "./pages/ChatPage";
 import CallsPage from "./pages/CallsPage";
@@ -33,6 +34,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
+            <VoipProvider>
             <Routes>
               {/* Rota pública — recebe tokens da página externa */}
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
@@ -54,6 +56,7 @@ const App = () => (
               <Route path="/automations" element={<ProtectedRoute><AutomationsPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            <VoipProvider>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
