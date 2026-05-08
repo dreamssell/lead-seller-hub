@@ -22,6 +22,40 @@ interface TopBarProps {
 
 export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
   const { theme, toggleTheme } = useThemeContext();
+  const { user } = useAuth();
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string>('');
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const load = async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('avatar_url, display_name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!cancelled && data) {
+        setAvatarUrl(data.avatar_url);
+        setDisplayName(data.display_name || user.email || '');
+      }
+    };
+    load();
+    // refresh when profile updates elsewhere
+    const handler = () => load();
+    window.addEventListener('profile:updated', handler);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('profile:updated', handler);
+    };
+  }, [user]);
+
+  const initials = (displayName || user?.email || 'LS')
+    .split(' ')
+    .map((p) => p[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <header className="h-14 md:h-16 border-b border-border bg-card/60 backdrop-blur-md flex items-center justify-between px-3 md:px-6 shrink-0 sticky top-0 z-30">
