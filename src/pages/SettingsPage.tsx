@@ -1,6 +1,6 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { Bell, Shield, Globe, Webhook, Building2, Loader2, Save, Upload, Lock, Smartphone } from 'lucide-react';
+import { Bell, Shield, Globe, Webhook, Building2, Loader2, Save, Upload, Lock, Smartphone, UserCircle, Camera, Mail, Phone } from 'lucide-react';
 import { useThemeContext } from '@/contexts/ThemeContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
