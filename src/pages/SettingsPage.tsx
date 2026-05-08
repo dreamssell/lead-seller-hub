@@ -200,12 +200,72 @@ export default function SettingsPage() {
       <div className="max-w-4xl space-y-6">
         <Tabs defaultValue="company" className="w-full">
           <TabsList className="w-full overflow-x-auto flex-wrap h-auto justify-start">
+            <TabsTrigger value="profile"><UserCircle className="w-4 h-4 mr-2" />Perfil</TabsTrigger>
             <TabsTrigger value="company"><Building2 className="w-4 h-4 mr-2" />Empresa</TabsTrigger>
             <TabsTrigger value="appearance"><Globe className="w-4 h-4 mr-2" />Aparência</TabsTrigger>
             <TabsTrigger value="notifications"><Bell className="w-4 h-4 mr-2" />Notificações</TabsTrigger>
             <TabsTrigger value="security"><Shield className="w-4 h-4 mr-2" />Segurança</TabsTrigger>
             <TabsTrigger value="webhooks"><Webhook className="w-4 h-4 mr-2" />Webhooks</TabsTrigger>
           </TabsList>
+
+          {/* Profile */}
+          <TabsContent value="profile">
+            <motion.div className="glass-card p-6 space-y-5" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
+                <div className="relative">
+                  <div className="w-24 h-24 rounded-2xl bg-primary/10 border border-border flex items-center justify-center overflow-hidden">
+                    {profile.avatar_url ? (
+                      <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <UserCircle className="w-12 h-12 text-muted-foreground" />
+                    )}
+                  </div>
+                  <button
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={uploadingAvatar}
+                    className="absolute -bottom-1 -right-1 w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-lg disabled:opacity-50"
+                  >
+                    {uploadingAvatar ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                  </button>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => e.target.files?.[0] && uploadAvatar(e.target.files[0])}
+                  />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-foreground">Foto de Perfil</h3>
+                  <p className="text-xs text-muted-foreground">PNG ou JPG. Recomendado quadrada, mínimo 256×256.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Nome de exibição</Label>
+                  <Input value={profile.display_name} onChange={(e) => setProfile({ ...profile, display_name: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Cargo / Função</Label>
+                  <Input value={profile.role_label} onChange={(e) => setProfile({ ...profile, role_label: e.target.value })} />
+                </div>
+                <div>
+                  <Label className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" />E-mail</Label>
+                  <Input value={user?.email ?? ''} disabled />
+                </div>
+                <div>
+                  <Label className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" />Telefone</Label>
+                  <Input value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+                </div>
+              </div>
+
+              <Button onClick={saveProfile} disabled={savingProfile}>
+                {savingProfile ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                Salvar Perfil
+              </Button>
+            </motion.div>
+          </TabsContent>
 
           {/* Company */}
           <TabsContent value="company">
