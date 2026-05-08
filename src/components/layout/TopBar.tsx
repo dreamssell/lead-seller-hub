@@ -1,6 +1,10 @@
 import { Sun, Moon, Bell, Search, Menu, Globe, LogIn, CalendarPlus } from 'lucide-react';
 import { useThemeContext } from '@/contexts/ThemeContext';
 import { motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +22,40 @@ interface TopBarProps {
 
 export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
   const { theme, toggleTheme } = useThemeContext();
+  const { user } = useAuth();
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string>('');
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const load = async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('avatar_url, display_name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!cancelled && data) {
+        setAvatarUrl(data.avatar_url);
+        setDisplayName(data.display_name || user.email || '');
+      }
+    };
+    load();
+    // refresh when profile updates elsewhere
+    const handler = () => load();
+    window.addEventListener('profile:updated', handler);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('profile:updated', handler);
+    };
+  }, [user]);
+
+  const initials = (displayName || user?.email || 'LS')
+    .split(' ')
+    .map((p) => p[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <header className="h-14 md:h-16 border-b border-border bg-card/60 backdrop-blur-md flex items-center justify-between px-3 md:px-6 shrink-0 sticky top-0 z-30">
@@ -84,9 +122,10 @@ export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center ml-1 shrink-0">
-          <span className="text-xs font-bold text-primary">LS</span>
-        </div>
+        <Avatar className="w-8 h-8 ml-1 shrink-0 ring-2 ring-primary/20">
+          <AvatarImage src={avatarUrl || undefined} alt={displayName} />
+          <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">{initials}</AvatarFallback>
+        </Avatar>
       </div>
     </header>
   );
