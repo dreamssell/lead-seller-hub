@@ -198,7 +198,7 @@ export default function SettingsPage() {
   return (
     <AppLayout title="Configurações" subtitle="Personalize sua plataforma">
       <div className="max-w-4xl space-y-6">
-        <Tabs defaultValue="company" className="w-full">
+        <Tabs defaultValue="profile" className="w-full">
           <TabsList className="w-full overflow-x-auto flex-wrap h-auto justify-start">
             <TabsTrigger value="profile"><UserCircle className="w-4 h-4 mr-2" />Perfil</TabsTrigger>
             <TabsTrigger value="company"><Building2 className="w-4 h-4 mr-2" />Empresa</TabsTrigger>
