@@ -481,22 +481,144 @@ function UsersTab() {
   );
 }
 
+const TABLE_LABELS: Record<string, string> = {
+  leads: 'Leads', customers: 'Clientes', products: 'Produtos', tasks: 'Tarefas', profiles: 'Usuários',
+};
+const ACTION_LABELS: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' }> = {
+  create: { label: 'Criação', variant: 'default' },
+  update: { label: 'Edição', variant: 'secondary' },
+  delete: { label: 'Exclusão', variant: 'destructive' },
+};
+
+function AuditTab() {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [authors, setAuthors] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [tableFilter, setTableFilter] = useState<string>('all');
+  const [actionFilter, setActionFilter] = useState<string>('all');
+  const [detail, setDetail] = useState<any>(null);
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await (supabase as any).from('audit_logs').select('*').order('created_at', { ascending: false }).limit(500);
+    setLogs(data || []);
+    const ids = Array.from(new Set((data || []).map((l: any) => l.changed_by)));
+    if (ids.length) {
+      const { data: profs } = await supabase.from('profiles').select('user_id, display_name').in('user_id', ids as string[]);
+      const map: Record<string, string> = {};
+      (profs || []).forEach((p: any) => { map[p.user_id] = p.display_name || p.user_id; });
+      setAuthors(map);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const filtered = logs.filter(l =>
+    (tableFilter === 'all' || l.table_name === tableFilter) &&
+    (actionFilter === 'all' || l.action === actionFilter)
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <Select value={tableFilter} onValueChange={setTableFilter}>
+          <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as tabelas</SelectItem>
+            {Object.entries(TABLE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={actionFilter} onValueChange={setActionFilter}>
+          <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as ações</SelectItem>
+            <SelectItem value="create">Criação</SelectItem>
+            <SelectItem value="update">Edição</SelectItem>
+            <SelectItem value="delete">Exclusão</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button variant="outline" onClick={load}>Atualizar</Button>
+        <span className="text-sm text-muted-foreground ml-auto">{filtered.length} registro(s)</span>
+      </div>
+
+      <div className="glass-card overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Quando</TableHead>
+              <TableHead>Quem</TableHead>
+              <TableHead>Tabela</TableHead>
+              <TableHead>Ação</TableHead>
+              <TableHead>Registro</TableHead>
+              <TableHead className="text-right">Detalhes</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum log encontrado.</TableCell></TableRow>
+            ) : filtered.map(l => (
+              <TableRow key={l.id}>
+                <TableCell className="text-sm">{new Date(l.created_at).toLocaleString('pt-BR')}</TableCell>
+                <TableCell>{authors[l.changed_by] || <span className="text-muted-foreground">{l.changed_by.slice(0, 8)}…</span>}</TableCell>
+                <TableCell>{TABLE_LABELS[l.table_name] || l.table_name}</TableCell>
+                <TableCell><Badge variant={ACTION_LABELS[l.action]?.variant || 'outline'}>{ACTION_LABELS[l.action]?.label || l.action}</Badge></TableCell>
+                <TableCell className="max-w-xs truncate">{l.record_label || <span className="text-muted-foreground">—</span>}</TableCell>
+                <TableCell className="text-right">
+                  <Button variant="ghost" size="icon" onClick={() => setDetail(l)}><Eye className="w-4 h-4" /></Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <Dialog open={!!detail} onOpenChange={o => !o && setDetail(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Detalhes do log</DialogTitle>
+          </DialogHeader>
+          {detail && (
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div><span className="text-muted-foreground">Quando:</span> {new Date(detail.created_at).toLocaleString('pt-BR')}</div>
+                <div><span className="text-muted-foreground">Quem:</span> {authors[detail.changed_by] || detail.changed_by}</div>
+                <div><span className="text-muted-foreground">Tabela:</span> {TABLE_LABELS[detail.table_name] || detail.table_name}</div>
+                <div><span className="text-muted-foreground">Ação:</span> {ACTION_LABELS[detail.action]?.label}</div>
+                <div className="col-span-2"><span className="text-muted-foreground">Registro:</span> {detail.record_label || '—'} <span className="text-xs text-muted-foreground">({detail.record_id})</span></div>
+              </div>
+              <div>
+                <p className="text-muted-foreground mb-1">Alterações:</p>
+                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all">{JSON.stringify(detail.changes, null, 2)}</pre>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 export default function CadastrosPage() {
   return (
     <AppLayout title="Cadastros" subtitle="Gerencie leads, clientes, produtos, tarefas e usuários">
       <Tabs defaultValue="leads" className="w-full">
-        <TabsList className="grid grid-cols-2 md:grid-cols-5 mb-6">
+        <TabsList className="grid grid-cols-3 md:grid-cols-6 mb-6">
           <TabsTrigger value="leads"><Users className="w-4 h-4 mr-2" />Leads</TabsTrigger>
           <TabsTrigger value="customers"><Briefcase className="w-4 h-4 mr-2" />Clientes</TabsTrigger>
           <TabsTrigger value="products"><Package className="w-4 h-4 mr-2" />Produtos</TabsTrigger>
           <TabsTrigger value="tasks"><CheckSquare className="w-4 h-4 mr-2" />Tarefas</TabsTrigger>
           <TabsTrigger value="users"><UserCog className="w-4 h-4 mr-2" />Usuários</TabsTrigger>
+          <TabsTrigger value="audit"><History className="w-4 h-4 mr-2" />Auditoria</TabsTrigger>
         </TabsList>
         <TabsContent value="leads"><CrudTab entity="leads" /></TabsContent>
         <TabsContent value="customers"><CrudTab entity="customers" /></TabsContent>
         <TabsContent value="products"><CrudTab entity="products" /></TabsContent>
         <TabsContent value="tasks"><CrudTab entity="tasks" /></TabsContent>
         <TabsContent value="users"><UsersTab /></TabsContent>
+        <TabsContent value="audit"><AuditTab /></TabsContent>
       </Tabs>
     </AppLayout>
   );
