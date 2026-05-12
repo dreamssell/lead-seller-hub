@@ -14,6 +14,7 @@ import {
   UserCircle,
   Headphones,
   BarChart3,
+  Database,
   LogOut,
 } from 'lucide-react';
 
