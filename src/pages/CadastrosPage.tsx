@@ -351,6 +351,8 @@ function UsersTab() {
 
   const save = async () => {
     if (!editing) return;
+    const before = { display_name: editing.display_name, phone: editing.phone, role_label: editing.role_label, is_active: editing.is_active, role: roles[editing.user_id]?.[0] || 'user' };
+    const after = { display_name: form.display_name, phone: form.phone, role_label: form.role_label, is_active: form.is_active, role: form.role };
     const { error } = await supabase.from('profiles').update({
       display_name: form.display_name,
       phone: form.phone,
@@ -359,10 +361,10 @@ function UsersTab() {
     }).eq('user_id', editing.user_id);
     if (error) return toast({ title: 'Erro', description: error.message, variant: 'destructive' });
 
-    // update role: delete existing and insert new (admin only operation per RLS)
     await supabase.from('user_roles').delete().eq('user_id', editing.user_id);
     await supabase.from('user_roles').insert({ user_id: editing.user_id, role: form.role as any });
 
+    await logAudit({ table: 'profiles', recordId: editing.user_id, action: 'update', label: form.display_name, before, after });
     toast({ title: 'Usuário atualizado' });
     setOpen(false);
     load();
@@ -371,16 +373,22 @@ function UsersTab() {
   const toggleActive = async (profile: any) => {
     const { error } = await supabase.from('profiles').update({ is_active: !profile.is_active }).eq('user_id', profile.user_id);
     if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-    else load();
+    else {
+      await logAudit({ table: 'profiles', recordId: profile.user_id, action: 'update', label: profile.display_name, before: { is_active: profile.is_active }, after: { is_active: !profile.is_active } });
+      load();
+    }
   };
 
   const remove = async () => {
     if (!deleteUid) return;
-    // Soft delete: deactivate + remove roles
+    const target = profiles.find(p => p.user_id === deleteUid);
     await supabase.from('user_roles').delete().eq('user_id', deleteUid);
     const { error } = await supabase.from('profiles').update({ is_active: false }).eq('user_id', deleteUid);
     if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-    else toast({ title: 'Usuário desativado', description: 'A exclusão definitiva precisa ser feita pelo administrador.' });
+    else {
+      await logAudit({ table: 'profiles', recordId: deleteUid, action: 'delete', label: target?.display_name, before: target });
+      toast({ title: 'Usuário desativado', description: 'A exclusão definitiva precisa ser feita pelo administrador.' });
+    }
     setDeleteUid(null);
     load();
   };
