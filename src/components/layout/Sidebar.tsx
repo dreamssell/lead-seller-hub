@@ -14,6 +14,7 @@ import {
   UserCircle,
   Headphones,
   BarChart3,
+  Database,
   LogOut,
 } from 'lucide-react';
 
@@ -31,6 +32,7 @@ const navSections = [
     label: 'Gestão',
     items: [
       { icon: Users, label: 'Equipe (SDR/Closers)', path: '/team' },
+      { icon: Database, label: 'Cadastros', path: '/cadastros' },
       { icon: Bot, label: 'Agentes de I.A.', path: '/ai-agents' },
       { icon: BarChart3, label: 'Relatórios', path: '/reports' },
       { icon: FileText, label: 'Kanban / Pipeline', path: '/pipeline' },
