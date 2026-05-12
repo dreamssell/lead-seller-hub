@@ -192,13 +192,15 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
     });
 
     if (editing) {
-      const { error } = await (supabase as any).from(schema.table).update(payload).eq('id', editing.id);
+      const { data, error } = await (supabase as any).from(schema.table).update(payload).eq('id', editing.id).select().single();
       if (error) return toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
+      await logAudit({ table: schema.table, recordId: editing.id, action: 'update', label: data?.[schema.titleKey], before: editing, after: data });
       toast({ title: 'Atualizado com sucesso' });
     } else {
       payload.created_by = user.id;
-      const { error } = await (supabase as any).from(schema.table).insert(payload);
+      const { data, error } = await (supabase as any).from(schema.table).insert(payload).select().single();
       if (error) return toast({ title: 'Erro ao criar', description: error.message, variant: 'destructive' });
+      await logAudit({ table: schema.table, recordId: data?.id, action: 'create', label: data?.[schema.titleKey], after: data });
       toast({ title: 'Criado com sucesso' });
     }
     setOpen(false);
@@ -207,9 +209,13 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
 
   const remove = async () => {
     if (!deleteId) return;
+    const target = rows.find(r => r.id === deleteId);
     const { error } = await (supabase as any).from(schema.table).delete().eq('id', deleteId);
     if (error) toast({ title: 'Erro ao excluir', description: error.message, variant: 'destructive' });
-    else toast({ title: 'Excluído com sucesso' });
+    else {
+      await logAudit({ table: schema.table, recordId: deleteId, action: 'delete', label: target?.[schema.titleKey], before: target });
+      toast({ title: 'Excluído com sucesso' });
+    }
     setDeleteId(null);
     load();
   };
