@@ -55,6 +55,7 @@ const App = () => (
               <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppPage /></ProtectedRoute>} />
               <Route path="/video" element={<ProtectedRoute><VideoCallsPage /></ProtectedRoute>} />
               <Route path="/automations" element={<ProtectedRoute><AutomationsPage /></ProtectedRoute>} />
+              <Route path="/cadastros" element={<ProtectedRoute><CadastrosPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             </VoipProvider>
