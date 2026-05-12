@@ -22,6 +22,7 @@ import AuthCallbackPage from "./pages/AuthCallbackPage";
 import WhatsAppPage from "./pages/WhatsAppPage";
 import VideoCallsPage from "./pages/VideoCallsPage";
 import AutomationsPage from "./pages/AutomationsPage";
+import CadastrosPage from "./pages/CadastrosPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
