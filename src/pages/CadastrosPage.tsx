@@ -609,6 +609,14 @@ function AuditTab() {
         </Table>
       </div>
 
+      {hasMore && !loading && (
+        <div className="flex justify-center">
+          <Button variant="outline" onClick={() => load(false)} disabled={loadingMore}>
+            {loadingMore ? 'Carregando...' : 'Carregar mais'}
+          </Button>
+        </div>
+      )}
+
       <Dialog open={!!detail} onOpenChange={o => !o && setDetail(null)}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
