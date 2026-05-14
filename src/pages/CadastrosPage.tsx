@@ -571,8 +571,9 @@ function AuditTab() {
             <SelectItem value="delete">Exclusão</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline" onClick={load}>Atualizar</Button>
-        <span className="text-sm text-muted-foreground ml-auto">{filtered.length} registro(s)</span>
+        <Button variant="outline" onClick={() => load(true)}>Atualizar</Button>
+        {liveCount > 0 && <Badge variant="default">{liveCount} novo(s) ao vivo</Badge>}
+        <span className="text-sm text-muted-foreground ml-auto">{filtered.length} de {logs.length} carregado(s)</span>
       </div>
 
       <div className="glass-card overflow-hidden">
