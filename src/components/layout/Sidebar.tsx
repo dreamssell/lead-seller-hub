@@ -15,6 +15,7 @@ import {
   Headphones,
   BarChart3,
   Database,
+  Crown,
   LogOut,
 } from 'lucide-react';
 
