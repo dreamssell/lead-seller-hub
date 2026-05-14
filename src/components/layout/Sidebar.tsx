@@ -15,6 +15,7 @@ import {
   Headphones,
   BarChart3,
   Database,
+  Crown,
   LogOut,
 } from 'lucide-react';
 
@@ -36,6 +37,7 @@ const navSections = [
       { icon: Bot, label: 'Agentes de I.A.', path: '/ai-agents' },
       { icon: BarChart3, label: 'Relatórios', path: '/reports' },
       { icon: FileText, label: 'Kanban / Pipeline', path: '/pipeline' },
+      { icon: Crown, label: 'Dashboard CEO', path: '/ceo' },
     ],
   },
   {

@@ -23,6 +23,7 @@ import WhatsAppPage from "./pages/WhatsAppPage";
 import VideoCallsPage from "./pages/VideoCallsPage";
 import AutomationsPage from "./pages/AutomationsPage";
 import CadastrosPage from "./pages/CadastrosPage";
+import CEODashboardPage from "./pages/CEODashboardPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -56,6 +57,7 @@ const App = () => (
               <Route path="/video" element={<ProtectedRoute><VideoCallsPage /></ProtectedRoute>} />
               <Route path="/automations" element={<ProtectedRoute><AutomationsPage /></ProtectedRoute>} />
               <Route path="/cadastros" element={<ProtectedRoute><CadastrosPage /></ProtectedRoute>} />
+              <Route path="/ceo" element={<ProtectedRoute><CEODashboardPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             </VoipProvider>

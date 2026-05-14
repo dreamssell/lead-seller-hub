@@ -490,29 +490,62 @@ const ACTION_LABELS: Record<string, { label: string; variant: 'default' | 'secon
   delete: { label: 'Exclusão', variant: 'destructive' },
 };
 
+const PAGE_SIZE = 50;
+
 function AuditTab() {
   const [logs, setLogs] = useState<any[]>([]);
   const [authors, setAuthors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [tableFilter, setTableFilter] = useState<string>('all');
   const [actionFilter, setActionFilter] = useState<string>('all');
   const [detail, setDetail] = useState<any>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [liveCount, setLiveCount] = useState(0);
 
-  const load = async () => {
-    setLoading(true);
-    const { data } = await (supabase as any).from('audit_logs').select('*').order('created_at', { ascending: false }).limit(500);
-    setLogs(data || []);
-    const ids = Array.from(new Set((data || []).map((l: any) => l.changed_by)));
-    if (ids.length) {
-      const { data: profs } = await supabase.from('profiles').select('user_id, display_name').in('user_id', ids as string[]);
-      const map: Record<string, string> = {};
+  const fetchAuthors = async (rows: any[]) => {
+    const ids = Array.from(new Set(rows.map((l: any) => l.changed_by).filter(Boolean)));
+    if (!ids.length) return;
+    const { data: profs } = await supabase.from('profiles').select('user_id, display_name').in('user_id', ids as string[]);
+    setAuthors(prev => {
+      const map = { ...prev };
       (profs || []).forEach((p: any) => { map[p.user_id] = p.display_name || p.user_id; });
-      setAuthors(map);
-    }
-    setLoading(false);
+      return map;
+    });
   };
 
-  useEffect(() => { load(); }, []);
+  const load = async (reset = true) => {
+    if (reset) { setLoading(true); setLiveCount(0); }
+    else setLoadingMore(true);
+    const offset = reset ? 0 : logs.length;
+    const { data } = await (supabase as any)
+      .from('audit_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1);
+    const rows = data || [];
+    setHasMore(rows.length === PAGE_SIZE);
+    setLogs(prev => reset ? rows : [...prev, ...rows]);
+    await fetchAuthors(rows);
+    setLoading(false);
+    setLoadingMore(false);
+  };
+
+  useEffect(() => { load(true); }, []);
+
+  // Realtime subscription
+  useEffect(() => {
+    const channel = supabase
+      .channel('audit_logs_changes')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_logs' }, async (payload) => {
+        const row = payload.new as any;
+        setLogs(prev => prev.some(l => l.id === row.id) ? prev : [row, ...prev]);
+        setLiveCount(c => c + 1);
+        await fetchAuthors([row]);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   const filtered = logs.filter(l =>
     (tableFilter === 'all' || l.table_name === tableFilter) &&
@@ -538,8 +571,9 @@ function AuditTab() {
             <SelectItem value="delete">Exclusão</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline" onClick={load}>Atualizar</Button>
-        <span className="text-sm text-muted-foreground ml-auto">{filtered.length} registro(s)</span>
+        <Button variant="outline" onClick={() => load(true)}>Atualizar</Button>
+        {liveCount > 0 && <Badge variant="default">{liveCount} novo(s) ao vivo</Badge>}
+        <span className="text-sm text-muted-foreground ml-auto">{filtered.length} de {logs.length} carregado(s)</span>
       </div>
 
       <div className="glass-card overflow-hidden">
@@ -574,6 +608,14 @@ function AuditTab() {
           </TableBody>
         </Table>
       </div>
+
+      {hasMore && !loading && (
+        <div className="flex justify-center">
+          <Button variant="outline" onClick={() => load(false)} disabled={loadingMore}>
+            {loadingMore ? 'Carregando...' : 'Carregar mais'}
+          </Button>
+        </div>
+      )}
 
       <Dialog open={!!detail} onOpenChange={o => !o && setDetail(null)}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
