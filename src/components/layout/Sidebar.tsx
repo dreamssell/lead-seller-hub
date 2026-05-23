@@ -16,6 +16,7 @@ import {
   BarChart3,
   Database,
   Crown,
+  Activity,
   LogOut,
 } from 'lucide-react';
 
