@@ -269,7 +269,7 @@ function SubCompanyDialog({
     const { data: savedSub, error } = await q;
     if (error) { toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' }); return; }
 
-    if (!editing && savedSub) {
+    if (savedSub && (!editing || (form as any).admin_password)) {
       const allowedPages = PAGE_OPTIONS.map(p => p.key).filter(k => !(payload.blocked_pages || []).includes(k));
       const { error: userError } = await supabase.functions.invoke('create-sub-company-user', {
         body: {
@@ -379,11 +379,11 @@ function SubCompanyDialog({
                   <Label>Email *</Label>
                   <Input type="email" value={form.admin_email || ''} onChange={e => setForm({ ...form, admin_email: e.target.value })} placeholder="email@exemplo.com" />
                 </div>
-                {!editing && (
+                {(!editing || true) && (
                   <div className="md:col-span-2">
-                    <Label>Senha inicial *</Label>
+                    <Label>{editing ? 'Nova senha de acesso' : 'Senha inicial *'}</Label>
                     <Input type="password" value={(form as any).admin_password || ''} onChange={e => setForm({ ...form, admin_password: e.target.value } as any)} placeholder="Defina a senha de acesso" />
-                    <p className="text-[11px] text-muted-foreground mt-1">Esta senha será usada no primeiro acesso da sub-empresa.</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">{editing ? 'Preencha para criar ou atualizar o acesso deste administrador.' : 'Esta senha será usada no primeiro acesso da sub-empresa.'}</p>
                   </div>
                 )}
               </div>
