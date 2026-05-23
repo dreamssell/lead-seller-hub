@@ -495,12 +495,17 @@ const PAGE_SIZE = 50;
 function AuditTab() {
   const [logs, setLogs] = useState<any[]>([]);
   const [authors, setAuthors] = useState<Record<string, string>>({});
+  const [allProfiles, setAllProfiles] = useState<{ user_id: string; display_name: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [tableFilter, setTableFilter] = useState<string>('all');
   const [actionFilter, setActionFilter] = useState<string>('all');
+  const [userFilter, setUserFilter] = useState<string>('all');
+  const [fromDate, setFromDate] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
   const [detail, setDetail] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
+  const [total, setTotal] = useState<number>(0);
   const [liveCount, setLiveCount] = useState(0);
 
   const fetchAuthors = async (rows: any[]) => {
@@ -514,56 +519,84 @@ function AuditTab() {
     });
   };
 
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('profiles').select('user_id, display_name').order('display_name');
+      setAllProfiles((data || []).map((p: any) => ({ user_id: p.user_id, display_name: p.display_name || p.user_id })));
+    })();
+  }, []);
+
   const load = async (reset = true) => {
     if (reset) { setLoading(true); setLiveCount(0); }
     else setLoadingMore(true);
     const offset = reset ? 0 : logs.length;
-    const { data } = await (supabase as any)
-      .from('audit_logs')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .range(offset, offset + PAGE_SIZE - 1);
-    const rows = data || [];
-    setHasMore(rows.length === PAGE_SIZE);
+    const { data, error } = await (supabase as any).rpc('search_audit_logs', {
+      p_table: tableFilter === 'all' ? null : tableFilter,
+      p_action: actionFilter === 'all' ? null : actionFilter,
+      p_user: userFilter === 'all' ? null : userFilter,
+      p_from: fromDate ? new Date(fromDate).toISOString() : null,
+      p_to: toDate ? new Date(toDate).toISOString() : null,
+      p_limit: PAGE_SIZE,
+      p_offset: offset,
+    });
+    if (error) {
+      toast({ title: 'Erro ao carregar auditoria', description: error.message, variant: 'destructive' });
+      setLoading(false); setLoadingMore(false);
+      return;
+    }
+    const rows = (data || []) as any[];
+    const totalCount = rows[0]?.total_count ? Number(rows[0].total_count) : 0;
+    setTotal(totalCount);
+    setHasMore(offset + rows.length < totalCount);
     setLogs(prev => reset ? rows : [...prev, ...rows]);
+    setAuthors(prev => {
+      const map = { ...prev };
+      rows.forEach(r => { if (r.changed_by && r.changed_by_name) map[r.changed_by] = r.changed_by_name; });
+      return map;
+    });
     await fetchAuthors(rows);
     setLoading(false);
     setLoadingMore(false);
   };
 
-  useEffect(() => { load(true); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(true); }, [tableFilter, actionFilter, userFilter, fromDate, toDate]);
 
-  // Realtime subscription
   useEffect(() => {
     const channel = supabase
       .channel('audit_logs_changes')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_logs' }, async (payload) => {
         const row = payload.new as any;
+        if (tableFilter !== 'all' && row.table_name !== tableFilter) return;
+        if (actionFilter !== 'all' && row.action !== actionFilter) return;
+        if (userFilter !== 'all' && row.changed_by !== userFilter) return;
+        if (fromDate && new Date(row.created_at) < new Date(fromDate)) return;
+        if (toDate && new Date(row.created_at) > new Date(toDate)) return;
         setLogs(prev => prev.some(l => l.id === row.id) ? prev : [row, ...prev]);
+        setTotal(t => t + 1);
         setLiveCount(c => c + 1);
         await fetchAuthors([row]);
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [tableFilter, actionFilter, userFilter, fromDate, toDate]);
 
-  const filtered = logs.filter(l =>
-    (tableFilter === 'all' || l.table_name === tableFilter) &&
-    (actionFilter === 'all' || l.action === actionFilter)
-  );
+  const clearFilters = () => {
+    setTableFilter('all'); setActionFilter('all'); setUserFilter('all'); setFromDate(''); setToDate('');
+  };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <Select value={tableFilter} onValueChange={setTableFilter}>
-          <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas as tabelas</SelectItem>
             {Object.entries(TABLE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={actionFilter} onValueChange={setActionFilter}>
-          <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas as ações</SelectItem>
             <SelectItem value="create">Criação</SelectItem>
@@ -571,9 +604,25 @@ function AuditTab() {
             <SelectItem value="delete">Exclusão</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={userFilter} onValueChange={setUserFilter}>
+          <SelectTrigger className="w-52"><SelectValue placeholder="Usuário" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os usuários</SelectItem>
+            {allProfiles.map(p => <SelectItem key={p.user_id} value={p.user_id}>{p.display_name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground">De</Label>
+          <Input type="datetime-local" className="w-52" value={fromDate} onChange={e => setFromDate(e.target.value)} />
+        </div>
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground">Até</Label>
+          <Input type="datetime-local" className="w-52" value={toDate} onChange={e => setToDate(e.target.value)} />
+        </div>
+        <Button variant="ghost" onClick={clearFilters}>Limpar</Button>
         <Button variant="outline" onClick={() => load(true)}>Atualizar</Button>
         {liveCount > 0 && <Badge variant="default">{liveCount} novo(s) ao vivo</Badge>}
-        <span className="text-sm text-muted-foreground ml-auto">{filtered.length} de {logs.length} carregado(s)</span>
+        <span className="text-sm text-muted-foreground ml-auto">{logs.length} de {total} resultado(s)</span>
       </div>
 
       <div className="glass-card overflow-hidden">
@@ -591,12 +640,12 @@ function AuditTab() {
           <TableBody>
             {loading ? (
               <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-            ) : filtered.length === 0 ? (
+            ) : logs.length === 0 ? (
               <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum log encontrado.</TableCell></TableRow>
-            ) : filtered.map(l => (
+            ) : logs.map(l => (
               <TableRow key={l.id}>
                 <TableCell className="text-sm">{new Date(l.created_at).toLocaleString('pt-BR')}</TableCell>
-                <TableCell>{authors[l.changed_by] || <span className="text-muted-foreground">{l.changed_by.slice(0, 8)}…</span>}</TableCell>
+                <TableCell>{authors[l.changed_by] || l.changed_by_name || <span className="text-muted-foreground">{(l.changed_by || '').slice(0, 8)}…</span>}</TableCell>
                 <TableCell>{TABLE_LABELS[l.table_name] || l.table_name}</TableCell>
                 <TableCell><Badge variant={ACTION_LABELS[l.action]?.variant || 'outline'}>{ACTION_LABELS[l.action]?.label || l.action}</Badge></TableCell>
                 <TableCell className="max-w-xs truncate">{l.record_label || <span className="text-muted-foreground">—</span>}</TableCell>
