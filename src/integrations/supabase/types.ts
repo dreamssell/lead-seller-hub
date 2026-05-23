@@ -368,6 +368,57 @@ export type Database = {
         }
         Relationships: []
       }
+      plan_packages: {
+        Row: {
+          active: boolean
+          created_at: string
+          credits_included: number
+          features: Json
+          id: string
+          is_custom: boolean
+          is_most_chosen: boolean
+          max_users: number | null
+          monthly_price: number
+          name: string
+          slug: string
+          sort_order: number
+          tagline: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          credits_included?: number
+          features?: Json
+          id?: string
+          is_custom?: boolean
+          is_most_chosen?: boolean
+          max_users?: number | null
+          monthly_price?: number
+          name: string
+          slug: string
+          sort_order?: number
+          tagline?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          credits_included?: number
+          features?: Json
+          id?: string
+          is_custom?: boolean
+          is_most_chosen?: boolean
+          max_users?: number | null
+          monthly_price?: number
+          name?: string
+          slug?: string
+          sort_order?: number
+          tagline?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           category: string | null
@@ -490,6 +541,80 @@ export type Database = {
           username?: string | null
         }
         Relationships: []
+      }
+      sub_companies: {
+        Row: {
+          admin_email: string
+          admin_name: string
+          blocked_pages: string[]
+          byok_api_key: string | null
+          byok_inherit: boolean
+          created_at: string
+          credit_balance: number
+          credit_limit: number
+          credits_used_30d: number
+          credits_used_today: number
+          id: string
+          inherit_branding: boolean
+          monthly_fee: number
+          name: string
+          owner_id: string
+          plan_slug: string
+          status: string
+          updated_at: string
+          whatsapp_limit: number
+        }
+        Insert: {
+          admin_email: string
+          admin_name: string
+          blocked_pages?: string[]
+          byok_api_key?: string | null
+          byok_inherit?: boolean
+          created_at?: string
+          credit_balance?: number
+          credit_limit?: number
+          credits_used_30d?: number
+          credits_used_today?: number
+          id?: string
+          inherit_branding?: boolean
+          monthly_fee?: number
+          name: string
+          owner_id: string
+          plan_slug?: string
+          status?: string
+          updated_at?: string
+          whatsapp_limit?: number
+        }
+        Update: {
+          admin_email?: string
+          admin_name?: string
+          blocked_pages?: string[]
+          byok_api_key?: string | null
+          byok_inherit?: boolean
+          created_at?: string
+          credit_balance?: number
+          credit_limit?: number
+          credits_used_30d?: number
+          credits_used_today?: number
+          id?: string
+          inherit_branding?: boolean
+          monthly_fee?: number
+          name?: string
+          owner_id?: string
+          plan_slug?: string
+          status?: string
+          updated_at?: string
+          whatsapp_limit?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sub_companies_plan_slug_fkey"
+            columns: ["plan_slug"]
+            isOneToOne: false
+            referencedRelation: "plan_packages"
+            referencedColumns: ["slug"]
+          },
+        ]
       }
       tasks: {
         Row: {
@@ -627,6 +752,60 @@ export type Database = {
           phone_number?: string | null
           provider?: Database["public"]["Enums"]["whatsapp_provider"]
           status?: Database["public"]["Enums"]["whatsapp_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      white_label_settings: {
+        Row: {
+          company_name: string | null
+          created_at: string
+          custom_domain: string | null
+          domain_active: boolean
+          id: string
+          login_headline: string | null
+          login_image_url: string | null
+          login_panel_style: string
+          login_subtext: string | null
+          logo_dark_url: string | null
+          logo_icon_url: string | null
+          logo_light_url: string | null
+          owner_id: string
+          primary_color: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_name?: string | null
+          created_at?: string
+          custom_domain?: string | null
+          domain_active?: boolean
+          id?: string
+          login_headline?: string | null
+          login_image_url?: string | null
+          login_panel_style?: string
+          login_subtext?: string | null
+          logo_dark_url?: string | null
+          logo_icon_url?: string | null
+          logo_light_url?: string | null
+          owner_id: string
+          primary_color?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_name?: string | null
+          created_at?: string
+          custom_domain?: string | null
+          domain_active?: boolean
+          id?: string
+          login_headline?: string | null
+          login_image_url?: string | null
+          login_panel_style?: string
+          login_subtext?: string | null
+          logo_dark_url?: string | null
+          logo_icon_url?: string | null
+          logo_light_url?: string | null
+          owner_id?: string
+          primary_color?: string | null
           updated_at?: string
         }
         Relationships: []
