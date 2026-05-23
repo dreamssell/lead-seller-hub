@@ -68,6 +68,39 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_settings: {
+        Row: {
+          created_at: string
+          created_by: string
+          default_max_tokens: number
+          default_model: string
+          default_temperature: number
+          id: string
+          system_prompt: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          default_max_tokens?: number
+          default_model?: string
+          default_temperature?: number
+          id?: string
+          system_prompt?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          default_max_tokens?: number
+          default_model?: string
+          default_temperature?: number
+          id?: string
+          system_prompt?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       api_keys: {
         Row: {
           created_at: string
@@ -176,6 +209,45 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_fields: {
+        Row: {
+          created_at: string
+          created_by: string
+          entity: string
+          field_key: string
+          id: string
+          is_active: boolean
+          label: string
+          position: number
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          entity?: string
+          field_key: string
+          id?: string
+          is_active?: boolean
+          label: string
+          position?: number
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          entity?: string
+          field_key?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          position?: number
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           address: string | null
@@ -214,6 +286,39 @@ export type Database = {
           name?: string
           notes?: string | null
           phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      integrations: {
+        Row: {
+          config: Json
+          created_at: string
+          created_by: string
+          id: string
+          is_active: boolean
+          name: string | null
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          created_by: string
+          id?: string
+          is_active?: boolean
+          name?: string | null
+          provider: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          created_by?: string
+          id?: string
+          is_active?: boolean
+          name?: string | null
+          provider?: string
           updated_at?: string
         }
         Relationships: []
@@ -341,6 +446,51 @@ export type Database = {
         }
         Relationships: []
       }
+      smtp_settings: {
+        Row: {
+          created_at: string
+          created_by: string
+          from_email: string
+          from_name: string | null
+          host: string
+          id: string
+          is_active: boolean
+          password: string | null
+          port: number
+          updated_at: string
+          use_tls: boolean
+          username: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          from_email: string
+          from_name?: string | null
+          host: string
+          id?: string
+          is_active?: boolean
+          password?: string | null
+          port?: number
+          updated_at?: string
+          use_tls?: boolean
+          username?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          from_email?: string
+          from_name?: string | null
+          host?: string
+          id?: string
+          is_active?: boolean
+          password?: string | null
+          port?: number
+          updated_at?: string
+          use_tls?: boolean
+          username?: string | null
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           assigned_to: string | null
@@ -397,6 +547,50 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      webhooks: {
+        Row: {
+          api_key_id: string | null
+          created_at: string
+          created_by: string
+          events: string[]
+          id: string
+          is_active: boolean
+          secret: string | null
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          api_key_id?: string | null
+          created_at?: string
+          created_by: string
+          events?: string[]
+          id?: string
+          is_active?: boolean
+          secret?: string | null
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          api_key_id?: string | null
+          created_at?: string
+          created_by?: string
+          events?: string[]
+          id?: string
+          is_active?: boolean
+          secret?: string | null
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhooks_api_key_id_fkey"
+            columns: ["api_key_id"]
+            isOneToOne: false
+            referencedRelation: "api_keys"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_connections: {
         Row: {
