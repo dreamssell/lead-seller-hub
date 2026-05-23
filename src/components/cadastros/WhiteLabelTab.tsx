@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Building2, Globe, LayoutDashboard, Plus, Pencil, Trash2, Ban, LogIn, Copy, Check, Sparkles, Crown, Star, Wand2, Upload, ShieldCheck, RefreshCw, AlertCircle } from 'lucide-react';
 import { SubCompanyManageDialog } from './SubCompanyManageDialog';
+import { PAGE_OPTIONS } from '@/lib/navigation';
 
 type Plan = {
   id: string; slug: string; name: string; tagline: string | null;
@@ -38,16 +39,6 @@ type WLSettings = {
   domain_last_checked_at?: string | null;
   domain_check_message?: string | null;
 };
-
-const BLOCKABLE_PAGES = [
-  { id: 'billing', label: 'Faturamento', desc: 'Página de créditos e planos' },
-  { id: 'ai-agents', label: 'Agentes IA', desc: 'Criação e edição de agentes' },
-  { id: 'analytics', label: 'Analytics', desc: 'Relatórios e métricas' },
-  { id: 'automations', label: 'Automações', desc: 'Fluxos e automações' },
-  { id: 'campaigns', label: 'Campanhas', desc: 'Disparos em massa' },
-  { id: 'followups', label: 'Follow-ups', desc: 'Regras de follow-up' },
-  { id: 'calendar', label: 'Calendário', desc: 'Eventos e agendamentos' },
-];
 
 export default function WhiteLabelTab() {
   return (
