@@ -224,6 +224,7 @@ function SubCompaniesSection() {
         ownerId={user?.id || ''}
         onSaved={() => { setOpen(false); load(); }}
       />
+      <SubCompanyManageDialog sub={managing as any} open={!!managing} onOpenChange={(o) => !o && setManaging(null)} />
     </div>
   );
 }
