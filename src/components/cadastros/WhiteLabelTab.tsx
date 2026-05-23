@@ -230,7 +230,7 @@ function SubCompanyDialog({
   const [form, setForm] = useState<Partial<SubCompany>>({});
   useEffect(() => {
     if (editing) setForm(editing);
-    else setForm({ name: '', admin_name: '', admin_email: '', whatsapp_limit: 10, inherit_branding: true, byok_inherit: true, blocked_pages: [] });
+    else setForm({ name: '', admin_name: '', admin_email: '', admin_password: '', whatsapp_limit: 10, inherit_branding: true, byok_inherit: true, blocked_pages: [] } as any);
   }, [editing, open]);
 
   const togglePage = (id: string) => {
@@ -241,6 +241,9 @@ function SubCompanyDialog({
   const save = async () => {
     if (!form.name || !form.admin_name || !form.admin_email) {
       toast({ title: 'Preencha os campos obrigatórios', variant: 'destructive' }); return;
+    }
+    if (!editing && !(form as any).admin_password) {
+      toast({ title: 'Defina uma senha inicial para o administrador', variant: 'destructive' }); return;
     }
     if (!selectedPlan) { toast({ title: 'Selecione um plano', variant: 'destructive' }); return; }
 
@@ -261,10 +264,25 @@ function SubCompanyDialog({
     };
 
     const q = editing
-      ? supabase.from('sub_companies').update(payload).eq('id', editing.id)
-      : supabase.from('sub_companies').insert(payload as any);
-    const { error } = await q;
+      ? supabase.from('sub_companies').update(payload).eq('id', editing.id).select().single()
+      : supabase.from('sub_companies').insert(payload as any).select().single();
+    const { data: savedSub, error } = await q;
     if (error) { toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' }); return; }
+
+    if (!editing && savedSub) {
+      const allowedPages = PAGE_OPTIONS.map(p => p.key).filter(k => !(payload.blocked_pages || []).includes(k));
+      const { error: userError } = await supabase.functions.invoke('create-sub-company-user', {
+        body: {
+          sub_company_id: savedSub.id,
+          email: form.admin_email,
+          name: form.admin_name,
+          password: (form as any).admin_password,
+          allowed_pages: allowedPages,
+          is_account_admin: true,
+        },
+      });
+      if (userError) { toast({ title: 'Sub-empresa criada, mas o usuário não foi criado', description: userError.message, variant: 'destructive' }); return; }
+    }
     toast({ title: editing ? 'Sub-empresa atualizada' : 'Convite enviado!', description: editing ? '' : `Plano ${selectedPlan.name} aplicado.` });
     onSaved();
   };
