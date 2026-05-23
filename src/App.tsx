@@ -24,6 +24,7 @@ import VideoCallsPage from "./pages/VideoCallsPage";
 import AutomationsPage from "./pages/AutomationsPage";
 import CadastrosPage from "./pages/CadastrosPage";
 import CEODashboardPage from "./pages/CEODashboardPage";
+import BackendStatusPage from "./pages/BackendStatusPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
