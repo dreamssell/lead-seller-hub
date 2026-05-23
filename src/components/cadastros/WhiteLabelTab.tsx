@@ -84,6 +84,7 @@ function SubCompaniesSection() {
   const [step, setStep] = useState<'plan' | 'details'>('plan');
   const [editing, setEditing] = useState<SubCompany | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [managing, setManaging] = useState<SubCompany | null>(null);
 
   const load = async () => {
     setLoading(true);
