@@ -1034,6 +1034,16 @@ export type Database = {
           total_count: number
         }[]
       }
+      validate_sub_login_token: {
+        Args: { p_token: string }
+        Returns: {
+          admin_email: string
+          admin_name: string
+          expires_at: string
+          sub_company_id: string
+          sub_company_name: string
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "atendente" | "closer"
