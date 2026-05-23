@@ -697,12 +697,13 @@ export default function CadastrosPage() {
   return (
     <AppLayout title="Cadastros" subtitle="Gerencie leads, clientes, produtos, tarefas e usuários">
       <Tabs defaultValue="leads" className="w-full">
-        <TabsList className="grid grid-cols-3 md:grid-cols-6 mb-6">
+        <TabsList className="grid grid-cols-3 md:grid-cols-7 mb-6">
           <TabsTrigger value="leads"><Users className="w-4 h-4 mr-2" />Leads</TabsTrigger>
           <TabsTrigger value="customers"><Briefcase className="w-4 h-4 mr-2" />Clientes</TabsTrigger>
           <TabsTrigger value="products"><Package className="w-4 h-4 mr-2" />Produtos</TabsTrigger>
           <TabsTrigger value="tasks"><CheckSquare className="w-4 h-4 mr-2" />Tarefas</TabsTrigger>
           <TabsTrigger value="users"><UserCog className="w-4 h-4 mr-2" />Usuários</TabsTrigger>
+          <TabsTrigger value="whitelabel"><Sparkles className="w-4 h-4 mr-2" />White Label</TabsTrigger>
           <TabsTrigger value="audit"><History className="w-4 h-4 mr-2" />Auditoria</TabsTrigger>
         </TabsList>
         <TabsContent value="leads"><CrudTab entity="leads" /></TabsContent>
@@ -710,6 +711,7 @@ export default function CadastrosPage() {
         <TabsContent value="products"><CrudTab entity="products" /></TabsContent>
         <TabsContent value="tasks"><CrudTab entity="tasks" /></TabsContent>
         <TabsContent value="users"><UsersTab /></TabsContent>
+        <TabsContent value="whitelabel"><WhiteLabelTab /></TabsContent>
         <TabsContent value="audit"><AuditTab /></TabsContent>
       </Tabs>
     </AppLayout>
