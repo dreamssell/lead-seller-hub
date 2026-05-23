@@ -65,12 +65,13 @@ export default function APIKeysPage() {
     try {
       const { data, error } = await supabase.functions.invoke('manage-api-keys', {
         method: 'POST',
-        body: { name: newKeyName.trim() },
+        body: { name: newKeyName.trim(), scopes: newKeyScopes },
       });
       if (error) throw error;
       setNewlyCreatedKey(data.full_key);
       setKeys(prev => [data, ...prev]);
       setNewKeyName('');
+      setNewKeyScopes(['auth:verify', 'auth:login']);
       setShowCreateForm(false);
       toast({ title: 'Chave criada!', description: 'Copie a chave agora — ela não será exibida novamente por completo.' });
     } catch {
@@ -78,6 +79,26 @@ export default function APIKeysPage() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const updateScopes = async (id: string, scopes: string[]) => {
+    try {
+      const { error } = await supabase.functions.invoke('manage-api-keys', {
+        method: 'PUT',
+        body: { id, scopes },
+      });
+      if (error) throw error;
+      setKeys(prev => prev.map(k => k.id === id ? { ...k, scopes } : k));
+      toast({ title: 'Escopos atualizados' });
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Falha ao atualizar escopos.' });
+    }
+  };
+
+  const toggleScope = (current: string[] | null | undefined, scope: string) => {
+    const set = new Set(current ?? []);
+    set.has(scope) ? set.delete(scope) : set.add(scope);
+    return Array.from(set);
   };
 
   const toggleKeyStatus = async (id: string, currentStatus: boolean | null) => {
