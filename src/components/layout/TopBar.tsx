@@ -1,4 +1,5 @@
-import { Sun, Moon, Bell, Search, Menu, Globe, LogIn, CalendarPlus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Sun, Moon, Bell, Search, Menu, Globe, LogIn, CalendarPlus, Settings } from 'lucide-react';
 import { useThemeContext } from '@/contexts/ThemeContext';
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
@@ -13,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface TopBarProps {
   title: string;
