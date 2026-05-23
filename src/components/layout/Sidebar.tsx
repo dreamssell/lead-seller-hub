@@ -2,55 +2,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import logo from '@/assets/logo.png';
-import {
-  LayoutDashboard,
-  MessageSquare,
-  Phone,
-  Users,
-  Bot,
-  Settings,
-  Key,
-  FileText,
-  UserCircle,
-  Headphones,
-  BarChart3,
-  Database,
-  Crown,
-  Activity,
-  LogOut,
-} from 'lucide-react';
-
-const navSections = [
-  {
-    label: 'Principal',
-    items: [
-      { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-      { icon: MessageSquare, label: 'Chat Omnichannel', path: '/chat' },
-      { icon: Phone, label: 'VoIP & Chamadas', path: '/calls' },
-      { icon: Headphones, label: 'Atendimentos', path: '/tickets' },
-    ],
-  },
-  {
-    label: 'Gestão',
-    items: [
-      { icon: Users, label: 'Equipe (SDR/Closers)', path: '/team' },
-      { icon: Database, label: 'Cadastros', path: '/cadastros' },
-      { icon: Bot, label: 'Agentes de I.A.', path: '/ai-agents' },
-      { icon: BarChart3, label: 'Relatórios', path: '/reports' },
-      { icon: FileText, label: 'Kanban / Pipeline', path: '/pipeline' },
-      { icon: Crown, label: 'Dashboard CEO', path: '/ceo' },
-    ],
-  },
-  {
-    label: 'Configurações',
-    items: [
-      { icon: Settings, label: 'Configurações', path: '/settings' },
-      { icon: Key, label: 'Chaves API', path: '/api-keys' },
-      { icon: Activity, label: 'Status do Backend', path: '/status' },
-      { icon: UserCircle, label: 'Meu Perfil', path: '/profile' },
-    ],
-  },
-];
+import { LogOut } from 'lucide-react';
+import { navSections } from '@/lib/navigation';
 
 interface SidebarProps {
   onNavigate?: () => void;
@@ -59,7 +12,7 @@ interface SidebarProps {
 export function Sidebar({ onNavigate }: SidebarProps = {}) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { signOut, canAccessPage } = useAuth();
 
   const go = (path: string) => {
     navigate(path);
@@ -81,13 +34,16 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-5">
-        {navSections.map((section) => (
+        {navSections.map((section) => {
+          const items = section.items.filter((item) => canAccessPage(item.key));
+          if (items.length === 0) return null;
+          return (
           <div key={section.label}>
             <p className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               {section.label}
             </p>
             <div className="space-y-0.5">
-              {section.items.map((item) => {
+              {items.map((item) => {
                 const isActive = location.pathname === item.path;
                 return (
                   <motion.button
@@ -103,7 +59,8 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
               })}
             </div>
           </div>
-        ))}
+        );
+        })}
       </nav>
 
       {/* Footer */}
