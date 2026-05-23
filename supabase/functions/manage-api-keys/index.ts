@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
     const method = req.method;
 
     if (method === "POST") {
-      const { name } = await req.json();
+      const { name, scopes } = await req.json();
       if (!name) {
         return new Response(JSON.stringify({ error: "Nome é obrigatório" }), {
           status: 400,
@@ -77,11 +77,14 @@ Deno.serve(async (req) => {
       }
 
       const key = generateApiKey();
-      const { data, error } = await supabaseAdmin.from("api_keys").insert({
-        name,
-        key,
-        created_by: user.id,
-      }).select().single();
+      const insertPayload: Record<string, unknown> = { name, key, created_by: user.id };
+      if (Array.isArray(scopes) && scopes.length) insertPayload.scopes = scopes;
+
+      const { data, error } = await supabaseAdmin
+        .from("api_keys")
+        .insert(insertPayload)
+        .select()
+        .single();
 
       if (error) {
         return new Response(JSON.stringify({ error: error.message }), {
@@ -91,6 +94,23 @@ Deno.serve(async (req) => {
       }
 
       return new Response(JSON.stringify({ ...data, full_key: key }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (method === "PUT") {
+      const { id, scopes } = await req.json();
+      const { error } = await supabaseAdmin
+        .from("api_keys")
+        .update({ scopes })
+        .eq("id", id);
+      if (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

@@ -13,13 +13,23 @@ interface ApiKey {
   last_used_at: string | null;
   created_at: string;
   created_by: string;
+  scopes?: string[] | null;
 }
+
+const AVAILABLE_SCOPES: { id: string; label: string; description: string }[] = [
+  { id: 'auth:verify', label: 'auth:verify', description: 'Verificar e-mail (login externo - etapa 1)' },
+  { id: 'auth:login', label: 'auth:login', description: 'Autenticar com senha (login externo - etapa 2)' },
+  { id: 'data:read', label: 'data:read', description: 'Leitura de dados via API' },
+  { id: 'data:write', label: 'data:write', description: 'Escrita de dados via API' },
+  { id: 'admin:full', label: 'admin:full', description: 'Acesso administrativo total' },
+];
 
 export default function APIKeysPage() {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
+  const [newKeyScopes, setNewKeyScopes] = useState<string[]>(['auth:verify', 'auth:login']);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
@@ -55,12 +65,13 @@ export default function APIKeysPage() {
     try {
       const { data, error } = await supabase.functions.invoke('manage-api-keys', {
         method: 'POST',
-        body: { name: newKeyName.trim() },
+        body: { name: newKeyName.trim(), scopes: newKeyScopes },
       });
       if (error) throw error;
       setNewlyCreatedKey(data.full_key);
       setKeys(prev => [data, ...prev]);
       setNewKeyName('');
+      setNewKeyScopes(['auth:verify', 'auth:login']);
       setShowCreateForm(false);
       toast({ title: 'Chave criada!', description: 'Copie a chave agora — ela não será exibida novamente por completo.' });
     } catch {
@@ -68,6 +79,26 @@ export default function APIKeysPage() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const updateScopes = async (id: string, scopes: string[]) => {
+    try {
+      const { error } = await supabase.functions.invoke('manage-api-keys', {
+        method: 'PUT',
+        body: { id, scopes },
+      });
+      if (error) throw error;
+      setKeys(prev => prev.map(k => k.id === id ? { ...k, scopes } : k));
+      toast({ title: 'Escopos atualizados' });
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Falha ao atualizar escopos.' });
+    }
+  };
+
+  const toggleScope = (current: string[] | null | undefined, scope: string) => {
+    const set = new Set(current ?? []);
+    set.has(scope) ? set.delete(scope) : set.add(scope);
+    return Array.from(set);
   };
 
   const toggleKeyStatus = async (id: string, currentStatus: boolean | null) => {
@@ -151,28 +182,48 @@ export default function APIKeysPage() {
               exit={{ opacity: 0, height: 0 }}
             >
               <h4 className="text-sm font-semibold text-foreground mb-3">Criar nova chave API</h4>
-              <div className="flex gap-3">
+              <div className="space-y-3">
                 <input
                   type="text"
                   value={newKeyName}
                   onChange={e => setNewKeyName(e.target.value)}
                   placeholder="Ex: Produção - Auth Login"
-                  className="flex-1 bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                  onKeyDown={e => e.key === 'Enter' && createKey()}
+                  className="w-full bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 />
-                <button
-                  onClick={createKey}
-                  disabled={creating || !newKeyName.trim()}
-                  className="bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
-                >
-                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Gerar'}
-                </button>
-                <button
-                  onClick={() => { setShowCreateForm(false); setNewKeyName(''); }}
-                  className="px-4 py-2.5 rounded-xl text-sm text-muted-foreground hover:bg-secondary transition-colors"
-                >
-                  Cancelar
-                </button>
+                <div>
+                  <p className="text-xs font-medium text-foreground mb-2">Escopos (permissões)</p>
+                  <div className="flex flex-wrap gap-2">
+                    {AVAILABLE_SCOPES.map(s => {
+                      const active = newKeyScopes.includes(s.id);
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setNewKeyScopes(prev => toggleScope(prev, s.id))}
+                          title={s.description}
+                          className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${active ? 'bg-primary text-primary-foreground border-primary' : 'bg-secondary text-muted-foreground border-border hover:text-foreground'}`}
+                        >
+                          {s.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => { setShowCreateForm(false); setNewKeyName(''); }}
+                    className="px-4 py-2.5 rounded-xl text-sm text-muted-foreground hover:bg-secondary transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={createKey}
+                    disabled={creating || !newKeyName.trim()}
+                    className="bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Gerar Chave'}
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}
@@ -256,6 +307,21 @@ export default function APIKeysPage() {
                       <button onClick={() => copyKey(k.key)} className="p-1 hover:bg-secondary rounded transition-colors">
                         <Copy className="w-3.5 h-3.5 text-muted-foreground" />
                       </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {AVAILABLE_SCOPES.map(s => {
+                        const active = (k.scopes ?? []).includes(s.id);
+                        return (
+                          <button
+                            key={s.id}
+                            onClick={() => updateScopes(k.id, toggleScope(k.scopes, s.id))}
+                            title={s.description}
+                            className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${active ? 'bg-primary/10 text-primary border-primary/30' : 'bg-secondary text-muted-foreground border-border hover:text-foreground'}`}
+                          >
+                            {s.label}
+                          </button>
+                        );
+                      })}
                     </div>
                     <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
                       <span>Criada: {formatDate(k.created_at)}</span>

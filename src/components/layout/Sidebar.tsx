@@ -16,6 +16,7 @@ import {
   BarChart3,
   Database,
   Crown,
+  Activity,
   LogOut,
 } from 'lucide-react';
 
@@ -45,6 +46,7 @@ const navSections = [
     items: [
       { icon: Settings, label: 'Configurações', path: '/settings' },
       { icon: Key, label: 'Chaves API', path: '/api-keys' },
+      { icon: Activity, label: 'Status do Backend', path: '/status' },
       { icon: UserCircle, label: 'Meu Perfil', path: '/profile' },
     ],
   },
