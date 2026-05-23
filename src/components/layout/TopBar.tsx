@@ -23,6 +23,7 @@ interface TopBarProps {
 }
 
 export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
+  const navigate = useNavigate();
   const { theme, toggleTheme } = useThemeContext();
   const { user } = useAuth();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -124,10 +125,23 @@ export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Avatar className="w-8 h-8 ml-1 shrink-0 ring-2 ring-primary/20">
-          <AvatarImage src={avatarUrl || undefined} alt={displayName} />
-          <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">{initials}</AvatarFallback>
-        </Avatar>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Avatar
+              className="w-8 h-8 ml-1 shrink-0 ring-2 ring-primary/20 cursor-pointer hover:ring-primary/50 transition-all"
+              onClick={() => navigate('/profile')}
+            >
+              <AvatarImage src={avatarUrl || undefined} alt={displayName} />
+              <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">{initials}</AvatarFallback>
+            </Avatar>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="end">
+            <div className="flex items-center gap-2">
+              <Settings className="w-3.5 h-3.5" />
+              <span>Configurações do Perfil</span>
+            </div>
+          </TooltipContent>
+        </Tooltip>
       </div>
     </header>
   );
