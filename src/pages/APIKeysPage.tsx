@@ -308,6 +308,21 @@ export default function APIKeysPage() {
                         <Copy className="w-3.5 h-3.5 text-muted-foreground" />
                       </button>
                     </div>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {AVAILABLE_SCOPES.map(s => {
+                        const active = (k.scopes ?? []).includes(s.id);
+                        return (
+                          <button
+                            key={s.id}
+                            onClick={() => updateScopes(k.id, toggleScope(k.scopes, s.id))}
+                            title={s.description}
+                            className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${active ? 'bg-primary/10 text-primary border-primary/30' : 'bg-secondary text-muted-foreground border-border hover:text-foreground'}`}
+                          >
+                            {s.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                     <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
                       <span>Criada: {formatDate(k.created_at)}</span>
                       <span>•</span>
