@@ -130,6 +130,8 @@ function LoginTokensTab({ sub }: { sub: SubCompany }) {
 
   return (
     <div className="space-y-4">
+      <ProvisionAdminUser sub={sub} />
+
       <div className="rounded-xl border border-border bg-card/40 p-4 space-y-3">
         <p className="text-sm font-medium flex items-center gap-2"><LogIn className="w-4 h-4" /> Gerar novo link de acesso</p>
         <div className="grid grid-cols-2 gap-3">
