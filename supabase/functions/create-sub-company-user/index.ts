@@ -59,13 +59,17 @@ Deno.serve(async (req) => {
       is_active: true,
     }, { onConflict: "user_id" });
 
-    await adminClient.rpc("upsert_user_account_access", {
+    const { error: accessError } = await userClient.rpc("upsert_user_account_access", {
       p_user_id: createdUser.id,
       p_owner_id: sub.owner_id,
       p_sub_company_id: sub_company_id,
       p_allowed_pages: allowed_pages,
       p_is_account_admin: is_account_admin,
     });
+
+    if (accessError) {
+      return new Response(JSON.stringify({ error: accessError.message }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     return new Response(JSON.stringify({ ok: true, user_id: createdUser.id }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (error) {
