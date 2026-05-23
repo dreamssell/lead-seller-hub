@@ -1,11 +1,25 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Session, User } from '@supabase/supabase-js';
+import type { SidebarPageKey } from '@/lib/navigation';
+
+type AccountAccess = {
+  owner_id: string;
+  sub_company_id: string | null;
+  sub_company_name: string | null;
+  allowed_pages: SidebarPageKey[];
+  is_account_admin: boolean;
+  blocked_pages: string[];
+  status: string;
+};
 
 interface AuthContextType {
   session: Session | null;
   user: User | null;
   loading: boolean;
+  access: AccountAccess | null;
+  accessLoading: boolean;
+  canAccessPage: (page: SidebarPageKey) => boolean;
   signOut: () => Promise<void>;
 }
 
@@ -17,6 +31,8 @@ const EXTERNAL_LOGIN_URL = import.meta.env.VITE_EXTERNAL_LOGIN_URL || 'https://l
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [access, setAccess] = useState<AccountAccess | null>(null);
+  const [accessLoading, setAccessLoading] = useState(false);
 
   useEffect(() => {
     // 1. Listener primeiro (evita race conditions)
@@ -34,16 +50,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadAccess = async () => {
+      if (!session?.user) {
+        setAccess(null);
+        setAccessLoading(false);
+        return;
+      }
+      setAccessLoading(true);
+      const { data } = await (supabase as any).rpc('get_my_account_access');
+      if (!cancelled) {
+        const row = Array.isArray(data) ? data[0] : null;
+        setAccess(row || null);
+        setAccessLoading(false);
+      }
+    };
+    loadAccess();
+    return () => { cancelled = true; };
+  }, [session?.user?.id]);
+
+  const canAccessPage = (page: SidebarPageKey) => {
+    if (!access) return true;
+    if (access.status === 'blocked') return page === 'profile';
+    if (access.blocked_pages?.includes(page)) return false;
+    if (access.is_account_admin || access.allowed_pages.length === 0) return true;
+    return access.allowed_pages.includes(page) || page === 'profile';
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
     setSession(null);
+    setAccess(null);
     if (EXTERNAL_LOGIN_URL) {
       window.location.href = EXTERNAL_LOGIN_URL;
     }
   };
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signOut }}>
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, access, accessLoading, canAccessPage, signOut }}>
       {children}
     </AuthContext.Provider>
   );
