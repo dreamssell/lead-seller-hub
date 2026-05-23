@@ -182,28 +182,48 @@ export default function APIKeysPage() {
               exit={{ opacity: 0, height: 0 }}
             >
               <h4 className="text-sm font-semibold text-foreground mb-3">Criar nova chave API</h4>
-              <div className="flex gap-3">
+              <div className="space-y-3">
                 <input
                   type="text"
                   value={newKeyName}
                   onChange={e => setNewKeyName(e.target.value)}
                   placeholder="Ex: Produção - Auth Login"
-                  className="flex-1 bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                  onKeyDown={e => e.key === 'Enter' && createKey()}
+                  className="w-full bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 />
-                <button
-                  onClick={createKey}
-                  disabled={creating || !newKeyName.trim()}
-                  className="bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
-                >
-                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Gerar'}
-                </button>
-                <button
-                  onClick={() => { setShowCreateForm(false); setNewKeyName(''); }}
-                  className="px-4 py-2.5 rounded-xl text-sm text-muted-foreground hover:bg-secondary transition-colors"
-                >
-                  Cancelar
-                </button>
+                <div>
+                  <p className="text-xs font-medium text-foreground mb-2">Escopos (permissões)</p>
+                  <div className="flex flex-wrap gap-2">
+                    {AVAILABLE_SCOPES.map(s => {
+                      const active = newKeyScopes.includes(s.id);
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setNewKeyScopes(prev => toggleScope(prev, s.id))}
+                          title={s.description}
+                          className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${active ? 'bg-primary text-primary-foreground border-primary' : 'bg-secondary text-muted-foreground border-border hover:text-foreground'}`}
+                        >
+                          {s.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => { setShowCreateForm(false); setNewKeyName(''); }}
+                    className="px-4 py-2.5 rounded-xl text-sm text-muted-foreground hover:bg-secondary transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={createKey}
+                    disabled={creating || !newKeyName.trim()}
+                    className="bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Gerar Chave'}
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}
