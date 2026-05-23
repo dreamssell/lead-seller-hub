@@ -85,6 +85,77 @@ export function SubCompanyManageDialog({
   );
 }
 
+/* ============ PROVISION ADMIN USER ============ */
+function ProvisionAdminUser({ sub }: { sub: SubCompany }) {
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<'unknown' | 'exists' | 'missing'>('unknown');
+
+  const check = useCallback(async () => {
+    const { data } = await supabase
+      .from('user_account_access')
+      .select('user_id')
+      .eq('sub_company_id', sub.id)
+      .limit(1)
+      .maybeSingle();
+    setStatus(data ? 'exists' : 'missing');
+  }, [sub.id]);
+
+  useEffect(() => { check(); }, [check]);
+
+  const provision = async () => {
+    if (password.length < 6) {
+      toast({ title: 'Senha muito curta', description: 'Use ao menos 6 caracteres.', variant: 'destructive' });
+      return;
+    }
+    setLoading(true);
+    const allowedPages = PAGE_OPTIONS.map(p => p.key).filter(k => !(sub.blocked_pages || []).includes(k));
+    const { error } = await supabase.functions.invoke('create-sub-company-user', {
+      body: {
+        sub_company_id: sub.id,
+        email: sub.admin_email,
+        name: sub.admin_name,
+        password,
+        allowed_pages: allowedPages,
+        is_account_admin: true,
+      },
+    });
+    setLoading(false);
+    if (error) { toast({ title: 'Erro ao provisionar usuário', description: error.message, variant: 'destructive' }); return; }
+    toast({ title: 'Usuário provisionado', description: `${sub.admin_email} já pode fazer login.` });
+    setPassword('');
+    check();
+  };
+
+  return (
+    <div className={`rounded-xl border p-4 space-y-3 ${status === 'missing' ? 'border-orange-500/40 bg-orange-500/5' : 'border-border bg-card/40'}`}>
+      <div className="flex items-start gap-2">
+        <UserPlus className={`w-4 h-4 mt-0.5 ${status === 'missing' ? 'text-orange-500' : 'text-primary'}`} />
+        <div className="flex-1">
+          <p className="text-sm font-medium">
+            {status === 'missing' ? 'Administrador ainda sem acesso' : 'Provisionar / redefinir senha do administrador'}
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            {sub.admin_email} — defina uma senha para que o login externo encontre este usuário.
+          </p>
+        </div>
+        {status === 'exists' && <Badge variant="default" className="text-[10px]">Ativo</Badge>}
+      </div>
+      <div className="flex items-center gap-2">
+        <Input
+          type="password"
+          placeholder="Senha inicial (mín. 6 caracteres)"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+        />
+        <Button onClick={provision} disabled={loading || !password}>
+          {loading ? 'Salvando...' : status === 'missing' ? 'Criar acesso' : 'Atualizar senha'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /* ============ LOGIN TOKENS ============ */
 function LoginTokensTab({ sub }: { sub: SubCompany }) {
   const [tokens, setTokens] = useState<LoginToken[]>([]);
