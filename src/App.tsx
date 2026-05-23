@@ -42,6 +42,8 @@ const App = () => (
             <Routes>
               {/* Rota pública — recebe tokens da página externa */}
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
+              <Route path="/s/:subId/login" element={<SubLoginPage />} />
+
 
               {/* Rotas protegidas */}
               <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
