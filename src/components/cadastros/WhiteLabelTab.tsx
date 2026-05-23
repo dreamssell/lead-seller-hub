@@ -11,7 +11,8 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Building2, Globe, LayoutDashboard, Plus, Pencil, Trash2, Ban, LogIn, Copy, Check, Sparkles, Crown, Star, Wand2, Upload } from 'lucide-react';
+import { Building2, Globe, LayoutDashboard, Plus, Pencil, Trash2, Ban, LogIn, Copy, Check, Sparkles, Crown, Star, Wand2, Upload, ShieldCheck, RefreshCw, AlertCircle } from 'lucide-react';
+import { SubCompanyManageDialog } from './SubCompanyManageDialog';
 
 type Plan = {
   id: string; slug: string; name: string; tagline: string | null;
