@@ -418,11 +418,11 @@ function SubCompanyDialog({
               <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Páginas bloqueadas</h4>
               <p className="text-xs text-muted-foreground mb-3">Selecione as páginas que a sub-empresa NÃO poderá acessar</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {BLOCKABLE_PAGES.map(p => {
+                {PAGE_OPTIONS.map(p => {
                   const checked = (form.blocked_pages || []).includes(p.id);
                   return (
-                    <label key={p.id} className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer ${checked ? 'border-primary bg-primary/5' : 'border-border'}`}>
-                      <input type="checkbox" checked={checked} onChange={() => togglePage(p.id)} className="mt-1" />
+                    <label key={p.key} className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer ${checked ? 'border-primary bg-primary/5' : 'border-border'}`}>
+                      <input type="checkbox" checked={checked} onChange={() => togglePage(p.key)} className="mt-1" />
                       <div><p className="text-sm font-medium">{p.label}</p><p className="text-xs text-muted-foreground">{p.desc}</p></div>
                     </label>
                   );
