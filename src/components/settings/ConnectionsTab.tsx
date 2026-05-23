@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Instagram, ChevronRight, Settings2, MessageSquare, TrendingUp } from 'lucide-react';
+import { Camera, ChevronRight, Settings2, MessageSquare, TrendingUp } from 'lucide-react';
 
 const sections = [
   {
