@@ -206,7 +206,7 @@ function SubCompaniesSection() {
                 {s.status !== 'active' && <Badge variant="destructive">Bloqueada</Badge>}
               </div>
               <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" title="Link de Login"><LogIn className="w-4 h-4" /></Button>
+                <Button size="sm" variant="ghost" onClick={() => setManaging(s)} title="Acessos, chaves API e alertas"><LogIn className="w-4 h-4" /></Button>
                 <Button size="sm" variant="ghost" onClick={() => openEdit(s)} title="Editar"><Pencil className="w-4 h-4" /></Button>
                 <Button size="sm" variant="ghost" onClick={() => toggleStatus(s)} title="Bloquear/Ativar"><Ban className="w-4 h-4" /></Button>
                 <Button size="sm" variant="ghost" onClick={() => handleDelete(s.id)} title="Excluir"><Trash2 className="w-4 h-4 text-destructive" /></Button>
