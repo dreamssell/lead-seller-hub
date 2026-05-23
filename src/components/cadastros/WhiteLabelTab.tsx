@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Building2, Globe, LayoutDashboard, Plus, Pencil, Trash2, Ban, LogIn, Copy, Check, Sparkles, Crown, Star, Wand2, Upload, ShieldCheck, RefreshCw, AlertCircle } from 'lucide-react';
 import { SubCompanyManageDialog } from './SubCompanyManageDialog';
+import { PAGE_OPTIONS } from '@/lib/navigation';
 
 type Plan = {
   id: string; slug: string; name: string; tagline: string | null;
@@ -38,16 +39,6 @@ type WLSettings = {
   domain_last_checked_at?: string | null;
   domain_check_message?: string | null;
 };
-
-const BLOCKABLE_PAGES = [
-  { id: 'billing', label: 'Faturamento', desc: 'Página de créditos e planos' },
-  { id: 'ai-agents', label: 'Agentes IA', desc: 'Criação e edição de agentes' },
-  { id: 'analytics', label: 'Analytics', desc: 'Relatórios e métricas' },
-  { id: 'automations', label: 'Automações', desc: 'Fluxos e automações' },
-  { id: 'campaigns', label: 'Campanhas', desc: 'Disparos em massa' },
-  { id: 'followups', label: 'Follow-ups', desc: 'Regras de follow-up' },
-  { id: 'calendar', label: 'Calendário', desc: 'Eventos e agendamentos' },
-];
 
 export default function WhiteLabelTab() {
   return (
@@ -239,7 +230,7 @@ function SubCompanyDialog({
   const [form, setForm] = useState<Partial<SubCompany>>({});
   useEffect(() => {
     if (editing) setForm(editing);
-    else setForm({ name: '', admin_name: '', admin_email: '', whatsapp_limit: 10, inherit_branding: true, byok_inherit: true, blocked_pages: [] });
+    else setForm({ name: '', admin_name: '', admin_email: '', admin_password: '', whatsapp_limit: 10, inherit_branding: true, byok_inherit: true, blocked_pages: [] } as any);
   }, [editing, open]);
 
   const togglePage = (id: string) => {
@@ -250,6 +241,9 @@ function SubCompanyDialog({
   const save = async () => {
     if (!form.name || !form.admin_name || !form.admin_email) {
       toast({ title: 'Preencha os campos obrigatórios', variant: 'destructive' }); return;
+    }
+    if (!editing && !(form as any).admin_password) {
+      toast({ title: 'Defina uma senha inicial para o administrador', variant: 'destructive' }); return;
     }
     if (!selectedPlan) { toast({ title: 'Selecione um plano', variant: 'destructive' }); return; }
 
@@ -270,10 +264,25 @@ function SubCompanyDialog({
     };
 
     const q = editing
-      ? supabase.from('sub_companies').update(payload).eq('id', editing.id)
-      : supabase.from('sub_companies').insert(payload as any);
-    const { error } = await q;
+      ? supabase.from('sub_companies').update(payload).eq('id', editing.id).select().single()
+      : supabase.from('sub_companies').insert(payload as any).select().single();
+    const { data: savedSub, error } = await q;
     if (error) { toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' }); return; }
+
+    if (savedSub && (!editing || (form as any).admin_password)) {
+      const allowedPages = PAGE_OPTIONS.map(p => p.key).filter(k => !(payload.blocked_pages || []).includes(k));
+      const { error: userError } = await supabase.functions.invoke('create-sub-company-user', {
+        body: {
+          sub_company_id: savedSub.id,
+          email: form.admin_email,
+          name: form.admin_name,
+          password: (form as any).admin_password,
+          allowed_pages: allowedPages,
+          is_account_admin: true,
+        },
+      });
+      if (userError) { toast({ title: 'Sub-empresa criada, mas o usuário não foi criado', description: userError.message, variant: 'destructive' }); return; }
+    }
     toast({ title: editing ? 'Sub-empresa atualizada' : 'Convite enviado!', description: editing ? '' : `Plano ${selectedPlan.name} aplicado.` });
     onSaved();
   };
@@ -370,6 +379,13 @@ function SubCompanyDialog({
                   <Label>Email *</Label>
                   <Input type="email" value={form.admin_email || ''} onChange={e => setForm({ ...form, admin_email: e.target.value })} placeholder="email@exemplo.com" />
                 </div>
+                {(!editing || true) && (
+                  <div className="md:col-span-2">
+                    <Label>{editing ? 'Nova senha de acesso' : 'Senha inicial *'}</Label>
+                    <Input type="password" value={(form as any).admin_password || ''} onChange={e => setForm({ ...form, admin_password: e.target.value } as any)} placeholder="Defina a senha de acesso" />
+                    <p className="text-[11px] text-muted-foreground mt-1">{editing ? 'Preencha para criar ou atualizar o acesso deste administrador.' : 'Esta senha será usada no primeiro acesso da sub-empresa.'}</p>
+                  </div>
+                )}
               </div>
             </section>
 
@@ -409,11 +425,11 @@ function SubCompanyDialog({
               <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Páginas bloqueadas</h4>
               <p className="text-xs text-muted-foreground mb-3">Selecione as páginas que a sub-empresa NÃO poderá acessar</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {BLOCKABLE_PAGES.map(p => {
-                  const checked = (form.blocked_pages || []).includes(p.id);
+                {PAGE_OPTIONS.map(p => {
+                  const checked = (form.blocked_pages || []).includes(p.key);
                   return (
-                    <label key={p.id} className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer ${checked ? 'border-primary bg-primary/5' : 'border-border'}`}>
-                      <input type="checkbox" checked={checked} onChange={() => togglePage(p.id)} className="mt-1" />
+                    <label key={p.key} className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer ${checked ? 'border-primary bg-primary/5' : 'border-border'}`}>
+                      <input type="checkbox" checked={checked} onChange={() => togglePage(p.key)} className="mt-1" />
                       <div><p className="text-sm font-medium">{p.label}</p><p className="text-xs text-muted-foreground">{p.desc}</p></div>
                     </label>
                   );

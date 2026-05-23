@@ -466,6 +466,7 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           display_name: string | null
+          email: string | null
           id: string
           is_active: boolean | null
           phone: string | null
@@ -477,6 +478,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
+          email?: string | null
           id?: string
           is_active?: boolean | null
           phone?: string | null
@@ -488,6 +490,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
+          email?: string | null
           id?: string
           is_active?: boolean | null
           phone?: string | null
@@ -799,6 +802,50 @@ export type Database = {
         }
         Relationships: []
       }
+      user_account_access: {
+        Row: {
+          allowed_pages: string[]
+          created_at: string
+          created_by: string | null
+          id: string
+          is_account_admin: boolean
+          owner_id: string
+          sub_company_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          allowed_pages?: string[]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_account_admin?: boolean
+          owner_id: string
+          sub_company_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          allowed_pages?: string[]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_account_admin?: boolean
+          owner_id?: string
+          sub_company_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_account_access_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
@@ -1004,6 +1051,18 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_my_account_access: {
+        Args: never
+        Returns: {
+          allowed_pages: string[]
+          blocked_pages: string[]
+          is_account_admin: boolean
+          owner_id: string
+          status: string
+          sub_company_id: string
+          sub_company_name: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1033,6 +1092,32 @@ export type Database = {
           table_name: string
           total_count: number
         }[]
+      }
+      upsert_user_account_access: {
+        Args: {
+          p_allowed_pages?: string[]
+          p_is_account_admin?: boolean
+          p_owner_id: string
+          p_sub_company_id?: string
+          p_user_id: string
+        }
+        Returns: {
+          allowed_pages: string[]
+          created_at: string
+          created_by: string | null
+          id: string
+          is_account_admin: boolean
+          owner_id: string
+          sub_company_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "user_account_access"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       validate_sub_login_token: {
         Args: { p_token: string }
