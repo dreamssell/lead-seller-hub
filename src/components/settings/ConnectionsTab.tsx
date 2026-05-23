@@ -5,7 +5,7 @@ const sections = [
   {
     title: 'Instagram Business',
     items: [{
-      icon: <Instagram className="w-6 h-6 text-pink-500" />,
+      icon: <Camera className="w-6 h-6 text-pink-500" />,
       name: 'Instagram Business',
       tags: ['MENSAGENS & COMENTÁRIOS'],
       desc: 'Conecte contas do Instagram para automações de comentários e DMs',
