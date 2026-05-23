@@ -379,6 +379,13 @@ function SubCompanyDialog({
                   <Label>Email *</Label>
                   <Input type="email" value={form.admin_email || ''} onChange={e => setForm({ ...form, admin_email: e.target.value })} placeholder="email@exemplo.com" />
                 </div>
+                {!editing && (
+                  <div className="md:col-span-2">
+                    <Label>Senha inicial *</Label>
+                    <Input type="password" value={(form as any).admin_password || ''} onChange={e => setForm({ ...form, admin_password: e.target.value } as any)} placeholder="Defina a senha de acesso" />
+                    <p className="text-[11px] text-muted-foreground mt-1">Esta senha será usada no primeiro acesso da sub-empresa.</p>
+                  </div>
+                )}
               </div>
             </section>
 
