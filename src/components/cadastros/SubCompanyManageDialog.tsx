@@ -10,10 +10,12 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { LogIn, KeyRound, Bell, Settings2, Copy, Check, RefreshCw, Trash2, Plus, AlertTriangle, Clock, Building2, Power } from 'lucide-react';
+import { LogIn, KeyRound, Bell, Settings2, Copy, Check, RefreshCw, Trash2, Plus, AlertTriangle, Clock, Building2, Power, UserPlus } from 'lucide-react';
+import { PAGE_OPTIONS } from '@/lib/navigation';
 
 type SubCompany = {
-  id: string; owner_id: string; name: string; admin_email: string;
+  id: string; owner_id: string; name: string; admin_name: string; admin_email: string;
+  blocked_pages?: string[];
   credit_limit: number; credit_balance: number; credit_alert_threshold: number;
   auto_action: 'alert' | 'request_recharge' | 'block'; status: string;
 };
