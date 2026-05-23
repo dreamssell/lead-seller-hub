@@ -33,6 +33,10 @@ type WLSettings = {
   company_name: string | null; logo_light_url: string | null; logo_dark_url: string | null; logo_icon_url: string | null;
   primary_color: string | null; custom_domain: string | null; domain_active: boolean;
   login_panel_style: string; login_headline: string | null; login_subtext: string | null; login_image_url: string | null;
+  domain_status?: 'pending' | 'active' | 'invalid';
+  domain_verification_token?: string | null;
+  domain_last_checked_at?: string | null;
+  domain_check_message?: string | null;
 };
 
 const BLOCKABLE_PAGES = [
