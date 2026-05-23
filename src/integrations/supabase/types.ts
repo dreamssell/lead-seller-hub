@@ -546,16 +546,20 @@ export type Database = {
         Row: {
           admin_email: string
           admin_name: string
+          auto_action: string
           blocked_pages: string[]
           byok_api_key: string | null
           byok_inherit: boolean
           created_at: string
+          credit_alert_threshold: number
           credit_balance: number
           credit_limit: number
           credits_used_30d: number
           credits_used_today: number
           id: string
           inherit_branding: boolean
+          last_alert_at: string | null
+          last_alert_pct: number | null
           monthly_fee: number
           name: string
           owner_id: string
@@ -567,16 +571,20 @@ export type Database = {
         Insert: {
           admin_email: string
           admin_name: string
+          auto_action?: string
           blocked_pages?: string[]
           byok_api_key?: string | null
           byok_inherit?: boolean
           created_at?: string
+          credit_alert_threshold?: number
           credit_balance?: number
           credit_limit?: number
           credits_used_30d?: number
           credits_used_today?: number
           id?: string
           inherit_branding?: boolean
+          last_alert_at?: string | null
+          last_alert_pct?: number | null
           monthly_fee?: number
           name: string
           owner_id: string
@@ -588,16 +596,20 @@ export type Database = {
         Update: {
           admin_email?: string
           admin_name?: string
+          auto_action?: string
           blocked_pages?: string[]
           byok_api_key?: string | null
           byok_inherit?: boolean
           created_at?: string
+          credit_alert_threshold?: number
           credit_balance?: number
           credit_limit?: number
           credits_used_30d?: number
           credits_used_today?: number
           id?: string
           inherit_branding?: boolean
+          last_alert_at?: string | null
+          last_alert_pct?: number | null
           monthly_fee?: number
           name?: string
           owner_id?: string
@@ -613,6 +625,138 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "plan_packages"
             referencedColumns: ["slug"]
+          },
+        ]
+      }
+      sub_company_alerts: {
+        Row: {
+          action_taken: string | null
+          created_at: string
+          id: string
+          is_read: boolean
+          message: string
+          owner_id: string
+          percent: number | null
+          sub_company_id: string
+          type: string
+        }
+        Insert: {
+          action_taken?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message: string
+          owner_id: string
+          percent?: number | null
+          sub_company_id: string
+          type: string
+        }
+        Update: {
+          action_taken?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string
+          owner_id?: string
+          percent?: number | null
+          sub_company_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sub_company_alerts_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sub_company_api_keys: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          key: string
+          last_used_at: string | null
+          name: string
+          owner_id: string
+          scopes: string[]
+          sub_company_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key: string
+          last_used_at?: string | null
+          name: string
+          owner_id: string
+          scopes?: string[]
+          sub_company_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key?: string
+          last_used_at?: string | null
+          name?: string
+          owner_id?: string
+          scopes?: string[]
+          sub_company_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sub_company_api_keys_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sub_company_login_tokens: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          label: string | null
+          last_used_at: string | null
+          owner_id: string
+          revoked: boolean
+          sub_company_id: string
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          owner_id: string
+          revoked?: boolean
+          sub_company_id: string
+          token: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          owner_id?: string
+          revoked?: boolean
+          sub_company_id?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sub_company_login_tokens_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -762,6 +906,10 @@ export type Database = {
           created_at: string
           custom_domain: string | null
           domain_active: boolean
+          domain_check_message: string | null
+          domain_last_checked_at: string | null
+          domain_status: string
+          domain_verification_token: string | null
           id: string
           login_headline: string | null
           login_image_url: string | null
@@ -779,6 +927,10 @@ export type Database = {
           created_at?: string
           custom_domain?: string | null
           domain_active?: boolean
+          domain_check_message?: string | null
+          domain_last_checked_at?: string | null
+          domain_status?: string
+          domain_verification_token?: string | null
           id?: string
           login_headline?: string | null
           login_image_url?: string | null
@@ -796,6 +948,10 @@ export type Database = {
           created_at?: string
           custom_domain?: string | null
           domain_active?: boolean
+          domain_check_message?: string | null
+          domain_last_checked_at?: string | null
+          domain_status?: string
+          domain_verification_token?: string | null
           id?: string
           login_headline?: string | null
           login_image_url?: string | null
@@ -828,6 +984,26 @@ export type Database = {
       }
     }
     Functions: {
+      generate_sub_login_token: {
+        Args: { p_hours?: number; p_label?: string; p_sub_company_id: string }
+        Returns: {
+          created_at: string
+          expires_at: string
+          id: string
+          label: string | null
+          last_used_at: string | null
+          owner_id: string
+          revoked: boolean
+          sub_company_id: string
+          token: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sub_company_login_tokens"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

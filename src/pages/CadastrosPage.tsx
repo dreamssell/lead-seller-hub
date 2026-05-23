@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -667,28 +668,77 @@ function AuditTab() {
         </div>
       )}
 
-      <Dialog open={!!detail} onOpenChange={o => !o && setDetail(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Detalhes do log</DialogTitle>
-          </DialogHeader>
-          {detail && (
-            <div className="space-y-3 text-sm">
-              <div className="grid grid-cols-2 gap-3">
-                <div><span className="text-muted-foreground">Quando:</span> {new Date(detail.created_at).toLocaleString('pt-BR')}</div>
-                <div><span className="text-muted-foreground">Quem:</span> {authors[detail.changed_by] || detail.changed_by}</div>
-                <div><span className="text-muted-foreground">Tabela:</span> {TABLE_LABELS[detail.table_name] || detail.table_name}</div>
-                <div><span className="text-muted-foreground">Ação:</span> {ACTION_LABELS[detail.action]?.label}</div>
-                <div className="col-span-2"><span className="text-muted-foreground">Registro:</span> {detail.record_label || '—'} <span className="text-xs text-muted-foreground">({detail.record_id})</span></div>
-              </div>
-              <div>
-                <p className="text-muted-foreground mb-1">Alterações:</p>
-                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all">{JSON.stringify(detail.changes, null, 2)}</pre>
-              </div>
+      <Sheet open={!!detail} onOpenChange={o => !o && setDetail(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Detalhes do log</SheetTitle>
+            <SheetDescription>Auditoria completa do registro selecionado, incluindo diff antes/depois.</SheetDescription>
+          </SheetHeader>
+          {detail && <AuditLogDetail detail={detail} authors={authors} />}
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
+function AuditLogDetail({ detail, authors }: { detail: any; authors: Record<string, string> }) {
+  const changes = detail.changes || {};
+  // Detect shape: { before, after } | { old, new } | flat object
+  const before = changes.before ?? changes.old ?? changes.previous ?? null;
+  const after = changes.after ?? changes.new ?? changes.current ?? (before ? null : changes);
+  const isDiff = before && after;
+  const keys = isDiff
+    ? Array.from(new Set([...Object.keys(before || {}), ...Object.keys(after || {})]))
+    : [];
+  const changedKeys = isDiff ? keys.filter(k => JSON.stringify(before?.[k]) !== JSON.stringify(after?.[k])) : [];
+
+  const fmt = (v: any) => v === undefined || v === null ? <span className="text-muted-foreground italic">—</span> : typeof v === 'object' ? <pre className="text-[11px] whitespace-pre-wrap break-all">{JSON.stringify(v, null, 2)}</pre> : <span className="break-all">{String(v)}</span>;
+
+  return (
+    <div className="space-y-4 mt-4 text-sm">
+      <div className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-secondary/30 p-3">
+        <div><span className="text-muted-foreground">Quando:</span><br />{new Date(detail.created_at).toLocaleString('pt-BR')}</div>
+        <div><span className="text-muted-foreground">Quem:</span><br />{authors[detail.changed_by] || detail.changed_by_name || (detail.changed_by || '').slice(0, 8) + '…'}</div>
+        <div><span className="text-muted-foreground">Tabela:</span><br />{TABLE_LABELS[detail.table_name] || detail.table_name}</div>
+        <div><span className="text-muted-foreground">Ação:</span><br /><Badge variant={ACTION_LABELS[detail.action]?.variant || 'outline'}>{ACTION_LABELS[detail.action]?.label || detail.action}</Badge></div>
+        <div className="col-span-2"><span className="text-muted-foreground">Registro:</span><br />{detail.record_label || '—'} <span className="text-[11px] text-muted-foreground font-mono">({detail.record_id})</span></div>
+      </div>
+
+      {isDiff ? (
+        <div>
+          <p className="text-xs uppercase text-muted-foreground mb-2 font-semibold">Diff de alterações {changedKeys.length > 0 && <Badge variant="outline" className="ml-2">{changedKeys.length} campo(s) alterado(s)</Badge>}</p>
+          {changedKeys.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhuma diferença detectada entre antes e depois.</p>
+          ) : (
+            <div className="space-y-2">
+              {changedKeys.map(k => (
+                <div key={k} className="rounded-xl border border-border overflow-hidden">
+                  <div className="px-3 py-1.5 bg-secondary/40 text-xs font-semibold font-mono">{k}</div>
+                  <div className="grid grid-cols-2 divide-x divide-border text-xs">
+                    <div className="p-2 bg-destructive/5">
+                      <p className="text-[10px] uppercase text-destructive mb-1 font-semibold">Antes</p>
+                      {fmt(before?.[k])}
+                    </div>
+                    <div className="p-2 bg-emerald-500/5">
+                      <p className="text-[10px] uppercase text-emerald-600 mb-1 font-semibold">Depois</p>
+                      {fmt(after?.[k])}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+          <details className="mt-3">
+            <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">Ver JSON bruto</summary>
+            <pre className="bg-muted p-3 rounded-md text-[11px] overflow-x-auto whitespace-pre-wrap break-all mt-2">{JSON.stringify(changes, null, 2)}</pre>
+          </details>
+        </div>
+      ) : (
+        <div>
+          <p className="text-xs uppercase text-muted-foreground mb-2 font-semibold">Snapshot</p>
+          <pre className="bg-muted p-3 rounded-md text-[11px] overflow-x-auto whitespace-pre-wrap break-all">{JSON.stringify(changes, null, 2)}</pre>
+        </div>
+      )}
     </div>
   );
 }

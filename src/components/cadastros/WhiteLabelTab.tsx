@@ -11,7 +11,8 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Building2, Globe, LayoutDashboard, Plus, Pencil, Trash2, Ban, LogIn, Copy, Check, Sparkles, Crown, Star, Wand2, Upload } from 'lucide-react';
+import { Building2, Globe, LayoutDashboard, Plus, Pencil, Trash2, Ban, LogIn, Copy, Check, Sparkles, Crown, Star, Wand2, Upload, ShieldCheck, RefreshCw, AlertCircle } from 'lucide-react';
+import { SubCompanyManageDialog } from './SubCompanyManageDialog';
 
 type Plan = {
   id: string; slug: string; name: string; tagline: string | null;
@@ -32,6 +33,10 @@ type WLSettings = {
   company_name: string | null; logo_light_url: string | null; logo_dark_url: string | null; logo_icon_url: string | null;
   primary_color: string | null; custom_domain: string | null; domain_active: boolean;
   login_panel_style: string; login_headline: string | null; login_subtext: string | null; login_image_url: string | null;
+  domain_status?: 'pending' | 'active' | 'invalid';
+  domain_verification_token?: string | null;
+  domain_last_checked_at?: string | null;
+  domain_check_message?: string | null;
 };
 
 const BLOCKABLE_PAGES = [
@@ -83,6 +88,7 @@ function SubCompaniesSection() {
   const [step, setStep] = useState<'plan' | 'details'>('plan');
   const [editing, setEditing] = useState<SubCompany | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [managing, setManaging] = useState<SubCompany | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -204,7 +210,7 @@ function SubCompaniesSection() {
                 {s.status !== 'active' && <Badge variant="destructive">Bloqueada</Badge>}
               </div>
               <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" title="Link de Login"><LogIn className="w-4 h-4" /></Button>
+                <Button size="sm" variant="ghost" onClick={() => setManaging(s)} title="Acessos, chaves API e alertas"><LogIn className="w-4 h-4" /></Button>
                 <Button size="sm" variant="ghost" onClick={() => openEdit(s)} title="Editar"><Pencil className="w-4 h-4" /></Button>
                 <Button size="sm" variant="ghost" onClick={() => toggleStatus(s)} title="Bloquear/Ativar"><Ban className="w-4 h-4" /></Button>
                 <Button size="sm" variant="ghost" onClick={() => handleDelete(s.id)} title="Excluir"><Trash2 className="w-4 h-4 text-destructive" /></Button>
@@ -222,6 +228,7 @@ function SubCompaniesSection() {
         ownerId={user?.id || ''}
         onSaved={() => { setOpen(false); load(); }}
       />
+      <SubCompanyManageDialog sub={managing as any} open={!!managing} onOpenChange={(o) => !o && setManaging(null)} />
     </div>
   );
 }
@@ -535,10 +542,10 @@ function DomainBrandSection() {
         <div>
           <div className="flex items-center gap-2 mb-2">
             <h4 className="text-sm font-semibold flex items-center gap-2"><Globe className="w-4 h-4" /> Domínio Personalizado</h4>
-            {settings.domain_active && <Badge className="bg-green-500/15 text-green-600 border-green-500/30">✓ Ativo</Badge>}
+            <DomainStatusBadge status={(settings.domain_status as any) || 'pending'} />
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <Input className="max-w-md" placeholder="https://crm.suaempresa.com.br" value={settings.custom_domain || ''} onChange={e => setSettings({ ...settings, custom_domain: e.target.value })} onBlur={() => save({ custom_domain: settings.custom_domain })} />
+            <Input className="max-w-md" placeholder="crm.suaempresa.com.br" value={settings.custom_domain || ''} onChange={e => setSettings({ ...settings, custom_domain: e.target.value })} onBlur={() => save({ custom_domain: settings.custom_domain, domain_status: 'pending' })} />
             <div className="flex items-center gap-2">
               <Label className="text-xs">Ativo</Label>
               <Switch checked={settings.domain_active} onCheckedChange={v => { setSettings({ ...settings, domain_active: v }); save({ domain_active: v }); }} />
@@ -549,13 +556,114 @@ function DomainBrandSection() {
               </Button>
             )}
           </div>
-          {settings.domain_active && settings.custom_domain && (
-            <div className="mt-3 rounded-xl border border-green-500/30 bg-green-500/10 p-3">
-              <p className="text-sm">✅ Seu domínio está ativo e funcionando!</p>
-              <p className="text-xs text-muted-foreground mt-1">Seus clientes podem acessar por esse endereço.</p>
-            </div>
+
+          {settings.custom_domain && (
+            <DomainVerificationPanel settings={settings} setSettings={setSettings} save={save} />
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DomainStatusBadge({ status }: { status: 'pending' | 'active' | 'invalid' }) {
+  if (status === 'active') return <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30">✓ Ativo</Badge>;
+  if (status === 'invalid') return <Badge variant="destructive">Inválido</Badge>;
+  return <Badge variant="secondary">Pendente</Badge>;
+}
+
+function DomainVerificationPanel({ settings, setSettings, save }: {
+  settings: WLSettings;
+  setSettings: (s: WLSettings) => void;
+  save: (patch: Partial<WLSettings>) => Promise<void>;
+}) {
+  const [checking, setChecking] = useState(false);
+  const token = settings.domain_verification_token || 'lovable_verify_' + (settings.id || '').slice(0, 8);
+  const cnameTarget = (import.meta.env.VITE_SUPABASE_URL || 'app.lovable.dev').replace(/^https?:\/\//, '');
+  const status = (settings.domain_status as any) || 'pending';
+
+  const verify = async () => {
+    setChecking(true);
+    // Ensure verification token is persisted
+    if (!settings.domain_verification_token) {
+      await save({ domain_verification_token: token });
+    }
+    try {
+      // Attempt a DNS-over-HTTPS lookup (Google) for the CNAME record
+      const host = settings.custom_domain!.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      const cnameRes = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(host)}&type=CNAME`).then(r => r.json()).catch(() => null);
+      const txtRes = await fetch(`https://dns.google/resolve?name=_lovable.${encodeURIComponent(host)}&type=TXT`).then(r => r.json()).catch(() => null);
+
+      const cnameOk = cnameRes?.Answer?.some((a: any) => a.data?.includes(cnameTarget.split('.').slice(-2).join('.')));
+      const txtOk = txtRes?.Answer?.some((a: any) => (a.data || '').includes(token));
+
+      let newStatus: 'pending' | 'active' | 'invalid' = 'pending';
+      let msg = '';
+      if (cnameOk && txtOk) { newStatus = 'active'; msg = 'CNAME e TXT verificados com sucesso.'; }
+      else if (cnameRes?.Answer || txtRes?.Answer) { newStatus = 'invalid'; msg = `Registros encontrados mas não correspondem. CNAME: ${cnameOk ? 'ok' : 'falta'} · TXT: ${txtOk ? 'ok' : 'falta'}.`; }
+      else { newStatus = 'pending'; msg = 'Aguardando propagação DNS. Pode levar até 72h.'; }
+
+      const patch: Partial<WLSettings> = {
+        domain_status: newStatus,
+        domain_check_message: msg,
+        domain_last_checked_at: new Date().toISOString(),
+        domain_verification_token: token,
+      };
+      setSettings({ ...settings, ...patch } as WLSettings);
+      await save(patch);
+      toast({ title: newStatus === 'active' ? 'Domínio verificado' : 'Verificação concluída', description: msg });
+    } catch (e: any) {
+      toast({ title: 'Erro ao verificar', description: String(e?.message || e), variant: 'destructive' });
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 rounded-xl border border-border bg-secondary/30 p-4 space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <p className="text-sm font-semibold flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Verificação DNS</p>
+        <Button size="sm" variant="outline" onClick={verify} disabled={checking}>
+          <RefreshCw className={`w-3.5 h-3.5 mr-2 ${checking ? 'animate-spin' : ''}`} />{checking ? 'Verificando...' : 'Verificar agora'}
+        </Button>
+      </div>
+
+      {status === 'invalid' && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-2 text-xs flex items-start gap-2">
+          <AlertCircle className="w-3.5 h-3.5 text-destructive mt-0.5" />
+          <span>{settings.domain_check_message || 'Os registros DNS não correspondem ao esperado.'}</span>
+        </div>
+      )}
+      {status === 'active' && (
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs">✅ Domínio ativo e funcionando.</div>
+      )}
+      {status === 'pending' && (
+        <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 p-2 text-xs">⏳ Aguardando propagação. Adicione os registros abaixo no seu provedor de DNS.</div>
+      )}
+
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase">1. Registro CNAME</p>
+        <div className="grid grid-cols-3 gap-2 text-xs">
+          <div><span className="text-muted-foreground">Tipo</span><div className="font-mono mt-1">CNAME</div></div>
+          <div><span className="text-muted-foreground">Nome</span><div className="font-mono mt-1 truncate">{settings.custom_domain || '@'}</div></div>
+          <div><span className="text-muted-foreground">Valor</span><div className="font-mono mt-1 truncate flex items-center gap-1">{cnameTarget}<button onClick={() => navigator.clipboard.writeText(cnameTarget)} className="text-primary"><Copy className="w-3 h-3" /></button></div></div>
+        </div>
+
+        <p className="text-xs font-semibold text-muted-foreground uppercase mt-3">2. Registro TXT (verificação)</p>
+        <div className="grid grid-cols-3 gap-2 text-xs">
+          <div><span className="text-muted-foreground">Tipo</span><div className="font-mono mt-1">TXT</div></div>
+          <div><span className="text-muted-foreground">Nome</span><div className="font-mono mt-1">_lovable</div></div>
+          <div><span className="text-muted-foreground">Valor</span><div className="font-mono mt-1 truncate flex items-center gap-1">{token}<button onClick={() => navigator.clipboard.writeText(token)} className="text-primary"><Copy className="w-3 h-3" /></button></div></div>
+        </div>
+      </div>
+
+      <div className="rounded-lg bg-card/40 p-2 text-[11px] text-muted-foreground space-y-1">
+        <p>📋 <strong>Como configurar:</strong></p>
+        <p>1. Acesse o painel de DNS do seu provedor (Cloudflare, Registro.br, GoDaddy, etc.).</p>
+        <p>2. Adicione os dois registros acima exatamente como mostrados.</p>
+        <p>3. Salve e aguarde a propagação (normalmente 5–60 min, podendo chegar a 72h).</p>
+        <p>4. Volte aqui e clique em <strong>Verificar agora</strong>.</p>
+        {settings.domain_last_checked_at && <p className="mt-1 italic">Última verificação: {new Date(settings.domain_last_checked_at).toLocaleString('pt-BR')}</p>}
       </div>
     </div>
   );
