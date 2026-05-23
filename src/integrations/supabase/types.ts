@@ -77,6 +77,7 @@ export type Database = {
           key: string
           last_used_at: string | null
           name: string
+          scopes: string[]
         }
         Insert: {
           created_at?: string
@@ -86,6 +87,7 @@ export type Database = {
           key: string
           last_used_at?: string | null
           name: string
+          scopes?: string[]
         }
         Update: {
           created_at?: string
@@ -95,6 +97,7 @@ export type Database = {
           key?: string
           last_used_at?: string | null
           name?: string
+          scopes?: string[]
         }
         Relationships: []
       }
@@ -436,7 +439,20 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      audit_logs_view: {
+        Row: {
+          action: string | null
+          changed_by: string | null
+          changed_by_name: string | null
+          changes: Json | null
+          created_at: string | null
+          id: string | null
+          record_id: string | null
+          record_label: string | null
+          table_name: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {
@@ -445,6 +461,29 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      search_audit_logs: {
+        Args: {
+          p_action?: string
+          p_from?: string
+          p_limit?: number
+          p_offset?: number
+          p_table?: string
+          p_to?: string
+          p_user?: string
+        }
+        Returns: {
+          action: string
+          changed_by: string
+          changed_by_name: string
+          changes: Json
+          created_at: string
+          id: string
+          record_id: string
+          record_label: string
+          table_name: string
+          total_count: number
+        }[]
       }
     }
     Enums: {
