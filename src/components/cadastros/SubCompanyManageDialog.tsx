@@ -108,7 +108,7 @@ function LoginTokensTab({ sub }: { sub: SubCompany }) {
     toast({ title: 'Link de login gerado', description: `Expira em ${hours}h.` });
     setLabel('');
     load();
-    const url = `${window.location.origin}/s/${sub.owner_id}/login?t=${data.token}`;
+    const url = `${window.location.origin}/s/${sub.id}/login?t=${data.token}`;
     navigator.clipboard.writeText(url).catch(() => {});
   };
 
@@ -124,7 +124,7 @@ function LoginTokensTab({ sub }: { sub: SubCompany }) {
     load();
   };
 
-  const buildUrl = (t: LoginToken) => `${window.location.origin}/s/${sub.owner_id}/login?t=${t.token}`;
+  const buildUrl = (t: LoginToken) => `${window.location.origin}/s/${sub.id}/login?t=${t.token}`;
 
   return (
     <div className="space-y-4">
