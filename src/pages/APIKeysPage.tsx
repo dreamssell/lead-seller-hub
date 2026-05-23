@@ -13,7 +13,16 @@ interface ApiKey {
   last_used_at: string | null;
   created_at: string;
   created_by: string;
+  scopes?: string[] | null;
 }
+
+const AVAILABLE_SCOPES: { id: string; label: string; description: string }[] = [
+  { id: 'auth:verify', label: 'auth:verify', description: 'Verificar e-mail (login externo - etapa 1)' },
+  { id: 'auth:login', label: 'auth:login', description: 'Autenticar com senha (login externo - etapa 2)' },
+  { id: 'data:read', label: 'data:read', description: 'Leitura de dados via API' },
+  { id: 'data:write', label: 'data:write', description: 'Escrita de dados via API' },
+  { id: 'admin:full', label: 'admin:full', description: 'Acesso administrativo total' },
+];
 
 export default function APIKeysPage() {
   const [keys, setKeys] = useState<ApiKey[]>([]);
