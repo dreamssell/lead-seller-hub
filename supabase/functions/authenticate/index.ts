@@ -11,8 +11,9 @@ Deno.serve(async (req) => {
 
   try {
     const { email, password, api_key } = await req.json();
+    const normalizedEmail = String(email || "").trim().toLowerCase();
 
-    if (!email || !password || !api_key) {
+    if (!normalizedEmail || !password || !api_key) {
       return new Response(
         JSON.stringify({ error: "Email, password e api_key são obrigatórios" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -46,7 +47,7 @@ Deno.serve(async (req) => {
     );
 
     const { data: authData, error: authError } = await supabaseAuth.auth.signInWithPassword({
-      email,
+      email: normalizedEmail,
       password,
     });
 

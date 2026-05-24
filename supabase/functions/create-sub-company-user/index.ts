@@ -10,14 +10,27 @@ const ALL_PAGES = [
   "reports", "pipeline", "ceo", "settings", "api-keys", "status", "profile",
 ];
 
+async function findUserByEmail(adminClient: ReturnType<typeof createClient>, email: string) {
+  const normalized = String(email).trim().toLowerCase();
+  for (let page = 1; page <= 20; page += 1) {
+    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    const found = data.users.find((u) => u.email?.trim().toLowerCase() === normalized);
+    if (found) return found;
+    if (data.users.length < 1000) return null;
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
     const authHeader = req.headers.get("Authorization") || "";
     const { sub_company_id, email, name, password, allowed_pages = ALL_PAGES, is_account_admin = true } = await req.json();
+    const normalizedEmail = String(email || "").trim().toLowerCase();
 
-    if (!sub_company_id || !email || !name || !password) {
+    if (!sub_company_id || !normalizedEmail || !name || !password) {
       return new Response(JSON.stringify({ error: "Dados obrigatórios ausentes" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -40,11 +53,10 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Sem permissão para esta sub-empresa" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { data: listed } = await adminClient.auth.admin.listUsers();
-    const existing = listed.users.find((u) => u.email?.toLowerCase() === String(email).toLowerCase());
+    const existing = await findUserByEmail(adminClient, normalizedEmail);
     const userResult = existing
       ? await adminClient.auth.admin.updateUserById(existing.id, { password, email_confirm: true, user_metadata: { display_name: name } })
-      : await adminClient.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { display_name: name } });
+      : await adminClient.auth.admin.createUser({ email: normalizedEmail, password, email_confirm: true, user_metadata: { display_name: name } });
 
     if (userResult.error || !userResult.data.user) {
       return new Response(JSON.stringify({ error: userResult.error?.message || "Falha ao criar usuário" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -53,19 +65,21 @@ Deno.serve(async (req) => {
     const createdUser = userResult.data.user;
     await adminClient.from("profiles").upsert({
       user_id: createdUser.id,
-      email,
+      email: normalizedEmail,
       display_name: name,
       role_label: is_account_admin ? "Administrador da sub-empresa" : "Usuário da sub-empresa",
       is_active: true,
     }, { onConflict: "user_id" });
 
-    const { error: accessError } = await userClient.rpc("upsert_user_account_access", {
-      p_user_id: createdUser.id,
-      p_owner_id: sub.owner_id,
-      p_sub_company_id: sub_company_id,
-      p_allowed_pages: allowed_pages,
-      p_is_account_admin: is_account_admin,
-    });
+    const { error: accessError } = await adminClient.from("user_account_access").upsert({
+      user_id: createdUser.id,
+      owner_id: sub.owner_id,
+      sub_company_id,
+      allowed_pages: Array.isArray(allowed_pages) ? allowed_pages : ALL_PAGES,
+      is_account_admin,
+      created_by: caller.user.id,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id,owner_id,sub_company_id" });
 
     if (accessError) {
       return new Response(JSON.stringify({ error: accessError.message }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
