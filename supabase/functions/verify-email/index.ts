@@ -4,6 +4,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+async function findUserByEmail(supabaseAdmin: ReturnType<typeof createClient>, email: string) {
+  const normalized = String(email).trim().toLowerCase();
+  for (let page = 1; page <= 20; page += 1) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    const user = data.users.find((u) => u.email?.trim().toLowerCase() === normalized);
+    if (user) return user;
+    if (data.users.length < 1000) return null;
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -11,8 +23,9 @@ Deno.serve(async (req) => {
 
   try {
     const { email, api_key } = await req.json();
+    const normalizedEmail = String(email || "").trim().toLowerCase();
 
-    if (!email || !api_key) {
+    if (!normalizedEmail || !api_key) {
       return new Response(
         JSON.stringify({ error: "Email e api_key são obrigatórios" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -46,8 +59,7 @@ Deno.serve(async (req) => {
       .eq("id", keyData.id);
 
     // Check if user exists
-    const { data: userData } = await supabaseAdmin.auth.admin.listUsers();
-    const user = userData?.users?.find((u) => u.email === email);
+    const user = await findUserByEmail(supabaseAdmin, normalizedEmail);
 
     if (!user) {
       return new Response(
