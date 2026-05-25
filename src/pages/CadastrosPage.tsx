@@ -315,91 +315,154 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
 }
 
 function UsersTab() {
-  const { user } = useAuth();
-  const [profiles, setProfiles] = useState<any[]>([]);
-  const [roles, setRoles] = useState<Record<string, string[]>>({});
+  const { user, access } = useAuth();
+  const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [form, setForm] = useState<any>({ display_name: '', phone: '', role_label: 'Atendente', is_active: true, role: 'user' });
-  const [deleteUid, setDeleteUid] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<any>(null);
+  const [search, setSearch] = useState('');
+  const emptyForm = {
+    email: '', password: '', display_name: '', phone: '', role_label: 'Atendente',
+    is_active: true, is_account_admin: false,
+    allowed_pages: BLOCKABLE_PAGES.map(p => p.key) as string[],
+  };
+  const [form, setForm] = useState<any>(emptyForm);
+
+  const scopeSubId = access?.sub_company_id || null;
+  const isSubAdmin = !!access?.sub_company_id;
 
   const load = async () => {
     setLoading(true);
-    const [{ data: p }, { data: r }] = await Promise.all([
-      supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-      supabase.from('user_roles').select('user_id, role'),
-    ]);
-    const map: Record<string, string[]> = {};
-    (r || []).forEach((row: any) => { map[row.user_id] = [...(map[row.user_id] || []), row.role]; });
-    setRoles(map);
-    setProfiles(p || []);
+    const { data, error } = await supabase.functions.invoke('manage-account-user', {
+      body: { action: 'list', sub_company_id: scopeSubId },
+    });
+    if (error) toast({ title: 'Erro ao carregar', description: error.message, variant: 'destructive' });
+    setRows((data as any)?.users || []);
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [scopeSubId]);
 
-  const openEdit = (profile: any) => {
-    setEditing(profile);
+  const openNew = () => {
+    setEditing(null);
+    setForm(emptyForm);
+    setOpen(true);
+  };
+
+  const openEdit = (row: any) => {
+    setEditing(row);
     setForm({
-      display_name: profile.display_name || '',
-      phone: profile.phone || '',
-      role_label: profile.role_label || 'Atendente',
-      is_active: profile.is_active ?? true,
-      role: roles[profile.user_id]?.[0] || 'user',
+      email: row.profile?.email || '',
+      password: '',
+      display_name: row.profile?.display_name || '',
+      phone: row.profile?.phone || '',
+      role_label: row.profile?.role_label || 'Atendente',
+      is_active: row.profile?.is_active ?? true,
+      is_account_admin: !!row.is_account_admin,
+      allowed_pages: (row.allowed_pages && row.allowed_pages.length > 0)
+        ? row.allowed_pages
+        : BLOCKABLE_PAGES.map(p => p.key),
     });
     setOpen(true);
   };
 
+  const togglePage = (key: string) => {
+    setForm((f: any) => ({
+      ...f,
+      allowed_pages: f.allowed_pages.includes(key)
+        ? f.allowed_pages.filter((k: string) => k !== key)
+        : [...f.allowed_pages, key],
+    }));
+  };
+
   const save = async () => {
-    if (!editing) return;
-    const before = { display_name: editing.display_name, phone: editing.phone, role_label: editing.role_label, is_active: editing.is_active, role: roles[editing.user_id]?.[0] || 'user' };
-    const after = { display_name: form.display_name, phone: form.phone, role_label: form.role_label, is_active: form.is_active, role: form.role };
-    const { error } = await supabase.from('profiles').update({
-      display_name: form.display_name,
-      phone: form.phone,
-      role_label: form.role_label,
-      is_active: form.is_active,
-    }).eq('user_id', editing.user_id);
-    if (error) return toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-
-    await supabase.from('user_roles').delete().eq('user_id', editing.user_id);
-    await supabase.from('user_roles').insert({ user_id: editing.user_id, role: form.role as any });
-
-    await logAudit({ table: 'profiles', recordId: editing.user_id, action: 'update', label: form.display_name, before, after });
-    toast({ title: 'Usuário atualizado' });
+    if (!form.display_name) { toast({ title: 'Informe o nome', variant: 'destructive' }); return; }
+    setSaving(true);
+    if (editing) {
+      const payload: any = {
+        action: 'update',
+        sub_company_id: scopeSubId,
+        user_id: editing.user_id,
+        name: form.display_name,
+        phone: form.phone,
+        role_label: form.role_label,
+        is_active: form.is_active,
+        is_account_admin: form.is_account_admin,
+        allowed_pages: form.allowed_pages,
+      };
+      if (form.password) payload.password = form.password;
+      const { data, error } = await supabase.functions.invoke('manage-account-user', { body: payload });
+      setSaving(false);
+      if (error || (data as any)?.error) {
+        toast({ title: 'Erro ao salvar', description: error?.message || (data as any)?.error, variant: 'destructive' });
+        return;
+      }
+      await logAudit({ table: 'profiles', recordId: editing.user_id, action: 'update', label: form.display_name, after: payload });
+      toast({ title: 'Usuário atualizado' });
+    } else {
+      if (!form.email || !form.password || form.password.length < 6) {
+        setSaving(false);
+        toast({ title: 'Email e senha (mín. 6) obrigatórios', variant: 'destructive' });
+        return;
+      }
+      const payload = {
+        action: 'create',
+        sub_company_id: scopeSubId,
+        email: form.email,
+        name: form.display_name,
+        password: form.password,
+        allowed_pages: form.allowed_pages,
+        is_account_admin: form.is_account_admin,
+      };
+      const { data, error } = await supabase.functions.invoke('manage-account-user', { body: payload });
+      setSaving(false);
+      if (error || (data as any)?.error) {
+        toast({ title: 'Erro ao criar', description: error?.message || (data as any)?.error, variant: 'destructive' });
+        return;
+      }
+      await logAudit({ table: 'profiles', recordId: (data as any)?.user_id, action: 'create', label: form.display_name, after: payload });
+      toast({ title: 'Usuário criado', description: `${form.email} já pode fazer login.` });
+    }
     setOpen(false);
     load();
   };
 
-  const toggleActive = async (profile: any) => {
-    const { error } = await supabase.from('profiles').update({ is_active: !profile.is_active }).eq('user_id', profile.user_id);
-    if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-    else {
-      await logAudit({ table: 'profiles', recordId: profile.user_id, action: 'update', label: profile.display_name, before: { is_active: profile.is_active }, after: { is_active: !profile.is_active } });
-      load();
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    const { data, error } = await supabase.functions.invoke('manage-account-user', {
+      body: { action: 'delete', sub_company_id: scopeSubId, user_id: deleting.user_id },
+    });
+    if (error || (data as any)?.error) {
+      toast({ title: 'Erro ao excluir', description: error?.message || (data as any)?.error, variant: 'destructive' });
+    } else {
+      await logAudit({ table: 'profiles', recordId: deleting.user_id, action: 'delete', label: deleting.profile?.display_name });
+      toast({ title: 'Usuário excluído' });
     }
-  };
-
-  const remove = async () => {
-    if (!deleteUid) return;
-    const target = profiles.find(p => p.user_id === deleteUid);
-    await supabase.from('user_roles').delete().eq('user_id', deleteUid);
-    const { error } = await supabase.from('profiles').update({ is_active: false }).eq('user_id', deleteUid);
-    if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-    else {
-      await logAudit({ table: 'profiles', recordId: deleteUid, action: 'delete', label: target?.display_name, before: target });
-      toast({ title: 'Usuário desativado', description: 'A exclusão definitiva precisa ser feita pelo administrador.' });
-    }
-    setDeleteUid(null);
+    setDeleting(null);
     load();
   };
 
+  const filtered = rows.filter(r => {
+    if (!search) return true;
+    const blob = `${r.profile?.display_name || ''} ${r.profile?.email || ''} ${r.profile?.phone || ''}`.toLowerCase();
+    return blob.includes(search.toLowerCase());
+  });
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{profiles.length} usuário(s) cadastrado(s)</p>
-        <p className="text-xs text-muted-foreground">Novos usuários se cadastram pela tela de login.</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input placeholder="Buscar usuário..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+        </div>
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-muted-foreground hidden md:block">
+            {isSubAdmin ? 'Gerenciando colaboradores da sub-empresa' : 'Gerenciando colaboradores do painel'}
+          </p>
+          <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" />Novo usuário</Button>
+        </div>
       </div>
 
       <div className="glass-card overflow-hidden">
@@ -407,30 +470,32 @@ function UsersTab() {
           <TableHeader>
             <TableRow>
               <TableHead>Nome</TableHead>
+              <TableHead>Email</TableHead>
               <TableHead>Telefone</TableHead>
               <TableHead>Cargo</TableHead>
-              <TableHead>Permissão</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Páginas liberadas</TableHead>
+              <TableHead>Admin</TableHead>
+              <TableHead>Ativo</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-            ) : profiles.map(p => (
-              <TableRow key={p.id}>
-                <TableCell className="font-medium">{p.display_name || '—'}</TableCell>
-                <TableCell>{p.phone || '—'}</TableCell>
-                <TableCell>{p.role_label || '—'}</TableCell>
-                <TableCell>
-                  {(roles[p.user_id] || ['user']).map(r => <Badge key={r} variant="outline" className="mr-1">{r}</Badge>)}
-                </TableCell>
-                <TableCell>
-                  <Switch checked={!!p.is_active} onCheckedChange={() => toggleActive(p)} />
-                </TableCell>
+              <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum usuário cadastrado ainda.</TableCell></TableRow>
+            ) : filtered.map(r => (
+              <TableRow key={r.user_id}>
+                <TableCell className="font-medium">{r.profile?.display_name || '—'}</TableCell>
+                <TableCell className="text-muted-foreground">{r.profile?.email || '—'}</TableCell>
+                <TableCell>{r.profile?.phone || '—'}</TableCell>
+                <TableCell>{r.profile?.role_label || '—'}</TableCell>
+                <TableCell><Badge variant="outline">{(r.allowed_pages || []).length} / {BLOCKABLE_PAGES.length}</Badge></TableCell>
+                <TableCell>{r.is_account_admin ? <Badge>Sim</Badge> : <Badge variant="secondary">Não</Badge>}</TableCell>
+                <TableCell><Badge variant={r.profile?.is_active ? 'default' : 'secondary'}>{r.profile?.is_active ? 'Ativo' : 'Inativo'}</Badge></TableCell>
                 <TableCell className="text-right">
-                  <Button variant="ghost" size="icon" onClick={() => openEdit(p)}><Pencil className="w-4 h-4" /></Button>
-                  <Button variant="ghost" size="icon" onClick={() => setDeleteUid(p.user_id)} disabled={p.user_id === user?.id}>
+                  <Button variant="ghost" size="icon" onClick={() => openEdit(r)}><Pencil className="w-4 h-4" /></Button>
+                  <Button variant="ghost" size="icon" disabled={r.user_id === user?.id} onClick={() => setDeleting(r)}>
                     <Trash2 className="w-4 h-4 text-destructive" />
                   </Button>
                 </TableCell>
@@ -441,41 +506,90 @@ function UsersTab() {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Editar usuário</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Editar usuário' : 'Novo usuário'}</DialogTitle>
+          </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="space-y-1.5"><Label>Nome de exibição</Label><Input value={form.display_name} onChange={e => setForm({ ...form, display_name: e.target.value })} /></div>
-            <div className="space-y-1.5"><Label>Telefone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
-            <div className="space-y-1.5"><Label>Cargo</Label><Input value={form.role_label} onChange={e => setForm({ ...form, role_label: e.target.value })} /></div>
-            <div className="space-y-1.5">
-              <Label>Permissão</Label>
-              <Select value={form.role} onValueChange={v => setForm({ ...form, role: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Administrador</SelectItem>
-                  <SelectItem value="moderator">Moderador</SelectItem>
-                  <SelectItem value="user">Usuário</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Email {!editing && '*'}</Label>
+                <Input type="email" disabled={!!editing} value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{editing ? 'Nova senha (opcional)' : 'Senha *'}</Label>
+                <Input type="password" placeholder="Mín. 6 caracteres" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Nome de exibição *</Label>
+                <Input value={form.display_name} onChange={e => setForm({ ...form, display_name: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Telefone</Label>
+                <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Cargo</Label>
+                <Input value={form.role_label} onChange={e => setForm({ ...form, role_label: e.target.value })} />
+              </div>
+              <div className="flex items-end justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Switch checked={form.is_active} onCheckedChange={v => setForm({ ...form, is_active: v })} />
+                  <Label className="text-sm">Ativo</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={form.is_account_admin} onCheckedChange={v => setForm({ ...form, is_account_admin: v })} />
+                  <Label className="text-sm">Admin da conta</Label>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center justify-between"><Label>Ativo</Label><Switch checked={form.is_active} onCheckedChange={v => setForm({ ...form, is_active: v })} /></div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-sm font-medium">Permissões por página (Sidebar)</Label>
+                <div className="flex gap-1">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, allowed_pages: BLOCKABLE_PAGES.map(p => p.key) })}>Tudo</Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, allowed_pages: ['profile'] })}>Nada</Button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">Marque apenas as páginas que este usuário poderá acessar. "Meu Perfil" deve permanecer marcado.</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {BLOCKABLE_PAGES.map(p => {
+                  const checked = form.allowed_pages.includes(p.key);
+                  const Icon = p.icon;
+                  return (
+                    <label key={p.key} className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer ${checked ? 'border-primary bg-primary/5' : 'border-border'}`}>
+                      <input type="checkbox" checked={checked} onChange={() => togglePage(p.key)} className="mt-1" />
+                      <Icon className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">{p.label}</p>
+                        <p className="text-xs text-muted-foreground">{p.desc}</p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={save}>Salvar</Button>
+            <Button onClick={save} disabled={saving}>{saving ? 'Salvando...' : editing ? 'Salvar' : 'Criar usuário'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!deleteUid} onOpenChange={o => !o && setDeleteUid(null)}>
+      <AlertDialog open={!!deleting} onOpenChange={o => !o && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Desativar usuário?</AlertDialogTitle>
-            <AlertDialogDescription>O usuário será desativado e suas permissões removidas. A exclusão completa requer ação do administrador no painel de autenticação.</AlertDialogDescription>
+            <AlertDialogTitle>Excluir usuário?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleting?.profile?.display_name || deleting?.profile?.email} será removido do seu painel.
+              Caso ele não tenha outros vínculos, o acesso (login) também será excluído. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={remove}>Desativar</AlertDialogAction>
+            <AlertDialogAction onClick={confirmDelete}>Excluir</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
