@@ -18,6 +18,7 @@ import { toast } from '@/hooks/use-toast';
 import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles } from 'lucide-react';
 import WhiteLabelTab from '@/components/cadastros/WhiteLabelTab';
 import { logAudit } from '@/lib/audit';
+import { BLOCKABLE_PAGES } from '@/lib/navigation';
 
 type Entity = 'leads' | 'customers' | 'products' | 'tasks' | 'users';
 
