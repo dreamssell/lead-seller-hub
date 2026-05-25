@@ -52,47 +52,63 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Update last_used_at
     await supabaseAdmin
       .from("api_keys")
       .update({ last_used_at: new Date().toISOString() })
       .eq("id", keyData.id);
 
-    // Check if user exists
     const user = await findUserByEmail(supabaseAdmin, normalizedEmail);
 
-    if (!user) {
+    if (user) {
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (profile && !profile.is_active) {
+        return new Response(
+          JSON.stringify({ exists: false, error: "Acesso desativado. Contate o administrador." }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       return new Response(
-        JSON.stringify({ exists: false, error: "E-mail não encontrado" }),
+        JSON.stringify({
+          exists: true,
+          user: {
+            id: user.id,
+            email: user.email,
+            display_name: profile?.display_name || user.email,
+            avatar_url: profile?.avatar_url,
+            role_label: profile?.role_label,
+          },
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Get profile
-    const { data: profile } = await supabaseAdmin
-      .from("profiles")
-      .select("*")
-      .eq("user_id", user.id)
+    // User não existe no Auth — verificar se é admin de uma sub-empresa ativa
+    const { data: sub } = await supabaseAdmin
+      .from("sub_companies")
+      .select("id, admin_name, status")
+      .ilike("admin_email", normalizedEmail)
       .maybeSingle();
 
-    if (profile && !profile.is_active) {
+    if (sub && sub.status !== "blocked") {
+      // Permitir avançar para a etapa de senha — usuário será criado no authenticate
       return new Response(
-        JSON.stringify({ exists: false, error: "Acesso desativado. Contate o administrador." }),
+        JSON.stringify({
+          exists: true,
+          pending_provision: true,
+          user: { email: normalizedEmail, display_name: sub.admin_name || normalizedEmail },
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     return new Response(
-      JSON.stringify({
-        exists: true,
-        user: {
-          id: user.id,
-          email: user.email,
-          display_name: profile?.display_name || user.email,
-          avatar_url: profile?.avatar_url,
-          role_label: profile?.role_label,
-        },
-      }),
+      JSON.stringify({ exists: false, error: "E-mail não encontrado" }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
