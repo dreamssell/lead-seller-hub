@@ -82,3 +82,15 @@ export function getPageKeyByPath(pathname: string): SidebarPageKey {
   const nested = PAGE_OPTIONS.find((item) => item.path !== '/' && pathname.startsWith(`${item.path}/`));
   return nested?.key || 'dashboard';
 }
+// Sub-features that can be blocked per user/sub-company but are not standalone routes.
+export const EXTRA_PERMISSION_KEYS: { key: SidebarPageKey; icon: LucideIcon; label: string; desc: string }[] = [
+  { key: 'white-label', icon: Sparkles, label: 'White Label', desc: 'Personalização de marca (aba em Cadastros)' },
+];
+
+// Used by the "blocked pages" selector — includes routes + extra permission keys.
+export const BLOCKABLE_PAGES = [
+  ...PAGE_OPTIONS.map(p => ({ key: p.key, icon: p.icon, label: p.label, desc: p.desc })),
+  ...EXTRA_PERMISSION_KEYS,
+];
+
+export const ALL_PERMISSION_KEYS: SidebarPageKey[] = BLOCKABLE_PAGES.map(p => p.key);
