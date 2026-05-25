@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Building2, Globe, LayoutDashboard, Plus, Pencil, Trash2, Ban, LogIn, Copy, Check, Sparkles, Crown, Star, Wand2, Upload, ShieldCheck, RefreshCw, AlertCircle } from 'lucide-react';
 import { SubCompanyManageDialog } from './SubCompanyManageDialog';
-import { PAGE_OPTIONS, BLOCKABLE_PAGES, ALL_PERMISSION_KEYS } from '@/lib/navigation';
+import { BLOCKABLE_PAGES, ALL_PERMISSION_KEYS } from '@/lib/navigation';
 
 type Plan = {
   id: string; slug: string; name: string; tagline: string | null;
