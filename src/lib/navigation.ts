@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Phone,
   Settings,
+  Sparkles,
   UserCircle,
   Users,
 } from 'lucide-react';
@@ -30,7 +31,8 @@ export type SidebarPageKey =
   | 'settings'
   | 'api-keys'
   | 'status'
-  | 'profile';
+  | 'profile'
+  | 'white-label';
 
 export type SidebarNavItem = {
   key: SidebarPageKey;
