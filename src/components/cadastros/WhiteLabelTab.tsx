@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Building2, Globe, LayoutDashboard, Plus, Pencil, Trash2, Ban, LogIn, Copy, Check, Sparkles, Crown, Star, Wand2, Upload, ShieldCheck, RefreshCw, AlertCircle } from 'lucide-react';
 import { SubCompanyManageDialog } from './SubCompanyManageDialog';
-import { PAGE_OPTIONS } from '@/lib/navigation';
+import { PAGE_OPTIONS, BLOCKABLE_PAGES, ALL_PERMISSION_KEYS } from '@/lib/navigation';
 
 type Plan = {
   id: string; slug: string; name: string; tagline: string | null;
@@ -270,7 +270,7 @@ function SubCompanyDialog({
     if (error) { toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' }); return; }
 
     if (savedSub && (!editing || (form as any).admin_password)) {
-      const allowedPages = PAGE_OPTIONS.map(p => p.key).filter(k => !(payload.blocked_pages || []).includes(k));
+      const allowedPages = ALL_PERMISSION_KEYS.filter(k => !(payload.blocked_pages || []).includes(k));
       const { error: userError } = await supabase.functions.invoke('create-sub-company-user', {
         body: {
           sub_company_id: savedSub.id,
@@ -425,7 +425,7 @@ function SubCompanyDialog({
               <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Páginas bloqueadas</h4>
               <p className="text-xs text-muted-foreground mb-3">Selecione as páginas que a sub-empresa NÃO poderá acessar</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {PAGE_OPTIONS.map(p => {
+                {BLOCKABLE_PAGES.map(p => {
                   const checked = (form.blocked_pages || []).includes(p.key);
                   return (
                     <label key={p.key} className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer ${checked ? 'border-primary bg-primary/5' : 'border-border'}`}>
