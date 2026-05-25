@@ -50,24 +50,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  const reloadAccess = async () => {
+    if (!session?.user) {
+      setAccess(null);
+      setAccessLoading(false);
+      return;
+    }
+    setAccessLoading(true);
+    const { data } = await (supabase as any).rpc('get_my_account_access');
+    const row = Array.isArray(data) ? data[0] : null;
+    setAccess(row || null);
+    setAccessLoading(false);
+  };
+
   useEffect(() => {
-    let cancelled = false;
-    const loadAccess = async () => {
-      if (!session?.user) {
-        setAccess(null);
-        setAccessLoading(false);
-        return;
-      }
-      setAccessLoading(true);
-      const { data } = await (supabase as any).rpc('get_my_account_access');
-      if (!cancelled) {
-        const row = Array.isArray(data) ? data[0] : null;
-        setAccess(row || null);
-        setAccessLoading(false);
-      }
-    };
-    loadAccess();
-    return () => { cancelled = true; };
+    reloadAccess();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id]);
+
+  // Realtime: refresh quando sub_companies (blocked_pages) ou user_account_access mudar
+  useEffect(() => {
+    if (!session?.user) return;
+    const channel = supabase
+      .channel('access-watch')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sub_companies' }, () => reloadAccess())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_account_access' }, () => reloadAccess())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
   const canAccessPage = (page: SidebarPageKey) => {

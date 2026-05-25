@@ -16,105 +16,157 @@ async function findUserByEmail(supabaseAdmin: ReturnType<typeof createClient>, e
   return null;
 }
 
+async function logEvent(
+  admin: ReturnType<typeof createClient>,
+  req: Request,
+  payload: {
+    email?: string | null;
+    event: string;
+    success: boolean;
+    error_message?: string | null;
+    metadata?: Record<string, unknown>;
+    user_id?: string | null;
+    sub_company_id?: string | null;
+  },
+) {
+  try {
+    await admin.from("auth_audit_logs").insert({
+      email: payload.email ?? null,
+      event: payload.event,
+      success: payload.success,
+      error_message: payload.error_message ?? null,
+      metadata: payload.metadata ?? {},
+      user_id: payload.user_id ?? null,
+      sub_company_id: payload.sub_company_id ?? null,
+      ip_address: req.headers.get("x-forwarded-for") || req.headers.get("cf-connecting-ip"),
+      user_agent: req.headers.get("user-agent"),
+    });
+  } catch (e) {
+    console.error("audit log failed", e);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const supabaseAdmin = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  let normalizedEmail = "";
+
   try {
     const { email, api_key } = await req.json();
-    const normalizedEmail = String(email || "").trim().toLowerCase();
+    normalizedEmail = String(email || "").trim().toLowerCase();
 
     if (!normalizedEmail || !api_key) {
       return new Response(
         JSON.stringify({ error: "Email e api_key são obrigatórios" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
-
-    // Validate API key
-    const { data: keyData, error: keyError } = await supabaseAdmin
+    const { data: keyData } = await supabaseAdmin
       .from("api_keys")
       .select("id, is_active")
       .eq("key", api_key)
       .eq("is_active", true)
       .maybeSingle();
 
-    if (keyError || !keyData) {
+    if (!keyData) {
+      await logEvent(supabaseAdmin, req, {
+        email: normalizedEmail, event: "verify_email", success: false,
+        error_message: "Chave de API inválida",
+      });
       return new Response(
         JSON.stringify({ exists: false, error: "Chave de API inválida ou inativa" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    await supabaseAdmin
-      .from("api_keys")
-      .update({ last_used_at: new Date().toISOString() })
-      .eq("id", keyData.id);
+    await supabaseAdmin.from("api_keys").update({ last_used_at: new Date().toISOString() }).eq("id", keyData.id);
 
     const user = await findUserByEmail(supabaseAdmin, normalizedEmail);
 
     if (user) {
       const { data: profile } = await supabaseAdmin
-        .from("profiles")
-        .select("*")
-        .eq("user_id", user.id)
-        .maybeSingle();
+        .from("profiles").select("*").eq("user_id", user.id).maybeSingle();
 
       if (profile && !profile.is_active) {
+        await logEvent(supabaseAdmin, req, {
+          email: normalizedEmail, event: "verify_email_blocked", success: false,
+          error_message: "Perfil desativado", user_id: user.id,
+        });
         return new Response(
           JSON.stringify({ exists: false, error: "Acesso desativado. Contate o administrador." }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
+
+      await logEvent(supabaseAdmin, req, {
+        email: normalizedEmail, event: "verify_email", success: true,
+        user_id: user.id, metadata: { pending_provision: false },
+      });
 
       return new Response(
         JSON.stringify({
           exists: true,
           user: {
-            id: user.id,
-            email: user.email,
+            id: user.id, email: user.email,
             display_name: profile?.display_name || user.email,
-            avatar_url: profile?.avatar_url,
-            role_label: profile?.role_label,
+            avatar_url: profile?.avatar_url, role_label: profile?.role_label,
           },
         }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    // User não existe no Auth — verificar se é admin de uma sub-empresa ativa
     const { data: sub } = await supabaseAdmin
-      .from("sub_companies")
-      .select("id, admin_name, status")
-      .ilike("admin_email", normalizedEmail)
-      .maybeSingle();
+      .from("sub_companies").select("id, admin_name, status")
+      .ilike("admin_email", normalizedEmail).maybeSingle();
 
     if (sub && sub.status !== "blocked") {
-      // Permitir avançar para a etapa de senha — usuário será criado no authenticate
+      await logEvent(supabaseAdmin, req, {
+        email: normalizedEmail, event: "verify_email", success: true,
+        sub_company_id: sub.id, metadata: { pending_provision: true },
+      });
       return new Response(
         JSON.stringify({
-          exists: true,
-          pending_provision: true,
+          exists: true, pending_provision: true,
           user: { email: normalizedEmail, display_name: sub.admin_name || normalizedEmail },
         }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
+    }
+
+    if (sub && sub.status === "blocked") {
+      await logEvent(supabaseAdmin, req, {
+        email: normalizedEmail, event: "verify_email_blocked", success: false,
+        error_message: "Sub-empresa bloqueada", sub_company_id: sub.id,
+      });
+    } else {
+      await logEvent(supabaseAdmin, req, {
+        email: normalizedEmail, event: "verify_email", success: false,
+        error_message: "E-mail não encontrado",
+      });
     }
 
     return new Response(
       JSON.stringify({ exists: false, error: "E-mail não encontrado" }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
+    console.error("verify-email error", error);
+    await logEvent(supabaseAdmin, req, {
+      email: normalizedEmail || null, event: "verify_email_error", success: false,
+      error_message: error instanceof Error ? error.message : String(error),
+    });
     return new Response(
       JSON.stringify({ error: "Erro interno do servidor" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });
