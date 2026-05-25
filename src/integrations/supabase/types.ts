@@ -167,6 +167,48 @@ export type Database = {
         }
         Relationships: []
       }
+      auth_audit_logs: {
+        Row: {
+          created_at: string
+          email: string | null
+          error_message: string | null
+          event: string
+          id: string
+          ip_address: string | null
+          metadata: Json
+          sub_company_id: string | null
+          success: boolean
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          error_message?: string | null
+          event: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          sub_company_id?: string | null
+          success?: boolean
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          error_message?: string | null
+          event?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          sub_company_id?: string | null
+          success?: boolean
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       company_settings: {
         Row: {
           address: string | null
@@ -497,6 +539,21 @@ export type Database = {
           role_label?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      provision_locks: {
+        Row: {
+          email: string
+          locked_at: string
+        }
+        Insert: {
+          email: string
+          locked_at?: string
+        }
+        Update: {
+          email?: string
+          locked_at?: string
         }
         Relationships: []
       }
@@ -1070,6 +1127,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      release_provision_lock: { Args: { p_email: string }; Returns: undefined }
       search_audit_logs: {
         Args: {
           p_action?: string
@@ -1092,6 +1150,10 @@ export type Database = {
           table_name: string
           total_count: number
         }[]
+      }
+      try_acquire_provision_lock: {
+        Args: { p_email: string }
+        Returns: boolean
       }
       upsert_user_account_access: {
         Args: {
