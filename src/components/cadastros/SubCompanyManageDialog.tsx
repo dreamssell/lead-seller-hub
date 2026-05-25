@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { LogIn, KeyRound, Bell, Settings2, Copy, Check, RefreshCw, Trash2, Plus, AlertTriangle, Clock, Building2, Power, UserPlus } from 'lucide-react';
-import { BLOCKABLE_PAGES, ALL_PERMISSION_KEYS } from '@/lib/navigation';
+import { ALL_PERMISSION_KEYS } from '@/lib/navigation';
 
 type SubCompany = {
   id: string; owner_id: string; name: string; admin_name: string; admin_email: string;
