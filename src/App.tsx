@@ -13,6 +13,7 @@ import CallsPage from "./pages/CallsPage";
 import TicketsPage from "./pages/TicketsPage";
 import TeamPage from "./pages/TeamPage";
 import AIAgentsPage from "./pages/AIAgentsPage";
+import EditAgentPage from "./pages/EditAgentPage";
 import ReportsPage from "./pages/ReportsPage";
 import PipelinePage from "./pages/PipelinePage";
 import SettingsPage from "./pages/SettingsPage";
