@@ -2,6 +2,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
 import { Bot, Plus, Settings, ToggleLeft, ToggleRight, Trash2, Play, Loader2, Save, Sparkles, MessageSquare, X, Send } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
@@ -67,6 +68,7 @@ const emptyAgent: Omit<AIAgent, 'id' | 'created_by'> = {
 
 export default function AIAgentsPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [agents, setAgents] = useState<AIAgent[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Partial<AIAgent> | null>(null);
@@ -84,7 +86,7 @@ export default function AIAgentsPage() {
   useEffect(() => { fetchAgents(); }, []);
 
   const openNew = () => setEditing({ ...emptyAgent });
-  const openEdit = (a: AIAgent) => setEditing({ ...a });
+  const openEdit = (a: AIAgent) => navigate(`/ai-agents/${a.id}/editar`);
 
   const save = async () => {
     if (!user || !editing) return;
