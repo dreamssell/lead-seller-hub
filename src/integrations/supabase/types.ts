@@ -16,7 +16,9 @@ export type Database = {
     Tables: {
       ai_agents: {
         Row: {
+          avatar_url: string | null
           channels: string[]
+          config: Json
           created_at: string
           created_by: string
           description: string | null
@@ -28,12 +30,15 @@ export type Database = {
           model: string
           name: string
           provider: string
+          role: string | null
           system_prompt: string
           temperature: number
           updated_at: string
         }
         Insert: {
+          avatar_url?: string | null
           channels?: string[]
+          config?: Json
           created_at?: string
           created_by: string
           description?: string | null
@@ -45,12 +50,15 @@ export type Database = {
           model?: string
           name: string
           provider?: string
+          role?: string | null
           system_prompt?: string
           temperature?: number
           updated_at?: string
         }
         Update: {
+          avatar_url?: string | null
           channels?: string[]
+          config?: Json
           created_at?: string
           created_by?: string
           description?: string | null
@@ -62,6 +70,7 @@ export type Database = {
           model?: string
           name?: string
           provider?: string
+          role?: string | null
           system_prompt?: string
           temperature?: number
           updated_at?: string
