@@ -68,6 +68,7 @@ const emptyAgent: Omit<AIAgent, 'id' | 'created_by'> = {
 
 export default function AIAgentsPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [agents, setAgents] = useState<AIAgent[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Partial<AIAgent> | null>(null);
