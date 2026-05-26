@@ -86,7 +86,7 @@ export default function AIAgentsPage() {
   useEffect(() => { fetchAgents(); }, []);
 
   const openNew = () => setEditing({ ...emptyAgent });
-  const openEdit = (a: AIAgent) => setEditing({ ...a });
+  const openEdit = (a: AIAgent) => navigate(`/ai-agents/${a.id}/editar`);
 
   const save = async () => {
     if (!user || !editing) return;
