@@ -2,6 +2,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
 import { Bot, Plus, Settings, ToggleLeft, ToggleRight, Trash2, Play, Loader2, Save, Sparkles, MessageSquare, X, Send } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
