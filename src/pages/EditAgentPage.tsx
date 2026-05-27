@@ -1,4 +1,5 @@
 import { AppLayout } from '@/components/layout/AppLayout';
+import IntegrationsCatalog from '@/components/agents/IntegrationsCatalog';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
