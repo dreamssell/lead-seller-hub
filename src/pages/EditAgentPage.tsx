@@ -328,7 +328,7 @@ export default function EditAgentPage() {
               <IntencoesSection intents={config.intencoes || []} setIntents={(v) => setConfig({ intencoes: v })} />
             )}
             {section === 'integracoes' && (
-              <IntegracoesSection integracoes={config.integracoes || {}} patch={(p) => patchConfig('integracoes', p)} />
+              <IntegrationsCatalog agentId={id!} />
             )}
             {section === 'arquivos' && (
               <ArquivosSection agentId={id!} files={files} reload={loadFiles} />
