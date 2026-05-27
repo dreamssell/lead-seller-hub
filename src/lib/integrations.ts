@@ -1,4 +1,5 @@
-import { Sparkles, Calendar, Linkedin, Facebook, Instagram, MessageSquare, Mic, Slack, Zap, Briefcase, Target, Webhook, Phone } from 'lucide-react';
+import { Sparkles, Calendar, Linkedin, Facebook, Instagram, MessageSquare, Mic, MessagesSquare, Zap, Briefcase, Target, Webhook, Phone } from 'lucide-react';
+const Slack = MessagesSquare;
 import type { LucideIcon } from 'lucide-react';
 
 export type IntegrationField = {
