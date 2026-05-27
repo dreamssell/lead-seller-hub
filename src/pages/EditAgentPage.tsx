@@ -1,4 +1,5 @@
 import { AppLayout } from '@/components/layout/AppLayout';
+import IntegrationsCatalog from '@/components/agents/IntegrationsCatalog';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -328,7 +329,7 @@ export default function EditAgentPage() {
               <IntencoesSection intents={config.intencoes || []} setIntents={(v) => setConfig({ intencoes: v })} />
             )}
             {section === 'integracoes' && (
-              <IntegracoesSection integracoes={config.integracoes || {}} patch={(p) => patchConfig('integracoes', p)} />
+              <IntegrationsCatalog agentId={id!} />
             )}
             {section === 'arquivos' && (
               <ArquivosSection agentId={id!} files={files} reload={loadFiles} />

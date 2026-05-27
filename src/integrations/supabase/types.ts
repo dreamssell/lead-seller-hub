@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_integrations: {
+        Row: {
+          agent_id: string
+          config: Json
+          created_at: string
+          created_by: string
+          credentials: Json
+          id: string
+          label: string | null
+          last_error: string | null
+          last_tested_at: string | null
+          provider: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          config?: Json
+          created_at?: string
+          created_by: string
+          credentials?: Json
+          id?: string
+          label?: string | null
+          last_error?: string | null
+          last_tested_at?: string | null
+          provider: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          config?: Json
+          created_at?: string
+          created_by?: string
+          credentials?: Json
+          id?: string
+          label?: string | null
+          last_error?: string | null
+          last_tested_at?: string | null
+          provider?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ai_agents: {
         Row: {
           avatar_url: string | null
