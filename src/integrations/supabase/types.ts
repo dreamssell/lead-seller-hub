@@ -464,6 +464,41 @@ export type Database = {
         }
         Relationships: []
       }
+      mcp_server_logs: {
+        Row: {
+          created_at: string
+          id: string
+          latency_ms: number | null
+          mcp_server_id: string | null
+          message: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          latency_ms?: number | null
+          mcp_server_id?: string | null
+          message?: string | null
+          status: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          latency_ms?: number | null
+          mcp_server_id?: string | null
+          message?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mcp_server_logs_mcp_server_id_fkey"
+            columns: ["mcp_server_id"]
+            isOneToOne: false
+            referencedRelation: "mcp_servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mcp_servers: {
         Row: {
           api_key: string | null
