@@ -1121,8 +1121,11 @@ export type Database = {
           events: string[]
           id: string
           is_active: boolean
+          last_rotated_at: string | null
           name: string | null
+          previous_secret: string | null
           secret: string | null
+          secret_version: number | null
           type: string | null
           updated_at: string
           url: string
@@ -1134,8 +1137,11 @@ export type Database = {
           events?: string[]
           id?: string
           is_active?: boolean
+          last_rotated_at?: string | null
           name?: string | null
+          previous_secret?: string | null
           secret?: string | null
+          secret_version?: number | null
           type?: string | null
           updated_at?: string
           url: string
@@ -1147,8 +1153,11 @@ export type Database = {
           events?: string[]
           id?: string
           is_active?: boolean
+          last_rotated_at?: string | null
           name?: string | null
+          previous_secret?: string | null
           secret?: string | null
+          secret_version?: number | null
           type?: string | null
           updated_at?: string
           url?: string
