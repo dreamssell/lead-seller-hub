@@ -5,7 +5,7 @@ import {
   Search, Book, Code, Terminal, Zap, Shield, Globe, 
   MessageSquare, ChevronRight, Hash, Server, Play, 
   Copy, Check, Info, AlertTriangle, Cpu, Activity,
-  Webhook, Key, FileJson, CheckCircle2, Brackets
+  Webhook, Key, FileJson, CheckCircle2, Brackets, Download
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
