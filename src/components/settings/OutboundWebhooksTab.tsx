@@ -164,7 +164,8 @@ export default function OutboundWebhooksTab() {
       alert_email: '',
       alert_threshold: 3,
       idempotency_header: 'X-Idempotency-Key',
-      idempotency_missing_behavior: 'generate'
+      idempotency_missing_behavior: 'generate',
+      idempotency_ttl_hours: 24
     });
     setSelectedWebhook(null);
     setView('edit');
@@ -186,7 +187,8 @@ export default function OutboundWebhooksTab() {
       alert_email: webhook.alert_email || '',
       alert_threshold: webhook.alert_threshold || 3,
       idempotency_header: webhook.idempotency_header || 'X-Idempotency-Key',
-      idempotency_missing_behavior: webhook.idempotency_missing_behavior || 'generate'
+      idempotency_missing_behavior: webhook.idempotency_missing_behavior || 'generate',
+      idempotency_ttl_hours: webhook.idempotency_ttl_hours || 24
     });
     setView('edit');
   };
