@@ -29,6 +29,7 @@ export type SidebarPageKey =
   | 'pipeline'
   | 'ceo'
   | 'settings'
+  | 'developer'
   | 'api-keys'
   | 'status'
   | 'profile'
@@ -66,10 +67,10 @@ export const navSections: { label: string; items: SidebarNavItem[] }[] = [
   {
     label: 'Configurações',
     items: [
-      { key: 'settings', icon: Settings, label: 'Configurações', path: '/settings', desc: 'Preferências e integrações' },
+      { key: 'settings', icon: UserCircle, label: 'Configurações', path: '/settings', desc: 'Perfil e dados da empresa' },
+      { key: 'developer', icon: Settings, label: 'Desenvolvedor', path: '/developer', desc: 'Preferências e integrações técnicas' },
       { key: 'api-keys', icon: Key, label: 'Chaves API', path: '/api-keys', desc: 'Credenciais e integrações externas' },
       { key: 'status', icon: Activity, label: 'Status do Backend', path: '/status', desc: 'Saúde técnica da plataforma' },
-      { key: 'profile', icon: UserCircle, label: 'Meu Perfil', path: '/profile', desc: 'Perfil do usuário logado' },
     ],
   },
 ];

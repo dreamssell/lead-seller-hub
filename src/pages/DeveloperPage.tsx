@@ -20,9 +20,9 @@ const TABS = [
   { value: 'ai',          label: 'IA',        icon: Sparkles,     Comp: AiTab },
 ];
 
-export default function SettingsPage() {
+export default function DeveloperPage() {
   return (
-    <AppLayout title="Configurações" subtitle="Gerencie suas integrações e configurações da plataforma">
+    <AppLayout title="Developer Center" subtitle="Gerencie suas integrações técnicas e webhooks">
       <motion.div
         className="max-w-6xl space-y-6"
         initial={{ opacity: 0, y: 8 }}

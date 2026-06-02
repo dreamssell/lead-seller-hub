@@ -129,7 +129,7 @@ export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
           <TooltipTrigger asChild>
             <Avatar
               className="w-8 h-8 ml-1 shrink-0 ring-2 ring-primary/20 cursor-pointer hover:ring-primary/50 transition-all"
-              onClick={() => navigate('/profile')}
+              onClick={() => navigate('/settings')}
             >
               <AvatarImage src={avatarUrl || undefined} alt={displayName} />
               <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">{initials}</AvatarFallback>
