@@ -788,8 +788,8 @@ export default function OutboundWebhooksTab() {
                 <div className="glass-card p-5 space-y-5 bg-secondary/10 border-none shadow-inner">
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Campos Obrigatórios</span>
-                      <Badge variant="outline" className="text-[10px] text-primary bg-primary/5">3 campos padrão</Badge>
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Campos Padrão no Body</span>
+                      <Badge variant="outline" className="text-[10px] text-primary bg-primary/5">JSON Estruturado</Badge>
                     </div>
                     <div className="space-y-2">
                       {[
@@ -806,6 +806,24 @@ export default function OutboundWebhooksTab() {
                             </div>
                             <p className="text-[10px] text-muted-foreground mt-0.5">{field.desc}</p>
                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Headers de Controle</span>
+                    </div>
+                    <div className="space-y-2">
+                      {[
+                        { name: 'X-Webhook-Signature', desc: 'Assinatura HMAC-SHA256 para segurança' },
+                        { name: form.idempotency_header || 'X-Idempotency-Key', desc: 'Chave única para evitar duplicidades' },
+                        { name: 'X-Webhook-ID', desc: 'Identificador único deste webhook' }
+                      ].map(header => (
+                        <div key={header.name} className="flex items-center justify-between p-2 bg-background/50 rounded border border-dashed border-border/60">
+                          <code className="text-[10px] font-bold text-primary">{header.name}</code>
+                          <span className="text-[9px] text-muted-foreground italic">{header.desc}</span>
                         </div>
                       ))}
                     </div>
