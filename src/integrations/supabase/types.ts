@@ -1075,6 +1075,7 @@ export type Database = {
           response_status: number | null
           retry_count: number | null
           status: string | null
+          timeout_limit: number | null
           url: string
           webhook_id: string | null
         }
@@ -1092,6 +1093,7 @@ export type Database = {
           response_status?: number | null
           retry_count?: number | null
           status?: string | null
+          timeout_limit?: number | null
           url: string
           webhook_id?: string | null
         }
@@ -1109,6 +1111,7 @@ export type Database = {
           response_status?: number | null
           retry_count?: number | null
           status?: string | null
+          timeout_limit?: number | null
           url?: string
           webhook_id?: string | null
         }
@@ -1124,6 +1127,9 @@ export type Database = {
       }
       webhooks: {
         Row: {
+          alert_email: string | null
+          alert_slack_url: string | null
+          alert_threshold: number | null
           api_key_id: string | null
           created_at: string
           created_by: string
@@ -1143,6 +1149,9 @@ export type Database = {
           url: string
         }
         Insert: {
+          alert_email?: string | null
+          alert_slack_url?: string | null
+          alert_threshold?: number | null
           api_key_id?: string | null
           created_at?: string
           created_by: string
@@ -1162,6 +1171,9 @@ export type Database = {
           url: string
         }
         Update: {
+          alert_email?: string | null
+          alert_slack_url?: string | null
+          alert_threshold?: number | null
           api_key_id?: string | null
           created_at?: string
           created_by?: string

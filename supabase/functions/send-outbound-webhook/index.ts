@@ -31,6 +31,18 @@ async function signHmac(payload: string, secret: string) {
   return `t=${t},v1=${hashHex}`;
 }
 
+async function sendSlackAlert(url: string, message: string) {
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: message }),
+    });
+  } catch (err) {
+    console.error("Erro ao enviar alerta Slack:", err.message);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -56,8 +68,6 @@ Deno.serve(async (req) => {
 
     const bodyText = JSON.stringify(payload);
     const signature = webhook.secret ? await signHmac(bodyText, webhook.secret) : null;
-
-    // Use provided idempotency_key or generate one if not provided (for first attempts)
     const finalIdempotencyKey = idempotency_key || crypto.randomUUID();
 
     const headers: Record<string, string> = {
@@ -123,8 +133,29 @@ Deno.serve(async (req) => {
         direction: 'outbound',
         status: isSuccess ? 'completed' : (webhook.max_retries > 0 ? 'pending_retry' : 'failed'),
         error_message: error_message,
-        retry_count: 0
+        retry_count: 0,
+        timeout_limit: timeoutSeconds
       });
+
+      // Check for consecutive failures/timeouts
+      if (!isSuccess && (responseStatus === 408 || responseStatus === 0)) {
+        const { count } = await supabaseAdmin
+          .from("webhook_logs")
+          .select("*", { count: "exact", head: true })
+          .eq("webhook_id", webhook.id)
+          .in("response_status", [0, 408])
+          .order("created_at", { ascending: false })
+          .limit(webhook.alert_threshold || 3);
+        
+        if (count && count >= (webhook.alert_threshold || 3)) {
+          if (webhook.alert_slack_url) {
+            await sendSlackAlert(
+              webhook.alert_slack_url, 
+              `🚨 *Alerta de Webhook:* O webhook "${webhook.name}" falhou consecutivamente por timeout (${count} vezes).`
+            );
+          }
+        }
+      }
     }
 
     return new Response(JSON.stringify({

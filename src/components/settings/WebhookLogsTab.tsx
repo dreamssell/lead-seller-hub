@@ -59,6 +59,7 @@ interface WebhookLog {
   retry_count?: number;
   status?: string;
   error_message?: string;
+  timeout_limit?: number;
 }
 
 const PAGE_SIZE = 10;
@@ -246,12 +247,18 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
                             variant={log.response_status >= 200 && log.response_status < 300 ? 'default' : 'destructive'}
                             className="font-mono text-[10px]"
                           >
-                            {log.response_status === 0 ? 'FAIL' : log.response_status}
+                            {log.response_status === 0 ? 'FAIL' : (log.response_status === 408 ? 'T-OUT' : log.response_status)}
                           </Badge>
                           
                           {log.status === 'pending_retry' && (
                             <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-600 border-amber-500/20 animate-pulse">
                               <RotateCcw className="w-2.5 h-2.5 mr-1" /> Reenviando
+                            </Badge>
+                          )}
+
+                          {log.response_status === 408 && (
+                            <Badge variant="outline" className="text-[9px] bg-red-500/10 text-red-600 border-red-500/20">
+                              TIMEOUT ({log.timeout_limit}s)
                             </Badge>
                           )}
 
@@ -262,11 +269,13 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
                           )}
                         </div>
 
-                        {log.response_status >= 400 || log.response_status === 0 ? (
+                        {(log.response_status >= 400 || log.response_status === 0) ? (
                           <div className="flex items-center gap-1.5">
                             <AlertTriangle className="w-3 h-3 text-destructive/60" />
-                            <span className="text-[10px] text-destructive/70 truncate max-w-[150px]">
-                              {log.error_message || log.response_body || 'Erro na entrega'}
+                            <span className="text-[10px] text-destructive/70 truncate max-w-[200px]">
+                              {log.response_status === 408 
+                                ? `Limite de ${log.timeout_limit}s excedido (Duração: ${(log.latency_ms/1000).toFixed(1)}s)` 
+                                : (log.error_message || log.response_body || 'Erro na entrega')}
                             </span>
                           </div>
                         ) : null}
