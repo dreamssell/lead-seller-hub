@@ -341,101 +341,100 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
               Somente Duplicatas
             </Button>
 
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-2 h-9"
+              onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+            >
+              <ArrowUpDown className="w-4 h-4" />
+              {sortOrder === 'desc' ? 'Mais recentes' : 'Mais antigos'}
+            </Button>
 
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="gap-2 h-9"
-            onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
-          >
-            <ArrowUpDown className="w-4 h-4" />
-            {sortOrder === 'desc' ? 'Mais recentes' : 'Mais antigos'}
-          </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2 h-9">
+                  <Calendar className="w-4 h-4" />
+                  Datas
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="p-4 w-72 space-y-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground">De:</label>
+                  <Input 
+                    type="date" 
+                    value={dateFilter.from} 
+                    onChange={(e) => setDateFilter(prev => ({ ...prev, from: e.target.value }))}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground">Até:</label>
+                  <Input 
+                    type="date" 
+                    value={dateFilter.to} 
+                    onChange={(e) => setDateFilter(prev => ({ ...prev, to: e.target.value }))}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full h-7 text-[10px]"
+                  onClick={() => setDateFilter({ from: '', to: '' })}
+                >
+                  Limpar Período
+                </Button>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2 h-9">
-                <Calendar className="w-4 h-4" />
-                Datas
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="p-4 w-72 space-y-3">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-muted-foreground">De:</label>
-                <Input 
-                  type="date" 
-                  value={dateFilter.from} 
-                  onChange={(e) => setDateFilter(prev => ({ ...prev, from: e.target.value }))}
-                  className="h-8 text-xs"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-muted-foreground">Até:</label>
-                <Input 
-                  type="date" 
-                  value={dateFilter.to} 
-                  onChange={(e) => setDateFilter(prev => ({ ...prev, to: e.target.value }))}
-                  className="h-8 text-xs"
-                />
-              </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="w-full h-7 text-[10px]"
-                onClick={() => setDateFilter({ from: '', to: '' })}
-              >
-                Limpar Período
-              </Button>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2 h-9 border-primary/20 hover:border-primary/40 text-primary min-w-[100px]" disabled={exporting}>
+                  {exporting ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-[10px] tabular-nums">{exportProgress}%</span>
+                    </div>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      Exportar
+                    </>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2 h-9 border-primary/20 hover:border-primary/40 text-primary min-w-[100px]" disabled={exporting}>
-                {exporting ? (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="text-[10px] tabular-nums">{exportProgress}%</span>
-                  </div>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" />
-                    Exportar
-                  </>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => exportLogs('csv')} className="gap-2">
-                <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
-                CSV (Planilha)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => exportLogs('json')} className="gap-2">
-                <FileJson className="w-4 h-4 text-blue-500" />
-                JSON (Raw)
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-[10px]">Exportar Filtrados</DropdownMenuLabel>
-              <DropdownMenuItem 
-                onClick={async () => exportLogs('csv')} 
-                className="gap-2"
-              >
-                <FileSpreadsheet className="w-4 h-4 text-amber-500" />
-                CSV (Com filtros atuais)
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={async () => exportLogs('json')} 
-                className="gap-2"
-              >
-                <FileJson className="w-4 h-4 text-amber-500" />
-                JSON (Com filtros atuais)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => exportLogs('csv')} className="gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+                  CSV (Planilha)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportLogs('json')} className="gap-2">
+                  <FileJson className="w-4 h-4 text-blue-500" />
+                  JSON (Raw)
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-[10px]">Exportar Filtrados</DropdownMenuLabel>
+                <DropdownMenuItem 
+                  onClick={async () => exportLogs('csv')} 
+                  className="gap-2"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-amber-500" />
+                  CSV (Com filtros atuais)
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={async () => exportLogs('json')} 
+                  className="gap-2"
+                >
+                  <FileJson className="w-4 h-4 text-amber-500" />
+                  JSON (Com filtros atuais)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
-
 
       <div className="glass-card overflow-hidden border-border/40">
         <Table>
