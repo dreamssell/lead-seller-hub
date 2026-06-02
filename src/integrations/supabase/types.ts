@@ -1068,6 +1068,7 @@ export type Database = {
           events: string[]
           id: string
           is_active: boolean
+          name: string | null
           secret: string | null
           updated_at: string
           url: string
@@ -1079,6 +1080,7 @@ export type Database = {
           events?: string[]
           id?: string
           is_active?: boolean
+          name?: string | null
           secret?: string | null
           updated_at?: string
           url: string
@@ -1090,6 +1092,7 @@ export type Database = {
           events?: string[]
           id?: string
           is_active?: boolean
+          name?: string | null
           secret?: string | null
           updated_at?: string
           url?: string
