@@ -24,10 +24,16 @@ import {
   AlertTriangle,
   RotateCcw,
   History,
-  Download
+  Download,
+  Terminal,
+  FileJson,
+  FlaskConical,
+  Clock,
+  ArrowUpRight
 } from 'lucide-react';
 import WebhookLogsTab from './WebhookLogsTab';
 import WebhookAuditTab from './WebhookAuditTab';
+import OutboundWebhookTestConsole from './OutboundWebhookTestConsole';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -70,6 +76,8 @@ interface Webhook {
   is_active: boolean;
   created_at: string;
   type: string;
+  max_retries: number;
+  payload_schema?: any;
 }
 
 const EVENT_GROUPS = [
@@ -104,7 +112,8 @@ export default function OutboundWebhooksTab() {
     previous_secret: null as string | null,
     secret_version: 1,
     events: [] as string[],
-    is_active: true
+    is_active: true,
+    max_retries: 3
   });
 
   const load = async () => {
@@ -133,7 +142,8 @@ export default function OutboundWebhooksTab() {
       previous_secret: null,
       secret_version: 1,
       events: [],
-      is_active: true
+      is_active: true,
+      max_retries: 3
     });
     setSelectedWebhook(null);
     setView('edit');
@@ -148,7 +158,8 @@ export default function OutboundWebhooksTab() {
       previous_secret: webhook.previous_secret,
       secret_version: webhook.secret_version || 1,
       events: webhook.events || [],
-      is_active: webhook.is_active
+      is_active: webhook.is_active,
+      max_retries: webhook.max_retries || 3
     });
     setView('edit');
   };
@@ -187,6 +198,7 @@ export default function OutboundWebhooksTab() {
       secret_version: form.secret_version,
       events: form.events,
       is_active: form.is_active,
+      max_retries: form.max_retries,
       created_by: user.id,
       type: 'outbound'
     };
@@ -286,6 +298,9 @@ export default function OutboundWebhooksTab() {
             <TabsTrigger value="config" className="rounded-lg gap-2">
               <Settings className="w-4 h-4" /> Configuração
             </TabsTrigger>
+            <TabsTrigger value="test" className="rounded-lg gap-2">
+              <FlaskConical className="w-4 h-4" /> Teste
+            </TabsTrigger>
             <TabsTrigger value="logs" className="rounded-lg gap-2">
               <ListRestart className="w-4 h-4" /> Logs de Envio
             </TabsTrigger>
@@ -339,6 +354,43 @@ export default function OutboundWebhooksTab() {
                   </Button>
                 </div>
                 <p className="text-[11px] text-muted-foreground">Onde enviaremos os dados quando os eventos ocorrerem</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-primary/5 p-4 rounded-xl border border-primary/10">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-primary font-bold">Política de Retry</Label>
+                    <Badge className="bg-primary/20 text-primary border-none text-[9px] uppercase tracking-tighter hover:bg-primary/30">Backoff Exponencial</Badge>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Input 
+                      type="number" 
+                      min="0" 
+                      max="10" 
+                      value={form.max_retries} 
+                      onChange={(e) => setForm({ ...form, max_retries: parseInt(e.target.value) })}
+                      className="w-20 bg-background border-primary/20 focus-visible:ring-primary"
+                    />
+                    <div className="space-y-0.5">
+                      <p className="text-[11px] font-bold">Máximo de tentativas</p>
+                      <p className="text-[10px] text-muted-foreground leading-tight">Falhas no endpoint (5xx, Timeout, DNS)</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-muted-foreground">Intervalo de Reenvio</Label>
+                  <div className="flex items-center gap-3 py-1">
+                    <div className="flex -space-x-1">
+                      {[1, 2, 3].map(i => (
+                        <div key={i} className="w-6 h-6 rounded-full border-2 border-background bg-primary/20 flex items-center justify-center">
+                          <RotateCcw className="w-3 h-3 text-primary" />
+                        </div>
+                      ))}
+                    </div>
+                    <span className="text-[11px] font-medium">30s → 1m → 2m → 4m...</span>
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-4">
@@ -467,6 +519,24 @@ export default function OutboundWebhooksTab() {
             </div>
           </TabsContent>
 
+          <TabsContent value="test" className="mt-6">
+            {selectedWebhook ? (
+              <OutboundWebhookTestConsole webhook={selectedWebhook} />
+            ) : (
+              <div className="glass-card p-12 text-center bg-secondary/10 flex flex-col items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center">
+                  <FlaskConical className="w-8 h-8 text-muted-foreground/40" />
+                </div>
+                <div className="space-y-1">
+                  <p className="font-bold">Webhook ainda não salvo</p>
+                  <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                    Você precisa salvar as configurações do webhook antes de poder disparar eventos de teste.
+                  </p>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
           <TabsContent value="logs" className="mt-6">
             {selectedWebhook ? (
               <WebhookLogsTab webhookId={selectedWebhook.id} />
@@ -484,24 +554,79 @@ export default function OutboundWebhooksTab() {
           </TabsContent>
 
           <TabsContent value="payload" className="mt-6 space-y-6">
-            <div className="glass-card p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">Exemplo de Evento (JSON)</h3>
-                  <p className="text-sm text-muted-foreground">Formato que será enviado para sua URL</p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <FileJson className="w-5 h-5 text-primary" />
+                  <h3 className="text-lg font-bold">Validador de Payload</h3>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => downloadSchema(selectedWebhook)}>
-                    <Download className="w-4 h-4 mr-2" /> Download Schema
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => copyToClipboard(JSON.stringify(samplePayload, null, 2), 'payload')}>
-                    {copiedId === 'payload' ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />} Copiar
-                  </Button>
+                
+                <div className="glass-card p-5 space-y-5 bg-secondary/10 border-none shadow-inner">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Campos Obrigatórios</span>
+                      <Badge variant="outline" className="text-[10px] text-primary bg-primary/5">3 campos padrão</Badge>
+                    </div>
+                    <div className="space-y-2">
+                      {[
+                        { name: 'event', type: 'String', desc: 'Nome técnico do evento disparado' },
+                        { name: 'timestamp', type: 'DateTime', desc: 'Data/hora do evento em formato ISO-8601' },
+                        { name: 'data', type: 'Object', desc: 'Objeto contendo os dados específicos do recurso' }
+                      ].map(field => (
+                        <div key={field.name} className="flex items-start gap-3 p-3 bg-background rounded-lg border border-border/40 group hover:border-primary/30 transition-colors">
+                          <div className="w-1 h-8 rounded-full bg-primary/20 group-hover:bg-primary transition-colors" />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <code className="text-xs font-bold text-foreground font-mono">{field.name}</code>
+                              <span className="text-[10px] text-muted-foreground bg-secondary px-1 rounded">{field.type}</span>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{field.desc}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 space-y-2">
+                    <div className="flex items-center gap-2 text-amber-700">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Regras de Validação</span>
+                    </div>
+                    <ul className="text-[10px] text-amber-700/70 space-y-1 list-disc pl-4">
+                      <li>O body deve ser obrigatoriamente um JSON válido.</li>
+                      <li>A assinatura HMAC deve ser validada usando o header X-Webhook-Signature.</li>
+                      <li>Eventos de teste usam o tipo <code>webhook.test</code>.</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
-              <pre className="p-4 rounded-xl bg-slate-950 text-slate-50 text-xs overflow-x-auto font-mono border border-white/5">
-                {JSON.stringify(samplePayload, null, 2)}
-              </pre>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="w-5 h-5 text-primary" />
+                    <h3 className="text-lg font-bold">Exemplo do Body</h3>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => downloadSchema(selectedWebhook)} className="h-8 text-[11px] bg-background">
+                      <Download className="w-3.5 h-3.5 mr-2" /> Schema
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => copyToClipboard(JSON.stringify(samplePayload, null, 2), 'payload')} className="h-8 text-[11px] bg-background">
+                      {copiedId === 'payload' ? <Check className="w-3.5 h-3.5 mr-2" /> : <Copy className="w-3.5 h-3.5 mr-2" />} JSON
+                    </Button>
+                  </div>
+                </div>
+                <div className="relative group">
+                  <pre className="p-5 rounded-2xl bg-slate-950 text-slate-50 text-xs overflow-x-auto font-mono border border-white/5 shadow-2xl h-[400px]">
+                    {JSON.stringify(samplePayload, null, 2)}
+                  </pre>
+                  <div className="absolute top-4 right-4 flex gap-1">
+                    <div className="w-2 h-2 rounded-full bg-red-500/50" />
+                    <div className="w-2 h-2 rounded-full bg-amber-500/50" />
+                    <div className="w-2 h-2 rounded-full bg-emerald-500/50" />
+                  </div>
+                </div>
+              </div>
             </div>
           </TabsContent>
         </Tabs>

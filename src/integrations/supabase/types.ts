@@ -1064,6 +1064,7 @@ export type Database = {
         Row: {
           created_at: string
           direction: string | null
+          error_message: string | null
           event_type: string
           headers: Json | null
           id: string
@@ -1072,12 +1073,15 @@ export type Database = {
           payload: Json | null
           response_body: string | null
           response_status: number | null
+          retry_count: number | null
+          status: string | null
           url: string
           webhook_id: string | null
         }
         Insert: {
           created_at?: string
           direction?: string | null
+          error_message?: string | null
           event_type: string
           headers?: Json | null
           id?: string
@@ -1086,12 +1090,15 @@ export type Database = {
           payload?: Json | null
           response_body?: string | null
           response_status?: number | null
+          retry_count?: number | null
+          status?: string | null
           url: string
           webhook_id?: string | null
         }
         Update: {
           created_at?: string
           direction?: string | null
+          error_message?: string | null
           event_type?: string
           headers?: Json | null
           id?: string
@@ -1100,6 +1107,8 @@ export type Database = {
           payload?: Json | null
           response_body?: string | null
           response_status?: number | null
+          retry_count?: number | null
+          status?: string | null
           url?: string
           webhook_id?: string | null
         }
@@ -1122,7 +1131,9 @@ export type Database = {
           id: string
           is_active: boolean
           last_rotated_at: string | null
+          max_retries: number | null
           name: string | null
+          payload_schema: Json | null
           previous_secret: string | null
           secret: string | null
           secret_version: number | null
@@ -1138,7 +1149,9 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_rotated_at?: string | null
+          max_retries?: number | null
           name?: string | null
+          payload_schema?: Json | null
           previous_secret?: string | null
           secret?: string | null
           secret_version?: number | null
@@ -1154,7 +1167,9 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_rotated_at?: string | null
+          max_retries?: number | null
           name?: string | null
+          payload_schema?: Json | null
           previous_secret?: string | null
           secret?: string | null
           secret_version?: number | null
@@ -1295,6 +1310,7 @@ export type Database = {
       }
     }
     Functions: {
+      calculate_next_retry: { Args: { retry_count: number }; Returns: string }
       generate_sub_login_token: {
         Args: { p_hours?: number; p_label?: string; p_sub_company_id: string }
         Returns: {
