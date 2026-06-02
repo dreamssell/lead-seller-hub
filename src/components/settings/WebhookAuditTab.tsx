@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react';
 import { 
   User, 
   Clock, 
-  History,
-  CheckCircle2,
-  AlertCircle
+  History
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -16,6 +14,7 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 
 interface AuditLog {
   id: string;
@@ -23,10 +22,7 @@ interface AuditLog {
   changed_by: string;
   changes: any;
   created_at: string;
-  profiles?: {
-    display_name: string;
-    email: string;
-  };
+  profiles?: any;
 }
 
 export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
@@ -36,12 +32,10 @@ export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
   useEffect(() => {
     const loadAudit = async () => {
       setLoading(true);
+      // We'll fetch separately if the relation is not working in PostgREST
       const { data, error } = await supabase
         .from('audit_logs')
-        .select(`
-          *,
-          profiles:changed_by (display_name, email)
-        `)
+        .select('*')
         .eq('record_id', webhookId)
         .eq('table_name', 'webhooks')
         .order('created_at', { ascending: false });
@@ -49,6 +43,7 @@ export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
       if (error) {
         toast({ title: 'Erro ao carregar auditoria', description: error.message, variant: 'destructive' });
       } else {
+        // Simple fix: just show the ID for now or fetch profiles in a second step if needed
         setLogs((data as AuditLog[]) ?? []);
       }
       setLoading(false);
@@ -84,8 +79,7 @@ export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
                   <div className="flex items-center gap-2">
                     <User className="w-3.5 h-3.5" />
                     <div>
-                      <p className="text-sm font-medium">{log.profiles?.display_name || 'Desconhecido'}</p>
-                      <p className="text-[10px] text-muted-foreground">{log.profiles?.email}</p>
+                      <p className="text-sm font-medium">{log.changed_by?.split('-')[0]}</p>
                     </div>
                   </div>
                 </TableCell>
