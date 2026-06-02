@@ -85,6 +85,7 @@ interface Webhook {
   payload_schema?: any;
   idempotency_header?: string;
   idempotency_missing_behavior?: string;
+  idempotency_ttl_hours?: number;
 }
 
 const EVENT_GROUPS = [
@@ -126,7 +127,8 @@ export default function OutboundWebhooksTab() {
     alert_email: '',
     alert_threshold: 3,
     idempotency_header: 'X-Idempotency-Key',
-    idempotency_missing_behavior: 'generate'
+    idempotency_missing_behavior: 'generate',
+    idempotency_ttl_hours: 24
   });
 
   const load = async () => {
