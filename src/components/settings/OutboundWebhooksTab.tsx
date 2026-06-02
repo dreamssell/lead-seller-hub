@@ -142,7 +142,8 @@ export default function OutboundWebhooksTab() {
       previous_secret: null,
       secret_version: 1,
       events: [],
-      is_active: true
+      is_active: true,
+      max_retries: 3
     });
     setSelectedWebhook(null);
     setView('edit');
