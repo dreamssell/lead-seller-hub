@@ -223,6 +223,29 @@ export default function OutboundWebhooksTab() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const downloadSchema = (webhook: Webhook | null) => {
+    if (!webhook) return;
+    const schema = {
+      $schema: "http://json-schema.org/draft-07/schema#",
+      title: `Webhook Schema: ${webhook.name}`,
+      type: "object",
+      required: ["event", "timestamp", "data"],
+      properties: {
+        event: { type: "string", enum: webhook.events },
+        timestamp: { type: "string", format: "date-time" },
+        data: { type: "object" },
+        signature: { type: "string" }
+      }
+    };
+    const blob = new Blob([JSON.stringify(schema, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `schema-${webhook.id}.json`;
+    link.click();
+    toast({ title: 'Schema gerado para download' });
+  };
+
   const filteredItems = items.filter(item => 
     item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.url.toLowerCase().includes(searchTerm.toLowerCase())
