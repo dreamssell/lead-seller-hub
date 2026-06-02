@@ -18,6 +18,7 @@ type SubCompany = {
   blocked_pages?: string[];
   credit_limit: number; credit_balance: number; credit_alert_threshold: number;
   auto_action: 'alert' | 'request_recharge' | 'block'; status: string;
+  allow_custom_logic: boolean;
 };
 
 type LoginToken = {
