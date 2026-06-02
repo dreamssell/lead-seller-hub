@@ -143,18 +143,22 @@ export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
         </div>
       </div>
 
-      <div className="glass-card p-6 bg-secondary/10 border-dashed">
-        <div className="flex items-start gap-4">
-          <ZapOff className="w-10 h-10 text-muted-foreground/30" />
-          <div className="space-y-1">
-            <h4 className="text-sm font-bold">Por que isso é importante?</h4>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              O monitoramento de idempotência garante que seu sistema não processe a mesma requisição múltiplas vezes devido a retentativas de rede. 
-              O relatório de auditoria permite verificar quais chaves estão ativas e quando expirarão (TTL), garantindo conformidade e eficiência de armazenamento.
-            </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="glass-card p-6 bg-secondary/10 border-dashed">
+          <div className="flex items-start gap-4">
+            <ZapOff className="w-10 h-10 text-muted-foreground/30" />
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold">Por que isso é importante?</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                O monitoramento de idempotência garante que seu sistema não processe a mesma requisição múltiplas vezes devido a retentativas de rede. 
+              </p>
+            </div>
           </div>
         </div>
+
+        <CleanupLogsView webhookId={webhookId} />
       </div>
+
       
       <div className="flex justify-center">
         <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={loadStats}>
