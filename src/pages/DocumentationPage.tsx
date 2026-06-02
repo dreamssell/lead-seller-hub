@@ -116,110 +116,210 @@ export default function DocumentationPage() {
                   </header>
 
                   {/* Quick Concept */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <Card className="bg-secondary/20 border-none shadow-none">
                       <CardHeader className="p-5">
                         <Cpu className="w-5 h-5 text-primary mb-2" />
-                        <CardTitle className="text-sm">Contexto Expandido</CardTitle>
-                        <CardDescription className="text-xs">Dê à IA acesso a bancos de dados, arquivos e ferramentas em tempo real.</CardDescription>
+                        <CardTitle className="text-sm">Contexto</CardTitle>
+                        <CardDescription className="text-xs">Fontes de dados em tempo real.</CardDescription>
                       </CardHeader>
                     </Card>
                     <Card className="bg-secondary/20 border-none shadow-none">
                       <CardHeader className="p-5">
                         <Shield className="w-5 h-5 text-emerald-500 mb-2" />
-                        <CardTitle className="text-sm">Segurança Nativa</CardTitle>
-                        <CardDescription className="text-xs">Comunicação criptografada via TLS e autenticação por Bearer Token.</CardDescription>
+                        <CardTitle className="text-sm">Segurança</CardTitle>
+                        <CardDescription className="text-xs">Criptografia TLS e Bearer Auth.</CardDescription>
                       </CardHeader>
                     </Card>
                     <Card className="bg-secondary/20 border-none shadow-none">
                       <CardHeader className="p-5">
                         <Activity className="w-5 h-5 text-amber-500 mb-2" />
-                        <CardTitle className="text-sm">Monitoramento</CardTitle>
-                        <CardDescription className="text-xs">Logs de execução, latência e uptime integrados ao painel.</CardDescription>
+                        <CardTitle className="text-sm">Uptime</CardTitle>
+                        <CardDescription className="text-xs">Monitoramento e logs nativos.</CardDescription>
+                      </CardHeader>
+                    </Card>
+                    <Card className="bg-secondary/20 border-none shadow-none">
+                      <CardHeader className="p-5">
+                        <Webhook className="w-5 h-5 text-blue-500 mb-2" />
+                        <CardTitle className="text-sm">Eventos</CardTitle>
+                        <CardDescription className="text-xs">Webhooks para atualizações.</CardDescription>
                       </CardHeader>
                     </Card>
                   </div>
 
-                  {/* Configuration Guide */}
-                  <section className="space-y-6">
-                    <div className="flex items-center gap-2 border-b pb-4 border-border/50">
-                      <Hash className="w-5 h-5 text-primary" />
-                      <h2 className="text-2xl font-bold">Configuração do Servidor</h2>
-                    </div>
-                    <div className="prose prose-slate dark:prose-invert max-w-none">
-                      <p className="text-muted-foreground">
-                        Para registrar um novo MCP Server, você precisa de um host acessível (HTTP/HTTPS) que responda aos protocolos padrão.
-                      </p>
-                      <ul className="space-y-2 text-sm text-muted-foreground">
-                        <li><strong>Host:</strong> Domínio ou IP do seu servidor (ex: <code>mcp.minhaempresa.com</code>)</li>
-                        <li><strong>Porta:</strong> Porta de escuta (padrão <code>3000</code> ou <code>443</code> para SSL)</li>
-                        <li><strong>API Key:</strong> Chave de segurança para autenticar as requisições da nossa plataforma.</li>
-                      </ul>
-                    </div>
-                  </section>
+                  {/* Documentation Tabs */}
+                  <Tabs defaultValue="concepts" className="w-full">
+                    <TabsList className="w-full justify-start bg-secondary/30 p-1 rounded-xl h-12 mb-8">
+                      <TabsTrigger value="concepts" className="rounded-lg data-[state=active]:bg-background">Conceitos</TabsTrigger>
+                      <TabsTrigger value="auth" className="rounded-lg data-[state=active]:bg-background">Autenticação</TabsTrigger>
+                      <TabsTrigger value="endpoints" className="rounded-lg data-[state=active]:bg-background">Endpoints & Schema</TabsTrigger>
+                      <TabsTrigger value="webhooks" className="rounded-lg data-[state=active]:bg-background">Webhooks</TabsTrigger>
+                      <TabsTrigger value="test" className="rounded-lg data-[state=active]:bg-background flex items-center gap-2">
+                        <Play className="w-3 h-3" /> Console de Teste
+                      </TabsTrigger>
+                    </TabsList>
 
-                  {/* Code Examples */}
-                  <section className="space-y-6">
-                    <div className="flex items-center gap-2 border-b pb-4 border-border/50">
-                      <Terminal className="w-5 h-5 text-primary" />
-                      <h2 className="text-2xl font-bold">Exemplos de Implementação</h2>
-                    </div>
+                    <TabsContent value="concepts" className="space-y-10">
+                      {/* Configuration Guide */}
+                      <section className="space-y-6">
+                        <div className="flex items-center gap-2 border-b pb-4 border-border/50">
+                          <Hash className="w-5 h-5 text-primary" />
+                          <h2 className="text-2xl font-bold">Configuração do Servidor</h2>
+                        </div>
+                        <div className="prose prose-slate dark:prose-invert max-w-none">
+                          <p className="text-muted-foreground">
+                            Para registrar um novo MCP Server, você precisa de um host acessível (HTTP/HTTPS) que responda aos protocolos padrão.
+                          </p>
+                          <ul className="space-y-2 text-sm text-muted-foreground">
+                            <li><strong>Host:</strong> Domínio ou IP do seu servidor (ex: <code>mcp.minhaempresa.com</code>)</li>
+                            <li><strong>Porta:</strong> Porta de escuta (padrão <code>3000</code> ou <code>443</code> para SSL)</li>
+                            <li><strong>API Key:</strong> Chave de segurança para autenticar as requisições da nossa plataforma.</li>
+                          </ul>
+                        </div>
+                      </section>
 
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold flex items-center gap-2">
-                          <Badge variant="outline" className="bg-blue-500/5 text-blue-500 border-blue-500/20">Node.js</Badge>
-                          Servidor Express MCP Básico
-                        </span>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => copyToClipboard(nodeExample, 'node')}
-                          className="h-8 rounded-lg"
-                        >
-                          {copied === 'node' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span className="ml-2 text-[10px] uppercase font-bold">Copiar</span>
-                        </Button>
+                      {/* Multi-language Implementation */}
+                      <section className="space-y-6">
+                        <div className="flex items-center gap-2 border-b pb-4 border-border/50">
+                          <Terminal className="w-5 h-5 text-primary" />
+                          <h2 className="text-2xl font-bold">Exemplos Multi-Linguagem</h2>
+                        </div>
+                        
+                        <Tabs defaultValue="node" className="w-full">
+                          <TabsList className="bg-slate-950 p-1 border border-slate-800">
+                            <TabsTrigger value="node" className="text-xs">Node.js</TabsTrigger>
+                            <TabsTrigger value="python" className="text-xs">Python</TabsTrigger>
+                            <TabsTrigger value="curl" className="text-xs">cURL</TabsTrigger>
+                          </TabsList>
+                          
+                          <TabsContent value="node">
+                            <div className="relative group">
+                              <Button 
+                                variant="ghost" size="sm" 
+                                onClick={() => copyToClipboard(nodeExample, 'node')}
+                                className="absolute right-4 top-4 text-white hover:bg-white/10"
+                              >
+                                {copied === 'node' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                              </Button>
+                              <pre className="bg-slate-950 p-6 rounded-2xl text-[11px] font-mono overflow-x-auto text-slate-300 border border-slate-800">
+                                {nodeExample}
+                              </pre>
+                            </div>
+                          </TabsContent>
+                          
+                          <TabsContent value="python">
+                            <div className="relative group">
+                              <Button 
+                                variant="ghost" size="sm" 
+                                onClick={() => copyToClipboard(pythonExample, 'python')}
+                                className="absolute right-4 top-4 text-white hover:bg-white/10"
+                              >
+                                {copied === 'python' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                              </Button>
+                              <pre className="bg-slate-950 p-6 rounded-2xl text-[11px] font-mono overflow-x-auto text-slate-300 border border-slate-800">
+                                {pythonExample}
+                              </pre>
+                            </div>
+                          </TabsContent>
+
+                          <TabsContent value="curl">
+                            <div className="relative group">
+                              <Button 
+                                variant="ghost" size="sm" 
+                                onClick={() => copyToClipboard(curlExample, 'curl')}
+                                className="absolute right-4 top-4 text-white hover:bg-white/10"
+                              >
+                                {copied === 'curl' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                              </Button>
+                              <pre className="bg-slate-950 p-6 rounded-2xl text-[11px] font-mono overflow-x-auto text-slate-300 border border-slate-800">
+                                {curlExample}
+                              </pre>
+                            </div>
+                          </TabsContent>
+                        </Tabs>
+                      </section>
+                    </TabsContent>
+
+                    <TabsContent value="auth" className="space-y-6">
+                      <div className="flex items-center gap-2 border-b pb-4 border-border/50">
+                        <Key className="w-5 h-5 text-primary" />
+                        <h2 className="text-2xl font-bold">Autenticação & Segurança</h2>
                       </div>
-                      <pre className="bg-slate-950 p-6 rounded-2xl text-[11px] font-mono overflow-x-auto text-slate-300 border border-slate-800 leading-relaxed shadow-xl">
-{nodeExample}
-                      </pre>
-                    </div>
-
-                    <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 flex gap-3">
-                      <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
-                      <p className="text-xs text-amber-700/80 leading-relaxed">
-                        <strong>Importante:</strong> Certifique-se de que o firewall do seu host permite conexões vindas dos nossos IPs oficiais. 
-                        Consulte a seção de <button className="text-amber-700 underline font-bold">Segurança</button> para a lista de IPs.
-                      </p>
-                    </div>
-                  </section>
-
-                  {/* Test Calls */}
-                  <section className="space-y-6">
-                    <div className="flex items-center gap-2 border-b pb-4 border-border/50">
-                      <Play className="w-5 h-5 text-primary" />
-                      <h2 className="text-2xl font-bold">Chamadas de Teste</h2>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Use o cURL abaixo para validar se o seu servidor está respondendo corretamente antes de registrá-lo no painel.
-                    </p>
-                    <div className="relative group">
-                      <div className="absolute right-4 top-4">
-                        <Button 
-                          variant="secondary" 
-                          size="sm" 
-                          onClick={() => copyToClipboard(curlExample, 'curl')}
-                          className="h-8 bg-slate-800 text-white hover:bg-slate-700 border-none rounded-lg"
-                        >
-                          {copied === 'curl' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        </Button>
+                      <div className="space-y-4">
+                        <p className="text-muted-foreground">Todas as chamadas feitas pela plataforma para o seu MCP Server incluem um header de autorização para garantir que apenas nós possamos acessar seus dados.</p>
+                        <Card className="border-primary/20 bg-primary/5">
+                          <CardContent className="p-6">
+                            <div className="flex items-start gap-4">
+                              <Shield className="w-8 h-8 text-primary shrink-0" />
+                              <div className="space-y-2">
+                                <h4 className="font-bold">Header de Autorização</h4>
+                                <code className="bg-slate-900 text-primary-foreground px-3 py-1 rounded-lg text-sm block">Authorization: Bearer YOUR_MCP_API_KEY</code>
+                                <p className="text-xs text-muted-foreground">Substitua <code>YOUR_MCP_API_KEY</code> pela chave que você definiu no momento do cadastro do servidor no painel.</p>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
                       </div>
-                      <pre className="bg-slate-900 p-6 rounded-2xl text-[11px] font-mono overflow-x-auto text-emerald-400 border border-slate-800 leading-relaxed">
-{curlExample}
+                    </TabsContent>
+
+                    <TabsContent value="endpoints" className="space-y-10">
+                      <section className="space-y-6">
+                        <div className="flex items-center gap-2 border-b pb-4 border-border/50">
+                          <Brackets className="w-5 h-5 text-primary" />
+                          <h2 className="text-2xl font-bold">Estrutura de Payload (Schema)</h2>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-4">
+                            <h4 className="text-sm font-bold flex items-center gap-2"><FileJson className="w-4 h-4 text-primary" /> Request Body (Esperado)</h4>
+                            <div className="p-4 rounded-xl border border-border bg-secondary/10 space-y-3">
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="font-mono text-primary">query</span>
+                                <Badge variant="outline" className="text-[9px]">String</Badge>
+                                <span className="text-muted-foreground italic">Obrigatório</span>
+                              </div>
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="font-mono text-primary">metadata</span>
+                                <Badge variant="outline" className="text-[9px]">Object</Badge>
+                                <span className="text-muted-foreground italic">Opcional</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <h4 className="text-sm font-bold flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> Response Body (Esperado)</h4>
+                            <div className="p-4 rounded-xl border border-border bg-secondary/10 space-y-3">
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="font-mono text-emerald-600">data</span>
+                                <Badge variant="outline" className="text-[9px]">Object | Array</Badge>
+                                <span className="text-muted-foreground italic">Obrigatório</span>
+                              </div>
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="font-mono text-emerald-600">source</span>
+                                <Badge variant="outline" className="text-[9px]">String</Badge>
+                                <span className="text-muted-foreground italic">Obrigatório</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+                    </TabsContent>
+
+                    <TabsContent value="webhooks" className="space-y-6">
+                      <div className="flex items-center gap-2 border-b pb-4 border-border/50">
+                        <Webhook className="w-5 h-5 text-primary" />
+                        <h2 className="text-2xl font-bold">Webhooks de Eventos</h2>
+                      </div>
+                      <p className="text-muted-foreground">O MCP Server pode enviar eventos assíncronos para notificar a plataforma sobre mudanças de estado ou novos dados disponíveis.</p>
+                      <pre className="bg-slate-950 p-6 rounded-2xl text-[11px] font-mono text-blue-400 border border-slate-800">
+{webhookExample}
                       </pre>
-                    </div>
-                  </section>
+                    </TabsContent>
+
+                    <TabsContent value="test" className="pt-4">
+                      <MCPConsole />
+                    </TabsContent>
+                  </Tabs>
                 </motion.div>
               ) : (
                 <motion.div
