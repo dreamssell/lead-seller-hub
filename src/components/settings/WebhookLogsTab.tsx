@@ -91,31 +91,8 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
   const loadLogs = async () => {
     setLoading(true);
     try {
-      let query = supabase
-        .from('webhook_logs')
-        .select('*', { count: 'exact' })
-        .eq('webhook_id', webhookId);
+      const query = applyFilters(supabase.from('webhook_logs').select('*', { count: 'exact' }));
 
-      if (search) {
-        query = query.or(`event_type.ilike.%${search}%,idempotency_key.ilike.%${search}%,request_id.ilike.%${search}%`);
-      }
-
-      if (statusFilter === 'success') {
-        query = query.gte('response_status', 200).lt('response_status', 300);
-      } else if (statusFilter === 'error') {
-        query = query.or('response_status.lt.200,response_status.gte.300');
-      } else if (statusFilter === 'idempotency_hit') {
-        query = query.eq('is_idempotent_hit', true);
-      }
-
-      if (dateFilter.from) {
-        query = query.gte('created_at', new Date(dateFilter.from).toISOString());
-      }
-      if (dateFilter.to) {
-        const toDate = new Date(dateFilter.to);
-        toDate.setHours(23, 59, 59, 999);
-        query = query.lte('created_at', toDate.toISOString());
-      }
 
       const { data, count, error } = await query
         .order('created_at', { ascending: sortOrder === 'asc' })
