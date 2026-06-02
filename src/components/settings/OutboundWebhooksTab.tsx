@@ -580,21 +580,36 @@ export default function OutboundWebhooksTab() {
                     <option value="skip">Não enviar header de idempotência</option>
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] text-muted-foreground mt-6">Expiração da Chave (TTL)</Label>
-                  <div className="flex items-center gap-3">
-                    <Input 
-                      type="number" 
-                      min="1" 
-                      max="720" 
-                      value={form.idempotency_ttl_hours} 
-                      onChange={(e) => setForm({ ...form, idempotency_ttl_hours: parseInt(e.target.value) })}
-                      className="w-20 bg-background border-border/40 focus-visible:ring-primary"
-                    />
-                    <span className="text-[11px] font-medium">horas</span>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] text-muted-foreground mt-6">Expiração da Chave (TTL)</Label>
+                    <div className="flex items-center gap-3">
+                      <Input 
+                        type="number" 
+                        min="1" 
+                        max="720" 
+                        value={form.idempotency_ttl_hours} 
+                        onChange={(e) => setForm({ ...form, idempotency_ttl_hours: parseInt(e.target.value) })}
+                        className="w-20 bg-background border-border/40 focus-visible:ring-primary"
+                      />
+                      <span className="text-[11px] font-medium">horas</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground leading-tight">Período de retenção para evitar duplicidade.</p>
                   </div>
-                  <p className="text-[10px] text-muted-foreground leading-tight">Período de retenção para evitar duplicidade.</p>
+                  
+                  {selectedWebhook && (
+                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/10 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-primary animate-pulse" />
+                        <span className="text-[11px] font-bold">Status da Idempotência</span>
+                      </div>
+                      <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                        Ativa & Monitorada ({form.idempotency_ttl_hours}h retenção)
+                      </Badge>
+                    </div>
+                  )}
                 </div>
+
               </div>
 
               <div className="flex flex-col gap-4 p-4 rounded-xl border border-destructive/20 bg-destructive/5">
