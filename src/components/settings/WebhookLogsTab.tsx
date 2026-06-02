@@ -78,7 +78,7 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
   
   // Filtering & Pagination state
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'error'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'error' | 'idempotency_hit'>('all');
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
@@ -100,6 +100,8 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
         query = query.gte('response_status', 200).lt('response_status', 300);
       } else if (statusFilter === 'error') {
         query = query.or('response_status.lt.200,response_status.gte.300');
+      } else if (statusFilter === 'idempotency_hit') {
+        query = query.eq('is_idempotent_hit', true);
       }
 
       if (dateFilter.from) {
@@ -155,6 +157,8 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
         query = query.gte('response_status', 200).lt('response_status', 300);
       } else if (statusFilter === 'error') {
         query = query.or('response_status.lt.200,response_status.gte.300');
+      } else if (statusFilter === 'idempotency_hit') {
+        query = query.eq('is_idempotent_hit', true);
       }
 
       if (dateFilter.from) {
@@ -268,7 +272,7 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2 h-9">
                 <Filter className="w-4 h-4" />
-                Status: {statusFilter === 'all' ? 'Todos' : statusFilter === 'success' ? 'Sucesso' : 'Erro'}
+                Status: {statusFilter === 'all' ? 'Todos' : statusFilter === 'success' ? 'Sucesso' : statusFilter === 'idempotency_hit' ? 'Duplicatas' : 'Erro'}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
@@ -282,6 +286,9 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
               </DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem checked={statusFilter === 'error'} onCheckedChange={() => setStatusFilter('error')}>
                 Somente Erros
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem checked={statusFilter === 'idempotency_hit'} onCheckedChange={() => setStatusFilter('idempotency_hit')}>
+                Somente Duplicatas
               </DropdownMenuCheckboxItem>
             </DropdownMenuContent>
           </DropdownMenu>
