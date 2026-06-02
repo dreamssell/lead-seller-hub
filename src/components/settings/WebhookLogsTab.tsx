@@ -93,7 +93,7 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
         .eq('webhook_id', webhookId);
 
       if (search) {
-        query = query.ilike('event_type', `%${search}%`);
+        query = query.or(`event_type.ilike.%${search}%,idempotency_key.ilike.%${search}%,request_id.ilike.%${search}%`);
       }
 
       if (statusFilter === 'success') {
@@ -150,7 +150,7 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
         .eq('webhook_id', webhookId);
 
       if (search) {
-        query = query.ilike('event_type', `%${search}%`);
+        query = query.or(`event_type.ilike.%${search}%,idempotency_key.ilike.%${search}%,request_id.ilike.%${search}%`);
       }
 
       if (statusFilter === 'success') {
@@ -260,7 +260,7 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input 
-            placeholder="Buscar por evento..." 
+            placeholder="Buscar por evento, Idempotency-Key ou Request ID..." 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 bg-background/50 border-none shadow-none h-9"
