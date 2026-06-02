@@ -36,7 +36,7 @@ const TABS = [
   { value: 'api',         label: 'Chaves de API', subtitle: 'Gerenciar tokens', icon: Code2,        Comp: ApiTab, advanced: true },
   { value: 'mcp',         label: 'MCP Server',   subtitle: 'ChatGPT, Claude, Cursor', icon: Server,       Comp: MCPServerTab, advanced: true },
   { value: 'wh-in',       label: 'Webhooks de entrada', subtitle: 'Receber leads externos', icon: ArrowRightLeft, Comp: InboundWebhooksTab, advanced: true },
-  { value: 'wh-out',      label: 'Webhooks de saída', subtitle: 'Disparar em eventos', icon: Webhook,      Comp: WebhooksTab, advanced: true },
+  { value: 'wh-out',      label: 'Webhooks de saída', subtitle: 'Disparar em eventos', icon: Webhook,      Comp: OutboundWebhooksTab, advanced: true },
   { value: 'general',     label: 'Geral',        subtitle: 'Configurações base', icon: SettingsIcon, Comp: GeneralTab, advanced: false },
   { value: 'connections', label: 'Conexões',     subtitle: 'Apps terceiros', icon: Plug,         Comp: ConnectionsTab, advanced: false },
   { value: 'fields',      label: 'Campos',       subtitle: 'Dados personalizados', icon: ListChecks,   Comp: CustomFieldsTab, advanced: true },
