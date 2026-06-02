@@ -16,7 +16,8 @@ import AIAgentsPage from "./pages/AIAgentsPage";
 import EditAgentPage from "./pages/EditAgentPage";
 import ReportsPage from "./pages/ReportsPage";
 import PipelinePage from "./pages/PipelinePage";
-import SettingsPage from "./pages/SettingsPage";
+import DeveloperPage from "./pages/DeveloperPage";
+import AccountSettingsPage from "./pages/AccountSettingsPage";
 import APIKeysPage from "./pages/APIKeysPage";
 import ProfilePage from "./pages/ProfilePage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
@@ -56,7 +57,8 @@ const App = () => (
               <Route path="/ai-agents/:id/editar" element={<ProtectedRoute><EditAgentPage /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
               <Route path="/pipeline" element={<ProtectedRoute><PipelinePage /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute><AccountSettingsPage /></ProtectedRoute>} />
+              <Route path="/developer" element={<ProtectedRoute><DeveloperPage /></ProtectedRoute>} />
               <Route path="/api-keys" element={<ProtectedRoute><APIKeysPage /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
               <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppPage /></ProtectedRoute>} />
