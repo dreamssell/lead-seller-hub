@@ -1135,6 +1135,8 @@ export type Database = {
           created_by: string
           events: string[]
           id: string
+          idempotency_header: string | null
+          idempotency_missing_behavior: string | null
           is_active: boolean
           last_rotated_at: string | null
           max_retries: number | null
@@ -1157,6 +1159,8 @@ export type Database = {
           created_by: string
           events?: string[]
           id?: string
+          idempotency_header?: string | null
+          idempotency_missing_behavior?: string | null
           is_active?: boolean
           last_rotated_at?: string | null
           max_retries?: number | null
@@ -1179,6 +1183,8 @@ export type Database = {
           created_by?: string
           events?: string[]
           id?: string
+          idempotency_header?: string | null
+          idempotency_missing_behavior?: string | null
           is_active?: boolean
           last_rotated_at?: string | null
           max_retries?: number | null
