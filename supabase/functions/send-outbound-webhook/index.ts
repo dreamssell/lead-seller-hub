@@ -54,7 +54,19 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const { webhook_id, payload, is_test = false, idempotency_key = null, request_id = crypto.randomUUID() } = await req.json();
+    const { 
+      webhook_id, 
+      payload, 
+      is_test = false, 
+      idempotency_key = null, 
+      request_id = crypto.randomUUID(),
+      simulate_delay_ms = 0 
+    } = await req.json();
+
+    if (simulate_delay_ms > 0) {
+      console.log(`Simulando atraso de ${simulate_delay_ms}ms`);
+      await new Promise(resolve => setTimeout(resolve, simulate_delay_ms));
+    }
 
     if (!webhook_id) throw new Error("Missing webhook_id");
 
