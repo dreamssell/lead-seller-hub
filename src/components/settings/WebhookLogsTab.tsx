@@ -204,7 +204,7 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
           <TableHeader className="bg-secondary/40">
             <TableRow>
               <TableHead>Evento</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Status / Tentativas</TableHead>
               <TableHead>Latência</TableHead>
               <TableHead>Data</TableHead>
               <TableHead className="text-right">Ação</TableHead>
