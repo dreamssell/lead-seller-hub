@@ -1168,6 +1168,7 @@ export type Database = {
       get_my_account_access: {
         Args: never
         Returns: {
+          allow_custom_logic: boolean
           allowed_pages: string[]
           blocked_pages: string[]
           is_account_admin: boolean
