@@ -356,6 +356,33 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
                 <FileJson className="w-4 h-4 text-blue-500" />
                 JSON (Raw)
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-[10px]">Filtrados (Somente Duplicatas)</DropdownMenuLabel>
+              <DropdownMenuItem 
+                onClick={async () => {
+                  const originalFilter = statusFilter;
+                  setStatusFilter('idempotency_hit');
+                  setTimeout(() => exportLogs('csv'), 100);
+                  setTimeout(() => setStatusFilter(originalFilter), 500);
+                }} 
+                className="gap-2"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-amber-500" />
+                Duplicatas (CSV)
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={async () => {
+                  const originalFilter = statusFilter;
+                  setStatusFilter('idempotency_hit');
+                  setTimeout(() => exportLogs('json'), 100);
+                  setTimeout(() => setStatusFilter(originalFilter), 500);
+                }} 
+                className="gap-2"
+              >
+                <FileJson className="w-4 h-4 text-amber-500" />
+                Duplicatas (JSON)
+              </DropdownMenuItem>
+
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
