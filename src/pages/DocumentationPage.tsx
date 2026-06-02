@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, Book, Code, Terminal, Zap, Shield, Globe, 
   MessageSquare, ChevronRight, Hash, Server, Play, 
-  Copy, Check, Info, AlertTriangle, Cpu
+  Copy, Check, Info, AlertTriangle, Cpu, Activity
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
