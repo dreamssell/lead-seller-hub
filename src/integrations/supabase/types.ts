@@ -386,6 +386,38 @@ export type Database = {
         }
         Relationships: []
       }
+      idempotency_cleanup_logs: {
+        Row: {
+          clean_date: string | null
+          id: string
+          keys_removed: number
+          reason: string | null
+          webhook_id: string | null
+        }
+        Insert: {
+          clean_date?: string | null
+          id?: string
+          keys_removed: number
+          reason?: string | null
+          webhook_id?: string | null
+        }
+        Update: {
+          clean_date?: string | null
+          id?: string
+          keys_removed?: number
+          reason?: string | null
+          webhook_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "idempotency_cleanup_logs_webhook_id_fkey"
+            columns: ["webhook_id"]
+            isOneToOne: false
+            referencedRelation: "webhooks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integrations: {
         Row: {
           config: Json
@@ -1386,7 +1418,13 @@ export type Database = {
         Args: { ttl_hours?: number }
         Returns: number
       }
-      cleanup_expired_idempotency_keys_v2: { Args: never; Returns: number }
+      cleanup_expired_idempotency_keys_v2: {
+        Args: never
+        Returns: {
+          removed_count: number
+          webhook_id: string
+        }[]
+      }
       generate_sub_login_token: {
         Args: { p_hours?: number; p_label?: string; p_sub_company_id: string }
         Returns: {
