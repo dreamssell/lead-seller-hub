@@ -1060,6 +1060,56 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_logs: {
+        Row: {
+          created_at: string
+          event_type: string
+          headers: Json | null
+          id: string
+          latency_ms: number | null
+          method: string
+          payload: Json | null
+          response_body: string | null
+          response_status: number | null
+          url: string
+          webhook_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          headers?: Json | null
+          id?: string
+          latency_ms?: number | null
+          method: string
+          payload?: Json | null
+          response_body?: string | null
+          response_status?: number | null
+          url: string
+          webhook_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          headers?: Json | null
+          id?: string
+          latency_ms?: number | null
+          method?: string
+          payload?: Json | null
+          response_body?: string | null
+          response_status?: number | null
+          url?: string
+          webhook_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_logs_webhook_id_fkey"
+            columns: ["webhook_id"]
+            isOneToOne: false
+            referencedRelation: "webhooks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       webhooks: {
         Row: {
           api_key_id: string | null
