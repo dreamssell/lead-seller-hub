@@ -96,10 +96,13 @@ const client = new AppSDK({
         </div>
 
         <div className="space-y-6">
-          <Card className="border-primary/20 bg-primary/5">
-            <CardHeader>
+          <Card className="border-primary/20 bg-primary/5 shadow-sm">
+            <CardHeader className="pb-3">
               <CardTitle className="text-lg flex items-center gap-2">
-                <Play className="w-5 h-5" /> Início Rápido
+                <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
+                  <Play className="w-4 h-4 text-primary" />
+                </div>
+                Início Rápido
               </CardTitle>
               <CardDescription>
                 Tudo o que você precisa para começar a integrar em minutos.
@@ -108,30 +111,36 @@ const client = new AppSDK({
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <p className="text-sm font-medium">Recursos úteis:</p>
-                <ul className="space-y-2">
-                  <li className="text-sm flex items-center text-muted-foreground hover:text-primary cursor-pointer transition-colors">
-                    <ChevronRight className="w-4 h-4 mr-1" /> Exemplos em Node.js
-                  </li>
-                  <li className="text-sm flex items-center text-muted-foreground hover:text-primary cursor-pointer transition-colors">
-                    <ChevronRight className="w-4 h-4 mr-1" /> Guia de Autenticação
-                  </li>
-                  <li className="text-sm flex items-center text-muted-foreground hover:text-primary cursor-pointer transition-colors">
-                    <ChevronRight className="w-4 h-4 mr-1" /> Webhooks Listeners
-                  </li>
+                <ul className="space-y-3">
+                  {[
+                    "Exemplos em Node.js",
+                    "Guia de Autenticação",
+                    "Webhooks Listeners",
+                    "Status da API",
+                    "Rate Limits"
+                  ].map((item) => (
+                    <li key={item} className="text-sm flex items-center text-muted-foreground hover:text-primary cursor-pointer transition-colors group">
+                      <ChevronRight className="w-4 h-4 mr-1 text-primary/50 group-hover:text-primary" /> 
+                      {item}
+                    </li>
+                  ))}
                 </ul>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-secondary/20 border-secondary">
             <CardHeader>
-              <CardTitle className="text-lg">Suporte Técnico</CardTitle>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <ExternalLink className="w-5 h-5 text-muted-foreground" />
+                Suporte Técnico
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">
-                Precisa de ajuda com a integração? Nosso time de desenvolvedores está pronto para ajudar.
+                Precisa de ajuda específica para sua linguagem ou framework?
               </p>
-              <Button variant="secondary" className="w-full">
+              <Button variant="secondary" className="w-full rounded-xl">
                 Falar com Suporte
               </Button>
             </CardContent>
