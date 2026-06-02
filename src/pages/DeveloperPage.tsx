@@ -1,6 +1,6 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { Settings as SettingsIcon, Plug, Webhook, Code2, ListChecks, Mail, Sparkles, AlertCircle } from 'lucide-react';
+import { Settings as SettingsIcon, Plug, Webhook, Code2, ListChecks, Mail, Sparkles, AlertCircle, Play } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import GeneralTab from '@/components/settings/GeneralTab';
@@ -10,6 +10,7 @@ import ApiTab from '@/components/settings/ApiTab';
 import CustomFieldsTab from '@/components/settings/CustomFieldsTab';
 import SmtpTab from '@/components/settings/SmtpTab';
 import AiTab from '@/components/settings/AiTab';
+import QuickstartTab from '@/components/settings/QuickstartTab';
 
 const TABS = [
   { value: 'general',     label: 'Geral',     icon: SettingsIcon, Comp: GeneralTab, advanced: false },
