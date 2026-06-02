@@ -18,7 +18,8 @@ import {
   Database,
   ShieldCheck,
   AlertTriangle,
-  RotateCcw
+  RotateCcw,
+  Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
@@ -32,6 +33,12 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { motion } from 'framer-motion';
 
 interface WebhookLog {
@@ -46,6 +53,7 @@ interface WebhookLog {
   response_body: string;
   latency_ms: number;
   created_at: string;
+  direction: 'inbound' | 'outbound';
 }
 
 export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
@@ -74,7 +82,13 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
   const resendEvent = async (log: WebhookLog) => {
     setResending(log.id);
     try {
-      const response = await fetch(log.url, {
+      // For outbound, we send to the external URL
+      // For inbound, we send to our own edge function (re-process)
+      const url = log.direction === 'inbound' 
+        ? `${window.location.origin}/functions/v1/handle-inbound-webhook`
+        : log.url;
+
+      const response = await fetch(url, {
         method: log.method,
         headers: {
           ...log.headers,
@@ -102,6 +116,7 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
       <Table>
         <TableHeader className="bg-secondary/40">
           <TableRow>
+            <TableHead className="w-[100px]">Tipo</TableHead>
             <TableHead>Evento</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Latência</TableHead>
@@ -112,11 +127,30 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
         <TableBody>
           {logs.map(log => (
             <TableRow key={log.id}>
+              <TableCell>
+                <Badge variant="outline" className="text-[10px] uppercase">
+                  {log.direction || 'outbound'}
+                </Badge>
+              </TableCell>
               <TableCell className="font-mono text-xs">{log.event_type}</TableCell>
               <TableCell>
-                <Badge variant={log.response_status >= 200 && log.response_status < 300 ? 'default' : 'destructive'}>
-                  {log.response_status}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant={log.response_status >= 200 && log.response_status < 300 ? 'default' : 'destructive'}>
+                    {log.response_status}
+                  </Badge>
+                  {log.response_status >= 400 && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <AlertTriangle className="w-3 h-3 text-destructive" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p className="text-xs">{log.response_body || 'Sem detalhes do erro'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                </div>
               </TableCell>
               <TableCell className="text-xs">{log.latency_ms}ms</TableCell>
               <TableCell className="text-xs text-muted-foreground">
@@ -128,12 +162,20 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
                   size="sm" 
                   onClick={() => resendEvent(log)}
                   disabled={resending === log.id}
+                  title="Reenviar este evento"
                 >
                   {resending === log.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
                 </Button>
               </TableCell>
             </TableRow>
           ))}
+          {logs.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
+                Nenhum log encontrado para este webhook.
+              </TableCell>
+            </TableRow>
+          )}
         </TableBody>
       </Table>
     </div>
