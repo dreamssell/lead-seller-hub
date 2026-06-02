@@ -1070,6 +1070,7 @@ export type Database = {
           is_active: boolean
           name: string | null
           secret: string | null
+          type: string | null
           updated_at: string
           url: string
         }
@@ -1082,6 +1083,7 @@ export type Database = {
           is_active?: boolean
           name?: string | null
           secret?: string | null
+          type?: string | null
           updated_at?: string
           url: string
         }
@@ -1094,6 +1096,7 @@ export type Database = {
           is_active?: boolean
           name?: string | null
           secret?: string | null
+          type?: string | null
           updated_at?: string
           url?: string
         }
