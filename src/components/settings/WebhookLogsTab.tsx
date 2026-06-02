@@ -133,7 +133,9 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
         headers: {
           ...log.headers,
           'Content-Type': 'application/json',
-          'X-Webhook-Resend': 'true'
+          'X-Webhook-Resend': 'true',
+          'X-Idempotency-Key': log.id, // Use log ID as idempotency key for resends
+          'Idempotency-Key': log.id
         },
         body: JSON.stringify(log.payload)
       });

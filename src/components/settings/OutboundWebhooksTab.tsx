@@ -256,21 +256,38 @@ export default function OutboundWebhooksTab() {
     const schema = {
       $schema: "http://json-schema.org/draft-07/schema#",
       title: `Webhook Schema: ${webhook.name}`,
+      description: "Especificação do payload enviado pela plataforma",
       type: "object",
       required: ["event", "timestamp", "data"],
       properties: {
-        event: { type: "string", enum: webhook.events },
-        timestamp: { type: "string", format: "date-time" },
-        data: { type: "object" },
-        signature: { type: "string" }
+        event: { 
+          type: "string", 
+          enum: webhook.events,
+          description: "O tipo técnico do evento disparado"
+        },
+        timestamp: { 
+          type: "string", 
+          format: "date-time",
+          description: "Data e hora do evento em UTC (ISO-8601)"
+        },
+        data: { 
+          type: "object",
+          description: "Dados específicos do recurso associado ao evento"
+        },
+        idempotency_key: {
+          type: "string",
+          description: "Chave única para evitar processamento duplicado (enviada via header X-Idempotency-Key)"
+        }
       }
     };
     const blob = new Blob([JSON.stringify(schema, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `schema-${webhook.id}.json`;
+    link.download = `webhook-schema-${webhook.id}.json`;
     link.click();
+    
+    // Also generate OpenAPI if requested (conceptual here, keeping it to JSON Schema for now as requested)
     toast({ title: 'Schema gerado para download' });
   };
 
