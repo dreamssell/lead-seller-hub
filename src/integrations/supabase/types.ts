@@ -1184,6 +1184,7 @@ export type Database = {
           id: string
           idempotency_header: string | null
           idempotency_missing_behavior: string | null
+          idempotency_ttl_hours: number | null
           is_active: boolean
           last_rotated_at: string | null
           max_retries: number | null
@@ -1208,6 +1209,7 @@ export type Database = {
           id?: string
           idempotency_header?: string | null
           idempotency_missing_behavior?: string | null
+          idempotency_ttl_hours?: number | null
           is_active?: boolean
           last_rotated_at?: string | null
           max_retries?: number | null
@@ -1232,6 +1234,7 @@ export type Database = {
           id?: string
           idempotency_header?: string | null
           idempotency_missing_behavior?: string | null
+          idempotency_ttl_hours?: number | null
           is_active?: boolean
           last_rotated_at?: string | null
           max_retries?: number | null
@@ -1383,6 +1386,7 @@ export type Database = {
         Args: { ttl_hours?: number }
         Returns: number
       }
+      cleanup_expired_idempotency_keys_v2: { Args: never; Returns: number }
       generate_sub_login_token: {
         Args: { p_hours?: number; p_label?: string; p_sub_company_id: string }
         Returns: {

@@ -85,6 +85,7 @@ interface Webhook {
   payload_schema?: any;
   idempotency_header?: string;
   idempotency_missing_behavior?: string;
+  idempotency_ttl_hours?: number;
 }
 
 const EVENT_GROUPS = [
@@ -126,7 +127,8 @@ export default function OutboundWebhooksTab() {
     alert_email: '',
     alert_threshold: 3,
     idempotency_header: 'X-Idempotency-Key',
-    idempotency_missing_behavior: 'generate'
+    idempotency_missing_behavior: 'generate',
+    idempotency_ttl_hours: 24
   });
 
   const load = async () => {
@@ -162,7 +164,8 @@ export default function OutboundWebhooksTab() {
       alert_email: '',
       alert_threshold: 3,
       idempotency_header: 'X-Idempotency-Key',
-      idempotency_missing_behavior: 'generate'
+      idempotency_missing_behavior: 'generate',
+      idempotency_ttl_hours: 24
     });
     setSelectedWebhook(null);
     setView('edit');
@@ -184,7 +187,8 @@ export default function OutboundWebhooksTab() {
       alert_email: webhook.alert_email || '',
       alert_threshold: webhook.alert_threshold || 3,
       idempotency_header: webhook.idempotency_header || 'X-Idempotency-Key',
-      idempotency_missing_behavior: webhook.idempotency_missing_behavior || 'generate'
+      idempotency_missing_behavior: webhook.idempotency_missing_behavior || 'generate',
+      idempotency_ttl_hours: webhook.idempotency_ttl_hours || 24
     });
     setView('edit');
   };
@@ -575,6 +579,21 @@ export default function OutboundWebhooksTab() {
                     <option value="fail">Falhar o envio (Requer chave no gatilho)</option>
                     <option value="skip">Não enviar header de idempotência</option>
                   </select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] text-muted-foreground mt-6">Expiração da Chave (TTL)</Label>
+                  <div className="flex items-center gap-3">
+                    <Input 
+                      type="number" 
+                      min="1" 
+                      max="720" 
+                      value={form.idempotency_ttl_hours} 
+                      onChange={(e) => setForm({ ...form, idempotency_ttl_hours: parseInt(e.target.value) })}
+                      className="w-20 bg-background border-border/40 focus-visible:ring-primary"
+                    />
+                    <span className="text-[11px] font-medium">horas</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground leading-tight">Período de retenção para evitar duplicidade.</p>
                 </div>
               </div>
 
