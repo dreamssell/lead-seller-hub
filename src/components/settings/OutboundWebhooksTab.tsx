@@ -172,7 +172,10 @@ export default function OutboundWebhooksTab() {
       events: webhook.events || [],
       is_active: webhook.is_active,
       max_retries: webhook.max_retries || 3,
-      timeout_seconds: webhook.timeout_seconds || 30
+      timeout_seconds: webhook.timeout_seconds || 30,
+      alert_slack_url: webhook.alert_slack_url || '',
+      alert_email: webhook.alert_email || '',
+      alert_threshold: webhook.alert_threshold || 3
     });
     setView('edit');
   };
