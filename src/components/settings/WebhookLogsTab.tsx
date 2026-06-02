@@ -77,6 +77,7 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
   const [loading, setLoading] = useState(true);
   const [resending, setResending] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
   
   // Filtering & Pagination state
   const [search, setSearch] = useState('');
@@ -85,6 +86,7 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
   const [totalCount, setTotalCount] = useState(0);
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [dateFilter, setDateFilter] = useState<{ from: string; to: string }>({ from: '', to: '' });
+
 
   const loadLogs = async () => {
     setLoading(true);
