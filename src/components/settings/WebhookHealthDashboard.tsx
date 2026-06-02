@@ -156,7 +156,24 @@ export default function WebhookHealthDashboard({ webhookId }: { webhookId: strin
           <p className="text-[10px] text-muted-foreground">Status 408 ou falha de rede</p>
         </div>
 
+        {/* Idempotency Hits */}
+        <div className="glass-card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Duplicatas Evitadas</span>
+            <ShieldCheck className="w-4 h-4 text-primary" />
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-2xl font-bold">{health.idempotencyHits}</h4>
+            <div className="flex items-center gap-1.5">
+              <Activity className="w-3 h-3 text-muted-foreground" />
+              <span className="text-[10px] text-muted-foreground">Idempotência ativa</span>
+            </div>
+          </div>
+          <p className="text-[10px] text-muted-foreground">Nas últimas 100 requisições</p>
+        </div>
+
         {/* Availability Status */}
+
         <div className="glass-card p-4 space-y-3 bg-secondary/5">
           <div className="flex items-center justify-between">
             <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Status Geral</span>
