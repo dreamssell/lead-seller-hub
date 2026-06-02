@@ -98,6 +98,8 @@ Deno.serve(async (req) => {
       headers["X-Webhook-Signature"] = signature;
     }
 
+    headers["X-Request-ID"] = request_id;
+
     const startTime = Date.now();
     let responseStatus: number;
     let responseBody: string;
