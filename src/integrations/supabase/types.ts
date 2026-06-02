@@ -464,6 +464,53 @@ export type Database = {
         }
         Relationships: []
       }
+      mcp_servers: {
+        Row: {
+          api_key: string | null
+          created_at: string
+          description: string | null
+          host: string
+          id: string
+          name: string
+          port: number
+          status: string
+          sub_company_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          api_key?: string | null
+          created_at?: string
+          description?: string | null
+          host: string
+          id?: string
+          name: string
+          port: number
+          status?: string
+          sub_company_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          api_key?: string | null
+          created_at?: string
+          description?: string | null
+          host?: string
+          id?: string
+          name?: string
+          port?: number
+          status?: string
+          sub_company_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mcp_servers_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_packages: {
         Row: {
           active: boolean
