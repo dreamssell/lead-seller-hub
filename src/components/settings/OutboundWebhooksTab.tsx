@@ -384,17 +384,19 @@ export default function OutboundWebhooksTab() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-xs font-bold text-muted-foreground">Intervalo de Reenvio</Label>
-                  <div className="flex items-center gap-3 py-1">
-                    <div className="flex -space-x-1">
-                      {[1, 2, 3].map(i => (
-                        <div key={i} className="w-6 h-6 rounded-full border-2 border-background bg-primary/20 flex items-center justify-center">
-                          <RotateCcw className="w-3 h-3 text-primary" />
-                        </div>
-                      ))}
-                    </div>
-                    <span className="text-[11px] font-medium">30s → 1m → 2m → 4m...</span>
+                  <Label className="text-xs font-bold text-muted-foreground">Timeout da Requisição</Label>
+                  <div className="flex items-center gap-3">
+                    <Input 
+                      type="number" 
+                      min="1" 
+                      max="120" 
+                      value={form.timeout_seconds} 
+                      onChange={(e) => setForm({ ...form, timeout_seconds: parseInt(e.target.value) })}
+                      className="w-20 bg-background border-primary/20 focus-visible:ring-primary"
+                    />
+                    <span className="text-[11px] font-medium">segundos</span>
                   </div>
+                  <p className="text-[10px] text-muted-foreground">Tempo máximo para resposta do servidor.</p>
                 </div>
               </div>
 
