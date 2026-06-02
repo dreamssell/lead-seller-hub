@@ -53,7 +53,7 @@ export default function DeveloperPage() {
           </div>
         )}
 
-        <Tabs defaultValue="general" className="w-full">
+        <Tabs defaultValue="ativar" className="w-full">
           <TabsList className="w-full overflow-x-auto flex-wrap h-auto justify-start bg-secondary/60 p-1 rounded-xl">
             {visibleTabs.map(({ value, label, icon: Icon }) => (
               <TabsTrigger key={value} value={value} className="data-[state=active]:bg-card data-[state=active]:shadow-sm">
