@@ -158,7 +158,8 @@ export default function OutboundWebhooksTab() {
       previous_secret: webhook.previous_secret,
       secret_version: webhook.secret_version || 1,
       events: webhook.events || [],
-      is_active: webhook.is_active
+      is_active: webhook.is_active,
+      max_retries: webhook.max_retries || 3
     });
     setView('edit');
   };
