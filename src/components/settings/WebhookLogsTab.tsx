@@ -350,11 +350,21 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2 h-9 border-primary/20 hover:border-primary/40 text-primary" disabled={exporting}>
-                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                Exportar
+              <Button variant="outline" size="sm" className="gap-2 h-9 border-primary/20 hover:border-primary/40 text-primary min-w-[100px]" disabled={exporting}>
+                {exporting ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-[10px] tabular-nums">{exportProgress}%</span>
+                  </div>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Exportar
+                  </>
+                )}
               </Button>
             </DropdownMenuTrigger>
+
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => exportLogs('csv')} className="gap-2">
                 <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
