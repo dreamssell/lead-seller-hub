@@ -10,7 +10,6 @@ import {
   Loader2
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 
 interface WebhookHealth {
