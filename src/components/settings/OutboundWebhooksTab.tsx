@@ -447,6 +447,9 @@ export default function OutboundWebhooksTab() {
             <TabsTrigger value="config" className="rounded-lg gap-2">
               <Settings className="w-4 h-4" /> Configuração
             </TabsTrigger>
+            <TabsTrigger value="health" className="rounded-lg gap-2">
+              <Activity className="w-4 h-4" /> Saúde & Métricas
+            </TabsTrigger>
             <TabsTrigger value="test" className="rounded-lg gap-2">
               <FlaskConical className="w-4 h-4" /> Teste
             </TabsTrigger>
