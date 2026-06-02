@@ -554,24 +554,79 @@ export default function OutboundWebhooksTab() {
           </TabsContent>
 
           <TabsContent value="payload" className="mt-6 space-y-6">
-            <div className="glass-card p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">Exemplo de Evento (JSON)</h3>
-                  <p className="text-sm text-muted-foreground">Formato que será enviado para sua URL</p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <FileJson className="w-5 h-5 text-primary" />
+                  <h3 className="text-lg font-bold">Validador de Payload</h3>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => downloadSchema(selectedWebhook)}>
-                    <Download className="w-4 h-4 mr-2" /> Download Schema
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => copyToClipboard(JSON.stringify(samplePayload, null, 2), 'payload')}>
-                    {copiedId === 'payload' ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />} Copiar
-                  </Button>
+                
+                <div className="glass-card p-5 space-y-5 bg-secondary/10 border-none shadow-inner">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Campos Obrigatórios</span>
+                      <Badge variant="outline" className="text-[10px] text-primary bg-primary/5">3 campos padrão</Badge>
+                    </div>
+                    <div className="space-y-2">
+                      {[
+                        { name: 'event', type: 'String', desc: 'Nome técnico do evento disparado' },
+                        { name: 'timestamp', type: 'DateTime', desc: 'Data/hora do evento em formato ISO-8601' },
+                        { name: 'data', type: 'Object', desc: 'Objeto contendo os dados específicos do recurso' }
+                      ].map(field => (
+                        <div key={field.name} className="flex items-start gap-3 p-3 bg-background rounded-lg border border-border/40 group hover:border-primary/30 transition-colors">
+                          <div className="w-1 h-8 rounded-full bg-primary/20 group-hover:bg-primary transition-colors" />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <code className="text-xs font-bold text-foreground font-mono">{field.name}</code>
+                              <span className="text-[10px] text-muted-foreground bg-secondary px-1 rounded">{field.type}</span>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{field.desc}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 space-y-2">
+                    <div className="flex items-center gap-2 text-amber-700">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Regras de Validação</span>
+                    </div>
+                    <ul className="text-[10px] text-amber-700/70 space-y-1 list-disc pl-4">
+                      <li>O body deve ser obrigatoriamente um JSON válido.</li>
+                      <li>A assinatura HMAC deve ser validada usando o header X-Webhook-Signature.</li>
+                      <li>Eventos de teste usam o tipo <code>webhook.test</code>.</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
-              <pre className="p-4 rounded-xl bg-slate-950 text-slate-50 text-xs overflow-x-auto font-mono border border-white/5">
-                {JSON.stringify(samplePayload, null, 2)}
-              </pre>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="w-5 h-5 text-primary" />
+                    <h3 className="text-lg font-bold">Exemplo do Body</h3>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => downloadSchema(selectedWebhook)} className="h-8 text-[11px] bg-background">
+                      <Download className="w-3.5 h-3.5 mr-2" /> Schema
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => copyToClipboard(JSON.stringify(samplePayload, null, 2), 'payload')} className="h-8 text-[11px] bg-background">
+                      {copiedId === 'payload' ? <Check className="w-3.5 h-3.5 mr-2" /> : <Copy className="w-3.5 h-3.5 mr-2" />} JSON
+                    </Button>
+                  </div>
+                </div>
+                <div className="relative group">
+                  <pre className="p-5 rounded-2xl bg-slate-950 text-slate-50 text-xs overflow-x-auto font-mono border border-white/5 shadow-2xl h-[400px]">
+                    {JSON.stringify(samplePayload, null, 2)}
+                  </pre>
+                  <div className="absolute top-4 right-4 flex gap-1">
+                    <div className="w-2 h-2 rounded-full bg-red-500/50" />
+                    <div className="w-2 h-2 rounded-full bg-amber-500/50" />
+                    <div className="w-2 h-2 rounded-full bg-emerald-500/50" />
+                  </div>
+                </div>
+              </div>
             </div>
           </TabsContent>
         </Tabs>
