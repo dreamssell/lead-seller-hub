@@ -20,7 +20,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import GeneralTab from '@/components/settings/GeneralTab';
 import ConnectionsTab from '@/components/settings/ConnectionsTab';
-import WebhooksTab from '@/components/settings/WebhooksTab';
+import OutboundWebhooksTab from '@/components/settings/OutboundWebhooksTab';
 import ApiTab from '@/components/settings/ApiTab';
 import CustomFieldsTab from '@/components/settings/CustomFieldsTab';
 import SmtpTab from '@/components/settings/SmtpTab';
