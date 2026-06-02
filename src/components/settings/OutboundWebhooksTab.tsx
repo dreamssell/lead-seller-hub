@@ -24,10 +24,16 @@ import {
   AlertTriangle,
   RotateCcw,
   History,
-  Download
+  Download,
+  Terminal,
+  FileJson,
+  FlaskConical,
+  Clock,
+  ArrowUpRight
 } from 'lucide-react';
 import WebhookLogsTab from './WebhookLogsTab';
 import WebhookAuditTab from './WebhookAuditTab';
+import OutboundWebhookTestConsole from './OutboundWebhookTestConsole';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
