@@ -1,7 +1,8 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { Settings as SettingsIcon, Plug, Webhook, Code2, ListChecks, Mail, Sparkles } from 'lucide-react';
+import { Settings as SettingsIcon, Plug, Webhook, Code2, ListChecks, Mail, Sparkles, AlertCircle } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAuth } from '@/contexts/AuthContext';
 import GeneralTab from '@/components/settings/GeneralTab';
 import ConnectionsTab from '@/components/settings/ConnectionsTab';
 import WebhooksTab from '@/components/settings/WebhooksTab';
@@ -11,13 +12,13 @@ import SmtpTab from '@/components/settings/SmtpTab';
 import AiTab from '@/components/settings/AiTab';
 
 const TABS = [
-  { value: 'general',     label: 'Geral',     icon: SettingsIcon, Comp: GeneralTab },
-  { value: 'connections', label: 'Conexões',  icon: Plug,         Comp: ConnectionsTab },
-  { value: 'webhooks',    label: 'Webhooks',  icon: Webhook,      Comp: WebhooksTab },
-  { value: 'api',         label: 'API',       icon: Code2,        Comp: ApiTab },
-  { value: 'fields',      label: 'Campos',    icon: ListChecks,   Comp: CustomFieldsTab },
-  { value: 'smtp',        label: 'SMTP',      icon: Mail,         Comp: SmtpTab },
-  { value: 'ai',          label: 'IA',        icon: Sparkles,     Comp: AiTab },
+  { value: 'general',     label: 'Geral',     icon: SettingsIcon, Comp: GeneralTab, advanced: false },
+  { value: 'connections', label: 'Conexões',  icon: Plug,         Comp: ConnectionsTab, advanced: false },
+  { value: 'webhooks',    label: 'Webhooks',  icon: Webhook,      Comp: WebhooksTab, advanced: true },
+  { value: 'api',         label: 'API',       icon: Code2,        Comp: ApiTab, advanced: true },
+  { value: 'fields',      label: 'Campos',    icon: ListChecks,   Comp: CustomFieldsTab, advanced: true },
+  { value: 'smtp',        label: 'SMTP',      icon: Mail,         Comp: SmtpTab, advanced: true },
+  { value: 'ai',          label: 'IA',        icon: Sparkles,     Comp: AiTab, advanced: true },
 ];
 
 export default function DeveloperPage() {
