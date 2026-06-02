@@ -7,7 +7,8 @@ import {
   AlertCircle,
   TrendingUp,
   BarChart3,
-  Loader2
+  Loader2,
+  ShieldCheck
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Progress } from '@/components/ui/progress';
@@ -17,10 +18,12 @@ interface WebhookHealth {
   avgLatency: number;
   p95Latency: number;
   timeoutCount: number;
+  idempotencyHits: number;
   totalAttempts: number;
   lastAttempt: string | null;
   status: 'healthy' | 'unstable' | 'down' | 'unknown';
 }
+
 
 export default function WebhookHealthDashboard({ webhookId }: { webhookId: string }) {
   const [health, setHealth] = useState<WebhookHealth | null>(null);
@@ -32,7 +35,7 @@ export default function WebhookHealthDashboard({ webhookId }: { webhookId: strin
       // Get last 100 attempts for metrics
       const { data, error } = await supabase
         .from('webhook_logs')
-        .select('response_status, latency_ms, created_at')
+        .select('response_status, latency_ms, created_at, is_idempotent_hit')
         .eq('webhook_id', webhookId)
         .order('created_at', { ascending: false })
         .limit(100);
@@ -47,9 +50,11 @@ export default function WebhookHealthDashboard({ webhookId }: { webhookId: strin
       const total = data.length;
       const successes = data.filter(log => log.response_status >= 200 && log.response_status < 300).length;
       const timeouts = data.filter(log => log.response_status === 408 || log.response_status === 0).length;
+      const idempotencyHits = data.filter(log => log.is_idempotent_hit === true).length;
       const latencies = data.map(log => log.latency_ms || 0).sort((a, b) => a - b);
       
       const successRate = (successes / total) * 100;
+
       const avgLatency = latencies.reduce((a, b) => a + b, 0) / total;
       const p95Latency = latencies[Math.floor(total * 0.95)] || latencies[total - 1];
 
@@ -62,8 +67,10 @@ export default function WebhookHealthDashboard({ webhookId }: { webhookId: strin
         avgLatency,
         p95Latency,
         timeoutCount: timeouts,
+        idempotencyHits: idempotencyHits,
         totalAttempts: total,
         lastAttempt: data[0].created_at,
+
         status
       });
     } catch (err) {

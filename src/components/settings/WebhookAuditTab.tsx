@@ -1,102 +1,164 @@
 import { useEffect, useState } from 'react';
 import { 
-  User, 
-  Clock, 
-  History
+  ShieldCheck, 
+  Download, 
+  FileJson, 
+  FileSpreadsheet,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
+  ZapOff
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-
-interface AuditLog {
-  id: string;
-  action: string;
-  changed_by: string;
-  changes: any;
-  created_at: string;
-  profiles?: any;
-}
+import { Progress } from '@/components/ui/progress';
 
 export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
-  const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<{ total: number, hits: number, ratio: number } | null>(null);
+
+  const loadStats = async () => {
+    setLoading(true);
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30); // Last 30 days
+    
+    const { data, error } = await supabase.rpc('get_webhook_idempotency_stats', {
+      p_webhook_id: webhookId,
+      p_start_date: startDate.toISOString(),
+      p_end_date: new Date().toISOString()
+    });
+
+    if (!error && data && data.length > 0) {
+      setStats({
+        total: Number(data[0].total_requests),
+        hits: Number(data[0].idempotency_hits),
+        ratio: Number(data[0].hit_ratio)
+      });
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
-    const loadAudit = async () => {
-      setLoading(true);
-      // We'll fetch separately if the relation is not working in PostgREST
-      const { data, error } = await supabase
-        .from('audit_logs')
-        .select('*')
-        .eq('record_id', webhookId)
-        .eq('table_name', 'webhooks')
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        toast({ title: 'Erro ao carregar auditoria', description: error.message, variant: 'destructive' });
-      } else {
-        // Simple fix: just show the ID for now or fetch profiles in a second step if needed
-        setLogs((data as AuditLog[]) ?? []);
-      }
-      setLoading(false);
-    };
-
-    loadAudit();
+    loadStats();
   }, [webhookId]);
 
-  if (loading) return <div className="flex justify-center py-12">Carregando auditoria...</div>;
+  const exportAudit = async (format: 'json' | 'csv') => {
+    try {
+      const { data, error } = await supabase.rpc('get_idempotency_expiration_report', {
+        p_webhook_id: webhookId
+      });
+
+      if (error) throw error;
+
+      if (format === 'json') {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `webhook-idempotency-audit-${webhookId}.json`;
+        link.click();
+      } else {
+        // Simple CSV generation from report
+        const report = data as any;
+        const keys = report.keys_near_expiration || [];
+        const headers = ['idempotency_key', 'created_at', 'expires_at'];
+        const csvContent = [
+          headers.join(','),
+          ...keys.map((k: any) => `${k.idempotency_key},${k.created_at},${k.expires_at}`)
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `webhook-idempotency-audit-${webhookId}.csv`;
+        link.click();
+      }
+
+      toast({ title: 'Relatório exportado com sucesso' });
+    } catch (err) {
+      toast({ title: 'Erro ao exportar relatório', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="w-6 h-6 animate-spin text-primary/50" />
+      </div>
+    );
+  }
 
   return (
-    <div className="glass-card p-4">
-      <div className="flex items-center gap-2 mb-4">
-        <History className="w-5 h-5 text-primary" />
-        <h3 className="font-bold">Trilha de Auditoria</h3>
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="glass-card p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <ShieldCheck className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold">Estatísticas de Idempotência</h3>
+              <p className="text-[10px] text-muted-foreground">Últimos 30 dias</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex justify-between items-end">
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Taxa de Prevenção</span>
+                <h4 className="text-2xl font-bold">{stats?.ratio || 0}%</h4>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] text-muted-foreground">Bloqueadas: <strong>{stats?.hits || 0}</strong></p>
+                <p className="text-[10px] text-muted-foreground">Total: <strong>{stats?.total || 0}</strong></p>
+              </div>
+            </div>
+            <Progress value={stats?.ratio || 0} className="h-1.5" />
+          </div>
+        </div>
+
+        <div className="glass-card p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-amber-500/10">
+              <Download className="w-5 h-5 text-amber-500" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold">Relatório de Auditoria</h3>
+              <p className="text-[10px] text-muted-foreground">Exportar dados de expiração (TTL)</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => exportAudit('json')}>
+              <FileJson className="w-4 h-4" /> JSON
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => exportAudit('csv')}>
+              <FileSpreadsheet className="w-4 h-4" /> CSV
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="glass-card p-6 bg-secondary/10 border-dashed">
+        <div className="flex items-start gap-4">
+          <ZapOff className="w-10 h-10 text-muted-foreground/30" />
+          <div className="space-y-1">
+            <h4 className="text-sm font-bold">Por que isso é importante?</h4>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              O monitoramento de idempotência garante que seu sistema não processe a mesma requisição múltiplas vezes devido a retentativas de rede. 
+              O relatório de auditoria permite verificar quais chaves estão ativas e quando expirarão (TTL), garantindo conformidade e eficiência de armazenamento.
+            </p>
+          </div>
+        </div>
       </div>
       
-      {logs.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground italic">Nenhuma alteração registrada.</div>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Usuário</TableHead>
-              <TableHead>Ação</TableHead>
-              <TableHead>Data</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {logs.map(log => (
-              <TableRow key={log.id}>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <User className="w-3.5 h-3.5" />
-                    <div>
-                      <p className="text-sm font-medium">{log.changed_by?.split('-')[0]}</p>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="capitalize">{log.action}</Badge>
-                </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {new Date(log.created_at).toLocaleString()}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+      <div className="flex justify-center">
+        <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={loadStats}>
+          <RefreshCw className="w-3 h-3" /> Atualizar métricas
+        </Button>
+      </div>
     </div>
   );
 }
