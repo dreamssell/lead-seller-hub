@@ -22,6 +22,15 @@ const TABS = [
 ];
 
 export default function DeveloperPage() {
+  const { access } = useAuth();
+  const isMaster = !access?.sub_company_id;
+  const canCustomize = access?.allow_custom_logic;
+
+  const visibleTabs = TABS.filter(tab => {
+    if (!isMaster && !canCustomize && tab.advanced) return false;
+    return true;
+  });
+
   return (
     <AppLayout title="Developer Center" subtitle="Gerencie suas integrações técnicas e webhooks">
       <motion.div
@@ -29,16 +38,29 @@ export default function DeveloperPage() {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
       >
+        {!isMaster && !canCustomize && (
+          <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-700">Acesso Restrito</p>
+              <p className="text-xs text-amber-600/80">
+                Sua conta está configurada no modo padrão herdado da matriz. 
+                Entre em contato com o suporte caso precise de acesso a customizações avançadas (API, Webhooks, IA).
+              </p>
+            </div>
+          </div>
+        )}
+
         <Tabs defaultValue="general" className="w-full">
           <TabsList className="w-full overflow-x-auto flex-wrap h-auto justify-start bg-secondary/60 p-1 rounded-xl">
-            {TABS.map(({ value, label, icon: Icon }) => (
+            {visibleTabs.map(({ value, label, icon: Icon }) => (
               <TabsTrigger key={value} value={value} className="data-[state=active]:bg-card data-[state=active]:shadow-sm">
                 <Icon className="w-4 h-4 mr-2" />{label}
               </TabsTrigger>
             ))}
           </TabsList>
 
-          {TABS.map(({ value, Comp }) => (
+          {visibleTabs.map(({ value, Comp }) => (
             <TabsContent key={value} value={value} className="mt-6">
               <Comp />
             </TabsContent>
