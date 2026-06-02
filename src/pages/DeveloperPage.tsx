@@ -1,6 +1,6 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { Settings as SettingsIcon, Plug, Webhook, Code2, ListChecks, Mail, Sparkles, AlertCircle } from 'lucide-react';
+import { Settings as SettingsIcon, Plug, Webhook, Code2, ListChecks, Mail, Sparkles, AlertCircle, Play } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import GeneralTab from '@/components/settings/GeneralTab';
@@ -10,8 +10,10 @@ import ApiTab from '@/components/settings/ApiTab';
 import CustomFieldsTab from '@/components/settings/CustomFieldsTab';
 import SmtpTab from '@/components/settings/SmtpTab';
 import AiTab from '@/components/settings/AiTab';
+import QuickstartTab from '@/components/settings/QuickstartTab';
 
 const TABS = [
+  { value: 'ativar',      label: 'Ativar',    icon: Play,         Comp: QuickstartTab, advanced: false },
   { value: 'general',     label: 'Geral',     icon: SettingsIcon, Comp: GeneralTab, advanced: false },
   { value: 'connections', label: 'Conexões',  icon: Plug,         Comp: ConnectionsTab, advanced: false },
   { value: 'webhooks',    label: 'Webhooks',  icon: Webhook,      Comp: WebhooksTab, advanced: true },
@@ -51,7 +53,7 @@ export default function DeveloperPage() {
           </div>
         )}
 
-        <Tabs defaultValue="general" className="w-full">
+        <Tabs defaultValue="ativar" className="w-full">
           <TabsList className="w-full overflow-x-auto flex-wrap h-auto justify-start bg-secondary/60 p-1 rounded-xl">
             {visibleTabs.map(({ value, label, icon: Icon }) => (
               <TabsTrigger key={value} value={value} className="data-[state=active]:bg-card data-[state=active]:shadow-sm">
