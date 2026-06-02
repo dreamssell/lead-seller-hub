@@ -64,6 +64,8 @@ interface WebhookLog {
   error_message?: string;
   timeout_limit?: number;
   request_id?: string;
+  idempotency_key?: string;
+  is_idempotent_hit?: boolean;
 }
 
 const PAGE_SIZE = 10;
