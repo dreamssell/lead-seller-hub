@@ -152,7 +152,8 @@ Deno.serve(async (req) => {
         status: isSuccess ? 'completed' : (webhook.max_retries > 0 ? 'pending_retry' : 'failed'),
         error_message: error_message,
         retry_count: 0,
-        timeout_limit: timeoutSeconds
+        timeout_limit: timeoutSeconds,
+        request_id: request_id
       });
 
       // Check for consecutive failures/timeouts
