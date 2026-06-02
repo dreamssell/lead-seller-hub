@@ -5,7 +5,7 @@ import {
   Search, Book, Code, Terminal, Zap, Shield, Globe, 
   MessageSquare, ChevronRight, Hash, Server, Play, 
   Copy, Check, Info, AlertTriangle, Cpu, Activity,
-  Webhook, Key, FileJson, CheckCircle2, Brackets
+  Webhook, Key, FileJson, CheckCircle2, Brackets, Download
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,6 +47,19 @@ export default function DocumentationPage() {
     setCopied(id);
     toast({ title: "Copiado!", description: "Código copiado para a área de transferência." });
     setTimeout(() => setCopied(null), 2000);
+  };
+
+  const downloadFile = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast({ title: "Download iniciado", description: `O arquivo ${filename} foi gerado com sucesso.` });
   };
 
   return (
@@ -264,9 +277,27 @@ export default function DocumentationPage() {
 
                     <TabsContent value="endpoints" className="space-y-10">
                       <section className="space-y-6">
-                        <div className="flex items-center gap-2 border-b pb-4 border-border/50">
-                          <Brackets className="w-5 h-5 text-primary" />
-                          <h2 className="text-2xl font-bold">Estrutura de Payload (Schema)</h2>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 border-border/50">
+                          <div className="flex items-center gap-2">
+                            <Brackets className="w-5 h-5 text-primary" />
+                            <h2 className="text-2xl font-bold">Estrutura de Payload (Schema)</h2>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="outline" size="sm" 
+                              onClick={() => downloadFile(JSON.stringify(JSON_SCHEMA, null, 2), 'mcp-schema.json')}
+                              className="rounded-xl h-9 text-[10px] font-bold uppercase tracking-wider"
+                            >
+                              <Download className="w-3.5 h-3.5 mr-2" /> JSON Schema
+                            </Button>
+                            <Button 
+                              variant="outline" size="sm" 
+                              onClick={() => downloadFile(JSON.stringify(OPENAPI_SCHEMA, null, 2), 'mcp-openapi.json')}
+                              className="rounded-xl h-9 text-[10px] font-bold uppercase tracking-wider"
+                            >
+                              <Download className="w-3.5 h-3.5 mr-2" /> OpenAPI / Swagger
+                            </Button>
+                          </div>
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -429,3 +460,77 @@ const webhookExample = `{
     "changes": ["inventory_count", "price_list"]
   }
 }`;
+
+const JSON_SCHEMA = {
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MCP Server Request",
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "A pergunta ou instrução do usuário"
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "agent_id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "required": ["query"]
+};
+
+const OPENAPI_SCHEMA = {
+  "openapi": "3.0.0",
+  "info": {
+    "title": "MCP Server API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/mcp/context": {
+      "post": {
+        "summary": "Processa contexto para o agente",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/McpRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/McpResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "McpRequest": {
+        "type": "object",
+        "required": ["query"],
+        "properties": {
+          "query": { "type": "string" },
+          "metadata": { "type": "object" }
+        }
+      },
+      "McpResponse": {
+        "type": "object",
+        "required": ["data", "source"],
+        "properties": {
+          "data": { "type": "object" },
+          "source": { "type": "string" }
+        }
+      }
+    }
+  }
+};
