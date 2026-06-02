@@ -9,7 +9,8 @@ import {
   Code2, 
   Trash2,
   Globe,
-  Lock
+  Lock,
+  Hourglass
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -49,7 +50,7 @@ export default function OutboundWebhookTestConsole({ webhook }: { webhook: Webho
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const sendTest = async () => {
+  const sendTest = async (delayMs: number = 0) => {
     setSending(true);
     setError(null);
     setResponse(null);
@@ -62,7 +63,8 @@ export default function OutboundWebhookTestConsole({ webhook }: { webhook: Webho
         body: {
           webhook_id: webhook.id,
           payload: parsedPayload,
-          is_test: true
+          is_test: true,
+          simulate_delay_ms: delayMs
         }
       });
 
@@ -111,14 +113,27 @@ export default function OutboundWebhookTestConsole({ webhook }: { webhook: Webho
           </div>
         </div>
 
-        <Button 
-          onClick={sendTest} 
-          disabled={sending || !webhook.url} 
-          className="w-full gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90"
-        >
-          {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-          Disparar Teste Real
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={() => sendTest(0)} 
+            disabled={sending || !webhook.url} 
+            className="flex-1 gap-2 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90"
+          >
+            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+            Disparar Teste Real
+          </Button>
+
+          <Button 
+            onClick={() => sendTest(10000)} // Simula 10s de atraso (geralmente acima do timeout padrão de 3-5s)
+            disabled={sending || !webhook.url} 
+            variant="outline"
+            className="gap-2 border-amber-500/30 text-amber-600 hover:bg-amber-500/5 hover:text-amber-700"
+            title="Simula um endpoint lento (10s de atraso) para testar timeout"
+          >
+            <Hourglass className="w-4 h-4" />
+            Teste com Atraso
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-4">
