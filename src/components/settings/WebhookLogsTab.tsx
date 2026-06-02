@@ -70,7 +70,7 @@ interface WebhookLog {
   is_idempotent_hit?: boolean;
 }
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
   const [logs, setLogs] = useState<WebhookLog[]>([]);
@@ -81,11 +81,14 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
   
   // Filtering & Pagination state
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'error' | 'idempotency_hit'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | '2xx' | '4xx' | '5xx' | '409' | 'error'>('all');
+  const [onlyDuplicates, setOnlyDuplicates] = useState(false);
+  const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [dateFilter, setDateFilter] = useState<{ from: string; to: string }>({ from: '', to: '' });
+
 
 
   const loadLogs = async () => {
@@ -93,10 +96,9 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
     try {
       const query = applyFilters(supabase.from('webhook_logs').select('*', { count: 'exact' }));
 
-
       const { data, count, error } = await query
         .order('created_at', { ascending: sortOrder === 'asc' })
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        .range(page * pageSize, (page + 1) * pageSize - 1);
       
       if (error) throw error;
 
@@ -111,7 +113,8 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
 
   useEffect(() => { 
     loadLogs(); 
-  }, [webhookId, page, statusFilter, sortOrder, dateFilter]);
+  }, [webhookId, page, pageSize, statusFilter, onlyDuplicates, sortOrder, dateFilter]);
+
 
   // Handle search with debounce
   useEffect(() => {
@@ -129,13 +132,22 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
       q = q.or(`event_type.ilike.%${search}%,idempotency_key.ilike.%${search}%,request_id.ilike.%${search}%`);
     }
 
-    if (statusFilter === 'success') {
+    if (statusFilter === '2xx') {
       q = q.gte('response_status', 200).lt('response_status', 300);
+    } else if (statusFilter === '4xx') {
+      q = q.gte('response_status', 400).lt('response_status', 500);
+    } else if (statusFilter === '5xx') {
+      q = q.gte('response_status', 500);
+    } else if (statusFilter === '409') {
+      q = q.eq('response_status', 409);
     } else if (statusFilter === 'error') {
       q = q.or('response_status.lt.200,response_status.gte.300');
-    } else if (statusFilter === 'idempotency_hit') {
+    }
+
+    if (onlyDuplicates) {
       q = q.eq('is_idempotent_hit', true);
     }
+
 
     if (dateFilter.from) {
       q = q.gte('created_at', new Date(dateFilter.from).toISOString());
@@ -260,149 +272,167 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
     }
   };
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const totalPages = Math.ceil(totalCount / pageSize);
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case '2xx': return 'Sucesso (2xx)';
+      case '4xx': return 'Erro Cliente (4xx)';
+      case '5xx': return 'Erro Servidor (5xx)';
+      case '409': return 'Conflito (409)';
+      case 'error': return 'Todos os Erros';
+      default: return 'Todos os Status';
+    }
+  };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4 bg-secondary/20 p-3 rounded-xl border border-border/40">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input 
-            placeholder="Buscar por evento, Idempotency-Key ou Request ID..." 
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 bg-background/50 border-none shadow-none h-9"
-          />
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2 h-9">
-                <Filter className="w-4 h-4" />
-                Status: {statusFilter === 'all' ? 'Todos' : statusFilter === 'success' ? 'Sucesso' : statusFilter === 'idempotency_hit' ? 'Duplicatas' : 'Erro'}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel>Filtrar por Status</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuCheckboxItem checked={statusFilter === 'all'} onCheckedChange={() => setStatusFilter('all')}>
-                Todos
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem checked={statusFilter === 'success'} onCheckedChange={() => setStatusFilter('success')}>
-                Somente Sucesso
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem checked={statusFilter === 'error'} onCheckedChange={() => setStatusFilter('error')}>
-                Somente Erros
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem checked={statusFilter === 'idempotency_hit'} onCheckedChange={() => setStatusFilter('idempotency_hit')}>
-                Somente Duplicatas
-              </DropdownMenuCheckboxItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+      <div className="flex flex-col gap-4 bg-secondary/20 p-4 rounded-xl border border-border/40">
+        <div className="flex items-center gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input 
+              placeholder="Buscar por evento, Idempotency-Key ou Request ID..." 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 bg-background/50 border-none shadow-none h-9"
+            />
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2 h-9">
+                  <Filter className="w-4 h-4" />
+                  {getStatusLabel(statusFilter)}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Filtrar por Status</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem checked={statusFilter === 'all'} onCheckedChange={() => setStatusFilter('all')}>
+                  Todos os Status
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={statusFilter === '2xx'} onCheckedChange={() => setStatusFilter('2xx')}>
+                  Sucesso (200-299)
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={statusFilter === '4xx'} onCheckedChange={() => setStatusFilter('4xx')}>
+                  Erro Cliente (400-499)
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={statusFilter === '5xx'} onCheckedChange={() => setStatusFilter('5xx')}>
+                  Erro Servidor (500+)
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={statusFilter === '409'} onCheckedChange={() => setStatusFilter('409')}>
+                  Conflito (409)
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={statusFilter === 'error'} onCheckedChange={() => setStatusFilter('error')}>
+                  Qualquer Erro
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="gap-2 h-9"
-            onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
-          >
-            <ArrowUpDown className="w-4 h-4" />
-            {sortOrder === 'desc' ? 'Mais recentes' : 'Mais antigos'}
-          </Button>
+            <Button 
+              variant={onlyDuplicates ? "default" : "outline"}
+              size="sm" 
+              className="gap-2 h-9"
+              onClick={() => setOnlyDuplicates(!onlyDuplicates)}
+            >
+              <RotateCcw className={`w-4 h-4 ${onlyDuplicates ? 'animate-spin-once' : ''}`} />
+              Somente Duplicatas
+            </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2 h-9">
-                <Calendar className="w-4 h-4" />
-                Datas
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="p-4 w-72 space-y-3">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-muted-foreground">De:</label>
-                <Input 
-                  type="date" 
-                  value={dateFilter.from} 
-                  onChange={(e) => setDateFilter(prev => ({ ...prev, from: e.target.value }))}
-                  className="h-8 text-xs"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-muted-foreground">Até:</label>
-                <Input 
-                  type="date" 
-                  value={dateFilter.to} 
-                  onChange={(e) => setDateFilter(prev => ({ ...prev, to: e.target.value }))}
-                  className="h-8 text-xs"
-                />
-              </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="w-full h-7 text-[10px]"
-                onClick={() => setDateFilter({ from: '', to: '' })}
-              >
-                Limpar Período
-              </Button>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-2 h-9"
+              onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+            >
+              <ArrowUpDown className="w-4 h-4" />
+              {sortOrder === 'desc' ? 'Mais recentes' : 'Mais antigos'}
+            </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2 h-9 border-primary/20 hover:border-primary/40 text-primary min-w-[100px]" disabled={exporting}>
-                {exporting ? (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="text-[10px] tabular-nums">{exportProgress}%</span>
-                  </div>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" />
-                    Exportar
-                  </>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2 h-9">
+                  <Calendar className="w-4 h-4" />
+                  Datas
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="p-4 w-72 space-y-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground">De:</label>
+                  <Input 
+                    type="date" 
+                    value={dateFilter.from} 
+                    onChange={(e) => setDateFilter(prev => ({ ...prev, from: e.target.value }))}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase text-muted-foreground">Até:</label>
+                  <Input 
+                    type="date" 
+                    value={dateFilter.to} 
+                    onChange={(e) => setDateFilter(prev => ({ ...prev, to: e.target.value }))}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full h-7 text-[10px]"
+                  onClick={() => setDateFilter({ from: '', to: '' })}
+                >
+                  Limpar Período
+                </Button>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => exportLogs('csv')} className="gap-2">
-                <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
-                CSV (Planilha)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => exportLogs('json')} className="gap-2">
-                <FileJson className="w-4 h-4 text-blue-500" />
-                JSON (Raw)
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-[10px]">Filtrados (Somente Duplicatas)</DropdownMenuLabel>
-              <DropdownMenuItem 
-                onClick={async () => {
-                  const originalFilter = statusFilter;
-                  setStatusFilter('idempotency_hit');
-                  setTimeout(() => exportLogs('csv'), 100);
-                  setTimeout(() => setStatusFilter(originalFilter), 500);
-                }} 
-                className="gap-2"
-              >
-                <FileSpreadsheet className="w-4 h-4 text-amber-500" />
-                Duplicatas (CSV)
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={async () => {
-                  const originalFilter = statusFilter;
-                  setStatusFilter('idempotency_hit');
-                  setTimeout(() => exportLogs('json'), 100);
-                  setTimeout(() => setStatusFilter(originalFilter), 500);
-                }} 
-                className="gap-2"
-              >
-                <FileJson className="w-4 h-4 text-amber-500" />
-                Duplicatas (JSON)
-              </DropdownMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2 h-9 border-primary/20 hover:border-primary/40 text-primary min-w-[100px]" disabled={exporting}>
+                  {exporting ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-[10px] tabular-nums">{exportProgress}%</span>
+                    </div>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      Exportar
+                    </>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
 
-            </DropdownMenuContent>
-          </DropdownMenu>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => exportLogs('csv')} className="gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+                  CSV (Planilha)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportLogs('json')} className="gap-2">
+                  <FileJson className="w-4 h-4 text-blue-500" />
+                  JSON (Raw)
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-[10px]">Exportar Filtrados</DropdownMenuLabel>
+                <DropdownMenuItem 
+                  onClick={async () => exportLogs('csv')} 
+                  className="gap-2"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-amber-500" />
+                  CSV (Com filtros atuais)
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={async () => exportLogs('json')} 
+                  className="gap-2"
+                >
+                  <FileJson className="w-4 h-4 text-amber-500" />
+                  JSON (Com filtros atuais)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
 
@@ -555,11 +585,34 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
         </Table>
       </div>
 
-      {totalCount > PAGE_SIZE && (
-        <div className="flex items-center justify-between px-2 py-4">
-          <p className="text-xs text-muted-foreground">
-            Mostrando <b>{page * PAGE_SIZE + 1}</b> a <b>{Math.min((page + 1) * PAGE_SIZE, totalCount)}</b> de <b>{totalCount}</b> logs
-          </p>
+      {totalCount > 0 && (
+        <div className="flex items-center justify-between px-2 py-4 border-t border-border/40">
+          <div className="flex items-center gap-4">
+            <p className="text-xs text-muted-foreground whitespace-nowrap">
+              Mostrando <b>{page * pageSize + 1}</b> a <b>{Math.min((page + 1) * pageSize, totalCount)}</b> de <b>{totalCount}</b> logs
+            </p>
+            
+            <div className="flex items-center gap-2 ml-4 border-l pl-4 border-border/40">
+              <span className="text-[10px] text-muted-foreground uppercase font-bold">Por página:</span>
+              <div className="flex items-center gap-1">
+                {PAGE_SIZE_OPTIONS.map(size => (
+                  <Button
+                    key={size}
+                    variant={pageSize === size ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-7 px-2 text-[10px]"
+                    onClick={() => {
+                      setPageSize(size);
+                      setPage(0);
+                    }}
+                  >
+                    {size}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           <div className="flex items-center gap-2">
             <Button 
               variant="outline" 
