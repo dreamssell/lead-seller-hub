@@ -184,7 +184,8 @@ Deno.serve(async (req) => {
       latency,
       signature_preview: signature,
       error: error_message,
-      idempotency_key: finalIdempotencyKey
+      idempotency_key: finalIdempotencyKey,
+      request_id: request_id
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
