@@ -60,6 +60,7 @@ interface WebhookLog {
   status?: string;
   error_message?: string;
   timeout_limit?: number;
+  request_id?: string;
 }
 
 const PAGE_SIZE = 10;
