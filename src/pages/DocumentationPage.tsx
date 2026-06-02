@@ -381,35 +381,51 @@ const nodeExample = `const express = require('express');
 const app = express();
 app.use(express.json());
 
-// Endpoint de Verificação de Saúde
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'active', uptime: process.uptime() });
-});
-
-// Implementação do Contexto MCP
 app.post('/mcp/context', (req, res) => {
-  const { query, metadata } = req.body;
+  const { query } = req.body;
   const apiKey = req.headers['authorization'];
 
-  if (apiKey !== 'SUA_CHAVE_DEFINIDA') {
+  if (apiKey !== 'Bearer SUA_CHAVE') {
     return res.status(401).json({ error: 'Não autorizado' });
   }
 
-  // Sua lógica para buscar dados externos
-  const contextData = {
+  res.json({
     source: "Database Local",
-    data: "Informações recuperadas para a query: " + query
-  };
-
-  res.json(contextData);
+    data: { result: "Dados para: " + query }
+  });
 });
 
-app.listen(3000, () => console.log('MCP Server rodando na porta 3000'));`;
+app.listen(3000);`;
 
-const curlExample = `curl -X POST https://seu-mcp-server.com/mcp/context \\
+const pythonExample = `from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+@app.route('/mcp/context', methods=['POST'])
+def mcp_context():
+    api_key = request.headers.get('Authorization')
+    if api_key != 'Bearer SUA_CHAVE':
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    data = request.json
+    return jsonify({
+        "source": "Python API",
+        "data": {"message": f"Processado: {data['query']}"}
+    })
+
+if __name__ == '__main__':
+    app.run(port=3000)`;
+
+const curlExample = `curl -X POST https://seu-servidor.com/mcp/context \\
   -H "Authorization: Bearer SEU_TOKEN" \\
   -H "Content-Type: application/json" \\
-  -d '{
-    "query": "buscar faturamento do mês",
-    "metadata": { "agent_id": "123" }
-  }'`;
+  -d '{"query": "buscar dados", "metadata": {}}'`;
+
+const webhookExample = `{
+  "event": "mcp.data_updated",
+  "timestamp": "2024-05-27T10:00:00Z",
+  "payload": {
+    "server_id": "mcp_01",
+    "changes": ["inventory_count", "price_list"]
+  }
+}`;
