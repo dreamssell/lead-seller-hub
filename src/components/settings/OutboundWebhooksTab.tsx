@@ -356,6 +356,43 @@ export default function OutboundWebhooksTab() {
                 <p className="text-[11px] text-muted-foreground">Onde enviaremos os dados quando os eventos ocorrerem</p>
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-primary/5 p-4 rounded-xl border border-primary/10">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-primary font-bold">Política de Retry</Label>
+                    <Badge className="bg-primary/20 text-primary border-none text-[9px] uppercase tracking-tighter hover:bg-primary/30">Backoff Exponencial</Badge>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Input 
+                      type="number" 
+                      min="0" 
+                      max="10" 
+                      value={form.max_retries} 
+                      onChange={(e) => setForm({ ...form, max_retries: parseInt(e.target.value) })}
+                      className="w-20 bg-background border-primary/20 focus-visible:ring-primary"
+                    />
+                    <div className="space-y-0.5">
+                      <p className="text-[11px] font-bold">Máximo de tentativas</p>
+                      <p className="text-[10px] text-muted-foreground leading-tight">Falhas no endpoint (5xx, Timeout, DNS)</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-muted-foreground">Intervalo de Reenvio</Label>
+                  <div className="flex items-center gap-3 py-1">
+                    <div className="flex -space-x-1">
+                      {[1, 2, 3].map(i => (
+                        <div key={i} className="w-6 h-6 rounded-full border-2 border-background bg-primary/20 flex items-center justify-center">
+                          <RotateCcw className="w-3 h-3 text-primary" />
+                        </div>
+                      ))}
+                    </div>
+                    <span className="text-[11px] font-medium">30s → 1m → 2m → 4m...</span>
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <Label className="text-base font-bold">Segurança (HMAC)</Label>
