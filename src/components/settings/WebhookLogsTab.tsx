@@ -56,6 +56,9 @@ interface WebhookLog {
   latency_ms: number;
   created_at: string;
   direction: 'inbound' | 'outbound';
+  retry_count?: number;
+  status?: string;
+  error_message?: string;
 }
 
 const PAGE_SIZE = 10;
