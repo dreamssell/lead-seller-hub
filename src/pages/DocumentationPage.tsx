@@ -49,6 +49,19 @@ export default function DocumentationPage() {
     setTimeout(() => setCopied(null), 2000);
   };
 
+  const downloadFile = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast({ title: "Download iniciado", description: `O arquivo ${filename} foi gerado com sucesso.` });
+  };
+
   return (
     <AppLayout title="Documentação Técnica" subtitle="Tudo o que você precisa para integrar com nossa plataforma">
       <div className="max-w-7xl mx-auto space-y-8">
