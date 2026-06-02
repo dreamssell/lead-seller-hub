@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import WebhookLogsTab from './WebhookLogsTab';
 import WebhookAuditTab from './WebhookAuditTab';
+import WebhookHealthDashboard from './WebhookHealthDashboard';
 import OutboundWebhookTestConsole from './OutboundWebhookTestConsole';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
