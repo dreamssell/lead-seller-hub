@@ -17,7 +17,6 @@ import { toast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 
-
 export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<{ total: number, hits: number, ratio: number } | null>(null);
@@ -63,7 +62,6 @@ export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
         link.download = `webhook-idempotency-audit-${webhookId}.json`;
         link.click();
       } else {
-        // Simple CSV generation from report
         const report = data as any;
         const keys = report.keys_near_expiration || [];
         const headers = ['idempotency_key', 'created_at', 'expires_at'];
@@ -81,7 +79,7 @@ export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
       }
 
       toast({ title: 'Relatório exportado com sucesso' });
-    } catch (err) {
+    } catch (err: any) {
       toast({ title: 'Erro ao exportar relatório', description: err.message, variant: 'destructive' });
     }
   };
@@ -161,12 +159,58 @@ export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
         <CleanupLogsView webhookId={webhookId} />
       </div>
 
-      
       <div className="flex justify-center">
         <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={loadStats}>
           <RefreshCw className="w-3 h-3" /> Atualizar métricas
         </Button>
       </div>
+    </div>
+  );
+}
+
+function CleanupLogsView({ webhookId }: { webhookId: string }) {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      const { data } = await supabase
+        .from('idempotency_cleanup_logs')
+        .select('*')
+        .eq('webhook_id', webhookId)
+        .order('clean_date', { ascending: false })
+        .limit(5);
+      setLogs(data || []);
+      setLoading(false);
+    };
+    load();
+  }, [webhookId]);
+
+  return (
+    <div className="glass-card p-4 space-y-3 bg-secondary/5 border-dashed">
+      <div className="flex items-center gap-2">
+        <History className="w-4 h-4 text-muted-foreground" />
+        <h4 className="text-xs font-bold uppercase tracking-tight text-muted-foreground">Últimas Limpezas (TTL)</h4>
+      </div>
+      
+      {loading ? (
+        <div className="flex justify-center py-4">
+          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/40" />
+        </div>
+      ) : logs.length === 0 ? (
+        <p className="text-[10px] text-muted-foreground italic text-center py-2">Nenhuma limpeza registrada recentemente.</p>
+      ) : (
+        <div className="space-y-2">
+          {logs.map((log: any) => (
+            <div key={log.id} className="flex justify-between items-center text-[10px] border-b border-border/20 pb-1">
+              <span className="text-muted-foreground">{new Date(log.clean_date).toLocaleString()}</span>
+              <Badge variant="outline" className="text-[9px] bg-amber-500/5 text-amber-600 border-amber-500/10">
+                -{log.keys_removed} chaves
+              </Badge>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
