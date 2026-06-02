@@ -72,19 +72,32 @@ Deno.serve(async (req) => {
     let responseBody: string;
     let error_message: string | null = null;
 
+    const timeoutSeconds = webhook.timeout_seconds || 30;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
+
     try {
       const resp = await fetch(webhook.url, {
         method: "POST",
         headers,
         body: bodyText,
+        signal: controller.signal
       });
 
       responseStatus = resp.status;
       responseBody = await resp.text();
     } catch (err) {
-      responseStatus = 0;
-      responseBody = "Network Error";
-      error_message = err.message;
+      if (err.name === 'AbortError') {
+        responseStatus = 408; // Request Timeout
+        responseBody = "Request Timeout";
+        error_message = `A requisição excedeu o tempo limite de ${timeoutSeconds}s`;
+      } else {
+        responseStatus = 0;
+        responseBody = "Network Error";
+        error_message = err.message;
+      }
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     const latency = Date.now() - startTime;
@@ -114,7 +127,8 @@ Deno.serve(async (req) => {
       status: responseStatus,
       body: responseBody,
       latency,
-      signature_preview: signature
+      signature_preview: signature,
+      error: error_message
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
