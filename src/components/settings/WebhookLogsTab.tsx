@@ -59,6 +59,7 @@ interface WebhookLog {
   retry_count?: number;
   status?: string;
   error_message?: string;
+  timeout_limit?: number;
 }
 
 const PAGE_SIZE = 10;
