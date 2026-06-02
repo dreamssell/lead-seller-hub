@@ -316,6 +316,107 @@ export default function OutboundWebhooksTab() {
     toast({ title: 'Schema gerado para download' });
   };
 
+  const downloadOpenAPI = (webhook: Webhook | null) => {
+    if (!webhook) return;
+    
+    const spec = {
+      openapi: "3.0.0",
+      info: {
+        title: `Outbound Webhook API: ${webhook.name}`,
+        version: `1.0.${webhook.secret_version}`,
+        description: "Documentação técnica para o recebimento de eventos disparados por este webhook."
+      },
+      servers: [
+        {
+          url: webhook.url,
+          description: "Endpoint de destino configurado"
+        }
+      ],
+      paths: {
+        "/": {
+          post: {
+            summary: "Receber evento de webhook",
+            description: "Este endpoint será chamado via POST sempre que um dos eventos configurados ocorrer.",
+            parameters: [
+              {
+                name: webhook.idempotency_header || "X-Idempotency-Key",
+                in: "header",
+                required: webhook.idempotency_missing_behavior === 'fail',
+                schema: { type: "string" },
+                description: "Chave única de idempotência para evitar processamento duplicado."
+              },
+              {
+                name: "X-Webhook-Signature",
+                in: "header",
+                required: !!webhook.secret,
+                schema: { type: "string" },
+                description: "Assinatura HMAC-SHA256 para verificação de autenticidade."
+              },
+              {
+                name: "X-Webhook-Timestamp",
+                in: "header",
+                required: true,
+                schema: { type: "integer" },
+                description: "Timestamp UNIX do momento do disparo."
+              }
+            ],
+            requestBody: {
+              required: true,
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["event", "timestamp", "data"],
+                    properties: {
+                      event: { 
+                        type: "string", 
+                        enum: webhook.events,
+                        example: webhook.events[0] || "message.received"
+                      },
+                      timestamp: { 
+                        type: "string", 
+                        format: "date-time",
+                        example: new Date().toISOString()
+                      },
+                      data: { 
+                        type: "object",
+                        description: "Dados específicos do evento"
+                      }
+                    }
+                  },
+                  example: samplePayload
+                }
+              }
+            },
+            responses: {
+              "200": {
+                description: "Evento recebido e processado com sucesso."
+              },
+              "202": {
+                description: "Evento recebido e aceito para processamento assíncrono."
+              },
+              "4xx": {
+                description: "Erro no payload ou autenticação."
+              },
+              "5xx": {
+                description: "Erro interno no servidor de destino."
+              }
+            }
+          }
+        }
+      }
+    };
+
+    const blob = new Blob([JSON.stringify(spec, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `openapi-${webhook.id}.json`;
+    link.click();
+    
+    toast({ title: 'OpenAPI Spec gerado para download' });
+  };
+
   const filteredItems = items.filter(item => 
     item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.url.toLowerCase().includes(searchTerm.toLowerCase())
