@@ -198,6 +198,7 @@ export default function OutboundWebhooksTab() {
       secret_version: form.secret_version,
       events: form.events,
       is_active: form.is_active,
+      max_retries: form.max_retries,
       created_by: user.id,
       type: 'outbound'
     };
