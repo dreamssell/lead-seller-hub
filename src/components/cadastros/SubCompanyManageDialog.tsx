@@ -440,12 +440,17 @@ function AlertsTab({ sub }: { sub: SubCompany }) {
 function RulesTab({ sub }: { sub: SubCompany }) {
   const [threshold, setThreshold] = useState(sub.credit_alert_threshold);
   const [action, setAction] = useState(sub.auto_action);
+  const [allowCustom, setAllowCustom] = useState(sub.allow_custom_logic);
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
     setSaving(true);
     const { error } = await supabase.from('sub_companies')
-      .update({ credit_alert_threshold: threshold, auto_action: action } as any).eq('id', sub.id);
+      .update({ 
+        credit_alert_threshold: threshold, 
+        auto_action: action,
+        allow_custom_logic: allowCustom 
+      } as any).eq('id', sub.id);
     setSaving(false);
     if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
     else toast({ title: 'Regras salvas' });
