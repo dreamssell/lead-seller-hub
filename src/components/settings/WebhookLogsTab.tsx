@@ -400,6 +400,12 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
                             <span className="truncate max-w-[80px]" title={log.request_id}>{log.request_id.split('-')[0]}</span>
                           </div>
                         )}
+                        {log.idempotency_key && (
+                          <div className="flex items-center gap-1 opacity-50 text-[9px] uppercase tracking-tighter">
+                            <span className="bg-amber-500/20 text-amber-600 px-1 rounded-sm">IDEM POT</span>
+                            <span className="truncate max-w-[80px]" title={log.idempotency_key}>{log.idempotency_key.split('-')[0]}</span>
+                          </div>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -411,6 +417,21 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
                           >
                             {log.response_status === 0 ? 'FAIL' : (log.response_status === 408 ? 'T-OUT' : log.response_status)}
                           </Badge>
+                          
+                          {log.is_idempotent_hit && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="text-[9px] bg-blue-500/10 text-blue-600 border-blue-500/20">
+                                    <RotateCcw className="w-2.5 h-2.5 mr-1" /> DUPLICATA (IGNORADO)
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="text-xs">Esta requisição foi ignorada porque uma chave de idempotência idêntica já foi processada recentemente.</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                           
                           {log.status === 'pending_retry' && (
                             <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-600 border-amber-500/20 animate-pulse">
