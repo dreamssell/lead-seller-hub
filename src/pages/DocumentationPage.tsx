@@ -13,7 +13,7 @@ const DOC_SECTIONS = [
   {
     title: "Recursos da API",
     icon: Code,
-    items: ["Agentes de IA", "Empresas", "Usuários", "Leads", "Tarefas"]
+    items: ["Agentes de IA", "MCP Server", "Empresas", "Usuários", "Leads", "Tarefas"]
   },
   {
     title: "Canais & Mensageria",
