@@ -227,6 +227,8 @@ export default function OutboundWebhooksTab() {
       alert_slack_url: form.alert_slack_url,
       alert_email: form.alert_email,
       alert_threshold: form.alert_threshold,
+      idempotency_header: form.idempotency_header,
+      idempotency_missing_behavior: form.idempotency_missing_behavior,
       created_by: user.id,
       type: 'outbound'
     };
