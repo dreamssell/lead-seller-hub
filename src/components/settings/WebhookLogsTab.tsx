@@ -238,30 +238,36 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
                   >
                     <TableCell className="font-mono text-xs">{log.event_type}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Badge 
-                          variant={log.response_status >= 200 && log.response_status < 300 ? 'default' : 'destructive'}
-                          className="font-mono"
-                        >
-                          {log.response_status}
-                        </Badge>
-                        {log.response_status >= 400 && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <AlertTriangle className="w-3 h-3 text-destructive" />
-                              </TooltipTrigger>
-                              <TooltipContent className="max-w-xs p-3">
-                                <div className="space-y-1">
-                                  <p className="font-bold text-[10px] uppercase">Resposta do Servidor:</p>
-                                  <pre className="text-[10px] bg-slate-900 p-2 rounded max-h-32 overflow-y-auto">
-                                    {log.response_body || 'Sem corpo de resposta'}
-                                  </pre>
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            variant={log.response_status >= 200 && log.response_status < 300 ? 'default' : 'destructive'}
+                            className="font-mono text-[10px]"
+                          >
+                            {log.response_status === 0 ? 'FAIL' : log.response_status}
+                          </Badge>
+                          
+                          {log.status === 'pending_retry' && (
+                            <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-600 border-amber-500/20 animate-pulse">
+                              <RotateCcw className="w-2.5 h-2.5 mr-1" /> Reenviando
+                            </Badge>
+                          )}
+
+                          {log.retry_count && log.retry_count > 0 && (
+                            <span className="text-[10px] text-muted-foreground">
+                              ({log.retry_count}ª tentativa)
+                            </span>
+                          )}
+                        </div>
+
+                        {log.response_status >= 400 || log.response_status === 0 ? (
+                          <div className="flex items-center gap-1.5">
+                            <AlertTriangle className="w-3 h-3 text-destructive/60" />
+                            <span className="text-[10px] text-destructive/70 truncate max-w-[150px]">
+                              {log.error_message || log.response_body || 'Erro na entrega'}
+                            </span>
+                          </div>
+                        ) : null}
                       </div>
                     </TableCell>
                     <TableCell className="text-xs">
