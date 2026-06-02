@@ -6,13 +6,18 @@ const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 Deno.test("Idempotency TTL Expiration Test", async () => {
-  // 1. Create a temporary webhook for testing
+  // 1. Get a valid user profile ID
+  const { data: profile } = await supabase.from("profiles").select("id").limit(1).single();
+  const userId = profile?.id;
+
+  // 2. Create a temporary webhook for testing
   const { data: webhook, error: whError } = await supabase
     .from("webhooks")
     .insert({
       name: "Test TTL Webhook",
       url: "https://httpbin.org/post",
-      idempotency_ttl_hours: 1 // 1 hour TTL
+      idempotency_ttl_hours: 1, // 1 hour TTL
+      created_by: userId
     })
     .select()
     .single();
