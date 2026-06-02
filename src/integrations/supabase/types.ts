@@ -1137,6 +1137,7 @@ export type Database = {
           previous_secret: string | null
           secret: string | null
           secret_version: number | null
+          timeout_seconds: number | null
           type: string | null
           updated_at: string
           url: string
@@ -1155,6 +1156,7 @@ export type Database = {
           previous_secret?: string | null
           secret?: string | null
           secret_version?: number | null
+          timeout_seconds?: number | null
           type?: string | null
           updated_at?: string
           url: string
@@ -1173,6 +1175,7 @@ export type Database = {
           previous_secret?: string | null
           secret?: string | null
           secret_version?: number | null
+          timeout_seconds?: number | null
           type?: string | null
           updated_at?: string
           url?: string
