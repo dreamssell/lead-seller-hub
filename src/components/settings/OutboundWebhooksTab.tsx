@@ -21,8 +21,13 @@ import {
   ArrowRight,
   Database,
   ShieldCheck,
-  AlertTriangle
+  AlertTriangle,
+  RotateCcw,
+  History,
+  Download
 } from 'lucide-react';
+import WebhookLogsTab from './WebhookLogsTab';
+import WebhookAuditTab from './WebhookAuditTab';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
