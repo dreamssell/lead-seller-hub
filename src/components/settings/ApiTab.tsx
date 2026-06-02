@@ -24,10 +24,11 @@ interface ApiKey {
 }
 
 const AVAILABLE_SCOPES = [
-  { id: 'auth:verify', label: 'Auth Verify', desc: 'Verificação de e-mail' },
-  { id: 'auth:login', label: 'Auth Login', desc: 'Login via senha' },
-  { id: 'data:read', label: 'Data Read', desc: 'Leitura de recursos' },
-  { id: 'data:write', label: 'Data Write', desc: 'Criação/Edição' },
+  { id: 'auth:verify', label: 'auth:verify', desc: 'Verificar e-mail (login externo - etapa 1)' },
+  { id: 'auth:login', label: 'auth:login', desc: 'Autenticar com senha (login externo - etapa 2)' },
+  { id: 'data:read', label: 'data:read', desc: 'Leitura de dados via API' },
+  { id: 'data:write', label: 'data:write', desc: 'Escrita de dados via API' },
+  { id: 'admin:full', label: 'admin:full', desc: 'Acesso administrativo total' },
 ];
 
 export default function ApiTab() {
