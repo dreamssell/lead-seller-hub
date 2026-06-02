@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import WebhookLogsTab from './WebhookLogsTab';
 import WebhookAuditTab from './WebhookAuditTab';
+import WebhookHealthDashboard from './WebhookHealthDashboard';
 import OutboundWebhookTestConsole from './OutboundWebhookTestConsole';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -446,6 +447,9 @@ export default function OutboundWebhooksTab() {
             <TabsTrigger value="config" className="rounded-lg gap-2">
               <Settings className="w-4 h-4" /> Configuração
             </TabsTrigger>
+            <TabsTrigger value="health" className="rounded-lg gap-2">
+              <Activity className="w-4 h-4" /> Saúde & Métricas
+            </TabsTrigger>
             <TabsTrigger value="test" className="rounded-lg gap-2">
               <FlaskConical className="w-4 h-4" /> Teste
             </TabsTrigger>
@@ -741,6 +745,14 @@ export default function OutboundWebhooksTab() {
                 </Button>
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="health" className="mt-6">
+            {selectedWebhook ? (
+              <WebhookHealthDashboard webhookId={selectedWebhook.id} />
+            ) : (
+              <div className="glass-card p-12 text-center">Salve o webhook primeiro para ver as métricas de saúde.</div>
+            )}
           </TabsContent>
 
           <TabsContent value="test" className="mt-6">
