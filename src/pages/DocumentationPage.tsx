@@ -277,9 +277,27 @@ export default function DocumentationPage() {
 
                     <TabsContent value="endpoints" className="space-y-10">
                       <section className="space-y-6">
-                        <div className="flex items-center gap-2 border-b pb-4 border-border/50">
-                          <Brackets className="w-5 h-5 text-primary" />
-                          <h2 className="text-2xl font-bold">Estrutura de Payload (Schema)</h2>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 border-border/50">
+                          <div className="flex items-center gap-2">
+                            <Brackets className="w-5 h-5 text-primary" />
+                            <h2 className="text-2xl font-bold">Estrutura de Payload (Schema)</h2>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="outline" size="sm" 
+                              onClick={() => downloadFile(JSON.stringify(JSON_SCHEMA, null, 2), 'mcp-schema.json')}
+                              className="rounded-xl h-9 text-[10px] font-bold uppercase tracking-wider"
+                            >
+                              <Download className="w-3.5 h-3.5 mr-2" /> JSON Schema
+                            </Button>
+                            <Button 
+                              variant="outline" size="sm" 
+                              onClick={() => downloadFile(JSON.stringify(OPENAPI_SCHEMA, null, 2), 'mcp-openapi.json')}
+                              className="rounded-xl h-9 text-[10px] font-bold uppercase tracking-wider"
+                            >
+                              <Download className="w-3.5 h-3.5 mr-2" /> OpenAPI / Swagger
+                            </Button>
+                          </div>
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
