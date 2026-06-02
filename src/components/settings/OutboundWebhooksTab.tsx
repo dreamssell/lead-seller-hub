@@ -542,6 +542,37 @@ export default function OutboundWebhooksTab() {
                   <p className="text-[10px] text-muted-foreground">Tempo máximo para resposta do servidor.</p>
                 </div>
               </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-secondary/5 p-4 rounded-xl border border-border/40">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm font-bold">Configuração de Idempotência</Label>
+                    <Badge variant="outline" className="text-[9px] uppercase tracking-tighter">Opcional</Badge>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Nome do Header</Label>
+                    <Input 
+                      placeholder="X-Idempotency-Key" 
+                      value={form.idempotency_header} 
+                      onChange={(e) => setForm({ ...form, idempotency_header: e.target.value })}
+                      className="bg-background"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[10px] text-muted-foreground mt-6">Comportamento sem chave</Label>
+                  <select 
+                    value={form.idempotency_missing_behavior} 
+                    onChange={(e) => setForm({ ...form, idempotency_missing_behavior: e.target.value })}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <option value="generate">Gerar UUID automaticamente (Recomendado)</option>
+                    <option value="fail">Falhar o envio (Requer chave no gatilho)</option>
+                    <option value="skip">Não enviar header de idempotência</option>
+                  </select>
+                </div>
+              </div>
 
               <div className="space-y-4 pt-4 border-t border-border/40">
                 <div className="flex items-center gap-2">
