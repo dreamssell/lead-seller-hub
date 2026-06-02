@@ -373,29 +373,36 @@ export default function OutboundWebhooksTab() {
           </TabsContent>
 
           <TabsContent value="logs" className="mt-6">
-            <div className="glass-card p-12 text-center space-y-4">
-              <div className="w-16 h-16 rounded-full bg-secondary/50 flex items-center justify-center mx-auto mb-2">
-                <Activity className="w-8 h-8 text-muted-foreground/30" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold">Sem logs recentes</h3>
-                <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                  As tentativas de envio e respostas do seu servidor aparecerão aqui assim que o primeiro evento for disparado.
-                </p>
-              </div>
-            </div>
+            {selectedWebhook ? (
+              <WebhookLogsTab webhookId={selectedWebhook.id} />
+            ) : (
+              <div className="glass-card p-12 text-center">Salve o webhook primeiro para ver os logs.</div>
+            )}
           </TabsContent>
 
-          <TabsContent value="payload" className="mt-6">
+          <TabsContent value="audit" className="mt-6">
+            {selectedWebhook ? (
+              <WebhookAuditTab webhookId={selectedWebhook.id} />
+            ) : (
+              <div className="glass-card p-12 text-center">Salve o webhook primeiro para ver a auditoria.</div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="payload" className="mt-6 space-y-6">
             <div className="glass-card p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-semibold">Exemplo de Evento (JSON)</h3>
                   <p className="text-sm text-muted-foreground">Formato que será enviado para sua URL</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => copyToClipboard(JSON.stringify(samplePayload, null, 2), 'payload')}>
-                  {copiedId === 'payload' ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />} Copiar
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => downloadSchema(selectedWebhook)}>
+                    <Download className="w-4 h-4 mr-2" /> Download Schema
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => copyToClipboard(JSON.stringify(samplePayload, null, 2), 'payload')}>
+                    {copiedId === 'payload' ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />} Copiar
+                  </Button>
+                </div>
               </div>
               <pre className="p-4 rounded-xl bg-slate-950 text-slate-50 text-xs overflow-x-auto font-mono border border-white/5">
                 {JSON.stringify(samplePayload, null, 2)}
