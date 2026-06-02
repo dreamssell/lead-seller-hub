@@ -27,6 +27,7 @@ type SubCompany = {
   inherit_branding: boolean; byok_inherit: boolean; byok_api_key: string | null;
   blocked_pages: string[]; credit_limit: number; credit_balance: number;
   credits_used_today: number; credits_used_30d: number; status: string;
+  allow_custom_logic: boolean;
 };
 
 type WLSettings = {
