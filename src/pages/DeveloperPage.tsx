@@ -14,14 +14,15 @@ import QuickstartTab from '@/components/settings/QuickstartTab';
 import MCPServerTab from '@/components/settings/MCPServerTab';
 
 const TABS = [
-  { value: 'ativar',      label: 'Ativar',    icon: Play,         Comp: QuickstartTab, advanced: false },
-  { value: 'general',     label: 'Geral',     icon: SettingsIcon, Comp: GeneralTab, advanced: false },
-  { value: 'connections', label: 'Conexões',  icon: Plug,         Comp: ConnectionsTab, advanced: false },
-  { value: 'webhooks',    label: 'Webhooks',  icon: Webhook,      Comp: WebhooksTab, advanced: true },
-  { value: 'api',         label: 'API',       icon: Code2,        Comp: ApiTab, advanced: true },
-  { value: 'fields',      label: 'Campos',    icon: ListChecks,   Comp: CustomFieldsTab, advanced: true },
-  { value: 'smtp',        label: 'SMTP',      icon: Mail,         Comp: SmtpTab, advanced: true },
-  { value: 'ai',          label: 'IA',        icon: Sparkles,     Comp: AiTab, advanced: true },
+  { value: 'ativar',      label: 'Ativar',       icon: Play,         Comp: QuickstartTab, advanced: false },
+  { value: 'general',     label: 'Geral',        icon: SettingsIcon, Comp: GeneralTab, advanced: false },
+  { value: 'connections', label: 'Conexões',     icon: Plug,         Comp: ConnectionsTab, advanced: false },
+  { value: 'webhooks',    label: 'Webhooks',     icon: Webhook,      Comp: WebhooksTab, advanced: true },
+  { value: 'api',         label: 'API',          icon: Code2,        Comp: ApiTab, advanced: true },
+  { value: 'fields',      label: 'Campos',       icon: ListChecks,   Comp: CustomFieldsTab, advanced: true },
+  { value: 'smtp',        label: 'SMTP',         icon: Mail,         Comp: SmtpTab, advanced: true },
+  { value: 'ai',          label: 'IA',           icon: Sparkles,     Comp: AiTab, advanced: true },
+  { value: 'mcp',         label: 'MCP Server',   icon: Server,       Comp: MCPServerTab, advanced: true },
 ];
 
 export default function DeveloperPage() {
