@@ -80,6 +80,7 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [dateFilter, setDateFilter] = useState<{ from: string; to: string }>({ from: '', to: '' });
 
   const loadLogs = async () => {
     setLoading(true);
@@ -99,6 +100,15 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
         query = query.or('response_status.lt.200,response_status.gte.300');
       }
 
+      if (dateFilter.from) {
+        query = query.gte('created_at', new Date(dateFilter.from).toISOString());
+      }
+      if (dateFilter.to) {
+        const toDate = new Date(dateFilter.to);
+        toDate.setHours(23, 59, 59, 999);
+        query = query.lte('created_at', toDate.toISOString());
+      }
+
       const { data, count, error } = await query
         .order('created_at', { ascending: sortOrder === 'asc' })
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
@@ -116,7 +126,7 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
 
   useEffect(() => { 
     loadLogs(); 
-  }, [webhookId, page, statusFilter, sortOrder]);
+  }, [webhookId, page, statusFilter, sortOrder, dateFilter]);
 
   // Handle search with debounce
   useEffect(() => {
@@ -143,6 +153,15 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
         query = query.gte('response_status', 200).lt('response_status', 300);
       } else if (statusFilter === 'error') {
         query = query.or('response_status.lt.200,response_status.gte.300');
+      }
+
+      if (dateFilter.from) {
+        query = query.gte('created_at', new Date(dateFilter.from).toISOString());
+      }
+      if (dateFilter.to) {
+        const toDate = new Date(dateFilter.to);
+        toDate.setHours(23, 59, 59, 999);
+        query = query.lte('created_at', toDate.toISOString());
       }
 
       const { data, error } = await query.order('created_at', { ascending: false });
@@ -272,6 +291,43 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
             <ArrowUpDown className="w-4 h-4" />
             {sortOrder === 'desc' ? 'Mais recentes' : 'Mais antigos'}
           </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2 h-9">
+                <Calendar className="w-4 h-4" />
+                Datas
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="p-4 w-72 space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-muted-foreground">De:</label>
+                <Input 
+                  type="date" 
+                  value={dateFilter.from} 
+                  onChange={(e) => setDateFilter(prev => ({ ...prev, from: e.target.value }))}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-muted-foreground">Até:</label>
+                <Input 
+                  type="date" 
+                  value={dateFilter.to} 
+                  onChange={(e) => setDateFilter(prev => ({ ...prev, to: e.target.value }))}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="w-full h-7 text-[10px]"
+                onClick={() => setDateFilter({ from: '', to: '' })}
+              >
+                Limpar Período
+              </Button>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
