@@ -489,6 +489,14 @@ function RulesTab({ sub }: { sub: SubCompany }) {
             ))}
           </div>
         </div>
+        <Separator />
+        <div className="flex items-start gap-3 rounded-lg border p-3 bg-secondary/20">
+          <Switch checked={allowCustom} onCheckedChange={setAllowCustom} />
+          <div>
+            <p className="text-sm font-medium">Liberdade de customização</p>
+            <p className="text-xs text-muted-foreground">Permite que esta sub-empresa adicione personalizações à parte do código matriz.</p>
+          </div>
+        </div>
         <Button onClick={save} disabled={saving} className="w-full">{saving ? 'Salvando...' : 'Salvar regras'}</Button>
       </div>
     </div>
