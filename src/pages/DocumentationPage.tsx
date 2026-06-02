@@ -460,3 +460,77 @@ const webhookExample = `{
     "changes": ["inventory_count", "price_list"]
   }
 }`;
+
+const JSON_SCHEMA = {
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MCP Server Request",
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "A pergunta ou instrução do usuário"
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "agent_id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "required": ["query"]
+};
+
+const OPENAPI_SCHEMA = {
+  "openapi": "3.0.0",
+  "info": {
+    "title": "MCP Server API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/mcp/context": {
+      "post": {
+        "summary": "Processa contexto para o agente",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/McpRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/McpResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "McpRequest": {
+        "type": "object",
+        "required": ["query"],
+        "properties": {
+          "query": { "type": "string" },
+          "metadata": { "type": "object" }
+        }
+      },
+      "McpResponse": {
+        "type": "object",
+        "required": ["data", "source"],
+        "properties": {
+          "data": { "type": "object" },
+          "source": { "type": "string" }
+        }
+      }
+    }
+  }
+};
