@@ -4,13 +4,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, Book, Code, Terminal, Zap, Shield, Globe, 
   MessageSquare, ChevronRight, Hash, Server, Play, 
-  Copy, Check, Info, AlertTriangle, Cpu, Activity
+  Copy, Check, Info, AlertTriangle, Cpu, Activity,
+  Webhook, Key, FileJson, CheckCircle2, Brackets
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import MCPConsole from '@/components/settings/MCPConsole';
 
 const DOC_SECTIONS = [
   {
