@@ -78,6 +78,9 @@ interface Webhook {
   type: string;
   max_retries: number;
   timeout_seconds: number;
+  alert_slack_url?: string;
+  alert_email?: string;
+  alert_threshold?: number;
   payload_schema?: any;
 }
 
