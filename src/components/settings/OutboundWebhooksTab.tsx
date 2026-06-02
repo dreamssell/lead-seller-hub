@@ -576,6 +576,21 @@ export default function OutboundWebhooksTab() {
                     <option value="skip">Não enviar header de idempotência</option>
                   </select>
                 </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] text-muted-foreground mt-6">Expiração da Chave (TTL)</Label>
+                  <div className="flex items-center gap-3">
+                    <Input 
+                      type="number" 
+                      min="1" 
+                      max="720" 
+                      value={form.idempotency_ttl_hours} 
+                      onChange={(e) => setForm({ ...form, idempotency_ttl_hours: parseInt(e.target.value) })}
+                      className="w-20 bg-background border-border/40 focus-visible:ring-primary"
+                    />
+                    <span className="text-[11px] font-medium">horas</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground leading-tight">Período de retenção para evitar duplicidade.</p>
+                </div>
               </div>
 
               <div className="flex flex-col gap-4 p-4 rounded-xl border border-destructive/20 bg-destructive/5">
