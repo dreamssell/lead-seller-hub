@@ -112,7 +112,8 @@ export default function OutboundWebhooksTab() {
     previous_secret: null as string | null,
     secret_version: 1,
     events: [] as string[],
-    is_active: true
+    is_active: true,
+    max_retries: 3
   });
 
   const load = async () => {
