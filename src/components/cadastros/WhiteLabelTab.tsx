@@ -262,6 +262,7 @@ function SubCompanyDialog({
       byok_inherit: !!form.byok_inherit,
       byok_api_key: form.byok_inherit ? null : (form.byok_api_key || null),
       blocked_pages: form.blocked_pages || [],
+      allow_custom_logic: !!form.allow_custom_logic,
     };
 
     const q = editing
