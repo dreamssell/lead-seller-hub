@@ -11,7 +11,10 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
-  ArrowUpDown
+  ArrowUpDown,
+  Download,
+  FileJson,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,6 +72,7 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
   const [logs, setLogs] = useState<WebhookLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [resending, setResending] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   
   // Filtering & Pagination state
   const [search, setSearch] = useState('');
@@ -200,6 +204,25 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
             <ArrowUpDown className="w-4 h-4" />
             {sortOrder === 'desc' ? 'Mais recentes' : 'Mais antigos'}
           </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2 h-9 border-primary/20 hover:border-primary/40 text-primary" disabled={exporting}>
+                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                Exportar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => exportLogs('csv')} className="gap-2">
+                <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+                CSV (Planilha)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportLogs('json')} className="gap-2">
+                <FileJson className="w-4 h-4 text-blue-500" />
+                JSON (Raw)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
