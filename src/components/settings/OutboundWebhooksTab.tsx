@@ -123,7 +123,9 @@ export default function OutboundWebhooksTab() {
     timeout_seconds: 30,
     alert_slack_url: '',
     alert_email: '',
-    alert_threshold: 3
+    alert_threshold: 3,
+    idempotency_header: 'X-Idempotency-Key',
+    idempotency_missing_behavior: 'generate'
   });
 
   const load = async () => {
