@@ -15,6 +15,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+
 
 export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
   const [loading, setLoading] = useState(true);
