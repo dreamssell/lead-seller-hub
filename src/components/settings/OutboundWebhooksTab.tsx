@@ -216,6 +216,9 @@ export default function OutboundWebhooksTab() {
       is_active: form.is_active,
       max_retries: form.max_retries,
       timeout_seconds: form.timeout_seconds,
+      alert_slack_url: form.alert_slack_url,
+      alert_email: form.alert_email,
+      alert_threshold: form.alert_threshold,
       created_by: user.id,
       type: 'outbound'
     };
