@@ -145,46 +145,71 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
     return () => clearTimeout(timer);
   }, [search]);
 
+  const applyFilters = (query: any) => {
+    let q = query.eq('webhook_id', webhookId);
+
+    if (search) {
+      q = q.or(`event_type.ilike.%${search}%,idempotency_key.ilike.%${search}%,request_id.ilike.%${search}%`);
+    }
+
+    if (statusFilter === 'success') {
+      q = q.gte('response_status', 200).lt('response_status', 300);
+    } else if (statusFilter === 'error') {
+      q = q.or('response_status.lt.200,response_status.gte.300');
+    } else if (statusFilter === 'idempotency_hit') {
+      q = q.eq('is_idempotent_hit', true);
+    }
+
+    if (dateFilter.from) {
+      q = q.gte('created_at', new Date(dateFilter.from).toISOString());
+    }
+    if (dateFilter.to) {
+      const toDate = new Date(dateFilter.to);
+      toDate.setHours(23, 59, 59, 999);
+      q = q.lte('created_at', toDate.toISOString());
+    }
+    return q;
+  };
+
   const exportLogs = async (format: 'csv' | 'json') => {
     setExporting(true);
+    setExportProgress(0);
     try {
-      let query = supabase
-        .from('webhook_logs')
-        .select('*')
-        .eq('webhook_id', webhookId);
+      // 1. Obter contagem total para os filtros atuais
+      const countQuery = applyFilters(supabase.from('webhook_logs').select('*', { count: 'exact', head: true }));
+      const { count: filterTotal, error: countError } = await countQuery;
+      
+      if (countError) throw countError;
+      const totalToExport = filterTotal || 0;
 
-      if (search) {
-        query = query.or(`event_type.ilike.%${search}%,idempotency_key.ilike.%${search}%,request_id.ilike.%${search}%`);
-      }
-
-      if (statusFilter === 'success') {
-        query = query.gte('response_status', 200).lt('response_status', 300);
-      } else if (statusFilter === 'error') {
-        query = query.or('response_status.lt.200,response_status.gte.300');
-      } else if (statusFilter === 'idempotency_hit') {
-        query = query.eq('is_idempotent_hit', true);
-      }
-
-      if (dateFilter.from) {
-        query = query.gte('created_at', new Date(dateFilter.from).toISOString());
-      }
-      if (dateFilter.to) {
-        const toDate = new Date(dateFilter.to);
-        toDate.setHours(23, 59, 59, 999);
-        query = query.lte('created_at', toDate.toISOString());
-      }
-
-      const { data, error } = await query.order('created_at', { ascending: false });
-      if (error) throw error;
-      if (!data || data.length === 0) {
+      if (totalToExport === 0) {
         toast({ title: 'Nenhum log para exportar', variant: 'destructive' });
         return;
+      }
+
+      // 2. Buscar em pedaços (chunks) para evitar travar a UI e o banco
+      const CHUNK_SIZE = 1000;
+      let allData: any[] = [];
+      let from = 0;
+
+      while (from < totalToExport) {
+        const query = applyFilters(supabase.from('webhook_logs').select('*'));
+        const { data, error } = await query
+          .order('created_at', { ascending: false })
+          .range(from, Math.min(from + CHUNK_SIZE - 1, totalToExport - 1));
+
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+
+        allData = [...allData, ...data];
+        from += CHUNK_SIZE;
+        setExportProgress(Math.min(100, Math.round((allData.length / totalToExport) * 100)));
       }
 
       const filename = `webhook_logs_${webhookId}_${new Date().toISOString().split('T')[0]}`;
       
       if (format === 'json') {
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -192,7 +217,7 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
         a.click();
       } else {
         const headers = ['ID', 'Event', 'Status', 'Latency', 'Date', 'URL', 'Request ID', 'Idempotency Key', 'Is Hit', 'Error'];
-        const rows = data.map(log => [
+        const rows = allData.map(log => [
           log.id,
           log.event_type,
           log.response_status,
@@ -218,13 +243,15 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
         a.click();
       }
       
-      toast({ title: 'Exportação concluída!' });
+      toast({ title: 'Exportação concluída!', description: `${allData.length} registros exportados.` });
     } catch (error: any) {
       toast({ title: 'Erro ao exportar', description: error.message, variant: 'destructive' });
     } finally {
       setExporting(false);
+      setExportProgress(0);
     }
   };
+
 
   const resendEvent = async (log: WebhookLog) => {
     setResending(log.id);
