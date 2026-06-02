@@ -1407,6 +1407,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_idempotency_expiration_report: {
+        Args: { p_webhook_id: string }
+        Returns: Json
+      }
       get_my_account_access: {
         Args: never
         Returns: {
@@ -1418,6 +1422,15 @@ export type Database = {
           status: string
           sub_company_id: string
           sub_company_name: string
+        }[]
+      }
+      get_webhook_idempotency_stats: {
+        Args: { p_end_date: string; p_start_date: string; p_webhook_id: string }
+        Returns: {
+          hit_ratio: number
+          idempotency_hits: number
+          total_requests: number
+          webhook_id: string
         }[]
       }
       has_role: {
