@@ -28,6 +28,7 @@ import CadastrosPage from "./pages/CadastrosPage";
 import CEODashboardPage from "./pages/CEODashboardPage";
 import BackendStatusPage from "./pages/BackendStatusPage";
 import SubLoginPage from "./pages/SubLoginPage";
+import DocumentationPage from "./pages/DocumentationPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
