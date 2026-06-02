@@ -231,7 +231,7 @@ function SubCompanyDialog({
   const [form, setForm] = useState<Partial<SubCompany>>({});
   useEffect(() => {
     if (editing) setForm(editing);
-    else setForm({ name: '', admin_name: '', admin_email: '', admin_password: '', whatsapp_limit: 10, inherit_branding: true, byok_inherit: true, blocked_pages: [] } as any);
+    else setForm({ name: '', admin_name: '', admin_email: '', admin_password: '', whatsapp_limit: 10, inherit_branding: true, byok_inherit: true, blocked_pages: [], allow_custom_logic: false } as any);
   }, [editing, open]);
 
   const togglePage = (id: string) => {
