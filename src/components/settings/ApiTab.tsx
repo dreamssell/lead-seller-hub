@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Key, Plus, Copy, Trash2, Eye, EyeOff, ToggleLeft, ToggleRight, Loader2, AlertCircle, Code2, ExternalLink, ShieldCheck, Terminal, BookOpen } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { Link } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
