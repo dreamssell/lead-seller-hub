@@ -835,6 +835,9 @@ export default function OutboundWebhooksTab() {
                     <Button variant="outline" size="sm" onClick={() => downloadSchema(selectedWebhook)} className="h-8 text-[11px] bg-background">
                       <Download className="w-3.5 h-3.5 mr-2" /> Schema
                     </Button>
+                    <Button variant="outline" size="sm" onClick={() => downloadOpenAPI(selectedWebhook)} className="h-8 text-[11px] bg-background">
+                      <Terminal className="w-3.5 h-3.5 mr-2" /> OpenAPI
+                    </Button>
                     <Button variant="outline" size="sm" onClick={() => copyToClipboard(JSON.stringify(samplePayload, null, 2), 'payload')} className="h-8 text-[11px] bg-background">
                       {copiedId === 'payload' ? <Check className="w-3.5 h-3.5 mr-2" /> : <Copy className="w-3.5 h-3.5 mr-2" />} JSON
                     </Button>
