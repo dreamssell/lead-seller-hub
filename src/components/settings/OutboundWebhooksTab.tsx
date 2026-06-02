@@ -19,7 +19,9 @@ import {
   MoreVertical,
   Activity,
   ArrowRight,
-  Database
+  Database,
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,7 +50,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 interface Webhook {
   id: string;
@@ -59,6 +61,7 @@ interface Webhook {
   events: string[];
   is_active: boolean;
   created_at: string;
+  type: string;
 }
 
 const EVENT_GROUPS = [
@@ -75,7 +78,7 @@ function randomSecret() {
   return Array.from(arr).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-export default function WebhooksTab() {
+export default function OutboundWebhooksTab() {
   const [items, setItems] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -99,6 +102,7 @@ export default function WebhooksTab() {
     const { data, error } = await supabase
       .from('webhooks')
       .select('*')
+      .eq('type', 'outbound')
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -168,6 +172,7 @@ export default function WebhooksTab() {
       events: form.events,
       is_active: form.is_active,
       created_by: user.id,
+      type: 'outbound'
     };
 
     let error;
@@ -231,9 +236,9 @@ export default function WebhooksTab() {
           </Button>
           <div>
             <h2 className="text-xl font-bold text-foreground">
-              {selectedWebhook ? `Editar: ${selectedWebhook.name}` : 'Novo Webhook'}
+              {selectedWebhook ? `Editar: ${selectedWebhook.name}` : 'Novo Webhook de Saída'}
             </h2>
-            <p className="text-sm text-muted-foreground">Configure os detalhes e eventos do seu webhook</p>
+            <p className="text-sm text-muted-foreground">Configure o endpoint que receberá as notificações de eventos</p>
           </div>
         </div>
 
@@ -243,10 +248,10 @@ export default function WebhooksTab() {
               <Settings className="w-4 h-4" /> Configuração
             </TabsTrigger>
             <TabsTrigger value="logs" className="rounded-lg gap-2">
-              <ListRestart className="w-4 h-4" /> Logs
+              <ListRestart className="w-4 h-4" /> Logs de Envio
             </TabsTrigger>
             <TabsTrigger value="payload" className="rounded-lg gap-2">
-              <Code2 className="w-4 h-4" /> Payload
+              <Code2 className="w-4 h-4" /> Payload de Exemplo
             </TabsTrigger>
           </TabsList>
 
@@ -256,7 +261,7 @@ export default function WebhooksTab() {
                 <div className="space-y-2">
                   <Label>Nome do Webhook</Label>
                   <Input 
-                    placeholder="Ex: Integração N8N" 
+                    placeholder="Ex: Enviar para CRM" 
                     value={form.name} 
                     onChange={(e) => setForm({ ...form, name: e.target.value })} 
                   />
@@ -276,37 +281,26 @@ export default function WebhooksTab() {
               </div>
 
               <div className="space-y-2">
-                <Label>URL do Webhook</Label>
+                <Label>URL de Destino (Endpoint)</Label>
                 <div className="flex gap-2">
                   <Input 
-                    readOnly 
-                    value={selectedWebhook ? `https://api.plataforma.com/wh/${selectedWebhook.id}` : 'Disponível após a criação'} 
-                    className="bg-secondary/30"
+                    placeholder="https://seu-servidor.com/webhook" 
+                    value={form.url} 
+                    onChange={(e) => setForm({ ...form, url: e.target.value })} 
                   />
                   <Button 
                     variant="outline" 
                     size="icon"
-                    disabled={!selectedWebhook}
-                    onClick={() => copyToClipboard(`https://api.plataforma.com/wh/${selectedWebhook?.id}`, 'url')}
+                    onClick={() => copyToClipboard(form.url, 'form_url')}
                   >
-                    {copiedId === 'url' ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                    {copiedId === 'form_url' ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                   </Button>
                 </div>
-                <p className="text-[11px] text-muted-foreground">Esta é a URL que receberá as requisições externas</p>
+                <p className="text-[11px] text-muted-foreground">Onde enviaremos os dados quando os eventos ocorrerem</p>
               </div>
 
               <div className="space-y-2">
-                <Label>Endpoint de Destino</Label>
-                <Input 
-                  placeholder="https://seu-servidor.com/webhook" 
-                  value={form.url} 
-                  onChange={(e) => setForm({ ...form, url: e.target.value })} 
-                />
-                <p className="text-[11px] text-muted-foreground">Onde enviaremos os dados processados</p>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Chave Secreta (Secret)</Label>
+                <Label>Chave Secreta (HMAC Secret)</Label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Input 
@@ -322,14 +316,14 @@ export default function WebhooksTab() {
                     </button>
                   </div>
                   <Button variant="outline" onClick={() => setForm({ ...form, secret: randomSecret() })}>
-                    <RefreshCw className="w-4 h-4 mr-2" /> Gerar
+                    <RefreshCw className="w-4 h-4 mr-2" /> Gerar Novo
                   </Button>
                 </div>
-                <p className="text-[11px] text-muted-foreground">Assinatura HMAC-SHA256 enviada no header X-Webhook-Signature</p>
+                <p className="text-[11px] text-muted-foreground">Use este secret para validar a assinatura no header X-Webhook-Signature</p>
               </div>
 
               <div className="space-y-4">
-                <Label className="text-base">Configuração de Eventos</Label>
+                <Label className="text-base font-bold">Eventos que disparam este Webhook</Label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {EVENT_GROUPS.map((g) => (
                     <div key={g.name} className="border border-border/40 rounded-xl p-4 bg-secondary/10">
@@ -364,23 +358,22 @@ export default function WebhooksTab() {
                 <Button variant="outline" onClick={() => setView('list')}>Cancelar</Button>
                 <Button onClick={save} disabled={saving}>
                   {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                  {selectedWebhook ? 'Salvar Alterações' : 'Criar Webhook'}
+                  {selectedWebhook ? 'Atualizar Webhook' : 'Salvar Webhook de Saída'}
                 </Button>
               </div>
             </div>
           </TabsContent>
 
           <TabsContent value="logs" className="mt-6">
-            <div className="glass-card p-6 text-center space-y-4">
-              <Activity className="w-12 h-12 text-muted-foreground/30 mx-auto" />
-              <div>
-                <h3 className="text-lg font-semibold">Logs de Execução</h3>
-                <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                  Acompanhe as últimas requisições, status de entrega e latência deste webhook em tempo real.
-                </p>
+            <div className="glass-card p-12 text-center space-y-4">
+              <div className="w-16 h-16 rounded-full bg-secondary/50 flex items-center justify-center mx-auto mb-2">
+                <Activity className="w-8 h-8 text-muted-foreground/30" />
               </div>
-              <div className="border border-dashed border-border rounded-xl p-8 bg-secondary/5">
-                <p className="text-sm text-muted-foreground italic">Nenhum evento registrado nas últimas 24 horas.</p>
+              <div>
+                <h3 className="text-lg font-bold">Sem logs recentes</h3>
+                <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                  As tentativas de envio e respostas do seu servidor aparecerão aqui assim que o primeiro evento for disparado.
+                </p>
               </div>
             </div>
           </TabsContent>
@@ -389,14 +382,14 @@ export default function WebhooksTab() {
             <div className="glass-card p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold">Exemplo de Payload</h3>
-                  <p className="text-sm text-muted-foreground">Estrutura de dados que seu endpoint receberá</p>
+                  <h3 className="text-lg font-semibold">Exemplo de Evento (JSON)</h3>
+                  <p className="text-sm text-muted-foreground">Formato que será enviado para sua URL</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => copyToClipboard(JSON.stringify(samplePayload, null, 2), 'payload')}>
-                  {copiedId === 'payload' ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />} Copiar JSON
+                  {copiedId === 'payload' ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />} Copiar
                 </Button>
               </div>
-              <pre className="p-4 rounded-xl bg-slate-950 text-slate-50 text-xs overflow-x-auto font-mono">
+              <pre className="p-4 rounded-xl bg-slate-950 text-slate-50 text-xs overflow-x-auto font-mono border border-white/5">
                 {JSON.stringify(samplePayload, null, 2)}
               </pre>
             </div>
@@ -411,12 +404,12 @@ export default function WebhooksTab() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <WebhookIcon className="w-6 h-6 text-primary" /> Webhooks de Entrada
+            <WebhookIcon className="w-6 h-6 text-primary" /> Webhooks de Saída
           </h2>
-          <p className="text-sm text-muted-foreground">Gerencie seus endpoints e integre eventos da plataforma</p>
+          <p className="text-sm text-muted-foreground">O sistema notifica sua URL quando eventos ocorrem</p>
         </div>
-        <Button onClick={openNew} className="gap-2">
-          <Plus className="w-4 h-4" /> Adicionar Webhook
+        <Button onClick={openNew} className="gap-2 shadow-lg shadow-primary/20">
+          <Plus className="w-4 h-4" /> Novo Webhook de Saída
         </Button>
       </div>
 
@@ -431,25 +424,24 @@ export default function WebhooksTab() {
           />
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-background text-xs text-muted-foreground">
-          <Database className="w-3 h-3" />
-          <span>{filteredItems.length} webhooks cadastrados</span>
+          <Activity className="w-3 h-3 text-emerald-500" />
+          <span>{filteredItems.length} webhooks ativos</span>
         </div>
       </div>
 
       {loading ? (
         <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-primary/50" /></div>
       ) : items.length === 0 ? (
-        <div className="glass-card p-16 text-center border-dashed">
+        <div className="glass-card p-16 text-center border-dashed border-2">
           <div className="w-20 h-20 rounded-full bg-secondary/50 flex items-center justify-center mx-auto mb-6">
             <WebhookIcon className="w-10 h-10 text-muted-foreground/40" />
           </div>
-          <h3 className="text-xl font-bold text-foreground mb-2">Configure seu primeiro webhook</h3>
+          <h3 className="text-xl font-bold text-foreground mb-2">Configure os disparos de eventos</h3>
           <p className="text-sm text-muted-foreground mb-8 max-w-md mx-auto">
-            Receba notificações em tempo real quando eventos importantes ocorrerem, 
-            como novos leads ou mensagens recebidas.
+            Integre a plataforma com seu próprio sistema ou ferramentas como N8N, Zapier e Make.
           </p>
           <Button onClick={openNew} size="lg" className="gap-2">
-            <Plus className="w-5 h-5" /> Começar Agora
+            <Plus className="w-5 h-5" /> Criar Webhook de Saída
           </Button>
         </div>
       ) : (
@@ -457,25 +449,25 @@ export default function WebhooksTab() {
           <Table>
             <TableHeader className="bg-secondary/40">
               <TableRow className="hover:bg-transparent border-border/50">
-                <TableHead className="font-bold">Nome</TableHead>
-                <TableHead className="font-bold">URL</TableHead>
+                <TableHead className="font-bold">Identificação</TableHead>
+                <TableHead className="font-bold">URL de Destino</TableHead>
                 <TableHead className="font-bold">Status</TableHead>
-                <TableHead className="font-bold">Criado em</TableHead>
+                <TableHead className="font-bold">Eventos</TableHead>
                 <TableHead className="text-right font-bold">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredItems.map((w) => (
-                <TableRow key={w.id} className="hover:bg-secondary/20 transition-colors border-border/50">
+                <TableRow key={w.id} className="hover:bg-secondary/10 transition-colors border-border/50">
                   <TableCell>
                     <div className="flex flex-col">
                       <span className="font-bold text-foreground">{w.name || 'Sem nome'}</span>
                       <span className="text-[10px] text-muted-foreground uppercase tracking-tight">{w.id.split('-')[0]}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="max-w-[300px]">
+                  <TableCell className="max-w-[250px]">
                     <div className="flex items-center gap-2 group">
-                      <code className="text-[11px] bg-secondary/50 px-2 py-1 rounded truncate flex-1">
+                      <code className="text-[10px] bg-secondary px-1.5 py-0.5 rounded truncate flex-1 font-mono">
                         {w.url}
                       </code>
                       <Button 
@@ -489,14 +481,15 @@ export default function WebhooksTab() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={w.is_active ? 'default' : 'secondary'} className={w.is_active ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border-emerald-500/20' : ''}>
+                    <Badge variant={w.is_active ? 'default' : 'secondary'} className={w.is_active ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : ''}>
                       {w.is_active ? 'Ativo' : 'Inativo'}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                      <Calendar className="w-3.5 h-3.5" />
-                      {new Date(w.created_at).toLocaleDateString()}
+                    <div className="flex items-center gap-1">
+                      <Badge variant="outline" className="text-[10px] bg-secondary/30">
+                        {w.events?.length || 0} eventos
+                      </Badge>
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
@@ -511,11 +504,11 @@ export default function WebhooksTab() {
                           <Settings className="w-4 h-4" /> Editar Configurações
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => { setSelectedWebhook(w); setView('edit'); }} className="gap-2 cursor-pointer">
-                          <ListRestart className="w-4 h-4" /> Ver Logs
+                          <ListRestart className="w-4 h-4" /> Histórico de Envios
                         </DropdownMenuItem>
                         <div className="h-px bg-border my-1" />
                         <DropdownMenuItem onClick={() => remove(w.id)} className="gap-2 cursor-pointer text-destructive focus:text-destructive">
-                          <Trash2 className="w-4 h-4" /> Excluir Webhook
+                          <Trash2 className="w-4 h-4" /> Excluir Definitivamente
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -527,33 +520,14 @@ export default function WebhooksTab() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="glass-card p-4 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-            <Activity className="w-5 h-5 text-blue-500" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Taxa de Sucesso</p>
-            <p className="text-lg font-bold">99.8%</p>
-          </div>
-        </div>
-        <div className="glass-card p-4 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-            <RefreshCw className="w-5 h-5 text-emerald-500" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Latência Média</p>
-            <p className="text-lg font-bold">142ms</p>
-          </div>
-        </div>
-        <div className="glass-card p-4 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
-            <ArrowRight className="w-5 h-5 text-purple-500" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Eventos Enviados (24h)</p>
-            <p className="text-lg font-bold">1,245</p>
-          </div>
+      <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 flex items-start gap-4">
+        <AlertTriangle className="w-6 h-6 text-amber-500 shrink-0" />
+        <div className="space-y-1">
+          <p className="text-sm font-bold text-amber-800">Dica de Segurança</p>
+          <p className="text-xs text-amber-700/80 leading-relaxed">
+            Sempre verifique o header <code className="bg-amber-500/10 px-1 rounded">X-Webhook-Signature</code> no seu servidor de destino 
+            para garantir que a requisição partiu legitimamente da nossa plataforma.
+          </p>
         </div>
       </div>
     </div>
@@ -566,17 +540,11 @@ const samplePayload = {
   data: {
     id: "msg_123abc456",
     sender: {
-      id: "contact_789",
       name: "João Silva",
       phone: "+5511999999999"
     },
     message: {
-      type: "text",
-      content: "Olá, gostaria de saber mais sobre o produto."
-    },
-    context: {
-      channel: "whatsapp",
-      sub_company_id: "sub_001"
+      content: "Olá, como posso ajudar?"
     }
   },
   signature: "hmac_sha256_hash_here"
