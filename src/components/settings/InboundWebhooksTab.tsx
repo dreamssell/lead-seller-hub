@@ -16,7 +16,13 @@ import {
   ArrowDownLeft,
   Database,
   Globe,
-  ShieldCheck
+  ShieldCheck,
+  Eye,
+  EyeOff,
+  RefreshCw,
+  Terminal,
+  History,
+  ListRestart
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,6 +52,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { motion } from 'framer-motion';
+import WebhookLogsTab from './WebhookLogsTab';
+import WebhookAuditTab from './WebhookAuditTab';
+import WebhookTestConsole from './WebhookTestConsole';
 
 interface Webhook {
   id: string;
@@ -58,6 +67,12 @@ interface Webhook {
   type: string;
 }
 
+function randomSecret() {
+  const arr = new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 export default function InboundWebhooksTab() {
   const [items, setItems] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,9 +82,11 @@ export default function InboundWebhooksTab() {
   
   // Form state
   const [saving, setSaving] = useState(false);
+  const [showSecret, setShowSecret] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [form, setForm] = useState({ 
     name: '', 
+    secret: randomSecret(),
     is_active: true
   });
 
@@ -94,6 +111,7 @@ export default function InboundWebhooksTab() {
   const openNew = () => {
     setForm({ 
       name: '', 
+      secret: randomSecret(),
       is_active: true
     });
     setSelectedWebhook(null);
@@ -104,6 +122,7 @@ export default function InboundWebhooksTab() {
     setSelectedWebhook(webhook);
     setForm({
       name: webhook.name || '',
+      secret: webhook.secret || randomSecret(),
       is_active: webhook.is_active
     });
     setView('edit');
@@ -121,10 +140,11 @@ export default function InboundWebhooksTab() {
 
     const payload = {
       name: form.name,
+      secret: form.secret,
       is_active: form.is_active,
       created_by: user.id,
       type: 'inbound',
-      url: 'internal_lead_handler', // Inbound doesn't need a destination URL, it's the platform itself
+      url: 'internal_lead_handler', 
       events: ['lead.received']
     };
 
@@ -199,6 +219,15 @@ export default function InboundWebhooksTab() {
             <TabsTrigger value="config" className="rounded-lg gap-2">
               <Settings className="w-4 h-4" /> Configuração
             </TabsTrigger>
+            <TabsTrigger value="console" className="rounded-lg gap-2">
+              <Terminal className="w-4 h-4" /> Console de Teste
+            </TabsTrigger>
+            <TabsTrigger value="logs" className="rounded-lg gap-2">
+              <ListRestart className="w-4 h-4" /> Logs de Entrada
+            </TabsTrigger>
+            <TabsTrigger value="audit" className="rounded-lg gap-2">
+              <History className="w-4 h-4" /> Auditoria
+            </TabsTrigger>
             <TabsTrigger value="payload" className="rounded-lg gap-2">
               <Code2 className="w-4 h-4" /> Payload Esperado
             </TabsTrigger>
@@ -255,16 +284,43 @@ export default function InboundWebhooksTab() {
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                      <ShieldCheck className="w-5 h-5 text-amber-500" />
+                  <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-4">
+                    <div className="flex items-start gap-4">
+                      <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                        <ShieldCheck className="w-5 h-5 text-amber-500" />
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm font-bold">Segurança & Autenticação (HMAC)</p>
+                        <p className="text-xs text-muted-foreground">Recomendamos validar a assinatura no header <code>X-Webhook-Signature</code>.</p>
+                      </div>
                     </div>
-                    <div className="flex-1 space-y-1">
-                      <p className="text-sm font-bold">Segurança & Autenticação</p>
-                      <p className="text-xs text-muted-foreground">Cada requisição deve conter o header API-Key ou passar o token via query param.</p>
-                      <div className="mt-2 space-y-2">
-                        <code className="block text-[10px] bg-slate-900 text-slate-100 p-2 rounded">
-                          Header: X-API-Key: {selectedWebhook.id.split('-')[0]}...
+                    
+                    <div className="space-y-2 pl-14">
+                      <Label className="text-xs">Chave Secreta (HMAC Secret)</Label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Input 
+                            type={showSecret ? 'text' : 'password'} 
+                            value={form.secret} 
+                            onChange={(e) => setForm({ ...form, secret: e.target.value })} 
+                            className="font-mono text-xs"
+                          />
+                          <button 
+                            onClick={() => setShowSecret((s) => !s)} 
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => setForm({ ...form, secret: randomSecret() })}>
+                          <RefreshCw className="w-3 h-3 mr-2" /> Gerar Nova
+                        </Button>
+                      </div>
+                      <div className="p-3 bg-slate-950 rounded-lg border border-white/5 space-y-2">
+                        <p className="text-[10px] text-slate-400">Exemplo de validação PHP/Node:</p>
+                        <code className="block text-[10px] text-slate-100 font-mono whitespace-pre">
+                          $signature = hash_hmac('sha256', $payload, $secret);{"\n"}
+                          X-Webhook-Signature: t=1620000000,v1=hash...
                         </code>
                       </div>
                     </div>
@@ -280,6 +336,30 @@ export default function InboundWebhooksTab() {
                 </Button>
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="console" className="mt-6">
+            {selectedWebhook ? (
+              <WebhookTestConsole webhook={selectedWebhook} />
+            ) : (
+              <div className="glass-card p-12 text-center">Salve o webhook primeiro para usar o console.</div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="logs" className="mt-6">
+            {selectedWebhook ? (
+              <WebhookLogsTab webhookId={selectedWebhook.id} />
+            ) : (
+              <div className="glass-card p-12 text-center">Salve o webhook primeiro para ver os logs.</div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="audit" className="mt-6">
+            {selectedWebhook ? (
+              <WebhookAuditTab webhookId={selectedWebhook.id} />
+            ) : (
+              <div className="glass-card p-12 text-center">Salve o webhook primeiro para ver a auditoria.</div>
+            )}
           </TabsContent>
 
           <TabsContent value="payload" className="mt-6">
@@ -408,6 +488,9 @@ export default function InboundWebhooksTab() {
                         <DropdownMenuItem onClick={() => { setSelectedWebhook(w); setView('edit'); }} className="gap-2 cursor-pointer">
                           <Activity className="w-4 h-4" /> Ver Estatísticas
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => { setSelectedWebhook(w); setView('edit'); }} className="gap-2 cursor-pointer">
+                          <Terminal className="w-4 h-4" /> Console de Teste
+                        </DropdownMenuItem>
                         <div className="h-px bg-border my-1" />
                         <DropdownMenuItem onClick={() => remove(w.id)} className="gap-2 cursor-pointer text-destructive focus:text-destructive">
                           <Trash2 className="w-4 h-4" /> Excluir Webhook
@@ -425,7 +508,7 @@ export default function InboundWebhooksTab() {
   );
 }
 
-const leadPayload = {
+export const leadPayload = {
   name: "João Silva",
   email: "joao.silva@exemplo.com",
   phone: "+5511999999999",
