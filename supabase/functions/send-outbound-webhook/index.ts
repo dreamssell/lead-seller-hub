@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const { webhook_id, payload, is_test = false, idempotency_key = null } = await req.json();
+    const { webhook_id, payload, is_test = false, idempotency_key = null, request_id = crypto.randomUUID() } = await req.json();
 
     if (!webhook_id) throw new Error("Missing webhook_id");
 
