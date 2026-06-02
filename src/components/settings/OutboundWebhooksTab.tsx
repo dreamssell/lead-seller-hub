@@ -255,8 +255,11 @@ export default function OutboundWebhooksTab() {
             <TabsTrigger value="logs" className="rounded-lg gap-2">
               <ListRestart className="w-4 h-4" /> Logs de Envio
             </TabsTrigger>
+            <TabsTrigger value="audit" className="rounded-lg gap-2">
+              <History className="w-4 h-4" /> Auditoria
+            </TabsTrigger>
             <TabsTrigger value="payload" className="rounded-lg gap-2">
-              <Code2 className="w-4 h-4" /> Payload de Exemplo
+              <Code2 className="w-4 h-4" /> Schema & Payload
             </TabsTrigger>
           </TabsList>
 
