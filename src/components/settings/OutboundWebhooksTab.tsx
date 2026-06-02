@@ -159,7 +159,9 @@ export default function OutboundWebhooksTab() {
       timeout_seconds: 30,
       alert_slack_url: '',
       alert_email: '',
-      alert_threshold: 3
+      alert_threshold: 3,
+      idempotency_header: 'X-Idempotency-Key',
+      idempotency_missing_behavior: 'generate'
     });
     setSelectedWebhook(null);
     setView('edit');
@@ -179,7 +181,9 @@ export default function OutboundWebhooksTab() {
       timeout_seconds: webhook.timeout_seconds || 30,
       alert_slack_url: webhook.alert_slack_url || '',
       alert_email: webhook.alert_email || '',
-      alert_threshold: webhook.alert_threshold || 3
+      alert_threshold: webhook.alert_threshold || 3,
+      idempotency_header: webhook.idempotency_header || 'X-Idempotency-Key',
+      idempotency_missing_behavior: webhook.idempotency_missing_behavior || 'generate'
     });
     setView('edit');
   };
