@@ -424,6 +424,19 @@ function SubCompanyDialog({
             </section>
 
             <section>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-3">🛠️ Customização Avançada</h4>
+              <div className="space-y-2">
+                <label className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer ${form.allow_custom_logic ? 'border-primary bg-primary/5' : 'border-border'}`}>
+                  <Switch checked={!!form.allow_custom_logic} onCheckedChange={v => setForm({ ...form, allow_custom_logic: v })} />
+                  <div>
+                    <p className="text-sm font-medium">Liberdade de customização</p>
+                    <p className="text-xs text-muted-foreground">Permite que a sub-empresa adicione personalizações à parte do código matriz, dando liberdade de desenvolvimento.</p>
+                  </div>
+                </label>
+              </div>
+            </section>
+
+            <section>
               <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Páginas bloqueadas</h4>
               <p className="text-xs text-muted-foreground mb-3">Selecione as páginas que a sub-empresa NÃO poderá acessar</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
