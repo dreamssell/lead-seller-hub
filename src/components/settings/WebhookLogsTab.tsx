@@ -183,7 +183,7 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
         a.download = `${filename}.json`;
         a.click();
       } else {
-        const headers = ['ID', 'Event', 'Status', 'Latency', 'Date', 'URL', 'Request ID', 'Error'];
+        const headers = ['ID', 'Event', 'Status', 'Latency', 'Date', 'URL', 'Request ID', 'Idempotency Key', 'Is Hit', 'Error'];
         const rows = data.map(log => [
           log.id,
           log.event_type,
@@ -192,6 +192,8 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
           new Date(log.created_at).toLocaleString(),
           log.url,
           log.request_id || '',
+          log.idempotency_key || '',
+          log.is_idempotent_hit ? 'Sim' : 'Não',
           log.error_message || ''
         ]);
         
