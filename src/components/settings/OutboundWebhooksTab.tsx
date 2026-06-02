@@ -82,6 +82,8 @@ interface Webhook {
   alert_email?: string;
   alert_threshold?: number;
   payload_schema?: any;
+  idempotency_header?: string;
+  idempotency_missing_behavior?: string;
 }
 
 const EVENT_GROUPS = [
