@@ -18,6 +18,7 @@ type SubCompany = {
   blocked_pages?: string[];
   credit_limit: number; credit_balance: number; credit_alert_threshold: number;
   auto_action: 'alert' | 'request_recharge' | 'block'; status: string;
+  allow_custom_logic: boolean;
 };
 
 type LoginToken = {
@@ -439,12 +440,17 @@ function AlertsTab({ sub }: { sub: SubCompany }) {
 function RulesTab({ sub }: { sub: SubCompany }) {
   const [threshold, setThreshold] = useState(sub.credit_alert_threshold);
   const [action, setAction] = useState(sub.auto_action);
+  const [allowCustom, setAllowCustom] = useState(sub.allow_custom_logic);
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
     setSaving(true);
     const { error } = await supabase.from('sub_companies')
-      .update({ credit_alert_threshold: threshold, auto_action: action } as any).eq('id', sub.id);
+      .update({ 
+        credit_alert_threshold: threshold, 
+        auto_action: action,
+        allow_custom_logic: allowCustom 
+      } as any).eq('id', sub.id);
     setSaving(false);
     if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
     else toast({ title: 'Regras salvas' });
@@ -481,6 +487,14 @@ function RulesTab({ sub }: { sub: SubCompany }) {
                 <div><p className="text-sm font-medium">{o.label}</p><p className="text-xs text-muted-foreground">{o.desc}</p></div>
               </label>
             ))}
+          </div>
+        </div>
+        <Separator />
+        <div className="flex items-start gap-3 rounded-lg border p-3 bg-secondary/20">
+          <Switch checked={allowCustom} onCheckedChange={setAllowCustom} />
+          <div>
+            <p className="text-sm font-medium">Liberdade de customização</p>
+            <p className="text-xs text-muted-foreground">Permite que esta sub-empresa adicione personalizações à parte do código matriz.</p>
           </div>
         </div>
         <Button onClick={save} disabled={saving} className="w-full">{saving ? 'Salvando...' : 'Salvar regras'}</Button>

@@ -27,6 +27,7 @@ type SubCompany = {
   inherit_branding: boolean; byok_inherit: boolean; byok_api_key: string | null;
   blocked_pages: string[]; credit_limit: number; credit_balance: number;
   credits_used_today: number; credits_used_30d: number; status: string;
+  allow_custom_logic: boolean;
 };
 
 type WLSettings = {
@@ -230,7 +231,7 @@ function SubCompanyDialog({
   const [form, setForm] = useState<Partial<SubCompany>>({});
   useEffect(() => {
     if (editing) setForm(editing);
-    else setForm({ name: '', admin_name: '', admin_email: '', admin_password: '', whatsapp_limit: 10, inherit_branding: true, byok_inherit: true, blocked_pages: [] } as any);
+    else setForm({ name: '', admin_name: '', admin_email: '', admin_password: '', whatsapp_limit: 10, inherit_branding: true, byok_inherit: true, blocked_pages: [], allow_custom_logic: false } as any);
   }, [editing, open]);
 
   const togglePage = (id: string) => {
@@ -261,6 +262,7 @@ function SubCompanyDialog({
       byok_inherit: !!form.byok_inherit,
       byok_api_key: form.byok_inherit ? null : (form.byok_api_key || null),
       blocked_pages: form.blocked_pages || [],
+      allow_custom_logic: !!form.allow_custom_logic,
     };
 
     const q = editing
@@ -416,6 +418,19 @@ function SubCompanyDialog({
                     {!form.byok_inherit && (
                       <Input className="mt-2" placeholder="sk-..." value={form.byok_api_key || ''} onChange={e => setForm({ ...form, byok_api_key: e.target.value })} />
                     )}
+                  </div>
+                </label>
+              </div>
+            </section>
+
+            <section>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-3">🛠️ Customização Avançada</h4>
+              <div className="space-y-2">
+                <label className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer ${form.allow_custom_logic ? 'border-primary bg-primary/5' : 'border-border'}`}>
+                  <Switch checked={!!form.allow_custom_logic} onCheckedChange={v => setForm({ ...form, allow_custom_logic: v })} />
+                  <div>
+                    <p className="text-sm font-medium">Liberdade de customização</p>
+                    <p className="text-xs text-muted-foreground">Permite que a sub-empresa adicione personalizações à parte do código matriz, dando liberdade de desenvolvimento.</p>
                   </div>
                 </label>
               </div>

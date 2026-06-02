@@ -11,6 +11,7 @@ type AccountAccess = {
   is_account_admin: boolean;
   blocked_pages: string[];
   status: string;
+  allow_custom_logic: boolean;
 };
 
 interface AuthContextType {

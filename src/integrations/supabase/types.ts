@@ -660,6 +660,7 @@ export type Database = {
         Row: {
           admin_email: string
           admin_name: string
+          allow_custom_logic: boolean
           auto_action: string
           blocked_pages: string[]
           byok_api_key: string | null
@@ -685,6 +686,7 @@ export type Database = {
         Insert: {
           admin_email: string
           admin_name: string
+          allow_custom_logic?: boolean
           auto_action?: string
           blocked_pages?: string[]
           byok_api_key?: string | null
@@ -710,6 +712,7 @@ export type Database = {
         Update: {
           admin_email?: string
           admin_name?: string
+          allow_custom_logic?: boolean
           auto_action?: string
           blocked_pages?: string[]
           byok_api_key?: string | null
@@ -1165,6 +1168,7 @@ export type Database = {
       get_my_account_access: {
         Args: never
         Returns: {
+          allow_custom_logic: boolean
           allowed_pages: string[]
           blocked_pages: string[]
           is_account_admin: boolean
