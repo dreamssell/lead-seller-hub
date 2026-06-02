@@ -1060,6 +1060,44 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_idempotency_keys: {
+        Row: {
+          created_at: string | null
+          id: string
+          idempotency_key: string
+          latency_ms: number | null
+          response_body: string | null
+          response_status: number | null
+          webhook_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          idempotency_key: string
+          latency_ms?: number | null
+          response_body?: string | null
+          response_status?: number | null
+          webhook_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          idempotency_key?: string
+          latency_ms?: number | null
+          response_body?: string | null
+          response_status?: number | null
+          webhook_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_idempotency_keys_webhook_id_fkey"
+            columns: ["webhook_id"]
+            isOneToOne: false
+            referencedRelation: "webhooks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       webhook_logs: {
         Row: {
           created_at: string
@@ -1068,6 +1106,8 @@ export type Database = {
           event_type: string
           headers: Json | null
           id: string
+          idempotency_key: string | null
+          is_idempotent_hit: boolean | null
           latency_ms: number | null
           method: string
           payload: Json | null
@@ -1087,6 +1127,8 @@ export type Database = {
           event_type: string
           headers?: Json | null
           id?: string
+          idempotency_key?: string | null
+          is_idempotent_hit?: boolean | null
           latency_ms?: number | null
           method: string
           payload?: Json | null
@@ -1106,6 +1148,8 @@ export type Database = {
           event_type?: string
           headers?: Json | null
           id?: string
+          idempotency_key?: string | null
+          is_idempotent_hit?: boolean | null
           latency_ms?: number | null
           method?: string
           payload?: Json | null
@@ -1335,6 +1379,10 @@ export type Database = {
     }
     Functions: {
       calculate_next_retry: { Args: { retry_count: number }; Returns: string }
+      cleanup_expired_idempotency_keys: {
+        Args: { ttl_hours?: number }
+        Returns: number
+      }
       generate_sub_login_token: {
         Args: { p_hours?: number; p_label?: string; p_sub_company_id: string }
         Returns: {

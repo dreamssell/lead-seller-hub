@@ -112,40 +112,74 @@ Deno.serve(async (req) => {
 
     headers["X-Request-ID"] = request_id;
 
-    const startTime = Date.now();
-    let responseStatus: number;
-    let responseBody: string;
+    let responseStatus: number = 0;
+    let responseBody: string = "";
     let error_message: string | null = null;
+    let latency: number = 0;
+    let isIdempotentHit = false;
 
-    const timeoutSeconds = webhook.timeout_seconds || 30;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
+    // Check for idempotency
+    if (finalIdempotencyKey && !is_test) {
+      const { data: cached } = await supabaseAdmin
+        .from("webhook_idempotency_keys")
+        .select("*")
+        .eq("webhook_id", webhook.id)
+        .eq("idempotency_key", finalIdempotencyKey)
+        .maybeSingle();
 
-    try {
-      const resp = await fetch(webhook.url, {
-        method: "POST",
-        headers,
-        body: bodyText,
-        signal: controller.signal
-      });
-
-      responseStatus = resp.status;
-      responseBody = await resp.text();
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        responseStatus = 408; // Request Timeout
-        responseBody = "Request Timeout";
-        error_message = `A requisição excedeu o tempo limite de ${timeoutSeconds}s`;
-      } else {
-        responseStatus = 0;
-        responseBody = "Network Error";
-        error_message = err.message;
+      if (cached) {
+        console.log(`Idempotency hit for key: ${finalIdempotencyKey}`);
+        responseStatus = cached.response_status;
+        responseBody = cached.response_body;
+        latency = cached.latency_ms;
+        isIdempotentHit = true;
       }
-    } finally {
-      clearTimeout(timeoutId);
     }
 
-    const latency = Date.now() - startTime;
+    if (!isIdempotentHit) {
+      const startTime = Date.now();
+      const timeoutSeconds = webhook.timeout_seconds || 30;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
+
+      try {
+        const resp = await fetch(webhook.url, {
+          method: "POST",
+          headers,
+          body: bodyText,
+          signal: controller.signal
+        });
+
+        responseStatus = resp.status;
+        responseBody = await resp.text();
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          responseStatus = 408; // Request Timeout
+          responseBody = "Request Timeout";
+          error_message = `A requisição excedeu o tempo limite de ${timeoutSeconds}s`;
+        } else {
+          responseStatus = 0;
+          responseBody = "Network Error";
+          error_message = err.message;
+        }
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      latency = Date.now() - startTime;
+
+      // Save to idempotency table if not a test and we have a key
+      if (finalIdempotencyKey && !is_test) {
+        await supabaseAdmin.from("webhook_idempotency_keys").upsert({
+          webhook_id: webhook.id,
+          idempotency_key: finalIdempotencyKey,
+          response_status: responseStatus,
+          response_body: responseBody.substring(0, 5000), // Store more than log if needed
+          latency_ms: latency
+        }, { onConflict: 'webhook_id,idempotency_key' });
+      }
+    }
+
     const isSuccess = responseStatus >= 200 && responseStatus < 300;
 
     // Log the attempt
@@ -161,11 +195,13 @@ Deno.serve(async (req) => {
         response_body: responseBody.substring(0, 1000),
         latency_ms: latency,
         direction: 'outbound',
-        status: isSuccess ? 'completed' : (webhook.max_retries > 0 ? 'pending_retry' : 'failed'),
+        status: isSuccess ? 'completed' : (webhook.max_retries > 0 && !isIdempotentHit ? 'pending_retry' : 'failed'),
         error_message: error_message,
         retry_count: 0,
-        timeout_limit: timeoutSeconds,
-        request_id: request_id
+        timeout_limit: webhook.timeout_seconds || 30,
+        request_id: request_id,
+        idempotency_key: finalIdempotencyKey,
+        is_idempotent_hit: isIdempotentHit
       });
 
       // Check for consecutive failures/timeouts
@@ -187,6 +223,12 @@ Deno.serve(async (req) => {
           }
         }
       }
+    }
+
+    // Occasional cleanup (5% chance)
+    if (Math.random() < 0.05) {
+      console.log("Running background cleanup of expired idempotency keys...");
+      await supabaseAdmin.rpc('cleanup_expired_idempotency_keys', { ttl_hours: 24 });
     }
 
     return new Response(JSON.stringify({
