@@ -747,6 +747,14 @@ export default function OutboundWebhooksTab() {
             </div>
           </TabsContent>
 
+          <TabsContent value="health" className="mt-6">
+            {selectedWebhook ? (
+              <WebhookHealthDashboard webhookId={selectedWebhook.id} />
+            ) : (
+              <div className="glass-card p-12 text-center">Salve o webhook primeiro para ver as métricas de saúde.</div>
+            )}
+          </TabsContent>
+
           <TabsContent value="test" className="mt-6">
             {selectedWebhook ? (
               <OutboundWebhookTestConsole webhook={selectedWebhook} />
