@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const { webhook_id, payload, is_test = false } = await req.json();
+    const { webhook_id, payload, is_test = false, idempotency_key = null } = await req.json();
 
     if (!webhook_id) throw new Error("Missing webhook_id");
 
@@ -57,10 +57,15 @@ Deno.serve(async (req) => {
     const bodyText = JSON.stringify(payload);
     const signature = webhook.secret ? await signHmac(bodyText, webhook.secret) : null;
 
+    // Use provided idempotency_key or generate one if not provided (for first attempts)
+    const finalIdempotencyKey = idempotency_key || crypto.randomUUID();
+
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       "X-Webhook-ID": webhook.id,
       "X-Webhook-Version": `v${webhook.secret_version || 1}`,
+      "X-Idempotency-Key": finalIdempotencyKey,
+      "Idempotency-Key": finalIdempotencyKey,
     };
 
     if (signature) {
@@ -128,7 +133,8 @@ Deno.serve(async (req) => {
       body: responseBody,
       latency,
       signature_preview: signature,
-      error: error_message
+      error: error_message,
+      idempotency_key: finalIdempotencyKey
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
