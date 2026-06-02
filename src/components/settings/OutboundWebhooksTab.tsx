@@ -77,6 +77,7 @@ interface Webhook {
   created_at: string;
   type: string;
   max_retries: number;
+  timeout_seconds: number;
   payload_schema?: any;
 }
 
