@@ -225,6 +225,12 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Occasional cleanup (5% chance)
+    if (Math.random() < 0.05) {
+      console.log("Running background cleanup of expired idempotency keys...");
+      await supabaseAdmin.rpc('cleanup_expired_idempotency_keys', { ttl_hours: 24 });
+    }
+
     return new Response(JSON.stringify({
       success: isSuccess,
       status: responseStatus,
