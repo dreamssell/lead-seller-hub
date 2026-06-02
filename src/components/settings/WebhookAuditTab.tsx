@@ -7,12 +7,15 @@ import {
   AlertCircle,
   Loader2,
   RefreshCw,
-  ZapOff
+  ZapOff,
+  History
 } from 'lucide-react';
+
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 
 export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
   const [loading, setLoading] = useState(true);
@@ -59,7 +62,6 @@ export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
         link.download = `webhook-idempotency-audit-${webhookId}.json`;
         link.click();
       } else {
-        // Simple CSV generation from report
         const report = data as any;
         const keys = report.keys_near_expiration || [];
         const headers = ['idempotency_key', 'created_at', 'expires_at'];
@@ -77,7 +79,7 @@ export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
       }
 
       toast({ title: 'Relatório exportado com sucesso' });
-    } catch (err) {
+    } catch (err: any) {
       toast({ title: 'Erro ao exportar relatório', description: err.message, variant: 'destructive' });
     }
   };
@@ -141,24 +143,74 @@ export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
         </div>
       </div>
 
-      <div className="glass-card p-6 bg-secondary/10 border-dashed">
-        <div className="flex items-start gap-4">
-          <ZapOff className="w-10 h-10 text-muted-foreground/30" />
-          <div className="space-y-1">
-            <h4 className="text-sm font-bold">Por que isso é importante?</h4>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              O monitoramento de idempotência garante que seu sistema não processe a mesma requisição múltiplas vezes devido a retentativas de rede. 
-              O relatório de auditoria permite verificar quais chaves estão ativas e quando expirarão (TTL), garantindo conformidade e eficiência de armazenamento.
-            </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="glass-card p-6 bg-secondary/10 border-dashed">
+          <div className="flex items-start gap-4">
+            <ZapOff className="w-10 h-10 text-muted-foreground/30" />
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold">Por que isso é importante?</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                O monitoramento de idempotência garante que seu sistema não processe a mesma requisição múltiplas vezes devido a retentativas de rede. 
+              </p>
+            </div>
           </div>
         </div>
+
+        <CleanupLogsView webhookId={webhookId} />
       </div>
-      
+
       <div className="flex justify-center">
         <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={loadStats}>
           <RefreshCw className="w-3 h-3" /> Atualizar métricas
         </Button>
       </div>
+    </div>
+  );
+}
+
+function CleanupLogsView({ webhookId }: { webhookId: string }) {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      const { data } = await supabase
+        .from('idempotency_cleanup_logs')
+        .select('*')
+        .eq('webhook_id', webhookId)
+        .order('clean_date', { ascending: false })
+        .limit(5);
+      setLogs(data || []);
+      setLoading(false);
+    };
+    load();
+  }, [webhookId]);
+
+  return (
+    <div className="glass-card p-4 space-y-3 bg-secondary/5 border-dashed">
+      <div className="flex items-center gap-2">
+        <History className="w-4 h-4 text-muted-foreground" />
+        <h4 className="text-xs font-bold uppercase tracking-tight text-muted-foreground">Últimas Limpezas (TTL)</h4>
+      </div>
+      
+      {loading ? (
+        <div className="flex justify-center py-4">
+          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/40" />
+        </div>
+      ) : logs.length === 0 ? (
+        <p className="text-[10px] text-muted-foreground italic text-center py-2">Nenhuma limpeza registrada recentemente.</p>
+      ) : (
+        <div className="space-y-2">
+          {logs.map((log: any) => (
+            <div key={log.id} className="flex justify-between items-center text-[10px] border-b border-border/20 pb-1">
+              <span className="text-muted-foreground">{new Date(log.clean_date).toLocaleString()}</span>
+              <Badge variant="outline" className="text-[9px] bg-amber-500/5 text-amber-600 border-amber-500/10">
+                -{log.keys_removed} chaves
+              </Badge>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

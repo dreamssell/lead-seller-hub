@@ -456,13 +456,22 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Badge variant="outline" className="text-[9px] bg-blue-500/10 text-blue-600 border-blue-500/20">
+                                  <Badge variant="outline" className="text-[9px] bg-blue-500/10 text-blue-600 border-blue-500/20 cursor-help">
                                     <RotateCcw className="w-2.5 h-2.5 mr-1" /> DUPLICATA (IGNORADO)
                                   </Badge>
                                 </TooltipTrigger>
-                                <TooltipContent>
-                                  <p className="text-xs">Esta requisição foi ignorada porque uma chave de idempotência idêntica já foi processada recentemente.</p>
+                                <TooltipContent className="max-w-xs p-3">
+                                  <div className="space-y-2">
+                                    <p className="font-bold text-xs border-b border-border/40 pb-1">Resumo da Idempotência</p>
+                                    <div className="space-y-1">
+                                      <p className="text-[10px]"><strong>Chave:</strong> {log.idempotency_key}</p>
+                                      <p className="text-[10px]"><strong>Motivo:</strong> Requisição idêntica já processada com sucesso no endpoint.</p>
+                                      <p className="text-[10px]"><strong>Status Original:</strong> {log.response_status}</p>
+                                      <p className="text-[10px] text-muted-foreground italic">Este log reflete o cache do processamento original para evitar duplicidade de efeitos colaterais.</p>
+                                    </div>
+                                  </div>
                                 </TooltipContent>
+
                               </Tooltip>
                             </TooltipProvider>
                           )}
