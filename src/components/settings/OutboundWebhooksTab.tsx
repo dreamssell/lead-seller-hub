@@ -76,6 +76,8 @@ interface Webhook {
   is_active: boolean;
   created_at: string;
   type: string;
+  max_retries: number;
+  payload_schema?: any;
 }
 
 const EVENT_GROUPS = [
