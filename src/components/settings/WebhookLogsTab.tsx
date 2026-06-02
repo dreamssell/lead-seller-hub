@@ -11,7 +11,10 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
-  ArrowUpDown
+  ArrowUpDown,
+  Download,
+  FileJson,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,6 +72,7 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
   const [logs, setLogs] = useState<WebhookLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [resending, setResending] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   
   // Filtering & Pagination state
   const [search, setSearch] = useState('');
@@ -76,6 +80,7 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [dateFilter, setDateFilter] = useState<{ from: string; to: string }>({ from: '', to: '' });
 
   const loadLogs = async () => {
     setLoading(true);
@@ -95,6 +100,15 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
         query = query.or('response_status.lt.200,response_status.gte.300');
       }
 
+      if (dateFilter.from) {
+        query = query.gte('created_at', new Date(dateFilter.from).toISOString());
+      }
+      if (dateFilter.to) {
+        const toDate = new Date(dateFilter.to);
+        toDate.setHours(23, 59, 59, 999);
+        query = query.lte('created_at', toDate.toISOString());
+      }
+
       const { data, count, error } = await query
         .order('created_at', { ascending: sortOrder === 'asc' })
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
@@ -112,7 +126,7 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
 
   useEffect(() => { 
     loadLogs(); 
-  }, [webhookId, page, statusFilter, sortOrder]);
+  }, [webhookId, page, statusFilter, sortOrder, dateFilter]);
 
   // Handle search with debounce
   useEffect(() => {
@@ -122,6 +136,83 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
     }, 500);
     return () => clearTimeout(timer);
   }, [search]);
+
+  const exportLogs = async (format: 'csv' | 'json') => {
+    setExporting(true);
+    try {
+      let query = supabase
+        .from('webhook_logs')
+        .select('*')
+        .eq('webhook_id', webhookId);
+
+      if (search) {
+        query = query.ilike('event_type', `%${search}%`);
+      }
+
+      if (statusFilter === 'success') {
+        query = query.gte('response_status', 200).lt('response_status', 300);
+      } else if (statusFilter === 'error') {
+        query = query.or('response_status.lt.200,response_status.gte.300');
+      }
+
+      if (dateFilter.from) {
+        query = query.gte('created_at', new Date(dateFilter.from).toISOString());
+      }
+      if (dateFilter.to) {
+        const toDate = new Date(dateFilter.to);
+        toDate.setHours(23, 59, 59, 999);
+        query = query.lte('created_at', toDate.toISOString());
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        toast({ title: 'Nenhum log para exportar', variant: 'destructive' });
+        return;
+      }
+
+      const filename = `webhook_logs_${webhookId}_${new Date().toISOString().split('T')[0]}`;
+      
+      if (format === 'json') {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${filename}.json`;
+        a.click();
+      } else {
+        const headers = ['ID', 'Event', 'Status', 'Latency', 'Date', 'URL', 'Request ID', 'Error'];
+        const rows = data.map(log => [
+          log.id,
+          log.event_type,
+          log.response_status,
+          log.latency_ms,
+          new Date(log.created_at).toLocaleString(),
+          log.url,
+          log.request_id || '',
+          log.error_message || ''
+        ]);
+        
+        const csvContent = [
+          headers.join(','),
+          ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        ].join('\n');
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${filename}.csv`;
+        a.click();
+      }
+      
+      toast({ title: 'Exportação concluída!' });
+    } catch (error: any) {
+      toast({ title: 'Erro ao exportar', description: error.message, variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const resendEvent = async (log: WebhookLog) => {
     setResending(log.id);
@@ -200,6 +291,62 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
             <ArrowUpDown className="w-4 h-4" />
             {sortOrder === 'desc' ? 'Mais recentes' : 'Mais antigos'}
           </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2 h-9">
+                <Calendar className="w-4 h-4" />
+                Datas
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="p-4 w-72 space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-muted-foreground">De:</label>
+                <Input 
+                  type="date" 
+                  value={dateFilter.from} 
+                  onChange={(e) => setDateFilter(prev => ({ ...prev, from: e.target.value }))}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-muted-foreground">Até:</label>
+                <Input 
+                  type="date" 
+                  value={dateFilter.to} 
+                  onChange={(e) => setDateFilter(prev => ({ ...prev, to: e.target.value }))}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="w-full h-7 text-[10px]"
+                onClick={() => setDateFilter({ from: '', to: '' })}
+              >
+                Limpar Período
+              </Button>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2 h-9 border-primary/20 hover:border-primary/40 text-primary" disabled={exporting}>
+                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                Exportar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => exportLogs('csv')} className="gap-2">
+                <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+                CSV (Planilha)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportLogs('json')} className="gap-2">
+                <FileJson className="w-4 h-4 text-blue-500" />
+                JSON (Raw)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
