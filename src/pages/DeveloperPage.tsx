@@ -13,6 +13,7 @@ import AiTab from '@/components/settings/AiTab';
 import QuickstartTab from '@/components/settings/QuickstartTab';
 
 const TABS = [
+  { value: 'ativar',      label: 'Ativar',    icon: Play,         Comp: QuickstartTab, advanced: false },
   { value: 'general',     label: 'Geral',     icon: SettingsIcon, Comp: GeneralTab, advanced: false },
   { value: 'connections', label: 'Conexões',  icon: Plug,         Comp: ConnectionsTab, advanced: false },
   { value: 'webhooks',    label: 'Webhooks',  icon: Webhook,      Comp: WebhooksTab, advanced: true },
