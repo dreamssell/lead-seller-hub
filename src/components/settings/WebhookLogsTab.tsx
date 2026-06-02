@@ -127,6 +127,74 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
     return () => clearTimeout(timer);
   }, [search]);
 
+  const exportLogs = async (format: 'csv' | 'json') => {
+    setExporting(true);
+    try {
+      let query = supabase
+        .from('webhook_logs')
+        .select('*')
+        .eq('webhook_id', webhookId);
+
+      if (search) {
+        query = query.ilike('event_type', `%${search}%`);
+      }
+
+      if (statusFilter === 'success') {
+        query = query.gte('response_status', 200).lt('response_status', 300);
+      } else if (statusFilter === 'error') {
+        query = query.or('response_status.lt.200,response_status.gte.300');
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        toast({ title: 'Nenhum log para exportar', variant: 'destructive' });
+        return;
+      }
+
+      const filename = `webhook_logs_${webhookId}_${new Date().toISOString().split('T')[0]}`;
+      
+      if (format === 'json') {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${filename}.json`;
+        a.click();
+      } else {
+        const headers = ['ID', 'Event', 'Status', 'Latency', 'Date', 'URL', 'Request ID', 'Error'];
+        const rows = data.map(log => [
+          log.id,
+          log.event_type,
+          log.response_status,
+          log.latency_ms,
+          new Date(log.created_at).toLocaleString(),
+          log.url,
+          log.request_id || '',
+          log.error_message || ''
+        ]);
+        
+        const csvContent = [
+          headers.join(','),
+          ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        ].join('\n');
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${filename}.csv`;
+        a.click();
+      }
+      
+      toast({ title: 'Exportação concluída!' });
+    } catch (error: any) {
+      toast({ title: 'Erro ao exportar', description: error.message, variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const resendEvent = async (log: WebhookLog) => {
     setResending(log.id);
     try {
