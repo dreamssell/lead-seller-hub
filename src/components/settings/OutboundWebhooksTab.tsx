@@ -118,7 +118,10 @@ export default function OutboundWebhooksTab() {
     events: [] as string[],
     is_active: true,
     max_retries: 3,
-    timeout_seconds: 30
+    timeout_seconds: 30,
+    alert_slack_url: '',
+    alert_email: '',
+    alert_threshold: 3
   });
 
   const load = async () => {
