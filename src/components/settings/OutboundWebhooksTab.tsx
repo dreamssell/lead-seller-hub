@@ -519,6 +519,24 @@ export default function OutboundWebhooksTab() {
             </div>
           </TabsContent>
 
+          <TabsContent value="test" className="mt-6">
+            {selectedWebhook ? (
+              <OutboundWebhookTestConsole webhook={selectedWebhook} />
+            ) : (
+              <div className="glass-card p-12 text-center bg-secondary/10 flex flex-col items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center">
+                  <FlaskConical className="w-8 h-8 text-muted-foreground/40" />
+                </div>
+                <div className="space-y-1">
+                  <p className="font-bold">Webhook ainda não salvo</p>
+                  <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                    Você precisa salvar as configurações do webhook antes de poder disparar eventos de teste.
+                  </p>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
           <TabsContent value="logs" className="mt-6">
             {selectedWebhook ? (
               <WebhookLogsTab webhookId={selectedWebhook.id} />
