@@ -265,9 +265,9 @@ export default function ApiTab() {
             </div>
           </div>
           <Button variant="outline" size="sm" asChild className="rounded-xl">
-            <a href="https://docs.lovable.dev" target="_blank" rel="noreferrer">
+            <Link to="/documentation">
               Doc Completa <ExternalLink className="w-3.5 h-3.5 ml-2" />
-            </a>
+            </Link>
           </Button>
         </div>
         <div className="p-6 space-y-6">
