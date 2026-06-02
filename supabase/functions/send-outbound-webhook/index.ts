@@ -68,15 +68,31 @@ Deno.serve(async (req) => {
 
     const bodyText = JSON.stringify(payload);
     const signature = webhook.secret ? await signHmac(bodyText, webhook.secret) : null;
-    const finalIdempotencyKey = idempotency_key || crypto.randomUUID();
+    let finalIdempotencyKey = idempotency_key;
+    const missingBehavior = webhook.idempotency_missing_behavior || 'generate';
+    
+    if (!finalIdempotencyKey) {
+      if (missingBehavior === 'generate') {
+        finalIdempotencyKey = crypto.randomUUID();
+      } else if (missingBehavior === 'fail') {
+        throw new Error("Missing idempotency_key and behavior is set to fail");
+      }
+    }
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       "X-Webhook-ID": webhook.id,
       "X-Webhook-Version": `v${webhook.secret_version || 1}`,
-      "X-Idempotency-Key": finalIdempotencyKey,
-      "Idempotency-Key": finalIdempotencyKey,
     };
+
+    if (finalIdempotencyKey) {
+      const headerName = webhook.idempotency_header || 'X-Idempotency-Key';
+      headers[headerName] = finalIdempotencyKey;
+      // Also send the standard one for compatibility unless explicitly changed
+      if (headerName !== 'Idempotency-Key') {
+        headers['Idempotency-Key'] = finalIdempotencyKey;
+      }
+    }
 
     if (signature) {
       headers["X-Webhook-Signature"] = signature;

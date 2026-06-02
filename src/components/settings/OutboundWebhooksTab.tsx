@@ -82,6 +82,8 @@ interface Webhook {
   alert_email?: string;
   alert_threshold?: number;
   payload_schema?: any;
+  idempotency_header?: string;
+  idempotency_missing_behavior?: string;
 }
 
 const EVENT_GROUPS = [
@@ -121,7 +123,9 @@ export default function OutboundWebhooksTab() {
     timeout_seconds: 30,
     alert_slack_url: '',
     alert_email: '',
-    alert_threshold: 3
+    alert_threshold: 3,
+    idempotency_header: 'X-Idempotency-Key',
+    idempotency_missing_behavior: 'generate'
   });
 
   const load = async () => {
@@ -155,7 +159,9 @@ export default function OutboundWebhooksTab() {
       timeout_seconds: 30,
       alert_slack_url: '',
       alert_email: '',
-      alert_threshold: 3
+      alert_threshold: 3,
+      idempotency_header: 'X-Idempotency-Key',
+      idempotency_missing_behavior: 'generate'
     });
     setSelectedWebhook(null);
     setView('edit');
@@ -175,7 +181,9 @@ export default function OutboundWebhooksTab() {
       timeout_seconds: webhook.timeout_seconds || 30,
       alert_slack_url: webhook.alert_slack_url || '',
       alert_email: webhook.alert_email || '',
-      alert_threshold: webhook.alert_threshold || 3
+      alert_threshold: webhook.alert_threshold || 3,
+      idempotency_header: webhook.idempotency_header || 'X-Idempotency-Key',
+      idempotency_missing_behavior: webhook.idempotency_missing_behavior || 'generate'
     });
     setView('edit');
   };
@@ -219,6 +227,8 @@ export default function OutboundWebhooksTab() {
       alert_slack_url: form.alert_slack_url,
       alert_email: form.alert_email,
       alert_threshold: form.alert_threshold,
+      idempotency_header: form.idempotency_header,
+      idempotency_missing_behavior: form.idempotency_missing_behavior,
       created_by: user.id,
       type: 'outbound'
     };
@@ -304,6 +314,107 @@ export default function OutboundWebhooksTab() {
     
     // Also generate OpenAPI if requested (conceptual here, keeping it to JSON Schema for now as requested)
     toast({ title: 'Schema gerado para download' });
+  };
+
+  const downloadOpenAPI = (webhook: Webhook | null) => {
+    if (!webhook) return;
+    
+    const spec = {
+      openapi: "3.0.0",
+      info: {
+        title: `Outbound Webhook API: ${webhook.name}`,
+        version: `1.0.${webhook.secret_version}`,
+        description: "Documentação técnica para o recebimento de eventos disparados por este webhook."
+      },
+      servers: [
+        {
+          url: webhook.url,
+          description: "Endpoint de destino configurado"
+        }
+      ],
+      paths: {
+        "/": {
+          post: {
+            summary: "Receber evento de webhook",
+            description: "Este endpoint será chamado via POST sempre que um dos eventos configurados ocorrer.",
+            parameters: [
+              {
+                name: webhook.idempotency_header || "X-Idempotency-Key",
+                in: "header",
+                required: webhook.idempotency_missing_behavior === 'fail',
+                schema: { type: "string" },
+                description: "Chave única de idempotência para evitar processamento duplicado."
+              },
+              {
+                name: "X-Webhook-Signature",
+                in: "header",
+                required: !!webhook.secret,
+                schema: { type: "string" },
+                description: "Assinatura HMAC-SHA256 para verificação de autenticidade."
+              },
+              {
+                name: "X-Webhook-Timestamp",
+                in: "header",
+                required: true,
+                schema: { type: "integer" },
+                description: "Timestamp UNIX do momento do disparo."
+              }
+            ],
+            requestBody: {
+              required: true,
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["event", "timestamp", "data"],
+                    properties: {
+                      event: { 
+                        type: "string", 
+                        enum: webhook.events,
+                        example: webhook.events[0] || "message.received"
+                      },
+                      timestamp: { 
+                        type: "string", 
+                        format: "date-time",
+                        example: new Date().toISOString()
+                      },
+                      data: { 
+                        type: "object",
+                        description: "Dados específicos do evento"
+                      }
+                    }
+                  },
+                  example: samplePayload
+                }
+              }
+            },
+            responses: {
+              "200": {
+                description: "Evento recebido e processado com sucesso."
+              },
+              "202": {
+                description: "Evento recebido e aceito para processamento assíncrono."
+              },
+              "4xx": {
+                description: "Erro no payload ou autenticação."
+              },
+              "5xx": {
+                description: "Erro interno no servidor de destino."
+              }
+            }
+          }
+        }
+      }
+    };
+
+    const blob = new Blob([JSON.stringify(spec, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `openapi-${webhook.id}.json`;
+    link.click();
+    
+    toast({ title: 'OpenAPI Spec gerado para download' });
   };
 
   const filteredItems = items.filter(item => 
@@ -429,6 +540,37 @@ export default function OutboundWebhooksTab() {
                     <span className="text-[11px] font-medium">segundos</span>
                   </div>
                   <p className="text-[10px] text-muted-foreground">Tempo máximo para resposta do servidor.</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-secondary/5 p-4 rounded-xl border border-border/40">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm font-bold">Configuração de Idempotência</Label>
+                    <Badge variant="outline" className="text-[9px] uppercase tracking-tighter">Opcional</Badge>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Nome do Header</Label>
+                    <Input 
+                      placeholder="X-Idempotency-Key" 
+                      value={form.idempotency_header} 
+                      onChange={(e) => setForm({ ...form, idempotency_header: e.target.value })}
+                      className="bg-background"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[10px] text-muted-foreground mt-6">Comportamento sem chave</Label>
+                  <select 
+                    value={form.idempotency_missing_behavior} 
+                    onChange={(e) => setForm({ ...form, idempotency_missing_behavior: e.target.value })}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <option value="generate">Gerar UUID automaticamente (Recomendado)</option>
+                    <option value="fail">Falhar o envio (Requer chave no gatilho)</option>
+                    <option value="skip">Não enviar header de idempotência</option>
+                  </select>
                 </div>
               </div>
 
@@ -646,8 +788,8 @@ export default function OutboundWebhooksTab() {
                 <div className="glass-card p-5 space-y-5 bg-secondary/10 border-none shadow-inner">
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Campos Obrigatórios</span>
-                      <Badge variant="outline" className="text-[10px] text-primary bg-primary/5">3 campos padrão</Badge>
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Campos Padrão no Body</span>
+                      <Badge variant="outline" className="text-[10px] text-primary bg-primary/5">JSON Estruturado</Badge>
                     </div>
                     <div className="space-y-2">
                       {[
@@ -664,6 +806,24 @@ export default function OutboundWebhooksTab() {
                             </div>
                             <p className="text-[10px] text-muted-foreground mt-0.5">{field.desc}</p>
                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Headers de Controle</span>
+                    </div>
+                    <div className="space-y-2">
+                      {[
+                        { name: 'X-Webhook-Signature', desc: 'Assinatura HMAC-SHA256 para segurança' },
+                        { name: form.idempotency_header || 'X-Idempotency-Key', desc: 'Chave única para evitar duplicidades' },
+                        { name: 'X-Webhook-ID', desc: 'Identificador único deste webhook' }
+                      ].map(header => (
+                        <div key={header.name} className="flex items-center justify-between p-2 bg-background/50 rounded border border-dashed border-border/60">
+                          <code className="text-[10px] font-bold text-primary">{header.name}</code>
+                          <span className="text-[9px] text-muted-foreground italic">{header.desc}</span>
                         </div>
                       ))}
                     </div>
@@ -692,6 +852,9 @@ export default function OutboundWebhooksTab() {
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => downloadSchema(selectedWebhook)} className="h-8 text-[11px] bg-background">
                       <Download className="w-3.5 h-3.5 mr-2" /> Schema
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => downloadOpenAPI(selectedWebhook)} className="h-8 text-[11px] bg-background">
+                      <Terminal className="w-3.5 h-3.5 mr-2" /> OpenAPI
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => copyToClipboard(JSON.stringify(samplePayload, null, 2), 'payload')} className="h-8 text-[11px] bg-background">
                       {copiedId === 'payload' ? <Check className="w-3.5 h-3.5 mr-2" /> : <Copy className="w-3.5 h-3.5 mr-2" />} JSON
