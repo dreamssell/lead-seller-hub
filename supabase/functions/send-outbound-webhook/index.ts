@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const { webhook_id, payload, is_test = false, idempotency_key = null } = await req.json();
+    const { webhook_id, payload, is_test = false, idempotency_key = null, request_id = crypto.randomUUID() } = await req.json();
 
     if (!webhook_id) throw new Error("Missing webhook_id");
 
@@ -97,6 +97,8 @@ Deno.serve(async (req) => {
     if (signature) {
       headers["X-Webhook-Signature"] = signature;
     }
+
+    headers["X-Request-ID"] = request_id;
 
     const startTime = Date.now();
     let responseStatus: number;
@@ -150,7 +152,8 @@ Deno.serve(async (req) => {
         status: isSuccess ? 'completed' : (webhook.max_retries > 0 ? 'pending_retry' : 'failed'),
         error_message: error_message,
         retry_count: 0,
-        timeout_limit: timeoutSeconds
+        timeout_limit: timeoutSeconds,
+        request_id: request_id
       });
 
       // Check for consecutive failures/timeouts
@@ -181,7 +184,8 @@ Deno.serve(async (req) => {
       latency,
       signature_preview: signature,
       error: error_message,
-      idempotency_key: finalIdempotencyKey
+      idempotency_key: finalIdempotencyKey,
+      request_id: request_id
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,

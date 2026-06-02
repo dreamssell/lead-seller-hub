@@ -60,6 +60,7 @@ interface WebhookLog {
   status?: string;
   error_message?: string;
   timeout_limit?: number;
+  request_id?: string;
 }
 
 const PAGE_SIZE = 10;
@@ -239,7 +240,17 @@ export default function WebhookLogsTab({ webhookId }: { webhookId: string }) {
                     exit={{ opacity: 0 }}
                     className="group hover:bg-secondary/10 transition-colors"
                   >
-                    <TableCell className="font-mono text-xs">{log.event_type}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      <div className="flex flex-col gap-1">
+                        <span>{log.event_type}</span>
+                        {log.request_id && (
+                          <div className="flex items-center gap-1 opacity-50 text-[9px] uppercase tracking-tighter">
+                            <span className="bg-primary/20 text-primary px-1 rounded-sm">REQ ID</span>
+                            <span className="truncate max-w-[80px]" title={log.request_id}>{log.request_id.split('-')[0]}</span>
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1.5">
                         <div className="flex items-center gap-2">

@@ -1071,6 +1071,7 @@ export type Database = {
           latency_ms: number | null
           method: string
           payload: Json | null
+          request_id: string | null
           response_body: string | null
           response_status: number | null
           retry_count: number | null
@@ -1089,6 +1090,7 @@ export type Database = {
           latency_ms?: number | null
           method: string
           payload?: Json | null
+          request_id?: string | null
           response_body?: string | null
           response_status?: number | null
           retry_count?: number | null
@@ -1107,6 +1109,7 @@ export type Database = {
           latency_ms?: number | null
           method?: string
           payload?: Json | null
+          request_id?: string | null
           response_body?: string | null
           response_status?: number | null
           retry_count?: number | null
