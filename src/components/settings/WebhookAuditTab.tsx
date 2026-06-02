@@ -21,7 +21,6 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-
 export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<{ total: number, hits: number, ratio: number } | null>(null);
@@ -162,11 +161,92 @@ export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
         <CleanupLogsView webhookId={webhookId} />
       </div>
 
-
       <div className="flex justify-center">
         <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={loadStats}>
           <RefreshCw className="w-3 h-3" /> Atualizar métricas
         </Button>
+      </div>
+    </div>
+  );
+}
+
+function KeysExpirationMonitor({ webhookId }: { webhookId: string }) {
+  const [keys, setKeys] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchKey, setSearchKey] = useState('');
+
+  const loadKeys = async () => {
+    setLoading(true);
+    const { data } = await supabase.rpc('get_idempotency_expiration_report', {
+      p_webhook_id: webhookId
+    });
+    setKeys((data as any)?.keys_near_expiration || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadKeys();
+  }, [webhookId]);
+
+  const filteredKeys = searchKey 
+    ? keys.filter(k => k.idempotency_key.toLowerCase().includes(searchKey.toLowerCase()))
+    : keys.slice(0, 5);
+
+  return (
+    <div className="space-y-4">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+        <Input 
+          placeholder="Consultar Idempotency-Key ativa..." 
+          className="pl-9 h-8 text-xs bg-background"
+          value={searchKey}
+          onChange={(e) => setSearchKey(e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-2">
+        {loading ? (
+          <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-primary/40" /></div>
+        ) : filteredKeys.length === 0 ? (
+          <p className="text-[10px] text-muted-foreground italic text-center py-2">Nenhuma chave encontrada.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-2">
+            {filteredKeys.map((k) => {
+              const expiresAt = new Date(k.expires_at);
+              const now = new Date();
+              const diffMs = expiresAt.getTime() - now.getTime();
+              const diffHours = Math.max(0, diffMs / (1000 * 60 * 60));
+              const isExpiringSoon = diffHours < 2;
+
+              return (
+                <div key={k.idempotency_key} className="flex items-center justify-between p-2 rounded-lg bg-secondary/30 border border-border/40">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-mono font-bold truncate max-w-[120px]" title={k.idempotency_key}>
+                      {k.idempotency_key}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground">{new Date(k.created_at).toLocaleTimeString()}</span>
+                  </div>
+                  
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-2">
+                          {isExpiringSoon && <AlertCircle className="w-3 h-3 text-amber-500 animate-pulse" />}
+                          <Badge variant={isExpiringSoon ? "destructive" : "secondary"} className="text-[9px] px-1.5 py-0">
+                            {diffHours.toFixed(1)}h
+                          </Badge>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-[10px]">Expira em: {expiresAt.toLocaleString()}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
