@@ -578,46 +578,49 @@ export default function OutboundWebhooksTab() {
                 </div>
               </div>
 
-              <div className="space-y-4 pt-4 border-t border-border/40">
+              <div className="flex flex-col gap-4 p-4 rounded-xl border border-destructive/20 bg-destructive/5">
                 <div className="flex items-center gap-2">
-                  <Badge className="bg-destructive/10 text-destructive border-none text-[9px] uppercase tracking-tighter">Alertas Automáticos</Badge>
-                  <Label className="text-sm font-bold">Monitoramento de Falhas</Label>
+                  <Badge className="bg-destructive/10 text-destructive border-none text-[9px] uppercase tracking-tighter">Regras de Alerta</Badge>
+                  <Label className="text-sm font-bold">Monitoramento de Instabilidade</Label>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-xs">Slack Webhook URL (Opcional)</Label>
+                    <Label className="text-[10px] text-muted-foreground uppercase">Slack Webhook URL (Destino por Endpoint)</Label>
                     <Input 
                       placeholder="https://hooks.slack.com/services/..." 
                       value={form.alert_slack_url} 
                       onChange={(e) => setForm({ ...form, alert_slack_url: e.target.value })}
-                      className="bg-secondary/10"
+                      className="bg-background border-destructive/10 focus-visible:ring-destructive/30 h-9"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs">E-mail para Alertas (Opcional)</Label>
+                    <Label className="text-[10px] text-muted-foreground uppercase">E-mail para Alertas (Destino por Endpoint)</Label>
                     <Input 
                       placeholder="dev@empresa.com" 
                       value={form.alert_email} 
                       onChange={(e) => setForm({ ...form, alert_email: e.target.value })}
-                      className="bg-secondary/10"
+                      className="bg-background border-destructive/10 focus-visible:ring-destructive/30 h-9"
                     />
                   </div>
                 </div>
                 
-                <div className="flex items-center gap-3">
-                  <div className="space-y-1 flex-1">
-                    <Label className="text-xs">Gatilho de Alerta</Label>
-                    <p className="text-[10px] text-muted-foreground">Número de falhas/timeouts consecutivos para disparar o alerta.</p>
+                <div className="flex items-center gap-4 pt-2">
+                  <div className="flex-1 space-y-0.5">
+                    <Label className="text-xs font-bold">Limiar de Alerta (Consecutivo)</Label>
+                    <p className="text-[10px] text-muted-foreground">O alerta será disparado especificamente para este destino após o número de falhas seguidas.</p>
                   </div>
-                  <Input 
-                    type="number" 
-                    min="1" 
-                    max="10" 
-                    value={form.alert_threshold} 
-                    onChange={(e) => setForm({ ...form, alert_threshold: parseInt(e.target.value) })}
-                    className="w-20"
-                  />
+                  <div className="flex items-center gap-2">
+                    <Input 
+                      type="number" 
+                      min="1" 
+                      max="20" 
+                      value={form.alert_threshold} 
+                      onChange={(e) => setForm({ ...form, alert_threshold: parseInt(e.target.value) })}
+                      className="w-16 h-8 text-center"
+                    />
+                    <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">Timeouts</span>
+                  </div>
                 </div>
               </div>
 
