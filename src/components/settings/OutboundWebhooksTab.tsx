@@ -62,6 +62,9 @@ interface Webhook {
   name: string;
   url: string;
   secret: string | null;
+  previous_secret: string | null;
+  secret_version: number;
+  last_rotated_at: string | null;
   api_key_id: string | null;
   events: string[];
   is_active: boolean;
@@ -98,6 +101,8 @@ export default function OutboundWebhooksTab() {
     name: '', 
     url: '', 
     secret: randomSecret(), 
+    previous_secret: null as string | null,
+    secret_version: 1,
     events: [] as string[],
     is_active: true
   });
@@ -125,6 +130,8 @@ export default function OutboundWebhooksTab() {
       name: '', 
       url: '', 
       secret: randomSecret(), 
+      previous_secret: null,
+      secret_version: 1,
       events: [],
       is_active: true
     });
@@ -138,6 +145,8 @@ export default function OutboundWebhooksTab() {
       name: webhook.name || '',
       url: webhook.url,
       secret: webhook.secret || '',
+      previous_secret: webhook.previous_secret,
+      secret_version: webhook.secret_version || 1,
       events: webhook.events || [],
       is_active: webhook.is_active
     });
@@ -174,6 +183,8 @@ export default function OutboundWebhooksTab() {
       name: form.name,
       url: form.url,
       secret: form.secret,
+      previous_secret: form.previous_secret,
+      secret_version: form.secret_version,
       events: form.events,
       is_active: form.is_active,
       created_by: user.id,
@@ -330,27 +341,88 @@ export default function OutboundWebhooksTab() {
                 <p className="text-[11px] text-muted-foreground">Onde enviaremos os dados quando os eventos ocorrerem</p>
               </div>
 
-              <div className="space-y-2">
-                <Label>Chave Secreta (HMAC Secret)</Label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Input 
-                      type={showSecret ? 'text' : 'password'} 
-                      value={form.secret} 
-                      onChange={(e) => setForm({ ...form, secret: e.target.value })} 
-                    />
-                    <button 
-                      onClick={() => setShowSecret((s) => !s)} 
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <Button variant="outline" onClick={() => setForm({ ...form, secret: randomSecret() })}>
-                    <RefreshCw className="w-4 h-4 mr-2" /> Gerar Novo
-                  </Button>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-bold">Segurança (HMAC)</Label>
+                  {selectedWebhook && (
+                    <Badge variant="outline" className="text-[10px]">
+                      Versão: {form.secret_version}
+                    </Badge>
+                  )}
                 </div>
-                <p className="text-[11px] text-muted-foreground">Use este secret para validar a assinatura no header X-Webhook-Signature</p>
+                
+                <div className="space-y-2">
+                  <Label className="text-xs">Chave Secreta Atual (Secret Key)</Label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Input 
+                        type={showSecret ? 'text' : 'password'} 
+                        value={form.secret} 
+                        readOnly
+                        className="bg-secondary/20"
+                      />
+                      <button 
+                        onClick={() => setShowSecret((s) => !s)} 
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        if (confirm('Deseja rotacionar o segredo? O segredo atual será mantido como "anterior" para evitar interrupções.')) {
+                          setForm({ 
+                            ...form, 
+                            previous_secret: form.secret,
+                            secret: randomSecret(),
+                            secret_version: form.secret_version + 1
+                          });
+                          toast({ title: 'Segredo rotacionado', description: 'Salve as alterações para aplicar.' });
+                        }
+                      }}
+                    >
+                      <RotateCcw className="w-4 h-4 mr-2" /> Rotacionar
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Onde enviaremos os dados quando os eventos ocorrerem</p>
+                </div>
+
+                {form.previous_secret && (
+                  <div className="space-y-2 opacity-60">
+                    <Label className="text-xs">Chave Secreta Anterior (Transition Key)</Label>
+                    <div className="flex gap-2">
+                      <Input 
+                        type="password" 
+                        value={form.previous_secret} 
+                        readOnly
+                        className="bg-secondary/10"
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic">Mantida para validar eventos em cache ou em trânsito durante a rotação.</p>
+                  </div>
+                )}
+
+                <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 space-y-3">
+                  <div className="flex items-center gap-2 text-primary">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span className="text-xs font-bold uppercase tracking-wider">Prévia dos Headers de Assinatura</span>
+                  </div>
+                  <div className="space-y-1 font-mono text-[10px]">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">X-Webhook-Signature:</span>
+                      <span className="text-foreground">sha256={"{hash_calculado}"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">X-Webhook-Timestamp:</span>
+                      <span className="text-foreground">{Math.floor(Date.now() / 1000)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">X-Webhook-Version:</span>
+                      <span className="text-foreground">v{form.secret_version}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-4">
