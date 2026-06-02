@@ -8,7 +8,9 @@ import {
   Loader2,
   RefreshCw,
   ZapOff,
-  History
+  History,
+  Clock,
+  Search
 } from 'lucide-react';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -16,6 +18,8 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
   const [loading, setLoading] = useState(true);
@@ -144,16 +148,14 @@ export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="glass-card p-6 bg-secondary/10 border-dashed">
-          <div className="flex items-start gap-4">
-            <ZapOff className="w-10 h-10 text-muted-foreground/30" />
-            <div className="space-y-1">
-              <h4 className="text-sm font-bold">Por que isso é importante?</h4>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                O monitoramento de idempotência garante que seu sistema não processe a mesma requisição múltiplas vezes devido a retentativas de rede. 
-              </p>
+        <div className="glass-card p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-primary" />
+              <h3 className="text-sm font-bold">Monitor de TTL das Chaves</h3>
             </div>
           </div>
+          <KeysExpirationMonitor webhookId={webhookId} />
         </div>
 
         <CleanupLogsView webhookId={webhookId} />
@@ -163,6 +165,88 @@ export default function WebhookAuditTab({ webhookId }: { webhookId: string }) {
         <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" onClick={loadStats}>
           <RefreshCw className="w-3 h-3" /> Atualizar métricas
         </Button>
+      </div>
+    </div>
+  );
+}
+
+function KeysExpirationMonitor({ webhookId }: { webhookId: string }) {
+  const [keys, setKeys] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchKey, setSearchKey] = useState('');
+
+  const loadKeys = async () => {
+    setLoading(true);
+    const { data } = await supabase.rpc('get_idempotency_expiration_report', {
+      p_webhook_id: webhookId
+    });
+    setKeys((data as any)?.keys_near_expiration || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadKeys();
+  }, [webhookId]);
+
+  const filteredKeys = searchKey 
+    ? keys.filter(k => k.idempotency_key.toLowerCase().includes(searchKey.toLowerCase()))
+    : keys.slice(0, 5);
+
+  return (
+    <div className="space-y-4">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+        <Input 
+          placeholder="Consultar Idempotency-Key ativa..." 
+          className="pl-9 h-8 text-xs bg-background"
+          value={searchKey}
+          onChange={(e) => setSearchKey(e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-2">
+        {loading ? (
+          <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-primary/40" /></div>
+        ) : filteredKeys.length === 0 ? (
+          <p className="text-[10px] text-muted-foreground italic text-center py-2">Nenhuma chave encontrada.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-2">
+            {filteredKeys.map((k) => {
+              const expiresAt = new Date(k.expires_at);
+              const now = new Date();
+              const diffMs = expiresAt.getTime() - now.getTime();
+              const diffHours = Math.max(0, diffMs / (1000 * 60 * 60));
+              const isExpiringSoon = diffHours < 2;
+
+              return (
+                <div key={k.idempotency_key} className="flex items-center justify-between p-2 rounded-lg bg-secondary/30 border border-border/40">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-mono font-bold truncate max-w-[120px]" title={k.idempotency_key}>
+                      {k.idempotency_key}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground">{new Date(k.created_at).toLocaleTimeString()}</span>
+                  </div>
+                  
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-2">
+                          {isExpiringSoon && <AlertCircle className="w-3 h-3 text-amber-500 animate-pulse" />}
+                          <Badge variant={isExpiringSoon ? "destructive" : "secondary"} className="text-[9px] px-1.5 py-0">
+                            {diffHours.toFixed(1)}h
+                          </Badge>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-[10px]">Expira em: {expiresAt.toLocaleString()}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
