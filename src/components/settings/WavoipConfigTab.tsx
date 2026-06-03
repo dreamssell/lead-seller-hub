@@ -99,6 +99,7 @@ export default function WavoipConfigPage() {
     email: false,
     webhook: false
   });
+  const [alertThreshold, setAlertThreshold] = useState(60); // Segundos
   const [wsStatus, setWsStatus] = useState<'connected' | 'reconnecting' | 'offline'>('connected');
   const [wsBackoff, setWsBackoff] = useState({
     min: 1000,
@@ -258,13 +259,57 @@ export default function WavoipConfigPage() {
 
   // Deduplicação e Reconexão via Supabase Realtime
   useEffect(() => {
+    const loadPersistedConfig = async () => {
+      if (!access?.sub_company_id) return;
+      
+      const { data: settings } = await supabase
+        .from('wavoip_settings')
+        .select('*')
+        .eq('sub_company_id', access.sub_company_id)
+        .single();
+        
+      if (settings) {
+        setAlertChannels(settings.alert_channels);
+        setWsBackoff(settings.ws_backoff);
+        setAlertThreshold(settings.alert_threshold_seconds);
+      }
+
+      const { data: syncState } = await supabase
+        .from('wavoip_sync_state')
+        .select('*')
+        .eq('sub_company_id', access.sub_company_id)
+        .single();
+        
+      if (syncState) {
+        setDedupWindow(syncState.dedup_window as any);
+        // Em um cenário real, recarregaríamos as chaves recentes aqui se necessário
+      }
+    };
+
+    loadPersistedConfig();
+  }, [access?.sub_company_id]);
+
+  useEffect(() => {
     if (!isLive) return;
 
     let reconnectTimeout: ReturnType<typeof setTimeout>;
     let retryCount = 0;
+    let offlineTimer: ReturnType<typeof setTimeout>;
 
     const setupChannel = () => {
       setWsStatus('reconnecting');
+      
+      // Monitor de tempo offline
+      clearTimeout(offlineTimer);
+      offlineTimer = setTimeout(() => {
+        if (isAlertEnabled) {
+          toast.error(`WebSocket em falha por mais de ${alertThreshold}s. Verifique sua conexão.`, {
+            icon: <AlertCircle className="w-4 h-4" />,
+            duration: 10000
+          });
+        }
+      }, alertThreshold * 1000);
+
       const channel = supabase.channel('wavoip-events', {
         config: {
           broadcast: { self: false },
@@ -297,6 +342,16 @@ export default function WavoipConfigPage() {
             payloadHash: payload.payloadHash || ((payload as any).type === 'Security' ? 'sha256:generated...' : undefined)
           };
           
+          // Persistir estado de deduplicação no backend
+          if (access?.sub_company_id) {
+            const currentKeys = prev.slice(0, 10).map(h => h.id.toString());
+            supabase.from('wavoip_sync_state').upsert({
+              sub_company_id: access.sub_company_id,
+              dedup_window: dedupWindow,
+              recent_event_keys: [eventId.toString(), ...currentKeys]
+            }).then();
+          }
+
           return [newEvent, ...prev].sort((a, b) => 
             new Date(b.date).getTime() - new Date(a.date).getTime()
           ).slice(0, 50);
@@ -650,6 +705,15 @@ export default function WavoipConfigPage() {
                         onCheckedChange={(checked) => setAlertChannels({...alertChannels, webhook: !!checked})} 
                       />
                     </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px]">Limite Alerta Inatividade (s)</Label>
+                      <Input 
+                        type="number" 
+                        value={alertThreshold} 
+                        onChange={e => setAlertThreshold(Number(e.target.value))}
+                        className="h-8 text-xs"
+                      />
+                    </div>
                     <Separator />
                     <div className="flex items-center justify-between">
                       <Label className="text-xs font-bold">Ativar Geral</Label>
@@ -657,7 +721,17 @@ export default function WavoipConfigPage() {
                         variant={isAlertEnabled ? "default" : "outline"} 
                         size="sm" 
                         className="h-7 text-[10px]"
-                        onClick={() => setIsAlertEnabled(!isAlertEnabled)}
+                        onClick={() => {
+                          const newVal = !isAlertEnabled;
+                          setIsAlertEnabled(newVal);
+                          if (access?.sub_company_id) {
+                            supabase.from('wavoip_settings').upsert({
+                              sub_company_id: access.sub_company_id,
+                              alert_channels: alertChannels,
+                              alert_threshold_seconds: alertThreshold
+                            }).then();
+                          }
+                        }}
                       >
                         {isAlertEnabled ? 'Ativo' : 'Pausado'}
                       </Button>
