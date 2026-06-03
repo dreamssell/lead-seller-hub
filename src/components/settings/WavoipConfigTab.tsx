@@ -21,7 +21,10 @@ import {
   Lock,
   Bell,
   Navigation,
-  ArrowRight
+  ArrowRight,
+  ArrowUpDown,
+  Terminal,
+  CirclePlay
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -465,28 +468,59 @@ export default function WavoipConfigPage() {
             />
           </div>
 
-          {routingTestResult !== 'none' && (
-            <div className={`md:col-span-2 p-3 rounded-lg flex items-center gap-3 text-xs ${
-              routingTestResult === 'success' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 'bg-red-500/10 text-red-600 border border-red-500/20'
+          {routingTestResult.status !== 'none' && (
+            <div className={`md:col-span-2 p-4 rounded-xl space-y-3 border ${
+              routingTestResult.status === 'success' 
+              ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-700' 
+              : 'bg-red-500/5 border-red-500/20 text-red-700'
             }`}>
-              {routingTestResult === 'success' ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  <div className="flex items-center gap-2">
-                    <span>{form.origin}</span>
-                    <ArrowRight className="w-3 h-3" />
-                    <span>{form.destination}</span>
-                    <span className="font-bold ml-2">Caminho Válido</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-tight">
+                  <Terminal className="w-3.5 h-3.5" />
+                  Logs de Execução do Teste
+                </div>
+                <Badge 
+                  variant="outline" 
+                  className={`text-[9px] ${
+                    routingTestResult.status === 'success' 
+                    ? 'border-emerald-500/30 text-emerald-600' 
+                    : 'border-red-500/30 text-red-600'
+                  }`}
+                >
+                  {routingTestResult.status === 'success' ? 'PASSED' : 'FAILED'}
+                </Badge>
+              </div>
+              
+              <div className="bg-black/5 rounded-lg p-3 font-mono text-[10px] space-y-1">
+                {routingTestResult.logs.map((log, i) => (
+                  <div key={i} className="flex gap-2">
+                    <span className="opacity-40">[{i+1}]</span>
+                    <span>{log}</span>
                   </div>
-                </>
-              ) : (
-                <>
-                  <AlertCircle className="w-4 h-4" />
-                  <span>Erro na validação do caminho de voz. Verifique as permissões do ramal.</span>
-                </>
-              )}
+                ))}
+              </div>
+
+              <div className="flex items-center gap-3 text-xs pt-1">
+                {routingTestResult.status === 'success' ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <span className="truncate">{form.origin}</span>
+                      <ArrowRight className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{form.destination}</span>
+                      <span className="font-bold ml-1 shrink-0">Caminho Válido</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span className="font-medium">{routingTestResult.details}</span>
+                  </>
+                )}
+              </div>
             </div>
           )}
+
 
           <div className="md:col-span-2 space-y-2 pt-2">
             <Label className="flex items-center gap-2">
@@ -690,13 +724,22 @@ export default function WavoipConfigPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent border-border/40">
-                <TableHead className="w-[180px] text-[10px] uppercase font-bold tracking-wider">Data/Hora</TableHead>
+                <TableHead className="w-[180px] text-[10px] uppercase font-bold tracking-wider">
+                  <button 
+                    className="flex items-center gap-1 hover:text-primary transition-colors"
+                    onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+                  >
+                    Data/Hora
+                    <ArrowUpDown className="w-3 h-3" />
+                  </button>
+                </TableHead>
                 <TableHead className="w-[100px] text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
                 <TableHead className="w-[100px] text-[10px] uppercase font-bold tracking-wider">Tipo</TableHead>
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider">Resultado/Mensagem</TableHead>
                 <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider">Ação</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {paginatedHistory.map((item) => (
                 <TableRow key={item.id} className="border-border/40 hover:bg-secondary/10 transition-colors">
