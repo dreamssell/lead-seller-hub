@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CheckCircle2, Loader2, Plug, RefreshCw, ShieldCheck, XCircle, History, Activity, Zap, Clock, LineChart as LineChartIcon, AlertTriangle, Settings, ChevronLeft, ChevronRight, MessageCircle, BarChart3, Filter, ExternalLink, Eye, AlertOctagon, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, Plug, RefreshCw, ShieldCheck, XCircle, History, Activity, Zap, Clock, LineChart as LineChartIcon, AlertTriangle, Settings, ChevronLeft, ChevronRight, MessageCircle, BarChart3, Filter, ExternalLink, Eye, AlertOctagon, AlertCircle, Download, FileJson, FileSpreadsheet, Copy } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import UazAuditTab from '@/components/settings/UazAuditTab';
@@ -210,6 +210,61 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
     if (data) setSubCompanies(data);
   };
 
+  const exportQueueToCSV = () => {
+    if (!queueStats.trend || queueStats.trend.length === 0) {
+      toast.error('Sem dados para exportar');
+      return;
+    }
+
+    const headers = ['Horário', 'Timestamp', 'Mensagens Pendentes', 'Tenant', 'Canal'];
+    const rows = queueStats.trend.map(point => [
+      point.time,
+      point.timestamp,
+      point.pending,
+      filterTenant === 'all' ? 'Todos' : subCompanies.find(c => c.id === filterTenant)?.name || filterTenant,
+      filterChannel.toUpperCase()
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `uaz_queue_metrics_${filterTenant}_${filterChannel}_${new Date().toISOString()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Métricas exportadas em CSV');
+  };
+
+  const exportLogToJSON = (log: any) => {
+    const exportData = {
+      id: log.id,
+      event_type: log.event_type,
+      status: log.status,
+      created_at: log.created_at,
+      latency_ms: log.latency_ms,
+      payload: log.payload,
+      response: log.response,
+      final_cause: log.final_cause,
+      full_trace: log.full_trace
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `uaz_log_${log.id}_${new Date().getTime()}.json`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Log exportado em JSON');
+  };
+
   const handleChartClick = async (data: any) => {
     if (!data || !data.activePayload || data.activePayload.length === 0) return;
     
@@ -341,7 +396,18 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
 
                   <div className="bg-secondary/20 p-3 rounded-xl border border-border/40 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase">Fila de Mensagens</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase">Fila de Mensagens</span>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-5 w-5 text-muted-foreground hover:text-primary" 
+                          onClick={exportQueueToCSV}
+                          title="Exportar métricas em CSV"
+                        >
+                          <FileSpreadsheet className="w-3 h-3" />
+                        </Button>
+                      </div>
                       <div className="flex gap-2">
                         <select value={filterTenant} onChange={(e) => setFilterTenant(e.target.value)} className="bg-background border border-border/40 rounded px-2 py-0.5 text-[9px] font-bold">
                           <option value="all">Todas Empresas</option>
@@ -373,7 +439,34 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
 
                   <div className="bg-secondary/20 p-3 rounded-xl border border-border/40">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase">Latência Histórica</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase">Latência Histórica</span>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-5 w-5 text-muted-foreground hover:text-primary" 
+                          onClick={() => {
+                            if (!latencyHistory || latencyHistory.length === 0) {
+                              toast.error('Sem dados para exportar');
+                              return;
+                            }
+                            const headers = ['Horário', 'Latência (ms)'];
+                            const csvContent = [headers.join(','), ...latencyHistory.map(p => [p.time, p.latency].join(','))].join('\n');
+                            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.setAttribute('href', url);
+                            link.setAttribute('download', `uaz_latency_${latencyPeriod}_${new Date().getTime()}.csv`);
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            toast.success('Latência exportada em CSV');
+                          }}
+                          title="Exportar latência em CSV"
+                        >
+                          <FileSpreadsheet className="w-3 h-3" />
+                        </Button>
+                      </div>
                       <div className="flex gap-1">
                         {(['24h', '7d', '30d'] as const).map(p => (
                           <Button key={p} variant={latencyPeriod === p ? 'default' : 'ghost'} size="sm" className="h-5 px-1.5 text-[8px]" onClick={() => setLatencyPeriod(p)}>{p.toUpperCase()}</Button>
@@ -544,6 +637,28 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
                   <pre className="mt-1 p-2 bg-secondary/50 rounded-md text-[10px] overflow-auto max-h-[200px] font-mono border border-border/40">
                     {JSON.stringify(selectedDetailLog?.response, null, 2)}
                   </pre>
+                </div>
+
+                <div className="pt-2 flex justify-end gap-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 text-[10px] gap-1.5"
+                    onClick={() => {
+                      navigator.clipboard.writeText(JSON.stringify(selectedDetailLog, null, 2));
+                      toast.success('Log copiado para a área de transferência');
+                    }}
+                  >
+                    <Copy className="w-3 h-3" /> Copiar JSON
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 text-[10px] gap-1.5"
+                    onClick={() => exportLogToJSON(selectedDetailLog)}
+                  >
+                    <FileJson className="w-3 h-3" /> Baixar JSON
+                  </Button>
                 </div>
 
                 {selectedDetailLog?.full_trace && (
