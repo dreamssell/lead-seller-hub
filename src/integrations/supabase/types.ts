@@ -1339,6 +1339,87 @@ export type Database = {
         }
         Relationships: []
       }
+      wavoip_audit_logs: {
+        Row: {
+          id: string
+          is_replay: boolean | null
+          message: string | null
+          metadata: Json | null
+          payload_hash: string | null
+          replay_source_id: string | null
+          replay_timestamp: string | null
+          replay_user_id: string | null
+          request_id: string | null
+          status: string
+          sub_company_id: string
+          timestamp: string | null
+          type: string
+          version: string | null
+        }
+        Insert: {
+          id?: string
+          is_replay?: boolean | null
+          message?: string | null
+          metadata?: Json | null
+          payload_hash?: string | null
+          replay_source_id?: string | null
+          replay_timestamp?: string | null
+          replay_user_id?: string | null
+          request_id?: string | null
+          status: string
+          sub_company_id: string
+          timestamp?: string | null
+          type: string
+          version?: string | null
+        }
+        Update: {
+          id?: string
+          is_replay?: boolean | null
+          message?: string | null
+          metadata?: Json | null
+          payload_hash?: string | null
+          replay_source_id?: string | null
+          replay_timestamp?: string | null
+          replay_user_id?: string | null
+          request_id?: string | null
+          status?: string
+          sub_company_id?: string
+          timestamp?: string | null
+          type?: string
+          version?: string | null
+        }
+        Relationships: []
+      }
+      wavoip_filter_presets: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          filters: Json
+          id: string
+          name: string
+          sub_company_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          filters: Json
+          id?: string
+          name: string
+          sub_company_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          filters?: Json
+          id?: string
+          name?: string
+          sub_company_id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       wavoip_settings: {
         Row: {
           alert_channels: Json | null
