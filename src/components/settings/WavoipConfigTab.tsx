@@ -87,12 +87,15 @@ export default function WavoipConfigPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [isAlertEnabled, setIsAlertEnabled] = useState(true);
+  const [wsStatus, setWsStatus] = useState<'connected' | 'reconnecting' | 'offline'>('connected');
+  const [dedupWindow, setDedupWindow] = useState<5 | 15 | 60>(5);
   const [routingTestResult, setRoutingTestResult] = useState<{
     status: 'success' | 'error' | 'none';
     details: string;
     logs: string[];
   }>({ status: 'none', details: '', logs: [] });
   const itemsPerPage = 5;
+
 
 
 
