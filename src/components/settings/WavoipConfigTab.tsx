@@ -754,8 +754,8 @@ export default function WavoipConfigPage() {
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                 <Input 
-                  placeholder="Buscar logs..." 
-                  className="pl-8 h-8 text-[10px] w-40"
+                  placeholder="Buscar logs ou segredos..." 
+                  className="pl-8 h-8 text-[10px] w-48"
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                 />
