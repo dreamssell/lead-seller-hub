@@ -125,6 +125,21 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
   const [resendingLast, setResendingLast] = useState(false);
 
   useEffect(() => {
+    // Reload queue when filters change
+    const loadQueue = async () => {
+      setLoadingQueue(true);
+      const { data } = await supabase.functions.invoke('uaz-queue-stats', {
+        body: { tenant_id: filterTenant === 'all' ? null : filterTenant, channel_type: filterChannel === 'all' ? null : filterChannel }
+      });
+      if (data) setQueueStats(data);
+      setLoadingQueue(false);
+    };
+    if (conn.provider === 'uaz' && conn.status === 'connected') {
+      loadQueue();
+    }
+  }, [filterTenant, filterChannel, conn.id, conn.status]);
+
+  useEffect(() => {
     if (conn.provider === 'uaz' && conn.status === 'connected') {
       const loadMetrics = async () => {
         const { data: recentLogs } = await supabase
