@@ -63,6 +63,7 @@ export default function WavoipConfigPage() {
   }>({ status: 'none', timestamp: null, message: '' });
 
   const [filterStatus, setFilterStatus] = useState<'all' | 'success' | 'error'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'API' | 'Webhook' | 'Security' | 'Routing'>('all');
   const [filterPeriod, setFilterPeriod] = useState<'today' | '7d' | '30d' | 'all'>('all');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [searchTerm, setSearchTerm] = useState('');
@@ -74,6 +75,7 @@ export default function WavoipConfigPage() {
     logs: string[];
   }>({ status: 'none', details: '', logs: [] });
   const itemsPerPage = 5;
+
 
 
   const [history, setHistory] = useState([
@@ -89,6 +91,7 @@ export default function WavoipConfigPage() {
 
   const filteredHistory = history.filter(item => {
     const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
+    const matchesType = filterType === 'all' || item.type === filterType;
     const matchesSearch = item.message.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          (item.type && item.type.toLowerCase().includes(searchTerm.toLowerCase()));
     
@@ -106,8 +109,9 @@ export default function WavoipConfigPage() {
       matchesPeriod = itemDate >= thirtyDaysAgo;
     }
 
-    return matchesStatus && matchesSearch && matchesPeriod;
+    return matchesStatus && matchesType && matchesSearch && matchesPeriod;
   }).sort((a, b) => {
+
     const dateA = new Date(a.date).getTime();
     const dateB = new Date(b.date).getTime();
     return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
@@ -221,7 +225,17 @@ export default function WavoipConfigPage() {
         logs: isOk ? logs : [...logs, 'ERRO: Permissão de discagem negada pelo gateway.']
       });
       
+      const timestamp = new Date().toLocaleString();
+      setHistory(prev => [{
+        id: Date.now(),
+        date: timestamp,
+        status: isOk ? 'success' : 'error',
+        type: 'Routing',
+        message: `Teste de roteamento manual: ${isOk ? 'PASSED' : 'FAILED'} (${form.origin} -> ${form.destination})`
+      }, ...prev]);
+
       setTesting(false);
+
       
       if (isOk) {
         toast.success('Roteamento validado com asserts automatizados!');
@@ -724,6 +738,20 @@ export default function WavoipConfigPage() {
               </div>
               <select 
                 className="h-8 text-[10px] rounded-md border border-input bg-background px-2"
+                value={filterType}
+                onChange={e => {
+                  setFilterType(e.target.value as any);
+                  setCurrentPage(1);
+                }}
+              >
+                <option value="all">Tipos: Tudo</option>
+                <option value="API">API</option>
+                <option value="Webhook">Webhooks</option>
+                <option value="Security">Segurança</option>
+                <option value="Routing">Roteamento</option>
+              </select>
+              <select 
+                className="h-8 text-[10px] rounded-md border border-input bg-background px-2"
                 value={filterPeriod}
                 onChange={e => {
                   setFilterPeriod(e.target.value as any);
@@ -748,6 +776,7 @@ export default function WavoipConfigPage() {
                 <option value="error">Falhas</option>
               </select>
             </div>
+
           </div>
         </CardHeader>
         <CardContent className="p-0">
