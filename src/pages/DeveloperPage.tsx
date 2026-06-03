@@ -137,7 +137,7 @@ export default function DeveloperPage() {
                 </button>
 
                 <button
-                  onClick={() => navigate('/docs')}
+                  onClick={() => navigate('/documentation')}
                   className="w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 text-muted-foreground hover:text-foreground hover:bg-secondary group"
                 >
                   <div className="p-2 rounded-lg bg-secondary">

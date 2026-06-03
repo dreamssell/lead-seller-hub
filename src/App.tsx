@@ -72,7 +72,7 @@ const App = () => (
               <Route path="/cadastros" element={<ProtectedRoute><CadastrosPage /></ProtectedRoute>} />
               <Route path="/ceo" element={<ProtectedRoute><CEODashboardPage /></ProtectedRoute>} />
               <Route path="/status" element={<ProtectedRoute><BackendStatusPage /></ProtectedRoute>} />
-              <Route path="/documentation" element={<ProtectedRoute><DocumentationPage /></ProtectedRoute>} />
+              <Route path="/documentation" element={<ProtectedRoute pageKey="documentation"><DocumentationPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             </VoipProvider>
