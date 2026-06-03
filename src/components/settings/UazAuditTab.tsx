@@ -91,6 +91,25 @@ export default function UazAuditTab() {
 
   return (
     <div className="space-y-4">
+      {new URLSearchParams(window.location.search).get('logId') && (
+        <div className="flex items-center justify-between bg-primary/10 p-3 rounded-lg border border-primary/20">
+          <p className="text-xs text-primary font-medium flex items-center gap-2">
+            <Filter className="w-3 h-3" /> Filtrando por log específico
+          </p>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-6 text-[10px] hover:bg-primary/20"
+            onClick={() => {
+              window.history.replaceState(null, '', window.location.pathname);
+              loadLogs();
+            }}
+          >
+            Limpar Filtros
+          </Button>
+        </div>
+      )}
+
       <div className="flex flex-col gap-4 bg-secondary/20 p-4 rounded-xl border border-border/40">
         <div className="flex items-center gap-4">
           <div className="relative flex-1">
