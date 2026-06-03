@@ -177,30 +177,109 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {conn.provider === 'uaz' && conn.status === 'connected' && metrics && (
-          <div className="grid grid-cols-3 gap-2 mb-2">
-            <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Activity className="w-3 h-3 text-primary" />
-                <span className="text-[10px] font-bold text-muted-foreground uppercase">Sessões</span>
+        {conn.provider === 'uaz' && conn.status === 'connected' && (
+          <div className="space-y-4">
+            {metrics && (
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Activity className="w-3 h-3 text-primary" />
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase">Sessões</span>
+                  </div>
+                  <p className="text-sm font-bold">{metrics.sessions}</p>
+                </div>
+                <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Zap className="w-3 h-3 text-amber-500" />
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase">Latência</span>
+                  </div>
+                  <p className="text-sm font-bold">{metrics.latency}ms</p>
+                </div>
+                <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Clock className="w-3 h-3 text-emerald-500" />
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase">Sync</span>
+                  </div>
+                  <p className="text-sm font-bold truncate">
+                    {metrics.lastSync ? new Date(metrics.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
+                  </p>
+                </div>
               </div>
-              <p className="text-sm font-bold">{metrics.sessions}</p>
-            </div>
-            <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Zap className="w-3 h-3 text-amber-500" />
-                <span className="text-[10px] font-bold text-muted-foreground uppercase">Latência</span>
+            )}
+
+            <div className="bg-secondary/20 p-3 rounded-xl border border-border/40">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <LineChartIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Histórico de Latência</span>
+                </div>
+                <div className="flex bg-background/50 p-0.5 rounded-md border border-border/40">
+                  {(['24h', '7d', '30d'] as const).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setLatencyPeriod(p)}
+                      className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all ${
+                        latencyPeriod === p 
+                          ? 'bg-primary text-primary-foreground shadow-sm' 
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {p.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <p className="text-sm font-bold">{metrics.latency}ms</p>
-            </div>
-            <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Clock className="w-3 h-3 text-emerald-500" />
-                <span className="text-[10px] font-bold text-muted-foreground uppercase">Sync</span>
+
+              <div className="h-[120px] w-full">
+                {loadingHistory ? (
+                  <div className="h-full flex items-center justify-center">
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : latencyHistory.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={latencyHistory}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                      <XAxis 
+                        dataKey="time" 
+                        fontSize={8} 
+                        tickLine={false} 
+                        axisLine={false} 
+                        stroke="#888888"
+                        interval="preserveStartEnd"
+                        minTickGap={20}
+                      />
+                      <YAxis 
+                        fontSize={8} 
+                        tickLine={false} 
+                        axisLine={false} 
+                        stroke="#888888"
+                        tickFormatter={(v) => `${v}ms`}
+                      />
+                      <RechartsTooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'rgba(23, 23, 23, 0.95)', 
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: '8px',
+                          fontSize: '10px'
+                        }}
+                        itemStyle={{ color: '#10b981' }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="latency" 
+                        stroke="#10b981" 
+                        strokeWidth={2} 
+                        dot={false}
+                        activeDot={{ r: 4, fill: '#10b981' }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-[10px] text-muted-foreground italic">
+                    Sem dados de latência no período.
+                  </div>
+                )}
               </div>
-              <p className="text-sm font-bold truncate">
-                {metrics.lastSync ? new Date(metrics.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
-              </p>
             </div>
           </div>
         )}
