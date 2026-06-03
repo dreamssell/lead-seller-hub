@@ -102,7 +102,9 @@ export default function WavoipConfigPage() {
     webhook: false
   });
   const [alertThreshold, setAlertThreshold] = useState(60); // Segundos
+  const [securityAlertLimit, setSecurityAlertLimit] = useState(5); // Limite de assinaturas inválidas
   const [wsStatus, setWsStatus] = useState<'connected' | 'reconnecting' | 'offline'>('connected');
+  const [isWsLoading, setIsWsLoading] = useState(false);
   const [wsBackoff, setWsBackoff] = useState({
     min: 1000,
     max: 30000,
@@ -284,6 +286,7 @@ export default function WavoipConfigPage() {
         if (settings.alert_channels) setAlertChannels(settings.alert_channels as any);
         if (settings.ws_backoff) setWsBackoff(settings.ws_backoff as any);
         if (settings.alert_threshold_seconds) setAlertThreshold(settings.alert_threshold_seconds);
+        if ((settings as any).security_alert_limit) setSecurityAlertLimit((settings as any).security_alert_limit);
       }
 
       const { data: syncState } = await supabase
@@ -304,6 +307,7 @@ export default function WavoipConfigPage() {
   useEffect(() => {
     if (!isLive) return;
 
+    setIsWsLoading(true);
     let reconnectTimeout: ReturnType<typeof setTimeout>;
     let retryCount = 0;
     let offlineTimer: ReturnType<typeof setTimeout>;
@@ -328,6 +332,13 @@ export default function WavoipConfigPage() {
         }
       })
       .on('broadcast', { event: 'log' }, (payload) => {
+        // Sincronizar Live com Filtro de Período
+        if (filterPeriod !== 'all') {
+          const now = new Date();
+          if (filterPeriod === 'today' && new Date(payload.date || now).toDateString() !== now.toDateString()) return;
+          // Adicionar outras lógicas de período se necessário
+        }
+
         const timestamp = new Date().toLocaleString();
         
         // Deduplicação dinâmica baseada na janela selecionada
@@ -372,6 +383,14 @@ export default function WavoipConfigPage() {
         if (payload.status === 'error' && isAlertEnabled) {
           const isSecurity = (payload as any).type === 'Security';
           
+          // Alerta automático por limite de segurança
+          if (isSecurity && securityIncidents.length >= securityAlertLimit) {
+            toast.error(`CRÍTICO: Limite de incidentes de segurança atingido (${securityIncidents.length})`, {
+              description: 'Múltiplas falhas de assinatura detectadas no período.',
+              duration: 10000
+            });
+          }
+
           if (alertChannels.visual) {
             toast.error(`${isSecurity ? 'Incidente de Segurança' : 'Alerta Wavoip'}: ${payload.message}`, {
               icon: <ShieldAlert className="w-4 h-4 text-red-500" />,
@@ -393,6 +412,7 @@ export default function WavoipConfigPage() {
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           setWsStatus('connected');
+          setIsWsLoading(false);
           retryCount = 0;
           clearTimeout(offlineTimer);
           
@@ -428,7 +448,7 @@ export default function WavoipConfigPage() {
       clearTimeout(reconnectTimeout);
       clearTimeout(offlineTimer);
     };
-  }, [isLive, isAlertEnabled, alertThreshold, access?.sub_company_id, wsBackoff.max, wsBackoff.maxAttempts, wsBackoff.min]);
+  }, [isLive, isAlertEnabled, alertThreshold, access?.sub_company_id, wsBackoff.max, wsBackoff.maxAttempts, wsBackoff.min, filterPeriod, securityAlertLimit]);
 
 
   const handleRoutingTest = async () => {
@@ -734,6 +754,15 @@ export default function WavoipConfigPage() {
                         type="number" 
                         value={alertThreshold} 
                         onChange={e => setAlertThreshold(Number(e.target.value))}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px]">Limite Incidentes Segurança</Label>
+                      <Input 
+                        type="number" 
+                        value={securityAlertLimit} 
+                        onChange={e => setSecurityAlertLimit(Number(e.target.value))}
                         className="h-8 text-xs"
                       />
                     </div>
@@ -1138,13 +1167,29 @@ export default function WavoipConfigPage() {
                   variant="ghost" 
                   size="sm" 
                   className={`h-8 text-[10px] gap-2 ${isLive ? 'text-emerald-500 hover:text-emerald-600 bg-emerald-500/5' : 'text-muted-foreground'}`}
-                  onClick={() => setIsLive(!isLive)}
+                  onClick={() => {
+                    if (isWsLoading) return;
+                    setIsLive(!isLive);
+                  }}
+                  disabled={isWsLoading}
                 >
-                  <div className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
+                  {isWsLoading ? <Loader2 className="w-1.5 h-1.5 animate-spin" /> : (
+                    <div className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
+                  )}
                   {isLive ? 'Live' : 'Pausado'}
                 </Button>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  <Button 
+                    variant={filterType === 'Security' ? "default" : "outline"} 
+                    size="sm" 
+                    className="h-7 text-[9px] gap-1 px-2 border-red-500/20 text-red-600 hover:bg-red-500/5"
+                    onClick={() => setFilterType(filterType === 'Security' ? 'all' : 'Security')}
+                  >
+                    <ShieldAlert className="w-3 h-3" />
+                    Somente Segurança
+                  </Button>
+                  <Separator orientation="vertical" className="h-4 mx-1" />
                   <Button 
                     variant="ghost" 
                     size="sm" 
