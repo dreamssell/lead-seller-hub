@@ -1018,6 +1018,7 @@ export default function WavoipConfigPage() {
 
           </div>
         </CardHeader>
+
         <CardContent className="p-0">
           <Table>
             <TableHeader>
