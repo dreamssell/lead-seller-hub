@@ -9,7 +9,10 @@ import {
   XCircle,
   Zap,
   Filter,
-  BarChart3
+  BarChart3,
+  Settings2,
+  Building,
+  History
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
