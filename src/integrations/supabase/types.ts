@@ -1075,6 +1075,8 @@ export type Database = {
         Row: {
           created_at: string
           event_type: string
+          final_cause: string | null
+          full_trace: Json | null
           id: string
           is_remediation: boolean | null
           latency_ms: number | null
@@ -1087,6 +1089,8 @@ export type Database = {
         Insert: {
           created_at?: string
           event_type: string
+          final_cause?: string | null
+          full_trace?: Json | null
           id?: string
           is_remediation?: boolean | null
           latency_ms?: number | null
@@ -1099,6 +1103,8 @@ export type Database = {
         Update: {
           created_at?: string
           event_type?: string
+          final_cause?: string | null
+          full_trace?: Json | null
           id?: string
           is_remediation?: boolean | null
           latency_ms?: number | null
@@ -1109,6 +1115,57 @@ export type Database = {
           status?: string
         }
         Relationships: []
+      }
+      uaz_incidents: {
+        Row: {
+          cause: string | null
+          created_at: string
+          customer_id: string | null
+          id: string
+          original_log_id: string | null
+          resolved_at: string | null
+          severity: string
+          status: string
+          trace: Json | null
+        }
+        Insert: {
+          cause?: string | null
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          original_log_id?: string | null
+          resolved_at?: string | null
+          severity?: string
+          status?: string
+          trace?: Json | null
+        }
+        Update: {
+          cause?: string | null
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          original_log_id?: string | null
+          resolved_at?: string | null
+          severity?: string
+          status?: string
+          trace?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "uaz_incidents_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "uaz_incidents_original_log_id_fkey"
+            columns: ["original_log_id"]
+            isOneToOne: false
+            referencedRelation: "uaz_audit_logs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       uaz_system_settings: {
         Row: {
