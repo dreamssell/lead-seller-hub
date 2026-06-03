@@ -78,6 +78,28 @@ export default function WavoipConfigPage() {
     destination: ''
   });
 
+  // Simulação de polling para tempo real
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (isLive) {
+      interval = setInterval(() => {
+        // Chance aleatória de surgir um novo evento simulado
+        if (Math.random() > 0.85) {
+          const timestamp = new Date().toLocaleString();
+          const newEvent = {
+            id: Date.now(),
+            date: timestamp,
+            status: Math.random() > 0.2 ? 'success' : 'error' as any,
+            type: 'Webhook',
+            message: 'Evento de chamada recebido via webhook'
+          };
+          setHistory(prev => [newEvent, ...prev.slice(0, 19)]);
+        }
+      }, 5000);
+    }
+    return () => clearInterval(interval);
+  }, [isLive]);
+
   const handleSave = async () => {
     if (!validated) {
       toast.error('Valide a conexão antes de salvar.');
@@ -312,6 +334,30 @@ export default function WavoipConfigPage() {
                 Copiar
               </Button>
             </div>
+            <div className="md:col-span-2 space-y-2 pt-2">
+              <Label className="flex items-center gap-2">
+                Segredo de Assinatura (Webhook Secret)
+              </Label>
+              <div className="flex gap-2">
+                <Input 
+                  className="font-mono text-[10px] bg-secondary/30" 
+                  value={webhookSecret} 
+                  readOnly
+                />
+                <Button variant="outline" size="sm" onClick={() => {
+                  navigator.clipboard.writeText(webhookSecret);
+                  toast.success('Segredo copiado!');
+                }}>
+                  Copiar
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setWebhookSecret('wv_' + Math.random().toString(36).substring(7))}>
+                  <RefreshCw className="w-3 h-3" />
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Utilize este segredo para validar o header <code className="bg-secondary px-1">X-Wavoip-Signature</code> em sua integração e garantir a autenticidade dos dados.
+              </p>
+            </div>
             <p className="text-[10px] text-muted-foreground italic">
               Configure esta URL no painel Wavoip para receber atualizações de chamadas e mensagens em tempo real.
             </p>
@@ -380,6 +426,15 @@ export default function WavoipConfigPage() {
               <CardDescription>Logs de validação e eventos de conectividade</CardDescription>
             </div>
             <div className="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className={`h-8 text-[10px] gap-2 ${isLive ? 'text-emerald-500 hover:text-emerald-600 bg-emerald-500/5' : 'text-muted-foreground'}`}
+                onClick={() => setIsLive(!isLive)}
+              >
+                <div className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
+                {isLive ? 'Live' : 'Pausado'}
+              </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
