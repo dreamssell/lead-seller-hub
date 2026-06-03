@@ -812,39 +812,49 @@ export default function WavoipConfigPage() {
   };
 
   return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      <Tabs defaultValue="config" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 h-10 mb-6">
+          <TabsTrigger value="config" className="text-xs gap-2">
+            <Settings2 className="w-4 h-4" /> Configuração & Auditoria
+          </TabsTrigger>
+          <TabsTrigger value="incidents" className="text-xs gap-2">
+            <ShieldAlert className="w-4 h-4" /> Gestão de Incidentes
+          </TabsTrigger>
+        </TabsList>
 
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-4 mb-2">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
-            <Phone className="w-6 h-6" />
+        <TabsContent value="config" className="space-y-6 outline-none">
+          <div className="flex items-center justify-between gap-4 mb-2">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+                <Phone className="w-6 h-6" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">Configuração Wavoip</h1>
+                <p className="text-sm text-muted-foreground">Credenciais de voz e mensagens integradas</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2 h-8 text-[10px]"
+                onClick={() => exportHealthMetrics('csv')}
+                disabled={!showHealthStats || isExporting}
+              >
+                <Download className="w-3 h-3" /> Relatório Saúde
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className={`gap-2 ${showHealthStats ? 'bg-primary/10 border-primary text-primary' : ''}`}
+                onClick={() => setShowHealthStats(!showHealthStats)}
+              >
+                <BarChart3 className="w-4 h-4" />
+                Dashboard de Saúde
+              </Button>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Configuração Wavoip</h1>
-            <p className="text-sm text-muted-foreground">Credenciais de voz e mensagens integradas</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="gap-2 h-8 text-[10px]"
-            onClick={() => exportHealthMetrics('csv')}
-            disabled={!showHealthStats || isExporting}
-          >
-            <Download className="w-3 h-3" /> Relatório Saúde
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className={`gap-2 ${showHealthStats ? 'bg-primary/10 border-primary text-primary' : ''}`}
-            onClick={() => setShowHealthStats(!showHealthStats)}
-          >
-            <BarChart3 className="w-4 h-4" />
-            Dashboard de Saúde
-          </Button>
-        </div>
-      </div>
 
       <AnimatePresence>
         {showHealthStats && (
@@ -1890,89 +1900,119 @@ export default function WavoipConfigPage() {
                                   </DialogDescription>
                                 </DialogHeader>
                                 <div className="space-y-3 py-2">
-                                  <p className="text-[10px] text-muted-foreground">Escolha a versão do segredo para o handshake simulado:</p>
-                                  <div className="flex gap-2">
-                                    <Dialog>
-                                      <DialogTrigger asChild>
-                                        <Button 
-                                          className="flex-1 text-[10px] h-8" 
-                                          disabled={(access as any)?.role !== 'admin'}
-                                        >
-                                          {(access as any)?.role === 'admin' ? 'v0 (Atual)' : <><Lock className="w-3 h-3 mr-1" /> v0</>}
-                                        </Button>
-                                      </DialogTrigger>
-                                      <DialogContent className="sm:max-w-xs">
-                                        <DialogHeader>
-                                          <DialogTitle className="text-sm font-bold">Confirmar Replay v0</DialogTitle>
-                                          <DialogDescription className="text-xs">
-                                            Deseja reprocessar o request {(item as any).requestId} usando o segredo atual (v0)?
-                                          </DialogDescription>
-                                        </DialogHeader>
-                                        <DialogFooter className="gap-2 sm:gap-0">
-                                          <DialogTrigger asChild>
-                                            <Button variant="outline" className="h-8 text-xs">Cancelar</Button>
-                                          </DialogTrigger>
-                                          <Button 
-                                            className="h-8 text-xs"
-                                            onClick={() => {
-                                              toast.success(`Replay iniciado com segredo v0 (Atual) para ${(item as any).requestId}`);
-                                              const replayEntry = {
-                                                ...item,
-                                                id: Date.now(),
-                                                date: new Date().toLocaleString(),
-                                                isReplay: true,
-                                                replayUser: (access as any)?.email || 'Admin',
-                                                replayVersion: 'v0',
-                                                replayStatus: 'success'
-                                              };
-                                              setHistory(prev => [replayEntry, ...prev]);
-                                            }}
-                                          >Confirmar Replay</Button>
-                                        </DialogFooter>
-                                      </DialogContent>
-                                    </Dialog>
+                                  {(() => {
+                                    const itemTime = new Date(item.date).getTime();
+                                    const nowTime = Date.now();
+                                    const windowMs = 24 * 60 * 60 * 1000; // Janela fixa de 24h para replay simplificado
+                                    const isWithinWindow = (nowTime - itemTime) <= windowMs;
+                                    const isEligible = item.status === 'error';
 
-                                    <Dialog>
-                                      <DialogTrigger asChild>
-                                        <Button 
-                                          variant="outline"
-                                          className="flex-1 text-[10px] h-8" 
-                                          disabled={(access as any)?.role !== 'admin'}
-                                        >
-                                          {(access as any)?.role === 'admin' ? 'v-1 (Legado)' : <><Lock className="w-3 h-3 mr-1" /> v-1</>}
-                                        </Button>
-                                      </DialogTrigger>
-                                      <DialogContent className="sm:max-w-xs">
-                                        <DialogHeader>
-                                          <DialogTitle className="text-sm font-bold">Confirmar Replay v-1</DialogTitle>
-                                          <DialogDescription className="text-xs">
-                                            Deseja reprocessar o request {(item as any).requestId} usando o segredo anterior (v-1)?
-                                          </DialogDescription>
-                                        </DialogHeader>
-                                        <DialogFooter className="gap-2 sm:gap-0">
-                                          <DialogTrigger asChild>
-                                            <Button variant="outline" className="h-8 text-xs">Cancelar</Button>
-                                          </DialogTrigger>
-                                          <Button 
-                                            className="h-8 text-xs"
-                                            onClick={() => {
-                                              toast.success(`Replay iniciado com segredo v-1 (Legado) para ${(item as any).requestId}`);
-                                              const replayEntry = {
-                                                ...item,
-                                                id: Date.now(),
-                                                date: new Date().toLocaleString(),
-                                                isReplay: true,
-                                                replayUser: (access as any)?.email || 'Admin',
-                                                replayVersion: 'v-1',
-                                                replayStatus: 'success'
-                                              };
-                                              setHistory(prev => [replayEntry, ...prev]);
-                                            }}
-                                          >Confirmar Replay</Button>
-                                        </DialogFooter>
-                                      </DialogContent>
-                                    </Dialog>
-                                  </div>
+                                    if (!isWithinWindow) {
+                                      return (
+                                        <div className="flex items-center gap-2 p-2 rounded bg-red-50 text-red-600 border border-red-100 text-[10px]">
+                                          <AlertCircle className="w-3.5 h-3.5" />
+                                          Fora da janela de 24h permitida para replay.
+                                        </div>
+                                      );
+                                    }
+
+                                    if (!isEligible) {
+                                      return (
+                                        <div className="flex items-center gap-2 p-2 rounded bg-amber-50 text-amber-600 border border-amber-100 text-[10px]">
+                                          <AlertCircle className="w-3.5 h-3.5" />
+                                          Apenas eventos com falha são elegíveis para replay.
+                                        </div>
+                                      );
+                                    }
+
+                                    return (
+                                      <>
+                                        <p className="text-[10px] text-muted-foreground">Escolha a versão do segredo para o handshake simulado:</p>
+                                        <div className="flex gap-2">
+                                          <Dialog>
+                                            <DialogTrigger asChild>
+                                              <Button 
+                                                className="flex-1 text-[10px] h-8" 
+                                                disabled={(access as any)?.role !== 'admin'}
+                                              >
+                                                {(access as any)?.role === 'admin' ? 'v0 (Atual)' : <><Lock className="w-3 h-3 mr-1" /> v0</>}
+                                              </Button>
+                                            </DialogTrigger>
+                                            <DialogContent className="sm:max-w-xs">
+                                              <DialogHeader>
+                                                <DialogTitle className="text-sm font-bold">Confirmar Replay v0</DialogTitle>
+                                                <DialogDescription className="text-xs">
+                                                  Deseja reprocessar o request {(item as any).requestId} usando o segredo atual (v0)?
+                                                </DialogDescription>
+                                              </DialogHeader>
+                                              <DialogFooter className="gap-2 sm:gap-0">
+                                                <DialogTrigger asChild>
+                                                  <Button variant="outline" className="h-8 text-xs">Cancelar</Button>
+                                                </DialogTrigger>
+                                                <Button 
+                                                  className="h-8 text-xs"
+                                                  onClick={() => {
+                                                    toast.success(`Replay iniciado com segredo v0 (Atual) para ${(item as any).requestId}`);
+                                                    const replayEntry = {
+                                                      ...item,
+                                                      id: Date.now(),
+                                                      date: new Date().toLocaleString(),
+                                                      isReplay: true,
+                                                      replayUser: (access as any)?.email || 'Admin',
+                                                      replayVersion: 'v0',
+                                                      replayStatus: 'success'
+                                                    };
+                                                    setHistory(prev => [replayEntry, ...prev]);
+                                                  }}
+                                                >Confirmar Replay</Button>
+                                              </DialogFooter>
+                                            </DialogContent>
+                                          </Dialog>
+
+                                          <Dialog>
+                                            <DialogTrigger asChild>
+                                              <Button 
+                                                variant="outline"
+                                                className="flex-1 text-[10px] h-8" 
+                                                disabled={(access as any)?.role !== 'admin'}
+                                              >
+                                                {(access as any)?.role === 'admin' ? 'v-1 (Legado)' : <><Lock className="w-3 h-3 mr-1" /> v-1</>}
+                                              </Button>
+                                            </DialogTrigger>
+                                            <DialogContent className="sm:max-w-xs">
+                                              <DialogHeader>
+                                                <DialogTitle className="text-sm font-bold">Confirmar Replay v-1</DialogTitle>
+                                                <DialogDescription className="text-xs">
+                                                  Deseja reprocessar o request {(item as any).requestId} usando o segredo anterior (v-1)?
+                                                </DialogDescription>
+                                              </DialogHeader>
+                                              <DialogFooter className="gap-2 sm:gap-0">
+                                                <DialogTrigger asChild>
+                                                  <Button variant="outline" className="h-8 text-xs">Cancelar</Button>
+                                                </DialogTrigger>
+                                                <Button 
+                                                  className="h-8 text-xs"
+                                                  onClick={() => {
+                                                    toast.success(`Replay iniciado com segredo v-1 (Legado) para ${(item as any).requestId}`);
+                                                    const replayEntry = {
+                                                      ...item,
+                                                      id: Date.now(),
+                                                      date: new Date().toLocaleString(),
+                                                      isReplay: true,
+                                                      replayUser: (access as any)?.email || 'Admin',
+                                                      replayVersion: 'v-1',
+                                                      replayStatus: 'success'
+                                                    };
+                                                    setHistory(prev => [replayEntry, ...prev]);
+                                                  }}
+                                                >Confirmar Replay</Button>
+                                              </DialogFooter>
+                                            </DialogContent>
+                                          </Dialog>
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
                                   {(access as any)?.role !== 'admin' && (
                                     <p className="text-[8px] text-red-500 italic text-center">Apenas administradores podem executar replay.</p>
                                   )}
@@ -2248,6 +2288,86 @@ export default function WavoipConfigPage() {
           <span>Você precisa validar as credenciais antes de ativar a integração Wavoip.</span>
         </div>
       )}
-    </div>
-  );
+    </TabsContent>
+
+    <TabsContent value="incidents" className="space-y-6 outline-none">
+      <Card className="glass-card">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg font-bold">Gestão de Incidentes</CardTitle>
+              <CardDescription className="text-xs">Visualize e gerencie threads resolvidas ou pendentes.</CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <Input 
+                  placeholder="Buscar por thread, responsável ou anotação..." 
+                  className="pl-8 h-8 text-[10px] w-64"
+                />
+              </div>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-border/40">
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Thread</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Responsável</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Data Resolução</TableHead>
+                <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Object.entries(resolvedThreads).length > 0 ? (
+                Object.entries(resolvedThreads).map(([hash, data]) => (
+                  <TableRow key={hash} className="border-border/40 hover:bg-secondary/10">
+                    <TableCell className="text-xs font-mono">
+                      <div className="flex items-center gap-2">
+                        <Fingerprint className="w-3 h-3 text-primary/50" />
+                        {hash.substring(7, 12)}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200 text-[9px] h-4 gap-1">
+                        <UserCheck className="w-2.5 h-2.5" /> Resolvido
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs">{data.resolvedBy}</TableCell>
+                    <TableCell className="text-xs">{data.resolvedAt}</TableCell>
+                    <TableCell className="text-right">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-7 text-[10px] gap-1"
+                        onClick={() => {
+                          setFilterType('all');
+                          setSearchTerm(hash.substring(7, 12));
+                          const tabs = document.querySelector('[role="tablist"]');
+                          const firstTab = tabs?.querySelector('[value="config"]') as HTMLElement;
+                          firstTab?.click();
+                        }}
+                      >
+                        <Eye className="w-3 h-3" /> Ver Auditoria
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-12 text-muted-foreground text-xs italic">
+                    Nenhum incidente resolvido encontrado.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </TabsContent>
+  </Tabs>
+</div>
+);
 }
