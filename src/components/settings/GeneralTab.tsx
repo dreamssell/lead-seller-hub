@@ -117,38 +117,7 @@ export default function GeneralTab() {
         </div>
       </div>
 
-      {/* Empresa */}
-      <div className="glass-card p-6 space-y-5">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
-          <div className="relative">
-            <div className="w-24 h-24 rounded-2xl bg-secondary border border-border flex items-center justify-center overflow-hidden">
-              {company.logo_url ? <img src={company.logo_url} alt="Logo" className="w-full h-full object-contain" /> : <Building2 className="w-10 h-10 text-muted-foreground" />}
-            </div>
-            <button onClick={() => logoRef.current?.click()} disabled={uploadingLogo} className="absolute -bottom-1 -right-1 w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-lg disabled:opacity-50">
-              {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            </button>
-            <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadLogo(e.target.files[0])} />
-          </div>
-          <div>
-            <h3 className="text-base font-semibold text-foreground">Dados da Empresa</h3>
-            <p className="text-xs text-muted-foreground">Logo PNG, JPG ou SVG (512×512 recomendado).</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>Nome da empresa</Label><Input value={company.name} onChange={(e) => setCompany({ ...company, name: e.target.value })} disabled={loading} /></div>
-          <div><Label>CNPJ / Documento</Label><Input value={company.document} onChange={(e) => setCompany({ ...company, document: e.target.value })} disabled={loading} /></div>
-          <div><Label>E-mail corporativo</Label><Input value={company.email} onChange={(e) => setCompany({ ...company, email: e.target.value })} disabled={loading} /></div>
-          <div><Label>Telefone</Label><Input value={company.phone} onChange={(e) => setCompany({ ...company, phone: e.target.value })} disabled={loading} /></div>
-          <div><Label>Site</Label><Input value={company.website} onChange={(e) => setCompany({ ...company, website: e.target.value })} disabled={loading} /></div>
-          <div><Label>Fuso horário</Label><Input value={company.timezone} onChange={(e) => setCompany({ ...company, timezone: e.target.value })} disabled={loading} /></div>
-          <div className="md:col-span-2"><Label>Endereço</Label><Textarea rows={2} value={company.address} onChange={(e) => setCompany({ ...company, address: e.target.value })} disabled={loading} /></div>
-        </div>
-
-        <Button onClick={save} disabled={saving || loading}>
-          {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}Salvar Alterações
-        </Button>
-      </div>
+      {/* Empresa removida conforme solicitação para evitar duplicidade */}
 
       {/* Notificação Lead */}
       <div className="glass-card p-6">

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { 
   Phone, 
   Shield, 
@@ -89,7 +90,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
-export default function WavoipConfigPage() {
+export default function WavoipConfigPage({ standalone = false }: { standalone?: boolean }) {
   const { access } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -119,8 +120,8 @@ export default function WavoipConfigPage() {
     email: false,
     webhook: false
   });
-  const [alertThreshold, setAlertThreshold] = useState(60); // Segundos
-  const [securityAlertLimit, setSecurityAlertLimit] = useState(5); // Limite de assinaturas inválidas
+  const [alertThreshold, setAlertThreshold] = useState(60);
+  const [securityAlertLimit, setSecurityAlertLimit] = useState(5);
   const [wsStatus, setWsStatus] = useState<'connected' | 'reconnecting' | 'offline'>('connected');
   const [isWsLoading, setIsWsLoading] = useState(false);
   const [wsBackoff, setWsBackoff] = useState({
@@ -148,9 +149,6 @@ export default function WavoipConfigPage() {
     { name: '16:00', received: 95, deduped: 8, invalid: 0, latency: 115 },
     { name: '20:00', received: 60, deduped: 4, invalid: 1, latency: 125 },
   ], []);
-
-
-
 
   const [history, setHistory] = useState([
     { id: 1, date: '2024-05-20 14:30:05', status: 'success', type: 'API', message: 'Conexão estabelecida via API Gateway' },
@@ -237,8 +235,6 @@ export default function WavoipConfigPage() {
     setExpandedRows(next);
   };
 
-
-
   const securityIncidents = useMemo(() => {
     return history.filter(item => item.type === 'Security' && item.status === 'error');
   }, [history]);
@@ -253,7 +249,6 @@ export default function WavoipConfigPage() {
                            ((item as any).payloadHash && (item as any).payloadHash.toLowerCase().includes(searchTerm.toLowerCase())) ||
                            ((item as any).requestId && (item as any).requestId.toLowerCase().includes(searchTerm.toLowerCase()));
 
-      
       let matchesPeriod = true;
       const itemDate = new Date(item.date);
       const now = new Date();
@@ -282,10 +277,6 @@ export default function WavoipConfigPage() {
     currentPage * itemsPerPage
   );
 
-
-
-  
-  // Persistir filtros na URL
   useEffect(() => {
     const params: Record<string, string> = {};
     if (filterStatus !== 'all') params.status = filterStatus;
@@ -302,7 +293,6 @@ export default function WavoipConfigPage() {
     destination: ''
   });
 
-  // Deduplicação e Reconexão via Supabase Realtime
   useEffect(() => {
     const loadPersistedConfig = async () => {
       if (!access?.sub_company_id) return;
@@ -330,7 +320,6 @@ export default function WavoipConfigPage() {
         setDedupWindow(syncState.dedup_window as any);
       }
 
-      // Load presets
       const { data: presets } = await supabase
         .from('wavoip_filter_presets')
         .select('*')
@@ -353,7 +342,6 @@ export default function WavoipConfigPage() {
     const setupChannel = () => {
       setWsStatus('reconnecting');
       
-      // Monitor de tempo offline
       clearTimeout(offlineTimer);
       offlineTimer = setTimeout(() => {
         if (isAlertEnabled) {
@@ -370,16 +358,12 @@ export default function WavoipConfigPage() {
         }
       })
       .on('broadcast', { event: 'log' }, (payload) => {
-        // Sincronizar Live com Filtro de Período
         if (filterPeriod !== 'all') {
           const now = new Date();
           if (filterPeriod === 'today' && new Date(payload.date || now).toDateString() !== now.toDateString()) return;
-          // Adicionar outras lógicas de período se necessário
         }
 
         const timestamp = new Date().toLocaleString();
-        
-        // Deduplicação dinâmica baseada na janela selecionada
         const eventId = payload.id || `${payload.message}-${timestamp}`;
         
         setHistory(prev => {
@@ -403,7 +387,6 @@ export default function WavoipConfigPage() {
             payloadHash: payload.payloadHash || ((payload as any).type === 'Security' ? 'sha256:generated...' : undefined)
           };
           
-          // Persistir estado de deduplicação no backend
           if (access?.sub_company_id) {
             const currentKeys = prev.slice(0, 10).map(h => h.id.toString());
             supabase.from('wavoip_sync_state').upsert({
@@ -421,7 +404,6 @@ export default function WavoipConfigPage() {
         if (payload.status === 'error' && isAlertEnabled) {
           const isSecurity = (payload as any).type === 'Security';
           
-          // Alerta automático por limite de segurança
           if (isSecurity && securityIncidents.length >= securityAlertLimit) {
             toast.error(`CRÍTICO: Limite de incidentes de segurança atingido (${securityIncidents.length})`, {
               description: 'Múltiplas falhas de assinatura detectadas no período.',
@@ -435,16 +417,6 @@ export default function WavoipConfigPage() {
               duration: isSecurity ? 8000 : 5000
             });
           }
-
-          if (alertChannels.email) {
-            // Mock email notification
-            console.log('Sending alert email:', payload.message);
-          }
-
-          if (alertChannels.webhook) {
-            // Mock webhook trigger
-            console.log('Triggering alert webhook:', payload.message);
-          }
         }
       })
       .subscribe((status) => {
@@ -454,7 +426,6 @@ export default function WavoipConfigPage() {
           retryCount = 0;
           clearTimeout(offlineTimer);
           
-          // Persistir status no backend
           if (access?.sub_company_id) {
             supabase.from('wavoip_sync_state').upsert({
               sub_company_id: access.sub_company_id,
@@ -478,7 +449,6 @@ export default function WavoipConfigPage() {
       return channel;
     };
 
-
     const channel = setupChannel();
 
     return () => {
@@ -487,7 +457,6 @@ export default function WavoipConfigPage() {
       clearTimeout(offlineTimer);
     };
   }, [isLive, isAlertEnabled, alertThreshold, access?.sub_company_id, wsBackoff.max, wsBackoff.maxAttempts, wsBackoff.min, filterPeriod, securityAlertLimit]);
-
 
   const exportThread = (payloadHash: string, format: 'csv' | 'pdf') => {
     setIsExporting(true);
@@ -510,7 +479,6 @@ export default function WavoipConfigPage() {
       
       let content = [headers, ...data].map(row => row.join(',')).join('\n');
       
-      // Adicionar seção de anotações auditáveis se houver resolução
       if (resolution) {
         content += '\n\nANOTAÇÕES DE RESOLUÇÃO\n';
         content += `Data Resolução,Resolvido Por,Anotação\n`;
@@ -565,10 +533,8 @@ export default function WavoipConfigPage() {
       payloadHash: type === 'Security' ? 'sha256:simulated_hash_123' : undefined
     };
 
-    // Usar toast para simular o efeito visual se o canal não estiver pronto
     toast.info(`Evento de ${type} disparado para simulação.`);
     
-    // Injetar diretamente no histórico se for simulação local para teste de dedup
     const eventId = mockPayload.id;
     setHistory(prev => {
       const nowTime = Date.now();
@@ -582,7 +548,6 @@ export default function WavoipConfigPage() {
 
       if (duplicate) {
         toast.warning("Evento suprimido pela deduplicação.");
-        // Registrar supressão no histórico para auditoria
         const suppressionLog = {
           id: `sup_${Date.now()}`,
           date: timestamp,
@@ -613,7 +578,6 @@ export default function WavoipConfigPage() {
     
     setTesting(true);
     
-    // Suite de testes com asserts automatizados
     setTimeout(() => {
       const logs = [
         'Iniciando teste de roteamento...',
@@ -641,7 +605,6 @@ export default function WavoipConfigPage() {
       }, ...prev]);
 
       setTesting(false);
-
       
       if (isOk) {
         toast.success('Roteamento validado com asserts automatizados!');
@@ -651,12 +614,9 @@ export default function WavoipConfigPage() {
     }, 1500);
   };
 
-
-
   const handleExportQuick = (period: 'today' | '7d' | '30d') => {
     setFilterPeriod(period);
     setCurrentPage(1);
-    // Pequeno delay para garantir que o filtro foi aplicado antes de disparar o download
     setTimeout(() => exportHistory('csv'), 100);
   };
 
@@ -666,7 +626,6 @@ export default function WavoipConfigPage() {
       return;
     }
     setLoading(true);
-    // Simulação de salvamento - integraria com whatsapp_connections ou similar
     setTimeout(() => {
       setLoading(false);
       toast.success('Configurações do Wavoip salvas com sucesso!');
@@ -681,7 +640,6 @@ export default function WavoipConfigPage() {
     setTesting(true);
     
     try {
-      // Simulação de validação
       const { data, error } = await supabase.functions.invoke('whatsapp-status', {
         body: { provider: 'wavoip', url: form.apiUrl, token: form.token }
       });
@@ -725,7 +683,6 @@ export default function WavoipConfigPage() {
     setIsExporting(true);
     toast.info(`Iniciando exportação em ${format.toUpperCase()}...`);
     
-    // Simulação de geração de arquivo com filtros aplicados e colunas selecionadas
     setTimeout(() => {
       const headers: string[] = [];
       if (exportColumns.date) headers.push('Data');
@@ -736,7 +693,6 @@ export default function WavoipConfigPage() {
       if (exportColumns.requestId) headers.push('Request ID');
       if (exportColumns.payloadHash) headers.push('Payload Hash');
       
-      // Adicionar colunas de replay na exportação
       headers.push('É Replay', 'Reprocessado Por', 'Versão Replay', 'Status Replay');
 
       const data = filteredHistory.map(item => {
@@ -771,7 +727,6 @@ export default function WavoipConfigPage() {
       toast.success(`Relatório filtrado (${filteredHistory.length} registros) exportado com sucesso!`);
     }, 1500);
   };
-
 
   const rotateSecret = () => {
     setIsRotating(true);
@@ -811,1563 +766,1567 @@ export default function WavoipConfigPage() {
     }, 2000);
   };
 
-  return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <Tabs defaultValue="config" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 h-10 mb-6">
-          <TabsTrigger value="config" className="text-xs gap-2">
-            <Settings2 className="w-4 h-4" /> Configuração & Auditoria
-          </TabsTrigger>
-          <TabsTrigger value="incidents" className="text-xs gap-2">
-            <ShieldAlert className="w-4 h-4" /> Gestão de Incidentes
-          </TabsTrigger>
-        </TabsList>
+  const mainContent = (
+    <div className="space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-w-7xl mx-auto"
+      >
+        <div className="space-y-6">
+          <Tabs defaultValue="config" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 h-10 mb-6">
+              <TabsTrigger value="config" className="text-xs gap-2">
+                <Settings2 className="w-4 h-4" /> Configuração & Auditoria
+              </TabsTrigger>
+              <TabsTrigger value="incidents" className="text-xs gap-2">
+                <ShieldAlert className="w-4 h-4" /> Gestão de Incidentes
+              </TabsTrigger>
+            </TabsList>
 
-        <TabsContent value="config" className="space-y-6 outline-none">
-          <div className="flex items-center justify-between gap-4 mb-2">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
-                <Phone className="w-6 h-6" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-foreground">Configuração Wavoip</h1>
-                <p className="text-sm text-muted-foreground">Credenciais de voz e mensagens integradas</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="gap-2 h-8 text-[10px]"
-                onClick={() => exportHealthMetrics('csv')}
-                disabled={!showHealthStats || isExporting}
-              >
-                <Download className="w-3 h-3" /> Relatório Saúde
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className={`gap-2 ${showHealthStats ? 'bg-primary/10 border-primary text-primary' : ''}`}
-                onClick={() => setShowHealthStats(!showHealthStats)}
-              >
-                <BarChart3 className="w-4 h-4" />
-                Dashboard de Saúde
-              </Button>
-            </div>
-          </div>
-
-      <AnimatePresence>
-        {showHealthStats && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <Card className="glass-card bg-primary/5">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <Activity className="w-3 h-3" /> Volume de Eventos (24h)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="h-[180px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={healthData}>
-                      <defs>
-                        <linearGradient id="colorReceived" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} />
-                      <YAxis fontSize={10} axisLine={false} tickLine={false} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '8px', fontSize: '10px' }}
-                      />
-                      <Area type="monotone" dataKey="received" stroke="#10b981" fillOpacity={1} fill="url(#colorReceived)" />
-                      <Area type="monotone" dataKey="deduped" stroke="#f59e0b" fill="transparent" strokeDasharray="5 5" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-              <Card className="glass-card bg-red-500/5">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <ShieldAlert className="w-3 h-3 text-red-500" /> Falhas de Assinatura & Latência
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="h-[180px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={healthData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} />
-                      <YAxis yAxisId="left" fontSize={10} axisLine={false} tickLine={false} />
-                      <YAxis yAxisId="right" orientation="right" fontSize={10} axisLine={false} tickLine={false} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '8px', fontSize: '10px' }}
-                      />
-                      <Bar yAxisId="left" dataKey="invalid" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                      <Bar yAxisId="right" dataKey="latency" fill="#3b82f6" opacity={0.5} radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <Card className="glass-card bg-emerald-500/5 border-emerald-500/20">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-emerald-600 uppercase tracking-wider">Status</p>
-              <div className="p-1.5 rounded-full bg-emerald-100 text-emerald-600">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <p className="text-xl font-bold text-foreground">Conectado</p>
-            <p className="text-[10px] text-emerald-600/70 mt-1">Sincronização ativa</p>
-          </CardContent>
-        </Card>
-
-        <Card className={`glass-card transition-all ${securityIncidents.length > 0 ? 'bg-red-500/5 border-red-500/20' : ''}`}>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Segurança</p>
-              <div className={`p-1.5 rounded-full ${securityIncidents.length > 0 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-secondary text-muted-foreground'}`}>
-                <ShieldAlert className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <p className={`text-xl font-bold ${securityIncidents.length > 0 ? 'text-red-600' : 'text-foreground'}`}>
-              {securityIncidents.length}
-            </p>
-            <p className="text-[10px] text-muted-foreground mt-1">Incidentes no período</p>
-          </CardContent>
-        </Card>
-
-
-        <Card className="glass-card">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Último Teste</p>
-              <div className="p-1.5 rounded-full bg-secondary text-muted-foreground">
-                <Clock className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <p className="text-xl font-bold text-foreground">
-              {lastValidation.timestamp ? lastValidation.timestamp.split(' ')[1] : '--:--'}
-            </p>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              {lastValidation.status === 'success' ? 'Sucesso' : lastValidation.status === 'error' ? 'Falha' : 'Aguardando'}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="glass-card">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Alertas</p>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className={`h-6 w-6 ${isAlertEnabled ? 'text-primary' : 'text-muted-foreground'}`}
-                  >
-                    <Settings2 className="w-3.5 h-3.5" />
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-xs">
-                  <DialogHeader>
-                    <DialogTitle className="text-sm font-bold">Canais de Alerta</DialogTitle>
-                    <DialogDescription className="text-[10px]">Configure como receber falhas críticas.</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs flex items-center gap-2"><Zap className="w-3 h-3" /> Visual (Toast)</Label>
-                      <Checkbox 
-                        checked={alertChannels.visual} 
-                        onCheckedChange={(checked) => setAlertChannels({...alertChannels, visual: !!checked})} 
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs flex items-center gap-2"><Mail className="w-3 h-3" /> E-mail</Label>
-                      <Checkbox 
-                        checked={alertChannels.email} 
-                        onCheckedChange={(checked) => setAlertChannels({...alertChannels, email: !!checked})} 
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs flex items-center gap-2"><Webhook className="w-3 h-3" /> Webhook</Label>
-                      <Checkbox 
-                        checked={alertChannels.webhook} 
-                        onCheckedChange={(checked) => setAlertChannels({...alertChannels, webhook: !!checked})} 
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[10px]">Limite Alerta Inatividade (s)</Label>
-                      <Input 
-                        type="number" 
-                        value={alertThreshold} 
-                        onChange={e => setAlertThreshold(Number(e.target.value))}
-                        className="h-8 text-xs"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[10px]">Limite Incidentes Segurança</Label>
-                      <Input 
-                        type="number" 
-                        value={securityAlertLimit} 
-                        onChange={e => setSecurityAlertLimit(Number(e.target.value))}
-                        className="h-8 text-xs"
-                      />
-                    </div>
-                    <Separator />
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-bold">Ativar Geral</Label>
-                      <Button 
-                        variant={isAlertEnabled ? "default" : "outline"} 
-                        size="sm" 
-                        className="h-7 text-[10px]"
-                        onClick={() => {
-                          const newVal = !isAlertEnabled;
-                          setIsAlertEnabled(newVal);
-                          if (access?.sub_company_id) {
-                            supabase.from('wavoip_settings').upsert({
-                              sub_company_id: access.sub_company_id,
-                              alert_channels: alertChannels,
-                              alert_threshold_seconds: alertThreshold
-                            }).then();
-                          }
-                        }}
-                      >
-                        {isAlertEnabled ? 'Ativo' : 'Pausado'}
-                      </Button>
-                    </div>
+            <TabsContent value="config" className="space-y-6 outline-none">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20">
+                    <Phone className="w-6 h-6" />
                   </div>
-                </DialogContent>
-              </Dialog>
-            </div>
-            <p className="text-xl font-bold text-foreground">{isAlertEnabled ? 'Ativos' : 'Silenciados'}</p>
-            <div className="flex gap-1 mt-1">
-              {alertChannels.visual && <Zap className="w-2.5 h-2.5 text-primary" />}
-              {alertChannels.email && <Mail className="w-2.5 h-2.5 text-primary" />}
-              {alertChannels.webhook && <Webhook className="w-2.5 h-2.5 text-primary" />}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="glass-card">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Shield className="w-4 h-4 text-primary" /> Credenciais de API
-          </CardTitle>
-          <CardDescription>Informe seus dados de acesso fornecidos pelo painel Wavoip</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>URL do Servidor</Label>
-            <div className="relative">
-              <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input 
-                className="pl-9" 
-                value={form.apiUrl} 
-                onChange={e => setForm({...form, apiUrl: e.target.value})}
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              Token de Acesso (API Key) <Lock className="w-3 h-3 text-muted-foreground" />
-            </Label>
-            <div className="relative">
-              <Input 
-                type={showToken ? "text" : "password"} 
-                placeholder="wa_..." 
-                value={form.token}
-                onChange={e => setForm({...form, token: e.target.value})}
-                className="pr-10 font-mono"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                onClick={() => setShowToken(!showToken)}
-              >
-                {showToken ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
-              </Button>
-            </div>
-            <p className="text-[10px] text-muted-foreground">
-              As credenciais são criptografadas em repouso seguindo padrões AES-256.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="glass-card">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Navigation className="w-4 h-4 text-primary" /> Roteamento de Chamadas
-            </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="h-7 text-[10px] gap-2"
-              onClick={handleRoutingTest}
-              disabled={testing}
-            >
-              {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Navigation className="w-3 h-3" />}
-              Testar Roteamento
-            </Button>
-          </CardTitle>
-          <CardDescription>Defina os ramais de origem e destino para as integrações</CardDescription>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Origem (DID/Ramal)</Label>
-            <Input 
-              placeholder="Ex: 551199999999" 
-              value={form.origin}
-              onChange={e => setForm({...form, origin: e.target.value})}
-              className={routingTestResult.status === 'error' && !form.origin ? 'border-red-500' : ''}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Destino Padrão</Label>
-            <Input 
-              placeholder="Ramal ou Fila" 
-              value={form.destination}
-              onChange={e => setForm({...form, destination: e.target.value})}
-              className={routingTestResult.status === 'error' && !form.destination ? 'border-red-500' : ''}
-            />
-
-          </div>
-
-          {routingTestResult.status !== 'none' && (
-            <div className={`md:col-span-2 p-4 rounded-xl space-y-3 border ${
-              routingTestResult.status === 'success' 
-              ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-700' 
-              : 'bg-red-500/5 border-red-500/20 text-red-700'
-            }`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-tight">
-                  <Terminal className="w-3.5 h-3.5" />
-                  Logs de Execução do Teste
-                </div>
-                <Badge 
-                  variant="outline" 
-                  className={`text-[9px] ${
-                    routingTestResult.status === 'success' 
-                    ? 'border-emerald-500/30 text-emerald-600' 
-                    : 'border-red-500/30 text-red-600'
-                  }`}
-                >
-                  {routingTestResult.status === 'success' ? 'PASSED' : 'FAILED'}
-                </Badge>
-              </div>
-              
-              <div className="bg-black/5 rounded-lg p-3 font-mono text-[10px] space-y-1">
-                {routingTestResult.logs.map((log, i) => (
-                  <div key={i} className="flex gap-2">
-                    <span className="opacity-40">[{i+1}]</span>
-                    <span>{log}</span>
+                  <div>
+                    <h1 className="text-2xl font-bold text-foreground tracking-tight">Wavoip Dashboard</h1>
+                    <p className="text-sm text-muted-foreground">Gestão avançada de mensagens, supressão de duplicados e auditoria VoIP.</p>
                   </div>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-3 text-xs pt-1">
-                {routingTestResult.status === 'success' ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <span className="truncate">{form.origin}</span>
-                      <ArrowRight className="w-3 h-3 shrink-0" />
-                      <span className="truncate">{form.destination}</span>
-                      <span className="font-bold ml-1 shrink-0">Caminho Válido</span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span className="font-medium">{routingTestResult.details}</span>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-
-          <div className="md:col-span-2 space-y-2 pt-2">
-            <Label className="flex items-center gap-2">
-              <Webhook className="w-4 h-4 text-primary" /> Webhook de Eventos
-            </Label>
-            <div className="flex gap-2">
-              <Input 
-                className="font-mono text-[10px] bg-secondary/30" 
-                value={`https://api.lovable.dev/v1/webhooks/wavoip/${access?.sub_company_id || 'master'}`} 
-                readOnly
-              />
-              <Button variant="outline" size="sm" onClick={() => {
-                navigator.clipboard.writeText(`https://api.lovable.dev/v1/webhooks/wavoip/${access?.sub_company_id || 'master'}`);
-                toast.success('URL copiada!');
-              }}>
-                Copiar
-              </Button>
-            </div>
-            <div className="md:col-span-2 space-y-2 pt-2">
-              <Label className="flex items-center gap-2">
-                Segredo de Assinatura (Webhook Secret)
-              </Label>
-              <div className="flex gap-2">
-                <Input 
-                  className="font-mono text-[10px] bg-secondary/30" 
-                  value={webhookSecret} 
-                  readOnly
-                />
-                <Button variant="outline" size="sm" onClick={() => {
-                  navigator.clipboard.writeText(webhookSecret);
-                  toast.success('Segredo copiado!');
-                }}>
-                  Copiar
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={rotateSecret}
-                  disabled={isRotating}
-                >
-                  {isRotating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                </Button>
-              </div>
-              {previousSecret && (
-                <div className="p-2 rounded bg-amber-500/5 border border-amber-500/10 text-[9px] text-amber-600 mt-2 flex items-center justify-between">
-                  <span>Segredo anterior (v-1) ainda aceito: <code className="font-mono">{previousSecret}</code></span>
-                  <Badge variant="outline" className="text-[8px] h-4">v-1 ativo</Badge>
                 </div>
-              )}
-              <p className="text-[10px] text-muted-foreground">
-                Utilize este segredo para validar o header <code className="bg-secondary px-1">X-Wavoip-Signature</code> em sua integração. O versionamento permite migração sem downtime.
-              </p>
-            </div>
-            
-            <div className="pt-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-7 text-[10px] gap-2 border-primary/20 hover:bg-primary/5"
-                onClick={runSecurityRotationTests}
-                disabled={testing}
-              >
-                <TestTube className="w-3 h-3 text-primary" />
-                Validar Rotação de Segredos
-              </Button>
-            </div>
-
-
-            <p className="text-[10px] text-muted-foreground italic">
-              Configure esta URL no painel Wavoip para receber atualizações de chamadas e mensagens em tempo real.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="flex flex-col sm:flex-row gap-3 pt-2">
-        <Button 
-          variant="secondary" 
-          className="flex-1 gap-2 bg-secondary/50 hover:bg-secondary border-border/40" 
-          onClick={handleTest}
-          disabled={testing}
-        >
-          {testing ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <CirclePlay className="w-4 h-4" />
-          )}
-          Executar Teste Completo
-        </Button>
-
-        <Button 
-          className="flex-1 gap-2 shadow-lg shadow-primary/20" 
-          onClick={handleSave}
-          disabled={loading || !validated}
-        >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          Ativar Integração
-        </Button>
-      </div>
-
-      {lastValidation.status !== 'none' && (
-        <AnimatePresence>
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            className={`flex items-center gap-3 p-4 rounded-xl border ${
-              lastValidation.status === 'success' 
-              ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-700' 
-              : 'bg-red-500/5 border-red-500/20 text-red-700'
-            }`}
-          >
-
-            {lastValidation.status === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 shrink-0" />
-            ) : (
-              <XCircle className="w-5 h-5 shrink-0" />
-            )}
-            <div className="flex-1">
-              <p className="text-xs font-bold">
-                {lastValidation.status === 'success' ? 'Conexão Bem-sucedida' : 'Erro de Conexão'}
-              </p>
-              <p className="text-[10px] opacity-80">{lastValidation.message}</p>
-            </div>
-            <span className="text-[10px] font-mono opacity-60">{lastValidation.timestamp}</span>
-          </motion.div>
-        </AnimatePresence>
-      )}
-
-      <Card className="glass-card overflow-hidden">
-        <CardHeader className="bg-secondary/20 pb-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex flex-col gap-1">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <History className="w-4 h-4 text-primary" /> Histórico de Auditoria
-                </CardTitle>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline" className={`text-[8px] uppercase tracking-widest px-1.5 py-0 ${isLive ? 'border-emerald-500/50 text-emerald-500' : 'text-muted-foreground'}`}>
-                    {isLive ? 'Conectado Live' : 'Pausado'}
-                  </Badge>
-                  <CardDescription className="text-[10px]">Logs de validação em tempo real</CardDescription>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
-                  <span className="text-[8px] uppercase text-muted-foreground font-bold">WebSocket Status</span>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-1.5 h-1.5 rounded-full ${
-                      wsStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 
-                      wsStatus === 'reconnecting' ? 'bg-amber-500 animate-bounce' : 'bg-red-500'
-                    }`} />
-                    <span className={`text-[9px] font-bold ${
-                      wsStatus === 'connected' ? 'text-emerald-600' : 
-                      wsStatus === 'reconnecting' ? 'text-amber-600' : 'text-red-600'
-                    }`}>
-                      {wsStatus.toUpperCase()}
-                    </span>
-                  </div>
-                </div>
-
-
-                <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
-                  <span className="text-[8px] uppercase text-muted-foreground font-bold">Config WS</span>
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-6 w-6">
-                        <Settings2 className="w-3 h-3" />
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-xs">
-                      <DialogHeader>
-                        <DialogTitle className="text-sm font-bold">Backoff do WebSocket</DialogTitle>
-                        <DialogDescription className="text-[10px]">Ajuste a estratégia de reconexão.</DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 py-2">
-                        <div className="space-y-1">
-                          <Label className="text-[10px]">Intervalo Mínimo (ms)</Label>
-                          <Input 
-                            type="number" 
-                            value={wsBackoff.min} 
-                            onChange={e => setWsBackoff({...wsBackoff, min: Number(e.target.value)})}
-                            className="h-8 text-xs"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-[10px]">Intervalo Máximo (ms)</Label>
-                          <Input 
-                            type="number" 
-                            value={wsBackoff.max} 
-                            onChange={e => setWsBackoff({...wsBackoff, max: Number(e.target.value)})}
-                            className="h-8 text-xs"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-[10px]">Tentativas Máximas</Label>
-                          <Input 
-                            type="number" 
-                            value={wsBackoff.maxAttempts} 
-                            onChange={e => setWsBackoff({...wsBackoff, maxAttempts: Number(e.target.value)})}
-                            className="h-8 text-xs"
-                          />
-                        </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-
-                <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
-                  <span className="text-[8px] uppercase text-muted-foreground font-bold">Simular Evento</span>
-                  <div className="flex gap-1">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-6 w-6 text-red-500 hover:bg-red-50" 
-                      onClick={() => simulateEvent('Security')}
-                      title="Simular Assinatura Inválida"
-                    >
-                      <ShieldAlert className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-6 w-6 text-primary hover:bg-primary/5" 
-                      onClick={() => simulateEvent('Routing')}
-                      title="Simular Roteamento"
-                    >
-                      <Navigation className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
-                  <span className="text-[8px] uppercase text-muted-foreground font-bold">Janela Dedup</span>
-                  <select 
-                    className="h-6 text-[9px] rounded bg-secondary/50 border-none outline-none px-1 font-bold"
-                    value={dedupWindow}
-                    onChange={(e) => setDedupWindow(Number(e.target.value) as any)}
-                  >
-                    <option value={5}>5m</option>
-                    <option value={15}>15m</option>
-                    <option value={60}>1h</option>
-                  </select>
-                </div>
-
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className={`h-8 text-[10px] gap-2 ${isLive ? 'text-emerald-500 hover:text-emerald-600 bg-emerald-500/5' : 'text-muted-foreground'}`}
-                  onClick={() => {
-                    if (isWsLoading) return;
-                    setIsLive(!isLive);
-                  }}
-                  disabled={isWsLoading}
-                >
-                  {isWsLoading ? <Loader2 className="w-1.5 h-1.5 animate-spin" /> : (
-                    <div className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
-                  )}
-                  {isLive ? 'Live' : 'Pausado'}
-                </Button>
-
-                <div className="flex flex-wrap items-center gap-2">
                   <Button 
-                    variant={filterType === 'Security' ? "default" : "outline"} 
+                    variant="outline" 
                     size="sm" 
-                    className="h-7 text-[9px] gap-1 px-2 border-red-500/20 text-red-600 hover:bg-red-500/5"
-                    onClick={() => setFilterType(filterType === 'Security' ? 'all' : 'Security')}
+                    className="gap-2 h-8 text-[10px]"
+                    onClick={() => exportHealthMetrics('csv')}
+                    disabled={!showHealthStats || isExporting}
                   >
-                    <ShieldAlert className="w-3 h-3" />
-                    Somente Segurança
+                    <Download className="w-3 h-3" /> Relatório Saúde
                   </Button>
-                  <Separator orientation="vertical" className="h-4 mx-1" />
                   <Button 
-                    variant="ghost" 
+                    variant="outline" 
                     size="sm" 
-                    className="h-7 text-[9px] border border-border/40"
-                    onClick={() => handleExportQuick('today')}
-                  >Hoje</Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-7 text-[9px] border border-border/40"
-                    onClick={() => handleExportQuick('7d')}
-                  >7 Dias</Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-7 text-[9px] border border-border/40"
-                    onClick={() => handleExportQuick('30d')}
-                  >30 Dias</Button>
-
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-7 text-[9px] gap-1 px-2">
-                        <Bookmark className="w-3 h-3" />
-                        Presets
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-xs">
-                      <DialogHeader>
-                        <DialogTitle className="text-sm font-bold">Presets de Filtro</DialogTitle>
-                        <DialogDescription className="text-[10px]">Salve ou carregue configurações de filtros.</DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 py-2">
-                        <div className="flex gap-2">
-                          <Input 
-                            placeholder="Nome do preset..." 
-                            className="h-8 text-xs" 
-                            id="new-preset-name"
-                          />
-                          <Button 
-                            size="sm" 
-                            className="h-8 text-xs"
-                            disabled={isSavingPreset}
-                            onClick={async () => {
-                              const nameInput = document.getElementById('new-preset-name') as HTMLInputElement;
-                              const name = nameInput.value;
-                              if (!name) return;
-                              setIsSavingPreset(true);
-                              const filters = { filterStatus, filterType, filterPeriod, searchTerm };
-                              const { error } = await supabase.from('wavoip_filter_presets').insert({
-                                sub_company_id: access?.sub_company_id,
-                                name,
-                                filters
-                              });
-                              if (!error) {
-                                toast.success('Preset salvo!');
-                                setFilterPresets([...filterPresets, { name, filters }]);
-                                nameInput.value = '';
-                              }
-                              setIsSavingPreset(false);
-                            }}
-                          >
-                            {isSavingPreset ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                          </Button>
-                        </div>
-                        <Separator />
-                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                          {filterPresets.map((p, i) => (
-                            <div key={i} className="flex items-center justify-between bg-secondary/20 p-2 rounded text-[10px]">
-                              <span className="font-medium">{p.name}</span>
-                              <div className="flex gap-1">
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-5 w-5"
-                                  onClick={() => {
-                                    setFilterStatus(p.filters.filterStatus);
-                                    setFilterType(p.filters.filterType);
-                                    setFilterPeriod(p.filters.filterPeriod);
-                                    setSearchTerm(p.filters.searchTerm);
-                                    toast.success(`Preset "${p.name}" aplicado.`);
-                                  }}
-                                >
-                                  <RefreshCw className="w-2.5 h-2.5" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-5 w-5"
-                                  onClick={() => {
-                                    const url = new URL(window.location.href);
-                                    url.searchParams.set('status', p.filters.filterStatus);
-                                    url.searchParams.set('type', p.filters.filterType);
-                                    url.searchParams.set('period', p.filters.filterPeriod);
-                                    url.searchParams.set('q', p.filters.searchTerm);
-                                    navigator.clipboard.writeText(url.toString());
-                                    toast.success('Link compartilhado copiado!');
-                                  }}
-                                >
-                                  <Share2 className="w-2.5 h-2.5" />
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="h-8 text-[10px] gap-2"
-                        disabled={isExporting}
-                      >
-                        {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-                        Exportar CSV
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-md">
-                      <DialogHeader>
-                        <DialogTitle className="text-sm font-bold">Configurar Exportação</DialogTitle>
-                        <DialogDescription className="text-xs">Selecione as colunas ou escolha um preset rápido.</DialogDescription>
-                      </DialogHeader>
-
-                      <div className="flex flex-col gap-3 py-2">
-                        <Label className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Presets de Relatório</Label>
-                        <div className="flex gap-2">
-                          <Button 
-                            variant="secondary" 
-                            size="sm" 
-                            className="h-7 text-[9px] flex-1 gap-1"
-                            onClick={() => applyPreset('security')}
-                          >
-                            <Shield className="w-3 h-3 text-red-500" /> Segurança
-                          </Button>
-                          <Button 
-                            variant="secondary" 
-                            size="sm" 
-                            className="h-7 text-[9px] flex-1 gap-1"
-                            onClick={() => applyPreset('routing')}
-                          >
-                            <Navigation className="w-3 h-3 text-primary" /> Roteamento
-                          </Button>
-                        </div>
-                      </div>
-
-                      <Separator className="opacity-40" />
-
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-3 py-4">
-
-                        <div className="flex items-center space-x-2">
-                          <Checkbox 
-                            id="col-date" 
-                            checked={exportColumns.date} 
-                            onCheckedChange={(checked) => setExportColumns({...exportColumns, date: !!checked})}
-                          />
-                          <label htmlFor="col-date" className="text-xs">Data/Hora</label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Checkbox 
-                            id="col-status" 
-                            checked={exportColumns.status} 
-                            onCheckedChange={(checked) => setExportColumns({...exportColumns, status: !!checked})}
-                          />
-                          <label htmlFor="col-status" className="text-xs">Status</label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Checkbox 
-                            id="col-type" 
-                            checked={exportColumns.type} 
-                            onCheckedChange={(checked) => setExportColumns({...exportColumns, type: !!checked})}
-                          />
-                          <label htmlFor="col-type" className="text-xs">Tipo</label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Checkbox 
-                            id="col-message" 
-                            checked={exportColumns.message} 
-                            onCheckedChange={(checked) => setExportColumns({...exportColumns, message: !!checked})}
-                          />
-                          <label htmlFor="col-message" className="text-xs">Mensagem</label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Checkbox 
-                            id="col-version" 
-                            checked={exportColumns.version} 
-                            onCheckedChange={(checked) => setExportColumns({...exportColumns, version: !!checked})}
-                          />
-                          <label htmlFor="col-version" className="text-xs">Versão Segredo</label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Checkbox 
-                            id="col-requestId" 
-                            checked={exportColumns.requestId} 
-                            onCheckedChange={(checked) => setExportColumns({...exportColumns, requestId: !!checked})}
-                          />
-                          <label htmlFor="col-requestId" className="text-xs">Request ID</label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Checkbox 
-                            id="col-payloadHash" 
-                            checked={exportColumns.payloadHash} 
-                            onCheckedChange={(checked) => setExportColumns({...exportColumns, payloadHash: !!checked})}
-                          />
-                          <label htmlFor="col-payloadHash" className="text-xs">Payload Hash</label>
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button 
-                          className="w-full text-xs h-8" 
-                          onClick={() => exportHistory('csv')}
-                        >
-                          Gerar CSV agora
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-
-                </div>
-
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <Input 
-                  placeholder="Buscar logs ou segredos..." 
-                  className="pl-8 h-8 text-[10px] w-48"
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <select 
-                className="h-8 text-[10px] rounded-md border border-input bg-background px-2"
-                value={filterType}
-                onChange={e => {
-                  setFilterType(e.target.value as any);
-                  setCurrentPage(1);
-                }}
-              >
-                <option value="all">Tipos: Tudo</option>
-                <option value="API">API</option>
-                <option value="Webhook">Webhooks</option>
-                <option value="Security">Segurança</option>
-                <option value="Routing">Roteamento</option>
-                <option value="CI">CI/CD Pipeline</option>
-              </select>
-              <select 
-                className="h-8 text-[10px] rounded-md border border-input bg-background px-2"
-                value={filterPeriod}
-                onChange={e => {
-                  setFilterPeriod(e.target.value as any);
-                  setCurrentPage(1);
-                }}
-              >
-                <option value="all">Período: Tudo</option>
-                <option value="today">Hoje</option>
-                <option value="7d">Últimos 7 dias</option>
-                <option value="30d">Últimos 30 dias</option>
-              </select>
-              <select 
-                className="h-8 text-[10px] rounded-md border border-input bg-background px-2"
-                value={filterStatus}
-                onChange={e => {
-                  setFilterStatus(e.target.value as any);
-                  setCurrentPage(1);
-                }}
-              >
-                <option value="all">Todos Status</option>
-                <option value="success">Sucessos</option>
-                <option value="error">Falhas</option>
-              </select>
-            </div>
-
-          </div>
-        </CardHeader>
-
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent border-border/40">
-                <TableHead className="w-[180px] text-[10px] uppercase font-bold tracking-wider">
-                  <button 
-                    className="flex items-center gap-1 hover:text-primary transition-colors"
-                    onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+                    className={`gap-2 ${showHealthStats ? 'bg-primary/10 border-primary text-primary' : ''}`}
+                    onClick={() => setShowHealthStats(!showHealthStats)}
                   >
-                    Data/Hora
-                    <ArrowUpDown className="w-3 h-3" />
-                  </button>
-                </TableHead>
-                <TableHead className="w-[100px] text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
-                <TableHead className="w-[100px] text-[10px] uppercase font-bold tracking-wider">Tipo</TableHead>
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Resultado/Mensagem</TableHead>
-                <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider">Ação</TableHead>
-              </TableRow>
-            </TableHeader>
+                    <BarChart3 className="w-4 h-4" />
+                    Dashboard de Saúde
+                  </Button>
+                </div>
+              </div>
 
-            <TableBody>
-                {paginatedHistory.map((item) => (
+              <AnimatePresence>
+                {showHealthStats && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                      <Card className="glass-card bg-primary/5">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                            <Activity className="w-3 h-3" /> Volume de Eventos (24h)
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="h-[180px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={healthData}>
+                              <defs>
+                                <linearGradient id="colorReceived" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                              <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} />
+                              <YAxis fontSize={10} axisLine={false} tickLine={false} />
+                              <Tooltip 
+                                contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '8px', fontSize: '10px' }}
+                              />
+                              <Area type="monotone" dataKey="received" stroke="#10b981" fillOpacity={1} fill="url(#colorReceived)" />
+                              <Area type="monotone" dataKey="deduped" stroke="#f59e0b" fill="transparent" strokeDasharray="5 5" />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
 
+                      <Card className="glass-card bg-red-500/5">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                            <ShieldAlert className="w-3 h-3 text-red-500" /> Falhas de Assinatura & Latência
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="h-[180px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={healthData}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                              <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} />
+                              <YAxis yAxisId="left" fontSize={10} axisLine={false} tickLine={false} />
+                              <YAxis yAxisId="right" orientation="right" fontSize={10} axisLine={false} tickLine={false} />
+                              <Tooltip 
+                                contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '8px', fontSize: '10px' }}
+                              />
+                              <Bar yAxisId="left" dataKey="invalid" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                              <Bar yAxisId="right" dataKey="latency" fill="#3b82f6" opacity={0.5} radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-                  <Fragment key={item.id}>
-                    <TableRow className="border-border/40 hover:bg-secondary/10 transition-colors cursor-pointer" onClick={() => toggleRow(item.id)}>
-                      <TableCell className="text-xs font-mono text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          {item.type === 'Security' || item.type === 'CI' ? (
-                            expandedRows.has(item.id) ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
-                          ) : null}
-                          {item.date}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge 
-                          variant="outline" 
-                          className={`text-[9px] font-bold px-1.5 py-0 ${
-                            item.status === 'success' 
-                            ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' 
-                            : 'bg-red-500/10 text-red-600 border-red-500/20'
-                          }`}
-                        >
-                          {item.status === 'success' ? 'SUCESSO' : 'FALHA'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="text-[9px] px-1.5 py-0">{item.type}</Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-2">
-                            <span>{item.message}</span>
-                            {(item as any).payloadHash && (
-                              <div className="flex items-center gap-1">
-                                <Fingerprint className="w-3 h-3 text-primary/50" />
-                                <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-primary/5 font-mono border-primary/20">
-                                  thread: {(item as any).payloadHash.substring(7, 12)}
-                                </Badge>
-                              </div>
-                            )}
-                            {(item as any).isSuppressed && (
-                              <Dialog>
-                                <DialogTrigger asChild>
-                                  <Badge 
-                                    variant="outline" 
-                                    className="text-[8px] h-3.5 px-1 bg-amber-50 text-amber-600 border-amber-200 uppercase cursor-pointer hover:bg-amber-100 transition-colors"
-                                  >
-                                    Deduplicado
-                                  </Badge>
-                                </DialogTrigger>
-                                <DialogContent className="sm:max-w-md">
-                                  <DialogHeader>
-                                    <DialogTitle className="text-sm font-bold flex items-center gap-2">
-                                      <Zap className="w-4 h-4 text-amber-500" /> Detalhes da Deduplicação
-                                    </DialogTitle>
-                                    <DialogDescription className="text-xs">Rastreamento do evento suprimido pelo motor de sincronização.</DialogDescription>
-                                  </DialogHeader>
-                                  <div className="space-y-4 py-2">
-                                    <div className="bg-secondary/20 p-3 rounded-lg space-y-2 border border-border/40">
-                                      <div className="flex justify-between text-[10px]">
-                                        <span className="text-muted-foreground">Status:</span>
-                                        <span className="font-bold text-amber-600">SUPRIMIDO</span>
-                                      </div>
-                                      <div className="flex justify-between text-[10px]">
-                                        <span className="text-muted-foreground">Motivo:</span>
-                                        <span className="font-medium">Chave idêntica detectada na janela ativa</span>
-                                      </div>
-                                      <div className="flex justify-between text-[10px]">
-                                        <span className="text-muted-foreground">Janela de Config:</span>
-                                        <span className="font-mono">{dedupWindow} minutos</span>
-                                      </div>
-                                    </div>
-                                    
-                                    <div className="space-y-2">
-                                      <span className="text-[10px] font-bold uppercase text-muted-foreground">Evento de Origem (Mestre)</span>
-                                      <div className="p-2 border rounded-md text-[10px] flex items-center justify-between hover:bg-secondary/10 cursor-pointer transition-colors">
-                                        <div className="flex items-center gap-2">
-                                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                          <span className="font-mono">{(item as any).details?.split('Chave comparada: ')[1] || 'req_...'}</span>
-                                        </div>
-                                        <Button variant="ghost" size="icon" className="h-4 w-4" title="Ir para Auditoria">
-                                          <Eye className="w-3 h-3" />
-                                        </Button>
-                                      </div>
-                                    </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <Card className="glass-card bg-emerald-500/5 border-emerald-500/20">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-medium text-emerald-600 uppercase tracking-wider">Status</p>
+                      <div className="p-1.5 rounded-full bg-emerald-100 text-emerald-600">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      </div>
+                    </div>
+                    <p className="text-xl font-bold text-foreground">Conectado</p>
+                    <p className="text-[10px] text-emerald-600/70 mt-1">Sincronização ativa</p>
+                  </CardContent>
+                </Card>
 
-                                    <div className="pt-2">
-                                      <Button 
-                                        variant="outline" 
-                                        className="w-full text-[10px] h-8 gap-2"
-                                        onClick={() => {
-                                          toast.info("Exportando log de supressão...");
-                                          // Simulação de exportação específica
-                                        }}
-                                      >
-                                        <Download className="w-3 h-3" /> Baixar Log de Supressão
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </DialogContent>
-                              </Dialog>
-                            )}
-                          </div>
-                          {(item as any).details && (
-                            <span className="text-[9px] opacity-60 italic">{(item as any).details}</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          {item.type === 'Security' && (
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-6 w-6 text-primary hover:bg-primary/10"
-                                  title="Reprocessar (Replay)"
-                                >
-                                  <RefreshCw className="h-3 w-3" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="sm:max-w-xs">
-                                <DialogHeader>
-                                  <DialogTitle className="text-sm font-bold">Reprocessar Evento</DialogTitle>
-                                  <DialogDescription className="text-[10px]">
-                                    RequestId: <code className="bg-secondary px-1">{(item as any).requestId}</code>
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <div className="space-y-3 py-2">
-                                  {(() => {
-                                    const itemTime = new Date(item.date).getTime();
-                                    const nowTime = Date.now();
-                                    const windowMs = 24 * 60 * 60 * 1000; // Janela fixa de 24h para replay simplificado
-                                    const isWithinWindow = (nowTime - itemTime) <= windowMs;
-                                    const isEligible = item.status === 'error';
+                <Card className={`glass-card transition-all ${securityIncidents.length > 0 ? 'bg-red-500/5 border-red-500/20' : ''}`}>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Segurança</p>
+                      <div className={`p-1.5 rounded-full ${securityIncidents.length > 0 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-secondary text-muted-foreground'}`}>
+                        <ShieldAlert className="w-3.5 h-3.5" />
+                      </div>
+                    </div>
+                    <p className={`text-xl font-bold ${securityIncidents.length > 0 ? 'text-red-600' : 'text-foreground'}`}>
+                      {securityIncidents.length}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-1">Incidentes no período</p>
+                  </CardContent>
+                </Card>
 
-                                    if (!isWithinWindow) {
-                                      return (
-                                        <div className="flex items-center gap-2 p-2 rounded bg-red-50 text-red-600 border border-red-100 text-[10px]">
-                                          <AlertCircle className="w-3.5 h-3.5" />
-                                          Fora da janela de 24h permitida para replay.
-                                        </div>
-                                      );
-                                    }
+                <Card className="glass-card">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Último Teste</p>
+                      <div className="p-1.5 rounded-full bg-secondary text-muted-foreground">
+                        <Clock className="w-3.5 h-3.5" />
+                      </div>
+                    </div>
+                    <p className="text-xl font-bold text-foreground">
+                      {lastValidation.timestamp ? lastValidation.timestamp.split(' ')[1] : '--:--'}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {lastValidation.status === 'success' ? 'Sucesso' : lastValidation.status === 'error' ? 'Falha' : 'Aguardando'}
+                    </p>
+                  </CardContent>
+                </Card>
 
-                                    if (!isEligible) {
-                                      return (
-                                        <div className="flex items-center gap-2 p-2 rounded bg-amber-50 text-amber-600 border border-amber-100 text-[10px]">
-                                          <AlertCircle className="w-3.5 h-3.5" />
-                                          Apenas eventos com falha são elegíveis para replay.
-                                        </div>
-                                      );
-                                    }
-
-                                    return (
-                                      <>
-                                        <p className="text-[10px] text-muted-foreground">Escolha a versão do segredo para o handshake simulado:</p>
-                                        <div className="flex gap-2">
-                                          <Dialog>
-                                            <DialogTrigger asChild>
-                                              <Button 
-                                                className="flex-1 text-[10px] h-8" 
-                                                disabled={(access as any)?.role !== 'admin'}
-                                              >
-                                                {(access as any)?.role === 'admin' ? 'v0 (Atual)' : <><Lock className="w-3 h-3 mr-1" /> v0</>}
-                                              </Button>
-                                            </DialogTrigger>
-                                            <DialogContent className="sm:max-w-xs">
-                                              <DialogHeader>
-                                                <DialogTitle className="text-sm font-bold">Confirmar Replay v0</DialogTitle>
-                                                <DialogDescription className="text-xs">
-                                                  Deseja reprocessar o request {(item as any).requestId} usando o segredo atual (v0)?
-                                                </DialogDescription>
-                                              </DialogHeader>
-                                              <DialogFooter className="gap-2 sm:gap-0">
-                                                <DialogTrigger asChild>
-                                                  <Button variant="outline" className="h-8 text-xs">Cancelar</Button>
-                                                </DialogTrigger>
-                                                <Button 
-                                                  className="h-8 text-xs"
-                                                  onClick={() => {
-                                                    toast.success(`Replay iniciado com segredo v0 (Atual) para ${(item as any).requestId}`);
-                                                    const replayEntry = {
-                                                      ...item,
-                                                      id: Date.now(),
-                                                      date: new Date().toLocaleString(),
-                                                      isReplay: true,
-                                                      replayUser: (access as any)?.email || 'Admin',
-                                                      replayVersion: 'v0',
-                                                      replayStatus: 'success'
-                                                    };
-                                                    setHistory(prev => [replayEntry, ...prev]);
-                                                  }}
-                                                >Confirmar Replay</Button>
-                                              </DialogFooter>
-                                            </DialogContent>
-                                          </Dialog>
-
-                                          <Dialog>
-                                            <DialogTrigger asChild>
-                                              <Button 
-                                                variant="outline"
-                                                className="flex-1 text-[10px] h-8" 
-                                                disabled={(access as any)?.role !== 'admin'}
-                                              >
-                                                {(access as any)?.role === 'admin' ? 'v-1 (Legado)' : <><Lock className="w-3 h-3 mr-1" /> v-1</>}
-                                              </Button>
-                                            </DialogTrigger>
-                                            <DialogContent className="sm:max-w-xs">
-                                              <DialogHeader>
-                                                <DialogTitle className="text-sm font-bold">Confirmar Replay v-1</DialogTitle>
-                                                <DialogDescription className="text-xs">
-                                                  Deseja reprocessar o request {(item as any).requestId} usando o segredo anterior (v-1)?
-                                                </DialogDescription>
-                                              </DialogHeader>
-                                              <DialogFooter className="gap-2 sm:gap-0">
-                                                <DialogTrigger asChild>
-                                                  <Button variant="outline" className="h-8 text-xs">Cancelar</Button>
-                                                </DialogTrigger>
-                                                <Button 
-                                                  className="h-8 text-xs"
-                                                  onClick={() => {
-                                                    toast.success(`Replay iniciado com segredo v-1 (Legado) para ${(item as any).requestId}`);
-                                                    const replayEntry = {
-                                                      ...item,
-                                                      id: Date.now(),
-                                                      date: new Date().toLocaleString(),
-                                                      isReplay: true,
-                                                      replayUser: (access as any)?.email || 'Admin',
-                                                      replayVersion: 'v-1',
-                                                      replayStatus: 'success'
-                                                    };
-                                                    setHistory(prev => [replayEntry, ...prev]);
-                                                  }}
-                                                >Confirmar Replay</Button>
-                                              </DialogFooter>
-                                            </DialogContent>
-                                          </Dialog>
-                                        </div>
-                                      </>
-                                    );
-                                  })()}
-                                  {(access as any)?.role !== 'admin' && (
-                                    <p className="text-[8px] text-red-500 italic text-center">Apenas administradores podem executar replay.</p>
-                                  )}
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                          )}
+                <Card className="glass-card">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Alertas</p>
+                      <Dialog>
+                        <DialogTrigger asChild>
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-6 w-6 text-muted-foreground hover:text-primary"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleTest();
-                            }}
+                            className={`h-6 w-6 ${isAlertEnabled ? 'text-primary' : 'text-muted-foreground'}`}
                           >
-                            <Activity className="h-3 w-3" />
+                            <Settings2 className="w-3.5 h-3.5" />
                           </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                    {expandedRows.has(item.id) && (item.type === 'Security' || item.type === 'CI') && (
-                      <TableRow className="bg-secondary/20 border-border/40 hover:bg-secondary/20">
-                        <TableCell colSpan={5} className="p-4">
-                          <motion.div 
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="grid grid-cols-1 md:grid-cols-2 gap-6"
-                          >
-                            {item.type === 'Security' ? (
-                              <>
-                                <div className="space-y-3">
-                                  <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                                    <ShieldAlert className="w-3.5 h-3.5 text-red-500" /> Detalhes do Incidente
-                                  </div>
-                                  <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-2">
-                                    <div className="flex justify-between text-[10px]">
-                                      <span className="text-muted-foreground">Motivo:</span>
-                                      <span className="font-bold text-red-600">{item.message}</span>
-                                    </div>
-                                    <div className="flex justify-between text-[10px]">
-                                      <span className="text-muted-foreground">Segredo Usado:</span>
-                                      <span className="font-mono text-primary bg-primary/5 px-1 rounded">{(item as any).version || 'v0'}</span>
-                                    </div>
-                                    <div className="flex justify-between text-[10px]">
-                                      <span className="text-muted-foreground">Request ID:</span>
-                                      <span className="font-mono">{(item as any).requestId}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                                  <Fingerprint className="w-3.5 h-3.5" /> Payload Metadata
-                                </div>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="h-6 text-[8px] gap-1 px-2 border border-border/40"
-                                  onClick={() => exportThread((item as any).payloadHash, 'csv')}
-                                >
-                                  <Download className="w-2.5 h-2.5" />
-                                  Exportar Thread
-                                </Button>
-                              </div>
-                              <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-4">
-                                <div className="flex flex-col gap-1 text-[10px]">
-                                  <span className="text-muted-foreground">Payload Hash (SHA-256):</span>
-                                  <span className="font-mono break-all bg-secondary/30 p-1.5 rounded">{(item as any).payloadHash}</span>
-                                </div>
-                                
-                                <div className="space-y-2">
-                                  <span className="text-[9px] font-bold uppercase text-muted-foreground">Timeline da Thread</span>
-                                  <div className="relative pl-4 space-y-3 border-l-2 border-primary/20">
-                                    {history
-                                      .filter(h => h.payloadHash === (item as any).payloadHash)
-                                      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                                      .map((h, i) => (
-                                        <div key={i} className="relative">
-                                          <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-background" />
-                                          <div className="flex flex-col gap-0.5 text-[9px]">
-                                            <div className="flex justify-between items-center">
-                                              <span className="font-bold text-foreground">{h.date}</span>
-                                              <Badge variant="outline" className="text-[7px] h-3.5 px-1 uppercase">{h.status}</Badge>
-                                            </div>
-                                            <span className="text-muted-foreground">Endpoint: {h.type === 'Webhook' ? 'Wavoip Gateway' : 'Wavoip API'}</span>
-                                            <span className="text-[8px] opacity-70">RID: {(h as any).requestId}</span>
-                                          </div>
-                                        </div>
-                                      ))}
-                                  </div>
-                                </div>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-xs">
+                          <DialogHeader>
+                            <DialogTitle className="text-sm font-bold">Canais de Alerta</DialogTitle>
+                            <DialogDescription className="text-[10px]">Configure como receber falhas críticas.</DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4 py-2">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs flex items-center gap-2"><Zap className="w-3 h-3" /> Visual (Toast)</Label>
+                              <Checkbox 
+                                checked={alertChannels.visual} 
+                                onCheckedChange={(checked) => setAlertChannels({...alertChannels, visual: !!checked})} 
+                              />
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs flex items-center gap-2"><Mail className="w-3 h-3" /> E-mail</Label>
+                              <Checkbox 
+                                checked={alertChannels.email} 
+                                onCheckedChange={(checked) => setAlertChannels({...alertChannels, email: !!checked})} 
+                              />
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs flex items-center gap-2"><Webhook className="w-3 h-3" /> Webhook</Label>
+                              <Checkbox 
+                                checked={alertChannels.webhook} 
+                                onCheckedChange={(checked) => setAlertChannels({...alertChannels, webhook: !!checked})} 
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[10px]">Limite Alerta Inatividade (s)</Label>
+                              <Input 
+                                type="number" 
+                                value={alertThreshold} 
+                                onChange={e => setAlertThreshold(Number(e.target.value))}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[10px]">Limite Incidentes Segurança</Label>
+                              <Input 
+                                type="number" 
+                                value={securityAlertLimit} 
+                                onChange={e => setSecurityAlertLimit(Number(e.target.value))}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                            <Separator />
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs font-bold">Ativar Geral</Label>
+                              <Button 
+                                variant={isAlertEnabled ? "default" : "outline"} 
+                                size="sm" 
+                                className="h-7 text-[10px]"
+                                onClick={() => {
+                                  const newVal = !isAlertEnabled;
+                                  setIsAlertEnabled(newVal);
+                                  if (access?.sub_company_id) {
+                                    supabase.from('wavoip_settings').upsert({
+                                      sub_company_id: access.sub_company_id,
+                                      alert_channels: alertChannels,
+                                      alert_threshold_seconds: alertThreshold
+                                    }).then();
+                                  }
+                                }}
+                              >
+                                {isAlertEnabled ? 'Ativo' : 'Pausado'}
+                              </Button>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                    <p className="text-xl font-bold text-foreground">{isAlertEnabled ? 'Ativos' : 'Silenciados'}</p>
+                    <div className="flex gap-1 mt-1">
+                      {alertChannels.visual && <Zap className="w-2.5 h-2.5 text-primary" />}
+                      {alertChannels.email && <Mail className="w-2.5 h-2.5 text-primary" />}
+                      {alertChannels.webhook && <Webhook className="w-2.5 h-2.5 text-primary" />}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
 
-                                <div className="space-y-3">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[9px] font-bold uppercase text-muted-foreground">Ações da Thread</span>
-                                    {resolvedThreads[(item as any).payloadHash] ? (
-                                      <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200 text-[8px] h-4 gap-1">
-                                        <UserCheck className="w-2 h-2" /> Resolvido
-                                      </Badge>
-                                    ) : null}
+              <Card className="glass-card">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-primary" /> Credenciais de API
+                  </CardTitle>
+                  <CardDescription>Informe seus dados de acesso fornecidos pelo painel Wavoip</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>URL do Servidor</Label>
+                    <div className="relative">
+                      <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input 
+                        className="pl-9" 
+                        value={form.apiUrl} 
+                        onChange={e => setForm({...form, apiUrl: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      Token de Acesso (API Key) <Lock className="w-3 h-3 text-muted-foreground" />
+                    </Label>
+                    <div className="relative">
+                      <Input 
+                        type={showToken ? "text" : "password"} 
+                        placeholder="wa_..." 
+                        value={form.token}
+                        onChange={e => setForm({...form, token: e.target.value})}
+                        className="pr-10 font-mono"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                        onClick={() => setShowToken(!showToken)}
+                      >
+                        {showToken ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      As credenciais são criptografadas em repouso seguindo padrões AES-256.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="glass-card">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Navigation className="w-4 h-4 text-primary" /> Roteamento de Chamadas
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-7 text-[10px] gap-2"
+                      onClick={handleRoutingTest}
+                      disabled={testing}
+                    >
+                      {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Navigation className="w-3 h-3" />}
+                      Testar Roteamento
+                    </Button>
+                  </CardTitle>
+                  <CardDescription>Defina os ramais de origem e destino para as integrações</CardDescription>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Origem (DID/Ramal)</Label>
+                    <Input 
+                      placeholder="Ex: 551199999999" 
+                      value={form.origin}
+                      onChange={e => setForm({...form, origin: e.target.value})}
+                      className={routingTestResult.status === 'error' && !form.origin ? 'border-red-500' : ''}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Destino Padrão</Label>
+                    <Input 
+                      placeholder="Ramal ou Fila" 
+                      value={form.destination}
+                      onChange={e => setForm({...form, destination: e.target.value})}
+                      className={routingTestResult.status === 'error' && !form.destination ? 'border-red-500' : ''}
+                    />
+                  </div>
+
+                  {routingTestResult.status !== 'none' && (
+                    <div className={`md:col-span-2 p-4 rounded-xl space-y-3 border ${
+                      routingTestResult.status === 'success' 
+                      ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-700' 
+                      : 'bg-red-500/5 border-red-500/20 text-red-700'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-tight">
+                          <Terminal className="w-3.5 h-3.5" />
+                          Logs de Execução do Teste
+                        </div>
+                        <Badge 
+                          variant="outline" 
+                          className={`text-[9px] ${
+                            routingTestResult.status === 'success' 
+                            ? 'border-emerald-500/30 text-emerald-600' 
+                            : 'border-red-500/30 text-red-600'
+                          }`}
+                        >
+                          {routingTestResult.status === 'success' ? 'PASSED' : 'FAILED'}
+                        </Badge>
+                      </div>
+                      
+                      <div className="bg-black/5 rounded-lg p-3 font-mono text-[10px] space-y-1">
+                        {routingTestResult.logs.map((log, i) => (
+                          <div key={i} className="flex gap-2">
+                            <span className="opacity-40">[{i+1}]</span>
+                            <span>{log}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center gap-3 text-xs pt-1">
+                        {routingTestResult.status === 'success' ? (
+                          <>
+                            <CheckCircle2 className="w-4 h-4 shrink-0" />
+                            <div className="flex items-center gap-2 overflow-hidden">
+                              <span className="truncate">{form.origin}</span>
+                              <ArrowRight className="w-3 h-3 shrink-0" />
+                              <span className="truncate">{form.destination}</span>
+                              <span className="font-bold ml-1 shrink-0">Caminho Válido</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            <span className="font-medium">{routingTestResult.details}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="md:col-span-2 space-y-2 pt-2">
+                    <Label className="flex items-center gap-2">
+                      <Webhook className="w-4 h-4 text-primary" /> Webhook de Eventos
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input 
+                        className="font-mono text-[10px] bg-secondary/30" 
+                        value={`https://api.lovable.dev/v1/webhooks/wavoip/${access?.sub_company_id || 'master'}`} 
+                        readOnly
+                      />
+                      <Button variant="outline" size="sm" onClick={() => {
+                        navigator.clipboard.writeText(`https://api.lovable.dev/v1/webhooks/wavoip/${access?.sub_company_id || 'master'}`);
+                        toast.success('URL copiada!');
+                      }}>
+                        Copiar
+                      </Button>
+                    </div>
+                    <div className="md:col-span-2 space-y-2 pt-2">
+                      <Label className="flex items-center gap-2">
+                        Segredo de Assinatura (Webhook Secret)
+                      </Label>
+                      <div className="flex gap-2">
+                        <Input 
+                          className="font-mono text-[10px] bg-secondary/30" 
+                          value={webhookSecret} 
+                          readOnly
+                        />
+                        <Button variant="outline" size="sm" onClick={() => {
+                          navigator.clipboard.writeText(webhookSecret);
+                          toast.success('Segredo copiado!');
+                        }}>
+                          Copiar
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={rotateSecret}
+                          disabled={isRotating}
+                        >
+                          {isRotating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                        </Button>
+                      </div>
+                      {previousSecret && (
+                        <div className="p-2 rounded bg-amber-500/5 border border-amber-500/10 text-[9px] text-amber-600 mt-2 flex items-center justify-between">
+                          <span>Segredo anterior (v-1) ainda aceito: <code className="font-mono">{previousSecret}</code></span>
+                          <Badge variant="outline" className="text-[8px] h-4">v-1 ativo</Badge>
+                        </div>
+                      )}
+                      <p className="text-[10px] text-muted-foreground">
+                        Utilize este segredo para validar o header <code className="bg-secondary px-1">X-Wavoip-Signature</code> em sua integração. O versionamento permite migração sem downtime.
+                      </p>
+                    </div>
+                    
+                    <div className="pt-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-7 text-[10px] gap-2 border-primary/20 hover:bg-primary/5"
+                        onClick={runSecurityRotationTests}
+                        disabled={testing}
+                      >
+                        <TestTube className="w-3 h-3 text-primary" />
+                        Validar Rotação de Segredos
+                      </Button>
+                    </div>
+
+                    <p className="text-[10px] text-muted-foreground italic">
+                      Configure esta URL no painel Wavoip para receber atualizações de chamadas e mensagens em tempo real.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <Button 
+                  variant="secondary" 
+                  className="flex-1 gap-2 bg-secondary/50 hover:bg-secondary border-border/40" 
+                  onClick={handleTest}
+                  disabled={testing}
+                >
+                  {testing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CirclePlay className="w-4 h-4" />
+                  )}
+                  Executar Teste Completo
+                </Button>
+
+                <Button 
+                  className="flex-1 gap-2 shadow-lg shadow-primary/20" 
+                  onClick={handleSave}
+                  disabled={loading || !validated}
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Ativar Integração
+                </Button>
+              </div>
+
+              {lastValidation.status !== 'none' && (
+                <AnimatePresence>
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className={`flex items-center gap-3 p-4 rounded-xl border ${
+                      lastValidation.status === 'success' 
+                      ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-700' 
+                      : 'bg-red-500/5 border-red-500/20 text-red-700'
+                    }`}
+                  >
+                    {lastValidation.status === 'success' ? (
+                      <CheckCircle2 className="w-5 h-5 shrink-0" />
+                    ) : (
+                      <XCircle className="w-5 h-5 shrink-0" />
+                    )}
+                    <div className="flex-1">
+                      <p className="text-xs font-bold">
+                        {lastValidation.status === 'success' ? 'Conexão Bem-sucedida' : 'Erro de Conexão'}
+                      </p>
+                      <p className="text-[10px] opacity-80">{lastValidation.message}</p>
+                    </div>
+                    <span className="text-[10px] font-mono opacity-60">{lastValidation.timestamp}</span>
+                  </motion.div>
+                </AnimatePresence>
+              )}
+
+              <Card className="glass-card overflow-hidden">
+                <CardHeader className="bg-secondary/20 pb-4">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex flex-col gap-1">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <History className="w-4 h-4 text-primary" /> Histórico de Auditoria
+                        </CardTitle>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className={`text-[8px] uppercase tracking-widest px-1.5 py-0 ${isLive ? 'border-emerald-500/50 text-emerald-500' : 'text-muted-foreground'}`}>
+                            {isLive ? 'Conectado Live' : 'Pausado'}
+                          </Badge>
+                          <CardDescription className="text-[10px]">Logs de validação em tempo real</CardDescription>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
+                          <span className="text-[8px] uppercase text-muted-foreground font-bold">WebSocket Status</span>
+                          <div className="flex items-center gap-2">
+                            <div className={`w-1.5 h-1.5 rounded-full ${
+                              wsStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 
+                              wsStatus === 'reconnecting' ? 'bg-amber-500 animate-bounce' : 'bg-red-500'
+                            }`} />
+                            <span className={`text-[9px] font-bold ${
+                              wsStatus === 'connected' ? 'text-emerald-600' : 
+                              wsStatus === 'reconnecting' ? 'text-amber-600' : 'text-red-600'
+                            }`}>
+                              {wsStatus.toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
+                          <span className="text-[8px] uppercase text-muted-foreground font-bold">Config WS</span>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-6 w-6">
+                                <Settings2 className="w-3 h-3" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-xs">
+                              <DialogHeader>
+                                <DialogTitle className="text-sm font-bold">Backoff do WebSocket</DialogTitle>
+                                <DialogDescription className="text-[10px]">Ajuste a estratégia de reconexão.</DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4 py-2">
+                                <div className="space-y-1">
+                                  <Label className="text-[10px]">Intervalo Mínimo (ms)</Label>
+                                  <Input 
+                                    type="number" 
+                                    value={wsBackoff.min} 
+                                    onChange={e => setWsBackoff({...wsBackoff, min: Number(e.target.value)})}
+                                    className="h-8 text-xs"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-[10px]">Intervalo Máximo (ms)</Label>
+                                  <Input 
+                                    type="number" 
+                                    value={wsBackoff.max} 
+                                    onChange={e => setWsBackoff({...wsBackoff, max: Number(e.target.value)})}
+                                    className="h-8 text-xs"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-[10px]">Tentativas Máximas</Label>
+                                  <Input 
+                                    type="number" 
+                                    value={wsBackoff.maxAttempts} 
+                                    onChange={e => setWsBackoff({...wsBackoff, maxAttempts: Number(e.target.value)})}
+                                    className="h-8 text-xs"
+                                  />
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
+
+                        <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
+                          <span className="text-[8px] uppercase text-muted-foreground font-bold">Simular Evento</span>
+                          <div className="flex gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-6 w-6 text-red-500 hover:bg-red-50" 
+                              onClick={() => simulateEvent('Security')}
+                              title="Simular Assinatura Inválida"
+                            >
+                              <ShieldAlert className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-6 w-6 text-primary hover:bg-primary/5" 
+                              onClick={() => simulateEvent('Routing')}
+                              title="Simular Roteamento"
+                            >
+                              <Navigation className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
+                          <span className="text-[8px] uppercase text-muted-foreground font-bold">Janela Dedup</span>
+                          <select 
+                            className="h-6 text-[9px] rounded bg-secondary/50 border-none outline-none px-1 font-bold"
+                            value={dedupWindow}
+                            onChange={(e) => setDedupWindow(Number(e.target.value) as any)}
+                          >
+                            <option value={5}>5m</option>
+                            <option value={15}>15m</option>
+                            <option value={60}>1h</option>
+                          </select>
+                        </div>
+
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className={`h-8 text-[10px] gap-2 ${isLive ? 'text-emerald-500 hover:text-emerald-600 bg-emerald-500/5' : 'text-muted-foreground'}`}
+                          onClick={() => {
+                            if (isWsLoading) return;
+                            setIsLive(!isLive);
+                          }}
+                          disabled={isWsLoading}
+                        >
+                          {isWsLoading ? <Loader2 className="w-1.5 h-1.5 animate-spin" /> : (
+                            <div className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
+                          )}
+                          {isLive ? 'Live' : 'Pausado'}
+                        </Button>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button 
+                            variant={filterType === 'Security' ? "default" : "outline"} 
+                            size="sm" 
+                            className="h-7 text-[9px] gap-1 px-2 border-red-500/20 text-red-600 hover:bg-red-500/5"
+                            onClick={() => setFilterType(filterType === 'Security' ? 'all' : 'Security')}
+                          >
+                            <ShieldAlert className="w-3 h-3" />
+                            Somente Segurança
+                          </Button>
+                          <Separator orientation="vertical" className="h-4 mx-1" />
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 text-[9px] border border-border/40"
+                            onClick={() => handleExportQuick('today')}
+                          >Hoje</Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 text-[9px] border border-border/40"
+                            onClick={() => handleExportQuick('7d')}
+                          >7 Dias</Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 text-[9px] border border-border/40"
+                            onClick={() => handleExportQuick('30d')}
+                          >30 Dias</Button>
+
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="outline" size="sm" className="h-7 text-[9px] gap-1 px-2">
+                                <Bookmark className="w-3 h-3" />
+                                Presets
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-xs">
+                              <DialogHeader>
+                                <DialogTitle className="text-sm font-bold">Presets de Filtro</DialogTitle>
+                                <DialogDescription className="text-[10px]">Salve ou carregue configurações de filtros.</DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4 py-2">
+                                <div className="flex gap-2">
+                                  <Input 
+                                    placeholder="Nome do preset..." 
+                                    className="h-8 text-xs" 
+                                    id="new-preset-name"
+                                  />
+                                  <Button 
+                                    size="sm" 
+                                    className="h-8 text-xs"
+                                    disabled={isSavingPreset}
+                                    onClick={async () => {
+                                      const nameInput = document.getElementById('new-preset-name') as HTMLInputElement;
+                                      const name = nameInput.value;
+                                      if (!name) return;
+                                      setIsSavingPreset(true);
+                                      const filters = { filterStatus, filterType, filterPeriod, searchTerm };
+                                      const { error } = await supabase.from('wavoip_filter_presets').insert({
+                                        sub_company_id: access?.sub_company_id,
+                                        name,
+                                        filters
+                                      });
+                                      if (!error) {
+                                        toast.success('Preset salvo!');
+                                        setFilterPresets([...filterPresets, { name, filters }]);
+                                        nameInput.value = '';
+                                      }
+                                      setIsSavingPreset(false);
+                                    }}
+                                  >
+                                    {isSavingPreset ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                  </Button>
+                                </div>
+                                <Separator />
+                                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                                  {filterPresets.map((p, i) => (
+                                    <div key={i} className="flex items-center justify-between bg-secondary/20 p-2 rounded text-[10px]">
+                                      <span className="font-medium">{p.name}</span>
+                                      <div className="flex gap-1">
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-5 w-5"
+                                          onClick={() => {
+                                            setFilterStatus(p.filters.filterStatus);
+                                            setFilterType(p.filters.filterType);
+                                            setFilterPeriod(p.filters.filterPeriod);
+                                            setSearchTerm(p.filters.searchTerm);
+                                            toast.success(`Preset "${p.name}" aplicado.`);
+                                          }}
+                                        >
+                                          <RefreshCw className="w-2.5 h-2.5" />
+                                        </Button>
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-5 w-5"
+                                          onClick={() => {
+                                            const url = new URL(window.location.href);
+                                            url.searchParams.set('status', p.filters.filterStatus);
+                                            url.searchParams.set('type', p.filters.filterType);
+                                            url.searchParams.set('period', p.filters.filterPeriod);
+                                            url.searchParams.set('q', p.filters.searchTerm);
+                                            navigator.clipboard.writeText(url.toString());
+                                            toast.success('Link compartilhado copiado!');
+                                          }}
+                                        >
+                                          <Share2 className="w-2.5 h-2.5" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 text-[10px] gap-2"
+                                disabled={isExporting}
+                              >
+                                {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                                Exportar CSV
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-md">
+                              <DialogHeader>
+                                <DialogTitle className="text-sm font-bold">Configurar Exportação</DialogTitle>
+                                <DialogDescription className="text-xs">Selecione as colunas ou escolha um preset rápido.</DialogDescription>
+                              </DialogHeader>
+
+                              <div className="flex flex-col gap-3 py-2">
+                                <Label className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Presets de Relatório</Label>
+                                <div className="flex gap-2">
+                                  <Button 
+                                    variant="secondary" 
+                                    size="sm" 
+                                    className="h-7 text-[9px] flex-1 gap-1"
+                                    onClick={() => applyPreset('security')}
+                                  >
+                                    <Shield className="w-3 h-3 text-red-500" /> Segurança
+                                  </Button>
+                                  <Button 
+                                    variant="secondary" 
+                                    size="sm" 
+                                    className="h-7 text-[9px] flex-1 gap-1"
+                                    onClick={() => applyPreset('routing')}
+                                  >
+                                    <Navigation className="w-3 h-3 text-primary" /> Roteamento
+                                  </Button>
+                                </div>
+                              </div>
+
+                              <Separator className="opacity-40" />
+
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-3 py-4">
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox 
+                                    id="col-date" 
+                                    checked={exportColumns.date} 
+                                    onCheckedChange={(checked) => setExportColumns({...exportColumns, date: !!checked})}
+                                  />
+                                  <label htmlFor="col-date" className="text-xs">Data/Hora</label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox 
+                                    id="col-status" 
+                                    checked={exportColumns.status} 
+                                    onCheckedChange={(checked) => setExportColumns({...exportColumns, status: !!checked})}
+                                  />
+                                  <label htmlFor="col-status" className="text-xs">Status</label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox 
+                                    id="col-type" 
+                                    checked={exportColumns.type} 
+                                    onCheckedChange={(checked) => setExportColumns({...exportColumns, type: !!checked})}
+                                  />
+                                  <label htmlFor="col-type" className="text-xs">Tipo</label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox 
+                                    id="col-message" 
+                                    checked={exportColumns.message} 
+                                    onCheckedChange={(checked) => setExportColumns({...exportColumns, message: !!checked})}
+                                  />
+                                  <label htmlFor="col-message" className="text-xs">Mensagem</label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox 
+                                    id="col-version" 
+                                    checked={exportColumns.version} 
+                                    onCheckedChange={(checked) => setExportColumns({...exportColumns, version: !!checked})}
+                                  />
+                                  <label htmlFor="col-version" className="text-xs">Versão Segredo</label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox 
+                                    id="col-requestId" 
+                                    checked={exportColumns.requestId} 
+                                    onCheckedChange={(checked) => setExportColumns({...exportColumns, requestId: !!checked})}
+                                  />
+                                  <label htmlFor="col-requestId" className="text-xs">Request ID</label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox 
+                                    id="col-payloadHash" 
+                                    checked={exportColumns.payloadHash} 
+                                    onCheckedChange={(checked) => setExportColumns({...exportColumns, payloadHash: !!checked})}
+                                  />
+                                  <label htmlFor="col-payloadHash" className="text-xs">Payload Hash</label>
+                                </div>
+                              </div>
+                              <DialogFooter>
+                                <Button 
+                                  className="w-full text-xs h-8" 
+                                  onClick={() => exportHistory('csv')}
+                                >
+                                  Gerar CSV agora
+                                </Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
+
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                        <Input 
+                          placeholder="Buscar logs ou segredos..." 
+                          className="pl-8 h-8 text-[10px] w-48"
+                          value={searchTerm}
+                          onChange={e => setSearchTerm(e.target.value)}
+                        />
+                      </div>
+                      <select 
+                        className="h-8 text-[10px] rounded-md border border-input bg-background px-2"
+                        value={filterType}
+                        onChange={e => {
+                          setFilterType(e.target.value as any);
+                          setCurrentPage(1);
+                        }}
+                      >
+                        <option value="all">Tipos: Tudo</option>
+                        <option value="API">API</option>
+                        <option value="Webhook">Webhooks</option>
+                        <option value="Security">Segurança</option>
+                        <option value="Routing">Roteamento</option>
+                        <option value="CI">CI/CD Pipeline</option>
+                      </select>
+                      <select 
+                        className="h-8 text-[10px] rounded-md border border-input bg-background px-2"
+                        value={filterPeriod}
+                        onChange={e => {
+                          setFilterPeriod(e.target.value as any);
+                          setCurrentPage(1);
+                        }}
+                      >
+                        <option value="all">Período: Tudo</option>
+                        <option value="today">Hoje</option>
+                        <option value="7d">Últimos 7 dias</option>
+                        <option value="30d">Últimos 30 dias</option>
+                      </select>
+                      <select 
+                        className="h-8 text-[10px] rounded-md border border-input bg-background px-2"
+                        value={filterStatus}
+                        onChange={e => {
+                          setFilterStatus(e.target.value as any);
+                          setCurrentPage(1);
+                        }}
+                      >
+                        <option value="all">Todos Status</option>
+                        <option value="success">Sucessos</option>
+                        <option value="error">Falhas</option>
+                      </select>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent border-border/40">
+                        <TableHead className="w-[180px] text-[10px] uppercase font-bold tracking-wider">
+                          <button 
+                            className="flex items-center gap-1 hover:text-primary transition-colors"
+                            onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+                          >
+                            Data/Hora
+                            <ArrowUpDown className="w-3 h-3" />
+                          </button>
+                        </TableHead>
+                        <TableHead className="w-[100px] text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
+                        <TableHead className="w-[100px] text-[10px] uppercase font-bold tracking-wider">Tipo</TableHead>
+                        <TableHead className="text-[10px] uppercase font-bold tracking-wider">Resultado/Mensagem</TableHead>
+                        <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider">Ação</TableHead>
+                      </TableRow>
+                    </TableHeader>
+
+                    <TableBody>
+                        {paginatedHistory.map((item) => (
+                          <Fragment key={item.id}>
+                            <TableRow className="border-border/40 hover:bg-secondary/10 transition-colors cursor-pointer" onClick={() => toggleRow(item.id)}>
+                              <TableCell className="text-xs font-mono text-muted-foreground">
+                                <div className="flex items-center gap-2">
+                                  {item.type === 'Security' || item.type === 'CI' ? (
+                                    expandedRows.has(item.id) ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+                                  ) : null}
+                                  {item.date}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge 
+                                  variant="outline" 
+                                  className={`text-[9px] font-bold px-1.5 py-0 ${
+                                    item.status === 'success' 
+                                    ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' 
+                                    : 'bg-red-500/10 text-red-600 border-red-500/20'
+                                  }`}
+                                >
+                                  {item.status === 'success' ? 'SUCESSO' : 'FALHA'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary" className="text-[9px] px-1.5 py-0">{item.type}</Badge>
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground">
+                                <div className="flex flex-col gap-0.5">
+                                  <div className="flex items-center gap-2">
+                                    <span>{item.message}</span>
+                                    {(item as any).payloadHash && (
+                                      <div className="flex items-center gap-1">
+                                        <Fingerprint className="w-3 h-3 text-primary/50" />
+                                        <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-primary/5 font-mono border-primary/20">
+                                          thread: {(item as any).payloadHash.substring(7, 12)}
+                                        </Badge>
+                                      </div>
+                                    )}
+                                    {(item as any).isSuppressed && (
+                                      <Dialog>
+                                        <DialogTrigger asChild>
+                                          <Badge 
+                                            variant="outline" 
+                                            className="text-[8px] h-3.5 px-1 bg-amber-50 text-amber-600 border-amber-200 uppercase cursor-pointer hover:bg-amber-100 transition-colors"
+                                          >
+                                            Deduplicado
+                                          </Badge>
+                                        </DialogTrigger>
+                                        <DialogContent className="sm:max-w-md">
+                                          <DialogHeader>
+                                            <DialogTitle className="text-sm font-bold flex items-center gap-2">
+                                              <Zap className="w-4 h-4 text-amber-500" /> Detalhes da Deduplicação
+                                            </DialogTitle>
+                                            <DialogDescription className="text-xs">Rastreamento do evento suprimido pelo motor de sincronização.</DialogDescription>
+                                          </DialogHeader>
+                                          <div className="space-y-4 py-2">
+                                            <div className="bg-secondary/20 p-3 rounded-lg space-y-2 border border-border/40">
+                                              <div className="flex justify-between text-[10px]">
+                                                <span className="text-muted-foreground">Status:</span>
+                                                <span className="font-bold text-amber-600">SUPRIMIDO</span>
+                                              </div>
+                                              <div className="flex justify-between text-[10px]">
+                                                <span className="text-muted-foreground">Motivo:</span>
+                                                <span className="font-medium">Chave idêntica detectada na janela ativa</span>
+                                              </div>
+                                              <div className="flex justify-between text-[10px]">
+                                                <span className="text-muted-foreground">Janela de Config:</span>
+                                                <span className="font-mono">{dedupWindow} minutos</span>
+                                              </div>
+                                            </div>
+                                            
+                                            <div className="space-y-2">
+                                              <span className="text-[10px] font-bold uppercase text-muted-foreground">Evento de Origem (Mestre)</span>
+                                              <div className="p-2 border rounded-md text-[10px] flex items-center justify-between hover:bg-secondary/10 cursor-pointer transition-colors">
+                                                <div className="flex items-center gap-2">
+                                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                                  <span className="font-mono">{(item as any).details?.split('Chave comparada: ')[1] || 'req_...'}</span>
+                                                </div>
+                                                <Button variant="ghost" size="icon" className="h-4 w-4" title="Ir para Auditoria">
+                                                  <Eye className="w-3 h-3" />
+                                                </Button>
+                                              </div>
+                                            </div>
+
+                                            <div className="pt-2">
+                                              <Button 
+                                                variant="outline" 
+                                                className="w-full text-[10px] h-8 gap-2"
+                                                onClick={() => {
+                                                  toast.info("Exportando log de supressão...");
+                                                }}
+                                              >
+                                                <Download className="w-3 h-3" /> Baixar Log de Supressão
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        </DialogContent>
+                                      </Dialog>
+                                    )}
                                   </div>
-                                  <div className="flex gap-2">
+                                  {(item as any).details && (
+                                    <span className="text-[9px] opacity-60 italic">{(item as any).details}</span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-1">
+                                  {item.type === 'Security' && (
                                     <Dialog>
                                       <DialogTrigger asChild>
-                                        <Button variant="outline" size="sm" className="h-7 text-[9px] flex-1 gap-1">
-                                          <UserCheck className="w-3 h-3" />
-                                          {resolvedThreads[(item as any).payloadHash] ? 'Editar Resolução' : 'Marcar Resolvido'}
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-6 w-6 text-primary hover:bg-primary/10"
+                                          title="Reprocessar (Replay)"
+                                        >
+                                          <RefreshCw className="h-3 w-3" />
                                         </Button>
                                       </DialogTrigger>
                                       <DialogContent className="sm:max-w-xs">
                                         <DialogHeader>
-                                          <DialogTitle className="text-sm font-bold">Resolver Incidente</DialogTitle>
-                                          <DialogDescription className="text-xs">Deixe uma anotação sobre a causa e solução.</DialogDescription>
+                                          <DialogTitle className="text-sm font-bold">Reprocessar Evento</DialogTitle>
+                                          <DialogDescription className="text-[10px]">
+                                            RequestId: <code className="bg-secondary px-1">{(item as any).requestId}</code>
+                                          </DialogDescription>
                                         </DialogHeader>
                                         <div className="space-y-3 py-2">
-                                          <Label className="text-[10px]">Anotação Auditável</Label>
-                                          <textarea 
-                                            id={`note-${(item as any).payloadHash}`}
-                                            className="w-full min-h-[80px] text-xs p-2 rounded-md border bg-background"
-                                            placeholder="Ex: Segredo v-1 rotacionado com sucesso. Tráfego normalizado."
-                                            defaultValue={resolvedThreads[(item as any).payloadHash]?.note || ''}
-                                          />
-                                          <Button 
-                                            className="w-full h-8 text-xs"
-                                            onClick={() => {
-                                              const note = (document.getElementById(`note-${(item as any).payloadHash}`) as HTMLTextAreaElement).value;
-                                              if (!note) return;
-                                              
-                                              const resolvedAt = new Date().toLocaleString();
-                                              const resolvedBy = (access as any)?.email || 'System';
-                                              
-                                              setResolvedThreads(prev => ({
-                                                ...prev,
-                                                [(item as any).payloadHash]: {
-                                                  note,
-                                                  resolvedAt,
-                                                  resolvedBy
-                                                }
-                                              }));
-                                              
-                                              // Notificar usuários com role adequada (simulado)
-                                              toast.info('Enviando notificações de resolução...', {
-                                                description: `Resumo enviado para administradores: "Thread ${(item as any).payloadHash.substring(7, 12)} resolvida por ${resolvedBy}"`,
-                                                duration: 5000
-                                              });
-                                              
-                                              toast.success('Incidente marcado como resolvido.');
-                                            }}
-                                          >Salvar Resolução</Button>
+                                          {(() => {
+                                            const itemTime = new Date(item.date).getTime();
+                                            const nowTime = Date.now();
+                                            const windowMs = 24 * 60 * 60 * 1000;
+                                            const isWithinWindow = (nowTime - itemTime) <= windowMs;
+                                            const isEligible = item.status === 'error';
+
+                                            if (!isWithinWindow) {
+                                              return (
+                                                <div className="flex items-center gap-2 p-2 rounded bg-red-50 text-red-600 border border-red-100 text-[10px]">
+                                                  <AlertCircle className="w-3.5 h-3.5" />
+                                                  Fora da janela de 24h permitida para replay.
+                                                </div>
+                                              );
+                                            }
+
+                                            if (!isEligible) {
+                                              return (
+                                                <div className="flex items-center gap-2 p-2 rounded bg-amber-50 text-amber-600 border border-amber-100 text-[10px]">
+                                                  <AlertCircle className="w-3.5 h-3.5" />
+                                                  Apenas eventos com falha são elegíveis para replay.
+                                                </div>
+                                              );
+                                            }
+
+                                            return (
+                                              <>
+                                                <p className="text-[10px] text-muted-foreground">Escolha a versão do segredo para o handshake simulado:</p>
+                                                <div className="flex gap-2">
+                                                  <Dialog>
+                                                    <DialogTrigger asChild>
+                                                      <Button 
+                                                        className="flex-1 text-[10px] h-8" 
+                                                        disabled={(access as any)?.role !== 'admin'}
+                                                      >
+                                                        {(access as any)?.role === 'admin' ? 'v0 (Atual)' : <><Lock className="w-3 h-3 mr-1" /> v0</>}
+                                                      </Button>
+                                                    </DialogTrigger>
+                                                    <DialogContent className="sm:max-w-xs">
+                                                      <DialogHeader>
+                                                        <DialogTitle className="text-sm font-bold">Confirmar Replay v0</DialogTitle>
+                                                        <DialogDescription className="text-xs">
+                                                          Deseja reprocessar o request {(item as any).requestId} usando o segredo atual (v0)?
+                                                        </DialogDescription>
+                                                      </DialogHeader>
+                                                      <DialogFooter className="gap-2 sm:gap-0">
+                                                        <DialogTrigger asChild>
+                                                          <Button variant="outline" className="h-8 text-xs">Cancelar</Button>
+                                                        </DialogTrigger>
+                                                        <Button 
+                                                          className="h-8 text-xs"
+                                                          onClick={() => {
+                                                            toast.success(`Replay iniciado com segredo v0 (Atual) para ${(item as any).requestId}`);
+                                                            const replayEntry = {
+                                                              ...item,
+                                                              id: Date.now(),
+                                                              date: new Date().toLocaleString(),
+                                                              isReplay: true,
+                                                              replayUser: (access as any)?.email || 'Admin',
+                                                              replayVersion: 'v0',
+                                                              replayStatus: 'success'
+                                                            };
+                                                            setHistory(prev => [replayEntry, ...prev]);
+                                                          }}
+                                                        >Confirmar Replay</Button>
+                                                      </DialogFooter>
+                                                    </DialogContent>
+                                                  </Dialog>
+
+                                                  <Dialog>
+                                                    <DialogTrigger asChild>
+                                                      <Button 
+                                                        variant="outline"
+                                                        className="flex-1 text-[10px] h-8" 
+                                                        disabled={(access as any)?.role !== 'admin'}
+                                                      >
+                                                        {(access as any)?.role === 'admin' ? 'v-1 (Legado)' : <><Lock className="w-3 h-3 mr-1" /> v-1</>}
+                                                      </Button>
+                                                    </DialogTrigger>
+                                                    <DialogContent className="sm:max-w-xs">
+                                                      <DialogHeader>
+                                                        <DialogTitle className="text-sm font-bold">Confirmar Replay v-1</DialogTitle>
+                                                        <DialogDescription className="text-xs">
+                                                          Deseja reprocessar o request {(item as any).requestId} usando o segredo anterior (v-1)?
+                                                        </DialogDescription>
+                                                      </DialogHeader>
+                                                      <DialogFooter className="gap-2 sm:gap-0">
+                                                        <DialogTrigger asChild>
+                                                          <Button variant="outline" className="h-8 text-xs">Cancelar</Button>
+                                                        </DialogTrigger>
+                                                        <Button 
+                                                          className="h-8 text-xs"
+                                                          onClick={() => {
+                                                            toast.success(`Replay iniciado com segredo v-1 (Legado) para ${(item as any).requestId}`);
+                                                            const replayEntry = {
+                                                              ...item,
+                                                              id: Date.now(),
+                                                              date: new Date().toLocaleString(),
+                                                              isReplay: true,
+                                                              replayUser: (access as any)?.email || 'Admin',
+                                                              replayVersion: 'v-1',
+                                                              replayStatus: 'success'
+                                                            };
+                                                            setHistory(prev => [replayEntry, ...prev]);
+                                                          }}
+                                                        >Confirmar Replay</Button>
+                                                      </DialogFooter>
+                                                    </DialogContent>
+                                                  </Dialog>
+                                                </div>
+                                              </>
+                                            );
+                                          })()}
+                                          {(access as any)?.role !== 'admin' && (
+                                            <p className="text-[8px] text-red-500 italic text-center">Apenas administradores podem executar replay.</p>
+                                          )}
                                         </div>
                                       </DialogContent>
                                     </Dialog>
-                                  </div>
-
-                                  {resolvedThreads[(item as any).payloadHash] && (
-                                    <div className="bg-emerald-500/5 border border-emerald-500/20 p-2 rounded-md space-y-1">
-                                      <div className="flex justify-between items-center text-[8px] text-emerald-700 font-bold uppercase">
-                                        <span>Resolução por: {resolvedThreads[(item as any).payloadHash].resolvedBy}</span>
-                                        <span>{resolvedThreads[(item as any).payloadHash].resolvedAt}</span>
-                                      </div>
-                                      <p className="text-[9px] text-emerald-800 italic">
-                                        "{resolvedThreads[(item as any).payloadHash].note}"
-                                      </p>
-                                    </div>
                                   )}
-
-                                  <div className="text-[9px] text-amber-600 italic mt-1">
-                                    * Tentativas com o mesmo hash são agrupadas nesta thread para rastreabilidade.
-                                  </div>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-6 w-6 text-muted-foreground hover:text-primary"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleTest();
+                                    }}
+                                  >
+                                    <Activity className="h-3 w-3" />
+                                  </Button>
                                 </div>
-                              </div>
-                            </div>
-                              </>
-                            ) : (
-                              <>
-                                <div className="space-y-3">
-                                  <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                                    <Cpu className="w-3.5 h-3.5 text-primary" /> Resumo da Execução CI
-                                  </div>
-                                  <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-2">
-                                    <div className="flex justify-between text-[10px]">
-                                      <span className="text-muted-foreground">Build Versão:</span>
-                                      <span className="font-mono bg-primary/5 px-1 rounded">{(item as any).version || 'v1.0.0'}</span>
-                                    </div>
-                                    <div className="flex justify-between text-[10px]">
-                                      <span className="text-muted-foreground">Casos com Falha:</span>
-                                      <span className={`font-bold ${(item as any).failedCases > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                                        {(item as any).failedCases || 0}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between text-[10px]">
-                                      <span className="text-muted-foreground">Status do Deploy:</span>
-                                      <Badge variant="outline" className="text-[8px] h-3.5 uppercase">
-                                        {item.status === 'success' ? 'Aprovado' : 'Bloqueado'}
-                                      </Badge>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="space-y-3">
-                                  <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                                    <Terminal className="w-3.5 h-3.5" /> Artefatos e Logs
-                                  </div>
-                                  <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-2">
-                                    <div className="flex flex-col gap-2">
-                                      {((item as any).artifacts || []).map((artifact: string, i: number) => (
-                                        <div key={i} className="flex items-center justify-between text-[10px] bg-secondary/30 p-1.5 rounded">
-                                          <span className="font-mono truncate mr-2">{artifact}</span>
-                                          <Button variant="ghost" size="icon" className="h-4 w-4">
-                                            <Download className="h-2.5 w-2.5" />
-                                          </Button>
+                              </TableCell>
+                            </TableRow>
+                            {expandedRows.has(item.id) && (item.type === 'Security' || item.type === 'CI') && (
+                              <TableRow className="bg-secondary/20 border-border/40 hover:bg-secondary/20">
+                                <TableCell colSpan={5} className="p-4">
+                                  <motion.div 
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="grid grid-cols-1 md:grid-cols-2 gap-6"
+                                  >
+                                    {item.type === 'Security' ? (
+                                      <>
+                                        <div className="space-y-3">
+                                          <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                            <ShieldAlert className="w-3.5 h-3.5 text-red-500" /> Detalhes do Incidente
+                                          </div>
+                                          <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-2">
+                                            <div className="flex justify-between text-[10px]">
+                                              <span className="text-muted-foreground">Motivo:</span>
+                                              <span className="font-bold text-red-600">{item.message}</span>
+                                            </div>
+                                            <div className="flex justify-between text-[10px]">
+                                              <span className="text-muted-foreground">Segredo Usado:</span>
+                                              <span className="font-mono text-primary bg-primary/5 px-1 rounded">{(item as any).version || 'v0'}</span>
+                                            </div>
+                                            <div className="flex justify-between text-[10px]">
+                                              <span className="text-muted-foreground">Request ID:</span>
+                                              <span className="font-mono">{(item as any).requestId}</span>
+                                            </div>
+                                          </div>
                                         </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                </div>
-                              </>
+                                        <div className="space-y-3">
+                                          <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                              <Fingerprint className="w-3.5 h-3.5" /> Payload Metadata
+                                            </div>
+                                            <Button 
+                                              variant="ghost" 
+                                              size="sm" 
+                                              className="h-6 text-[8px] gap-1 px-2 border border-border/40"
+                                              onClick={() => exportThread((item as any).payloadHash, 'csv')}
+                                            >
+                                              <Download className="w-2.5 h-2.5" />
+                                              Exportar Thread
+                                            </Button>
+                                          </div>
+                                          <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-4">
+                                            <div className="flex flex-col gap-1 text-[10px]">
+                                              <span className="text-muted-foreground">Payload Hash (SHA-256):</span>
+                                              <span className="font-mono break-all bg-secondary/30 p-1.5 rounded">{(item as any).payloadHash}</span>
+                                            </div>
+                                            
+                                            <div className="space-y-2">
+                                              <span className="text-[9px] font-bold uppercase text-muted-foreground">Timeline da Thread</span>
+                                              <div className="relative pl-4 space-y-3 border-l-2 border-primary/20">
+                                                {history
+                                                  .filter(h => h.payloadHash === (item as any).payloadHash)
+                                                  .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                                                  .map((h, i) => (
+                                                    <div key={i} className="relative">
+                                                      <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-background" />
+                                                      <div className="flex flex-col gap-0.5 text-[9px]">
+                                                        <div className="flex justify-between items-center">
+                                                          <span className="font-bold text-foreground">{h.date}</span>
+                                                          <Badge variant="outline" className="text-[7px] h-3.5 px-1 uppercase">{h.status}</Badge>
+                                                        </div>
+                                                        <span className="text-muted-foreground">Endpoint: {h.type === 'Webhook' ? 'Wavoip Gateway' : 'Wavoip API'}</span>
+                                                        <span className="text-[8px] opacity-70">RID: {(h as any).requestId}</span>
+                                                      </div>
+                                                    </div>
+                                                  ))}
+                                              </div>
+                                            </div>
+
+                                            <div className="space-y-3">
+                                              <div className="flex items-center justify-between">
+                                                <span className="text-[9px] font-bold uppercase text-muted-foreground">Ações da Thread</span>
+                                                {resolvedThreads[(item as any).payloadHash] ? (
+                                                  <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200 text-[8px] h-4 gap-1">
+                                                    <UserCheck className="w-2 h-2" /> Resolvido
+                                                  </Badge>
+                                                ) : null}
+                                              </div>
+                                              <div className="flex gap-2">
+                                                <Dialog>
+                                                  <DialogTrigger asChild>
+                                                    <Button variant="outline" size="sm" className="h-7 text-[9px] flex-1 gap-1">
+                                                      <UserCheck className="w-3 h-3" />
+                                                      {resolvedThreads[(item as any).payloadHash] ? 'Editar Resolução' : 'Marcar Resolvido'}
+                                                    </Button>
+                                                  </DialogTrigger>
+                                                  <DialogContent className="sm:max-w-xs">
+                                                    <DialogHeader>
+                                                      <DialogTitle className="text-sm font-bold">Resolver Incidente</DialogTitle>
+                                                      <DialogDescription className="text-xs">Deixe uma anotação sobre a causa e solução.</DialogDescription>
+                                                    </DialogHeader>
+                                                    <div className="space-y-3 py-2">
+                                                      <Label className="text-[10px]">Anotação Auditável</Label>
+                                                      <textarea 
+                                                        id={`note-${(item as any).payloadHash}`}
+                                                        className="w-full min-h-[80px] text-xs p-2 rounded-md border bg-background"
+                                                        placeholder="Ex: Segredo v-1 rotacionado com sucesso. Tráfego normalizado."
+                                                        defaultValue={resolvedThreads[(item as any).payloadHash]?.note || ''}
+                                                      />
+                                                      <Button 
+                                                        className="w-full h-8 text-xs"
+                                                        onClick={() => {
+                                                          const note = (document.getElementById(`note-${(item as any).payloadHash}`) as HTMLTextAreaElement).value;
+                                                          if (!note) return;
+                                                          
+                                                          const resolvedAt = new Date().toLocaleString();
+                                                          const resolvedBy = (access as any)?.email || 'System';
+                                                          
+                                                          setResolvedThreads(prev => ({
+                                                            ...prev,
+                                                            [(item as any).payloadHash]: {
+                                                              note,
+                                                              resolvedAt,
+                                                              resolvedBy
+                                                            }
+                                                          }));
+                                                          
+                                                          toast.info('Enviando notificações de resolução...', {
+                                                            description: `Resumo enviado para administradores: "Thread ${(item as any).payloadHash.substring(7, 12)} resolvida por ${resolvedBy}"`,
+                                                            duration: 5000
+                                                          });
+                                                          
+                                                          toast.success('Incidente marcado como resolvido.');
+                                                        }}
+                                                      >Salvar Resolução</Button>
+                                                    </div>
+                                                  </DialogContent>
+                                                </Dialog>
+                                              </div>
+
+                                              {resolvedThreads[(item as any).payloadHash] && (
+                                                <div className="bg-emerald-500/5 border border-emerald-500/20 p-2 rounded-md space-y-1">
+                                                  <div className="flex justify-between items-center text-[8px] text-emerald-700 font-bold uppercase">
+                                                    <span>Resolução por: {resolvedThreads[(item as any).payloadHash].resolvedBy}</span>
+                                                    <span>{resolvedThreads[(item as any).payloadHash].resolvedAt}</span>
+                                                  </div>
+                                                  <p className="text-[9px] text-emerald-800 italic">
+                                                    "{resolvedThreads[(item as any).payloadHash].note}"
+                                                  </p>
+                                                </div>
+                                              )}
+
+                                              <div className="text-[9px] text-amber-600 italic mt-1">
+                                                * Tentativas com o mesmo hash são agrupadas nesta thread para rastreabilidade.
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div className="space-y-3">
+                                          <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                            <Cpu className="w-3.5 h-3.5 text-primary" /> Resumo da Execução CI
+                                          </div>
+                                          <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-2">
+                                            <div className="flex justify-between text-[10px]">
+                                              <span className="text-muted-foreground">Build Versão:</span>
+                                              <span className="font-mono bg-primary/5 px-1 rounded">{(item as any).version || 'v1.0.0'}</span>
+                                            </div>
+                                            <div className="flex justify-between text-[10px]">
+                                              <span className="text-muted-foreground">Casos com Falha:</span>
+                                              <span className={`font-bold ${(item as any).failedCases > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                {(item as any).failedCases || 0}
+                                              </span>
+                                            </div>
+                                            <div className="flex justify-between text-[10px]">
+                                              <span className="text-muted-foreground">Status do Deploy:</span>
+                                              <Badge variant="outline" className="text-[8px] h-3.5 uppercase">
+                                                {item.status === 'success' ? 'Aprovado' : 'Bloqueado'}
+                                              </Badge>
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <div className="space-y-3">
+                                          <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                            <Terminal className="w-3.5 h-3.5" /> Artefatos e Logs
+                                          </div>
+                                          <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-2">
+                                            <div className="flex flex-col gap-2">
+                                              {((item as any).artifacts || []).map((artifact: string, i: number) => (
+                                                <div key={i} className="flex items-center justify-between text-[10px] bg-secondary/30 p-1.5 rounded">
+                                                  <span className="font-mono truncate mr-2">{artifact}</span>
+                                                  <Button variant="ghost" size="icon" className="h-4 w-4">
+                                                    <Download className="h-2.5 w-2.5" />
+                                                  </Button>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </>
+                                    )}
+                                  </motion.div>
+                                </TableCell>
+                              </TableRow>
                             )}
-                          </motion.div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </Fragment>
-                ))}
+                          </Fragment>
+                        ))}
 
-                {paginatedHistory.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-xs italic">
-                      Nenhum log encontrado para os filtros selecionados.
-                    </TableCell>
-                  </TableRow>
-                )}
-            </TableBody>
-            </Table>
+                        {paginatedHistory.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-xs italic">
+                              Nenhum log encontrado para os filtros selecionados.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                    </TableBody>
+                  </Table>
 
-          
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between p-4 border-t border-border/40 bg-secondary/10">
-              <p className="text-[10px] text-muted-foreground">
-                Mostrando {paginatedHistory.length} de {filteredHistory.length} registros
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-[10px]"
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                >
-                  Anterior
-                </Button>
-                <span className="text-[10px] font-medium px-2">
-                  {currentPage} / {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-[10px]"
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  Próxima
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {!validated && lastValidation.status === 'none' && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 text-amber-700 text-xs">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>Você precisa validar as credenciais antes de ativar a integração Wavoip.</span>
-        </div>
-      )}
-    </TabsContent>
-
-    <TabsContent value="incidents" className="space-y-6 outline-none">
-      <Card className="glass-card">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-lg font-bold">Gestão de Incidentes</CardTitle>
-              <CardDescription className="text-xs">Visualize e gerencie threads resolvidas ou pendentes.</CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <Input 
-                  placeholder="Buscar por thread, responsável ou anotação..." 
-                  className="pl-8 h-8 text-[10px] w-64"
-                />
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border/40">
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Thread</TableHead>
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Responsável</TableHead>
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Data Resolução</TableHead>
-                <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Object.entries(resolvedThreads).length > 0 ? (
-                Object.entries(resolvedThreads).map(([hash, data]) => (
-                  <TableRow key={hash} className="border-border/40 hover:bg-secondary/10">
-                    <TableCell className="text-xs font-mono">
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between p-4 border-t border-border/40 bg-secondary/10">
+                      <p className="text-[10px] text-muted-foreground">
+                        Mostrando {paginatedHistory.length} de {filteredHistory.length} registros
+                      </p>
                       <div className="flex items-center gap-2">
-                        <Fingerprint className="w-3 h-3 text-primary/50" />
-                        {hash.substring(7, 12)}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-[10px]"
+                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                          disabled={currentPage === 1}
+                        >
+                          Anterior
+                        </Button>
+                        <span className="text-[10px] font-medium px-2">
+                          {currentPage} / {totalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-[10px]"
+                          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                          disabled={currentPage === totalPages}
+                        >
+                          Próxima
+                        </Button>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200 text-[9px] h-4 gap-1">
-                        <UserCheck className="w-2.5 h-2.5" /> Resolvido
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs">{data.resolvedBy}</TableCell>
-                    <TableCell className="text-xs">{data.resolvedAt}</TableCell>
-                    <TableCell className="text-right">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-7 text-[10px] gap-1"
-                        onClick={() => {
-                          setFilterType('all');
-                          setSearchTerm(hash.substring(7, 12));
-                          const tabs = document.querySelector('[role="tablist"]');
-                          const firstTab = tabs?.querySelector('[value="config"]') as HTMLElement;
-                          firstTab?.click();
-                        }}
-                      >
-                        <Eye className="w-3 h-3" /> Ver Auditoria
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-12 text-muted-foreground text-xs italic">
-                    Nenhum incidente resolvido encontrado.
-                  </TableCell>
-                </TableRow>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {!validated && lastValidation.status === 'none' && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 text-amber-700 text-xs">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>Você precisa validar as credenciais antes de ativar a integração Wavoip.</span>
+                </div>
               )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </TabsContent>
-  </Tabs>
-</div>
-);
+            </TabsContent>
+
+            <TabsContent value="incidents" className="space-y-6 outline-none">
+              <Card className="glass-card">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-lg font-bold">Gestão de Incidentes</CardTitle>
+                      <CardDescription className="text-xs">Visualize e gerencie threads resolvidas ou pendentes.</CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                        <Input 
+                          placeholder="Buscar por thread, responsável ou anotação..." 
+                          className="pl-8 h-8 text-[10px] w-64"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border/40">
+                        <TableHead className="text-[10px] uppercase font-bold tracking-wider">Thread</TableHead>
+                        <TableHead className="text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
+                        <TableHead className="text-[10px] uppercase font-bold tracking-wider">Responsável</TableHead>
+                        <TableHead className="text-[10px] uppercase font-bold tracking-wider">Data Resolução</TableHead>
+                        <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {Object.entries(resolvedThreads).length > 0 ? (
+                        Object.entries(resolvedThreads).map(([hash, data]) => (
+                          <TableRow key={hash} className="border-border/40 hover:bg-secondary/10">
+                            <TableCell className="text-xs font-mono">
+                              <div className="flex items-center gap-2">
+                                <Fingerprint className="w-3 h-3 text-primary/50" />
+                                {hash.substring(7, 12)}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200 text-[9px] h-4 gap-1">
+                                <UserCheck className="w-2.5 h-2.5" /> Resolvido
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs">{data.resolvedBy}</TableCell>
+                            <TableCell className="text-xs">{data.resolvedAt}</TableCell>
+                            <TableCell className="text-right">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 text-[10px] gap-1"
+                                onClick={() => {
+                                  setFilterType('all');
+                                  setSearchTerm(hash.substring(7, 12));
+                                  const tabs = document.querySelector('[role="tablist"]');
+                                  const firstTab = tabs?.querySelector('[value="config"]') as HTMLElement;
+                                  firstTab?.click();
+                                }}
+                              >
+                                <Eye className="w-3 h-3" /> Ver Auditoria
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-12 text-muted-foreground text-xs italic">
+                            Nenhum incidente resolvido encontrado.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </motion.div>
+    </div>
+  );
+
+  if (standalone) {
+    return (
+      <AppLayout title="Wavoip Center" subtitle="Ambiente avançado de auditoria e configuração.">
+        {mainContent}
+      </AppLayout>
+    );
+  }
+
+  return mainContent;
 }

@@ -17,6 +17,7 @@ import EditAgentPage from "./pages/EditAgentPage";
 import ReportsPage from "./pages/ReportsPage";
 import PipelinePage from "./pages/PipelinePage";
 import DeveloperPage from "./pages/DeveloperPage";
+import WavoipPage from "./components/settings/WavoipConfigTab";
 import AccountSettingsPage from "./pages/AccountSettingsPage";
 import APIKeysPage from "./pages/APIKeysPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -63,6 +64,7 @@ const App = () => (
               <Route path="/settings" element={<ProtectedRoute><AccountSettingsPage /></ProtectedRoute>} />
               <Route path="/developer" element={<ProtectedRoute><DeveloperPage /></ProtectedRoute>} />
               <Route path="/api-keys" element={<ProtectedRoute><APIKeysPage /></ProtectedRoute>} />
+              <Route path="/wavoip" element={<ProtectedRoute><WavoipPage standalone={true} /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
               <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppPage /></ProtectedRoute>} />
               <Route path="/video" element={<ProtectedRoute><VideoCallsPage /></ProtectedRoute>} />
