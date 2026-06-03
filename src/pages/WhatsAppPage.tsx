@@ -201,6 +201,40 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
     if (data) setSubCompanies(data);
   };
 
+  const handleChartClick = async (data: any) => {
+    if (!data || !data.activePayload || data.activePayload.length === 0) return;
+    
+    const point = data.activePayload[0].payload;
+    if (!point.timestamp) return;
+
+    const clickedTime = new Date(point.timestamp);
+    const start = new Date(clickedTime.getTime() - 15 * 60000).toISOString(); // 15 mins before
+    const end = new Date(clickedTime.getTime() + 15 * 60000).toISOString();   // 15 mins after
+
+    setSelectedRange({ start, end });
+    setDrillDownOpen(true);
+    setLoadingDrillDown(true);
+
+    let query = supabase
+      .from('uaz_audit_logs')
+      .select('*')
+      .gte('created_at', start)
+      .lte('created_at', end)
+      .order('created_at', { ascending: false });
+
+    if (filterTenant !== 'all') {
+      query = query.or(`payload->>tenant_id.eq.${filterTenant},payload->>sub_company_id.eq.${filterTenant}`);
+    }
+
+    if (filterChannel !== 'all') {
+      query = query.filter('event_type', 'ilike', `${filterChannel}%`);
+    }
+
+    const { data: logs } = await query;
+    setDrillDownLogs(logs || []);
+    setLoadingDrillDown(false);
+  };
+
   useEffect(() => {
     if (conn.provider === 'uaz' && conn.status === 'connected') {
       loadHistory();
