@@ -396,7 +396,18 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
 
                   <div className="bg-secondary/20 p-3 rounded-xl border border-border/40 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase">Fila de Mensagens</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase">Fila de Mensagens</span>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-5 w-5 text-muted-foreground hover:text-primary" 
+                          onClick={exportQueueToCSV}
+                          title="Exportar métricas em CSV"
+                        >
+                          <FileSpreadsheet className="w-3 h-3" />
+                        </Button>
+                      </div>
                       <div className="flex gap-2">
                         <select value={filterTenant} onChange={(e) => setFilterTenant(e.target.value)} className="bg-background border border-border/40 rounded px-2 py-0.5 text-[9px] font-bold">
                           <option value="all">Todas Empresas</option>
