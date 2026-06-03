@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CheckCircle2, Loader2, Plug, RefreshCw, ShieldCheck, XCircle, History, Activity, Zap, Clock, LineChart as LineChartIcon } from 'lucide-react';
+import { CheckCircle2, Loader2, Plug, RefreshCw, ShieldCheck, XCircle, History, Activity, Zap, Clock, LineChart as LineChartIcon, AlertTriangle, Settings } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import UazAuditTab from '@/components/settings/UazAuditTab';
@@ -66,10 +66,13 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
   const [extra, setExtra] = useState<string>(conn.metadata?.phone_number_id ?? '');
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [metrics, setMetrics] = useState<{ sessions?: number; latency?: number; lastSync?: string } | null>(null);
+  const [metrics, setMetrics] = useState<{ sessions?: number; latency?: number; lastSync?: string; failures?: number; lastAttempt?: string }>({
+    failures: 0
+  });
   const [latencyHistory, setLatencyHistory] = useState<any[]>([]);
   const [latencyPeriod, setLatencyPeriod] = useState<'24h' | '7d' | '30d'>('24h');
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [latencyThreshold, setLatencyThreshold] = useState<number>(conn.metadata?.latency_threshold ?? 500);
 
   useEffect(() => {
     if (conn.provider === 'uaz' && conn.status === 'connected') {
@@ -108,24 +111,47 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
   useEffect(() => {
     if (conn.provider === 'uaz' && conn.status === 'connected') {
       const loadMetrics = async () => {
-        const { data } = await supabase
+        const { data: recentLogs } = await supabase
           .from('uaz_audit_logs')
-          .select('latency_ms, created_at')
+          .select('latency_ms, created_at, status')
           .order('created_at', { ascending: false })
-          .limit(10);
+          .limit(20);
         
-        if (data && data.length > 0) {
-          const avgLatency = Math.round(data.reduce((acc, curr) => acc + (curr.latency_ms || 0), 0) / data.length);
+        if (recentLogs && recentLogs.length > 0) {
+          const successes = recentLogs.filter(l => l.status === 'success');
+          const avgLatency = successes.length > 0 
+            ? Math.round(successes.reduce((acc, curr) => acc + (curr.latency_ms || 0), 0) / successes.length)
+            : 0;
+            
+          const failuresCount = recentLogs.filter(l => l.status === 'error').length;
+
           setMetrics({
-            sessions: 1, // UAZ usually 1 session per instance token
+            sessions: 1,
             latency: avgLatency,
-            lastSync: data[0].created_at
+            lastSync: successes[0]?.created_at,
+            failures: failuresCount,
+            lastAttempt: recentLogs[0]?.created_at
           });
         }
       };
       loadMetrics();
+      
+      const channel = supabase
+        .channel('uaz_metrics_realtime')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'uaz_audit_logs' }, () => {
+          loadMetrics();
+        })
+        .subscribe();
+        
+      return () => { supabase.removeChannel(channel); };
     }
   }, [conn.status, conn.provider]);
+
+  const updateThreshold = async (val: number) => {
+    setLatencyThreshold(val);
+    const metadata = { ...(conn.metadata ?? {}), latency_threshold: val };
+    await supabase.from('whatsapp_connections').update({ metadata }).eq('id', conn.id);
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -180,31 +206,67 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
         {conn.provider === 'uaz' && conn.status === 'connected' && (
           <div className="space-y-4">
             {metrics && (
-              <div className="grid grid-cols-3 gap-2">
-                <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Activity className="w-3 h-3 text-primary" />
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase">Sessões</span>
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Activity className="w-3 h-3 text-primary" />
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase">Sessões</span>
+                    </div>
+                    <p className="text-sm font-bold">{metrics.sessions}</p>
                   </div>
-                  <p className="text-sm font-bold">{metrics.sessions}</p>
-                </div>
-                <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Zap className="w-3 h-3 text-amber-500" />
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase">Latência</span>
+                  <div className={`p-2 rounded-lg border transition-colors ${
+                    (metrics.latency || 0) > latencyThreshold ? 'bg-destructive/10 border-destructive/40' : 'bg-secondary/30 border-border/40'
+                  }`}>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Zap className={`w-3 h-3 ${ (metrics.latency || 0) > latencyThreshold ? 'text-destructive' : 'text-amber-500' }`} />
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase">Latência</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className={`text-sm font-bold ${ (metrics.latency || 0) > latencyThreshold ? 'text-destructive' : '' }`}>
+                        {metrics.latency}ms
+                      </p>
+                      {(metrics.latency || 0) > latencyThreshold && (
+                        <AlertTriangle className="w-3 h-3 text-destructive animate-pulse" />
+                      )}
+                    </div>
                   </div>
-                  <p className="text-sm font-bold">{metrics.latency}ms</p>
-                </div>
-                <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Clock className="w-3 h-3 text-emerald-500" />
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase">Sync</span>
+                  <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <XCircle className={`w-3 h-3 ${ (metrics.failures || 0) > 0 ? 'text-destructive' : 'text-muted-foreground' }`} />
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase">Falhas (20)</span>
+                    </div>
+                    <p className={`text-sm font-bold ${ (metrics.failures || 0) > 0 ? 'text-destructive' : '' }`}>
+                      {metrics.failures}
+                    </p>
                   </div>
-                  <p className="text-sm font-bold truncate">
-                    {metrics.lastSync ? new Date(metrics.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
-                  </p>
+                  <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Clock className="w-3 h-3 text-emerald-500" />
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase">Última Sync</span>
+                    </div>
+                    <p className="text-sm font-bold truncate">
+                      {metrics.lastSync ? new Date(metrics.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
+                    </p>
+                  </div>
                 </div>
-              </div>
+
+                <div className="flex items-center gap-4 px-3 py-2 bg-secondary/10 rounded-lg border border-border/40">
+                  <div className="flex items-center gap-2 flex-1">
+                    <Settings className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Alerta de Latência:</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input 
+                      type="number" 
+                      value={latencyThreshold} 
+                      onChange={(e) => updateThreshold(Number(e.target.value))}
+                      className="w-20 h-7 text-xs px-2"
+                    />
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase">ms</span>
+                  </div>
+                </div>
+              </>
             )}
 
             <div className="bg-secondary/20 p-3 rounded-xl border border-border/40">
