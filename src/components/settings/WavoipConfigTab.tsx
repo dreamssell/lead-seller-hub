@@ -1890,89 +1890,119 @@ export default function WavoipConfigPage() {
                                   </DialogDescription>
                                 </DialogHeader>
                                 <div className="space-y-3 py-2">
-                                  <p className="text-[10px] text-muted-foreground">Escolha a versão do segredo para o handshake simulado:</p>
-                                  <div className="flex gap-2">
-                                    <Dialog>
-                                      <DialogTrigger asChild>
-                                        <Button 
-                                          className="flex-1 text-[10px] h-8" 
-                                          disabled={(access as any)?.role !== 'admin'}
-                                        >
-                                          {(access as any)?.role === 'admin' ? 'v0 (Atual)' : <><Lock className="w-3 h-3 mr-1" /> v0</>}
-                                        </Button>
-                                      </DialogTrigger>
-                                      <DialogContent className="sm:max-w-xs">
-                                        <DialogHeader>
-                                          <DialogTitle className="text-sm font-bold">Confirmar Replay v0</DialogTitle>
-                                          <DialogDescription className="text-xs">
-                                            Deseja reprocessar o request {(item as any).requestId} usando o segredo atual (v0)?
-                                          </DialogDescription>
-                                        </DialogHeader>
-                                        <DialogFooter className="gap-2 sm:gap-0">
-                                          <DialogTrigger asChild>
-                                            <Button variant="outline" className="h-8 text-xs">Cancelar</Button>
-                                          </DialogTrigger>
-                                          <Button 
-                                            className="h-8 text-xs"
-                                            onClick={() => {
-                                              toast.success(`Replay iniciado com segredo v0 (Atual) para ${(item as any).requestId}`);
-                                              const replayEntry = {
-                                                ...item,
-                                                id: Date.now(),
-                                                date: new Date().toLocaleString(),
-                                                isReplay: true,
-                                                replayUser: (access as any)?.email || 'Admin',
-                                                replayVersion: 'v0',
-                                                replayStatus: 'success'
-                                              };
-                                              setHistory(prev => [replayEntry, ...prev]);
-                                            }}
-                                          >Confirmar Replay</Button>
-                                        </DialogFooter>
-                                      </DialogContent>
-                                    </Dialog>
+                                  {(() => {
+                                    const itemTime = new Date(item.date).getTime();
+                                    const nowTime = Date.now();
+                                    const windowMs = 24 * 60 * 60 * 1000; // Janela fixa de 24h para replay simplificado
+                                    const isWithinWindow = (nowTime - itemTime) <= windowMs;
+                                    const isEligible = item.status === 'error';
 
-                                    <Dialog>
-                                      <DialogTrigger asChild>
-                                        <Button 
-                                          variant="outline"
-                                          className="flex-1 text-[10px] h-8" 
-                                          disabled={(access as any)?.role !== 'admin'}
-                                        >
-                                          {(access as any)?.role === 'admin' ? 'v-1 (Legado)' : <><Lock className="w-3 h-3 mr-1" /> v-1</>}
-                                        </Button>
-                                      </DialogTrigger>
-                                      <DialogContent className="sm:max-w-xs">
-                                        <DialogHeader>
-                                          <DialogTitle className="text-sm font-bold">Confirmar Replay v-1</DialogTitle>
-                                          <DialogDescription className="text-xs">
-                                            Deseja reprocessar o request {(item as any).requestId} usando o segredo anterior (v-1)?
-                                          </DialogDescription>
-                                        </DialogHeader>
-                                        <DialogFooter className="gap-2 sm:gap-0">
-                                          <DialogTrigger asChild>
-                                            <Button variant="outline" className="h-8 text-xs">Cancelar</Button>
-                                          </DialogTrigger>
-                                          <Button 
-                                            className="h-8 text-xs"
-                                            onClick={() => {
-                                              toast.success(`Replay iniciado com segredo v-1 (Legado) para ${(item as any).requestId}`);
-                                              const replayEntry = {
-                                                ...item,
-                                                id: Date.now(),
-                                                date: new Date().toLocaleString(),
-                                                isReplay: true,
-                                                replayUser: (access as any)?.email || 'Admin',
-                                                replayVersion: 'v-1',
-                                                replayStatus: 'success'
-                                              };
-                                              setHistory(prev => [replayEntry, ...prev]);
-                                            }}
-                                          >Confirmar Replay</Button>
-                                        </DialogFooter>
-                                      </DialogContent>
-                                    </Dialog>
-                                  </div>
+                                    if (!isWithinWindow) {
+                                      return (
+                                        <div className="flex items-center gap-2 p-2 rounded bg-red-50 text-red-600 border border-red-100 text-[10px]">
+                                          <AlertCircle className="w-3.5 h-3.5" />
+                                          Fora da janela de 24h permitida para replay.
+                                        </div>
+                                      );
+                                    }
+
+                                    if (!isEligible) {
+                                      return (
+                                        <div className="flex items-center gap-2 p-2 rounded bg-amber-50 text-amber-600 border border-amber-100 text-[10px]">
+                                          <AlertCircle className="w-3.5 h-3.5" />
+                                          Apenas eventos com falha são elegíveis para replay.
+                                        </div>
+                                      );
+                                    }
+
+                                    return (
+                                      <>
+                                        <p className="text-[10px] text-muted-foreground">Escolha a versão do segredo para o handshake simulado:</p>
+                                        <div className="flex gap-2">
+                                          <Dialog>
+                                            <DialogTrigger asChild>
+                                              <Button 
+                                                className="flex-1 text-[10px] h-8" 
+                                                disabled={(access as any)?.role !== 'admin'}
+                                              >
+                                                {(access as any)?.role === 'admin' ? 'v0 (Atual)' : <><Lock className="w-3 h-3 mr-1" /> v0</>}
+                                              </Button>
+                                            </DialogTrigger>
+                                            <DialogContent className="sm:max-w-xs">
+                                              <DialogHeader>
+                                                <DialogTitle className="text-sm font-bold">Confirmar Replay v0</DialogTitle>
+                                                <DialogDescription className="text-xs">
+                                                  Deseja reprocessar o request {(item as any).requestId} usando o segredo atual (v0)?
+                                                </DialogDescription>
+                                              </DialogHeader>
+                                              <DialogFooter className="gap-2 sm:gap-0">
+                                                <DialogTrigger asChild>
+                                                  <Button variant="outline" className="h-8 text-xs">Cancelar</Button>
+                                                </DialogTrigger>
+                                                <Button 
+                                                  className="h-8 text-xs"
+                                                  onClick={() => {
+                                                    toast.success(`Replay iniciado com segredo v0 (Atual) para ${(item as any).requestId}`);
+                                                    const replayEntry = {
+                                                      ...item,
+                                                      id: Date.now(),
+                                                      date: new Date().toLocaleString(),
+                                                      isReplay: true,
+                                                      replayUser: (access as any)?.email || 'Admin',
+                                                      replayVersion: 'v0',
+                                                      replayStatus: 'success'
+                                                    };
+                                                    setHistory(prev => [replayEntry, ...prev]);
+                                                  }}
+                                                >Confirmar Replay</Button>
+                                              </DialogFooter>
+                                            </DialogContent>
+                                          </Dialog>
+
+                                          <Dialog>
+                                            <DialogTrigger asChild>
+                                              <Button 
+                                                variant="outline"
+                                                className="flex-1 text-[10px] h-8" 
+                                                disabled={(access as any)?.role !== 'admin'}
+                                              >
+                                                {(access as any)?.role === 'admin' ? 'v-1 (Legado)' : <><Lock className="w-3 h-3 mr-1" /> v-1</>}
+                                              </Button>
+                                            </DialogTrigger>
+                                            <DialogContent className="sm:max-w-xs">
+                                              <DialogHeader>
+                                                <DialogTitle className="text-sm font-bold">Confirmar Replay v-1</DialogTitle>
+                                                <DialogDescription className="text-xs">
+                                                  Deseja reprocessar o request {(item as any).requestId} usando o segredo anterior (v-1)?
+                                                </DialogDescription>
+                                              </DialogHeader>
+                                              <DialogFooter className="gap-2 sm:gap-0">
+                                                <DialogTrigger asChild>
+                                                  <Button variant="outline" className="h-8 text-xs">Cancelar</Button>
+                                                </DialogTrigger>
+                                                <Button 
+                                                  className="h-8 text-xs"
+                                                  onClick={() => {
+                                                    toast.success(`Replay iniciado com segredo v-1 (Legado) para ${(item as any).requestId}`);
+                                                    const replayEntry = {
+                                                      ...item,
+                                                      id: Date.now(),
+                                                      date: new Date().toLocaleString(),
+                                                      isReplay: true,
+                                                      replayUser: (access as any)?.email || 'Admin',
+                                                      replayVersion: 'v-1',
+                                                      replayStatus: 'success'
+                                                    };
+                                                    setHistory(prev => [replayEntry, ...prev]);
+                                                  }}
+                                                >Confirmar Replay</Button>
+                                              </DialogFooter>
+                                            </DialogContent>
+                                          </Dialog>
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
                                   {(access as any)?.role !== 'admin' && (
                                     <p className="text-[8px] text-red-500 italic text-center">Apenas administradores podem executar replay.</p>
                                   )}
