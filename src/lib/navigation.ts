@@ -31,6 +31,7 @@ export type SidebarPageKey =
   | 'settings'
   | 'developer'
   | 'api-keys'
+  | 'wavoip'
   | 'status'
   | 'profile'
   | 'white-label';
