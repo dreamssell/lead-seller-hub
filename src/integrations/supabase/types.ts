@@ -1177,6 +1177,9 @@ export type Database = {
           id: string
           idempotency_window_minutes: number | null
           incident_threshold_retries: number | null
+          queue_threshold_global: number | null
+          queue_threshold_per_channel: Json | null
+          queue_threshold_per_tenant: Json | null
           remediation_interval_minutes: number | null
           request_timeout_ms: number | null
           updated_at: string | null
@@ -1190,6 +1193,9 @@ export type Database = {
           id?: string
           idempotency_window_minutes?: number | null
           incident_threshold_retries?: number | null
+          queue_threshold_global?: number | null
+          queue_threshold_per_channel?: Json | null
+          queue_threshold_per_tenant?: Json | null
           remediation_interval_minutes?: number | null
           request_timeout_ms?: number | null
           updated_at?: string | null
@@ -1203,6 +1209,9 @@ export type Database = {
           id?: string
           idempotency_window_minutes?: number | null
           incident_threshold_retries?: number | null
+          queue_threshold_global?: number | null
+          queue_threshold_per_channel?: Json | null
+          queue_threshold_per_tenant?: Json | null
           remediation_interval_minutes?: number | null
           request_timeout_ms?: number | null
           updated_at?: string | null
