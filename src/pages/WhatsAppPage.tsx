@@ -674,30 +674,6 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                   </div>
                 </div>
 
-                <div className="bg-secondary/20 p-3 rounded-xl border border-border/40">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <BarChart3 className="w-3.5 h-3.5 text-primary" />
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Fila de Mensagens (Erros/Pendentes)</span>
-                    </div>
-                    <Badge variant="outline" className="text-[9px] h-4 py-0 border-primary/30 text-primary">LIVE</Badge>
-                  </div>
-                  <div className="h-[80px] w-full">
-                    {loadingQueue ? (
-                      <div className="h-full flex items-center justify-center"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
-                    ) : queueStats.trend.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={queueStats.trend}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                          <XAxis dataKey="time" fontSize={7} tickLine={false} axisLine={false} stroke="#888888" />
-                          <YAxis fontSize={7} tickLine={false} axisLine={false} stroke="#888888" />
-                          <RechartsTooltip 
-                            contentStyle={{ backgroundColor: 'rgba(23, 23, 23, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '9px' }}
-                            itemStyle={{ color: '#3b82f6' }}
-                          />
-                          <Line type="stepAfter" dataKey="pending" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                        </LineChart>
-                      </ResponsiveContainer>
                     ) : (
                       <div className="h-full flex items-center justify-center text-[10px] text-muted-foreground italic">Sem dados de fila.</div>
                     )}
