@@ -90,39 +90,46 @@ export default function WavoipConfigPage() {
     { id: 8, date: '2024-05-11 18:00:00', status: 'error', type: 'Security', message: 'Falha na assinatura do Webhook: Assinatura inválida (Mismatch)' },
   ]);
 
-  const filteredHistory = history.filter(item => {
-    const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
-    const matchesType = filterType === 'all' || item.type === filterType;
-    const matchesSearch = item.message.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         (item.type && item.type.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    let matchesPeriod = true;
-    const itemDate = new Date(item.date);
-    const now = new Date();
-    
-    if (filterPeriod === 'today') {
-      matchesPeriod = itemDate.toDateString() === now.toDateString();
-    } else if (filterPeriod === '7d') {
-      const sevenDaysAgo = new Date(now.setDate(now.getDate() - 7));
-      matchesPeriod = itemDate >= sevenDaysAgo;
-    } else if (filterPeriod === '30d') {
-      const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
-      matchesPeriod = itemDate >= thirtyDaysAgo;
-    }
+  const securityIncidents = useMemo(() => {
+    return history.filter(item => item.type === 'Security' && item.status === 'error');
+  }, [history]);
 
-    return matchesStatus && matchesType && matchesSearch && matchesPeriod;
-  }).sort((a, b) => {
+  const filteredHistory = useMemo(() => {
+    return history.filter(item => {
+      const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
+      const matchesType = filterType === 'all' || item.type === filterType;
+      const matchesSearch = item.message.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           (item.type && item.type.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                           ((item as any).version && (item as any).version.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      let matchesPeriod = true;
+      const itemDate = new Date(item.date);
+      const now = new Date();
+      
+      if (filterPeriod === 'today') {
+        matchesPeriod = itemDate.toDateString() === now.toDateString();
+      } else if (filterPeriod === '7d') {
+        const sevenDaysAgo = new Date(now.setDate(now.getDate() - 7));
+        matchesPeriod = itemDate >= sevenDaysAgo;
+      } else if (filterPeriod === '30d') {
+        const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
+        matchesPeriod = itemDate >= thirtyDaysAgo;
+      }
 
-    const dateA = new Date(a.date).getTime();
-    const dateB = new Date(b.date).getTime();
-    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
-  });
+      return matchesStatus && matchesType && matchesSearch && matchesPeriod;
+    }).sort((a, b) => {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+    });
+  }, [history, filterStatus, filterType, filterPeriod, searchTerm, sortOrder]);
 
   const totalPages = Math.ceil(filteredHistory.length / itemsPerPage);
   const paginatedHistory = filteredHistory.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
 
 
   
