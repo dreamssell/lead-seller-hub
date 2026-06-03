@@ -104,8 +104,28 @@ export default function WavoipConfigPage() {
     { id: 5, date: '2024-05-14 11:20:00', status: 'success', type: 'Webhook', message: 'Configuração de Webhook validada' },
     { id: 6, date: '2024-05-13 15:45:00', status: 'success', type: 'API', message: 'Sincronização de logs completa' },
     { id: 7, date: '2024-05-12 09:30:00', status: 'error', type: 'Auth', message: '403 Forbidden - Permissão insuficiente' },
-    { id: 8, date: '2024-05-11 18:00:00', status: 'error', type: 'Security', message: 'Falha na assinatura do Webhook: Assinatura inválida (Mismatch)' },
+    { 
+      id: 8, 
+      date: '2024-05-11 18:00:00', 
+      status: 'error', 
+      type: 'Security', 
+      message: 'Falha na assinatura do Webhook: Assinatura inválida (Mismatch)',
+      version: 'v-1',
+      requestId: 'req_wavoip_99a82',
+      payloadHash: 'sha256:e3b0c442...'
+    },
   ]);
+
+  const [exportColumns, setExportColumns] = useState({
+    date: true,
+    status: true,
+    type: true,
+    message: true,
+    version: true,
+    requestId: true,
+    payloadHash: true
+  });
+
 
   const securityIncidents = useMemo(() => {
     return history.filter(item => item.type === 'Security' && item.status === 'error');
