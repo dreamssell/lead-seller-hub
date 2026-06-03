@@ -18,6 +18,10 @@ Deno.serve(async (req) => {
   let metrics: any = {};
 
   try {
+    const body = await req.json().catch(() => ({}));
+    const tenantId = body.tenant_id;
+    const channelType = body.channel_type;
+
     // 1. Get UAZ connection
     const { data: conn } = await supabaseAdmin
       .from("whatsapp_connections")
@@ -37,12 +41,21 @@ Deno.serve(async (req) => {
 
     if (!res.ok) status = "degraded";
     
-    // 3. Gather Recent Metrics
-    const { data: recentLogs } = await supabaseAdmin
+    // 3. Gather Recent Metrics with Filters
+    let query = supabaseAdmin
       .from("uaz_audit_logs")
-      .select("latency_ms, status, created_at")
+      .select("latency_ms, status, created_at, payload")
       .order("created_at", { ascending: false })
       .limit(50);
+
+    if (tenantId) {
+      query = query.or(`payload->>tenant_id.eq.${tenantId},payload->>sub_company_id.eq.${tenantId}`);
+    }
+    if (channelType) {
+      query = query.filter('event_type', 'ilike', `${channelType}%`);
+    }
+
+    const { data: recentLogs } = await query;
 
     const failures = recentLogs?.filter(l => l.status === "error").length || 0;
     const avgLatency = recentLogs?.length 
@@ -52,19 +65,11 @@ Deno.serve(async (req) => {
     metrics = {
       status,
       latency_ms: avgLatency,
-      failure_rate: (failures / 50) * 100,
+      failure_rate: recentLogs?.length ? (failures / recentLogs.length) * 100 : 0,
       last_check: new Date().toISOString(),
-      uaz_status_code: res.status
+      uaz_status_code: res.status,
+      filters: { tenantId, channelType }
     };
-
-    // Audit the healthcheck
-    await supabaseAdmin.from("uaz_audit_logs").insert({
-      event_type: 'healthcheck',
-      status: status === 'online' ? 'success' : 'warning',
-      message: `Healthcheck: ${status}`,
-      response: metrics,
-      latency_ms: Date.now() - startTime
-    });
 
     return new Response(JSON.stringify(metrics), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
