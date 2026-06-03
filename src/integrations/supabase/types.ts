@@ -1065,6 +1065,39 @@ export type Database = {
         }
         Relationships: []
       }
+      uaz_audit_logs: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          latency_ms: number | null
+          message: string | null
+          payload: Json | null
+          response: Json | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          latency_ms?: number | null
+          message?: string | null
+          payload?: Json | null
+          response?: Json | null
+          status: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          latency_ms?: number | null
+          message?: string | null
+          payload?: Json | null
+          response?: Json | null
+          status?: string
+        }
+        Relationships: []
+      }
       user_account_access: {
         Row: {
           allowed_pages: string[]
