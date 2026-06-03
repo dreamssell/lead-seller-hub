@@ -67,6 +67,43 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [metrics, setMetrics] = useState<{ sessions?: number; latency?: number; lastSync?: string } | null>(null);
+  const [latencyHistory, setLatencyHistory] = useState<any[]>([]);
+  const [latencyPeriod, setLatencyPeriod] = useState<'24h' | '7d' | '30d'>('24h');
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  useEffect(() => {
+    if (conn.provider === 'uaz' && conn.status === 'connected') {
+      const loadHistory = async () => {
+        setLoadingHistory(true);
+        const now = new Date();
+        let fromDate = new Date();
+        if (latencyPeriod === '24h') fromDate.setHours(now.getHours() - 24);
+        else if (latencyPeriod === '7d') fromDate.setDate(now.getDate() - 7);
+        else fromDate.setDate(now.getDate() - 30);
+
+        const { data } = await supabase
+          .from('uaz_audit_logs')
+          .select('latency_ms, created_at')
+          .eq('event_type', 'webhook')
+          .gte('created_at', fromDate.toISOString())
+          .order('created_at', { ascending: true });
+
+        if (data) {
+          const formatted = data.map(d => ({
+            time: new Date(d.created_at).toLocaleTimeString([], { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              ...(latencyPeriod !== '24h' && { day: '2-digit', month: '2-digit' })
+            }),
+            latency: d.latency_ms
+          }));
+          setLatencyHistory(formatted);
+        }
+        setLoadingHistory(false);
+      };
+      loadHistory();
+    }
+  }, [conn.status, conn.provider, latencyPeriod]);
 
   useEffect(() => {
     if (conn.provider === 'uaz' && conn.status === 'connected') {
