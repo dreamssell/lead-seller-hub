@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import UazAuditTab from '@/components/settings/UazAuditTab';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { motion } from 'framer-motion';
 
 type Provider = 'uaz' | 'meta';
 type Status = 'disconnected' | 'connecting' | 'connected' | 'error';
