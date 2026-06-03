@@ -210,6 +210,61 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
     if (data) setSubCompanies(data);
   };
 
+  const exportQueueToCSV = () => {
+    if (!queueStats.trend || queueStats.trend.length === 0) {
+      toast.error('Sem dados para exportar');
+      return;
+    }
+
+    const headers = ['Horário', 'Timestamp', 'Mensagens Pendentes', 'Tenant', 'Canal'];
+    const rows = queueStats.trend.map(point => [
+      point.time,
+      point.timestamp,
+      point.pending,
+      filterTenant === 'all' ? 'Todos' : subCompanies.find(c => c.id === filterTenant)?.name || filterTenant,
+      filterChannel.toUpperCase()
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `uaz_queue_metrics_${filterTenant}_${filterChannel}_${new Date().toISOString()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Métricas exportadas em CSV');
+  };
+
+  const exportLogToJSON = (log: any) => {
+    const exportData = {
+      id: log.id,
+      event_type: log.event_type,
+      status: log.status,
+      created_at: log.created_at,
+      latency_ms: log.latency_ms,
+      payload: log.payload,
+      response: log.response,
+      final_cause: log.final_cause,
+      full_trace: log.full_trace
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `uaz_log_${log.id}_${new Date().getTime()}.json`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Log exportado em JSON');
+  };
+
   const handleChartClick = async (data: any) => {
     if (!data || !data.activePayload || data.activePayload.length === 0) return;
     
