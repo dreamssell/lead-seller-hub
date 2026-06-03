@@ -613,17 +613,65 @@ export default function WavoipConfigPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Alertas</p>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className={`h-6 w-6 ${isAlertEnabled ? 'text-primary' : 'text-muted-foreground'}`}
-                onClick={() => setIsAlertEnabled(!isAlertEnabled)}
-              >
-                <Bell className={`w-3.5 h-3.5 ${isAlertEnabled ? 'fill-primary' : ''}`} />
-              </Button>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className={`h-6 w-6 ${isAlertEnabled ? 'text-primary' : 'text-muted-foreground'}`}
+                  >
+                    <Settings2 className="w-3.5 h-3.5" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-xs">
+                  <DialogHeader>
+                    <DialogTitle className="text-sm font-bold">Canais de Alerta</DialogTitle>
+                    <DialogDescription className="text-[10px]">Configure como receber falhas críticas.</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs flex items-center gap-2"><Zap className="w-3 h-3" /> Visual (Toast)</Label>
+                      <Checkbox 
+                        checked={alertChannels.visual} 
+                        onCheckedChange={(checked) => setAlertChannels({...alertChannels, visual: !!checked})} 
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs flex items-center gap-2"><Mail className="w-3 h-3" /> E-mail</Label>
+                      <Checkbox 
+                        checked={alertChannels.email} 
+                        onCheckedChange={(checked) => setAlertChannels({...alertChannels, email: !!checked})} 
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs flex items-center gap-2"><Webhook className="w-3 h-3" /> Webhook</Label>
+                      <Checkbox 
+                        checked={alertChannels.webhook} 
+                        onCheckedChange={(checked) => setAlertChannels({...alertChannels, webhook: !!checked})} 
+                      />
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold">Ativar Geral</Label>
+                      <Button 
+                        variant={isAlertEnabled ? "default" : "outline"} 
+                        size="sm" 
+                        className="h-7 text-[10px]"
+                        onClick={() => setIsAlertEnabled(!isAlertEnabled)}
+                      >
+                        {isAlertEnabled ? 'Ativo' : 'Pausado'}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
             <p className="text-xl font-bold text-foreground">{isAlertEnabled ? 'Ativos' : 'Silenciados'}</p>
-            <p className="text-[10px] text-muted-foreground mt-1">Notificação de falhas críticas</p>
+            <div className="flex gap-1 mt-1">
+              {alertChannels.visual && <Zap className="w-2.5 h-2.5 text-primary" />}
+              {alertChannels.email && <Mail className="w-2.5 h-2.5 text-primary" />}
+              {alertChannels.webhook && <Webhook className="w-2.5 h-2.5 text-primary" />}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -929,6 +977,52 @@ export default function WavoipConfigPage() {
                   </div>
                 </div>
 
+
+                <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
+                  <span className="text-[8px] uppercase text-muted-foreground font-bold">Config WS</span>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-6 w-6">
+                        <Settings2 className="w-3 h-3" />
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-xs">
+                      <DialogHeader>
+                        <DialogTitle className="text-sm font-bold">Backoff do WebSocket</DialogTitle>
+                        <DialogDescription className="text-[10px]">Ajuste a estratégia de reconexão.</DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-2">
+                        <div className="space-y-1">
+                          <Label className="text-[10px]">Intervalo Mínimo (ms)</Label>
+                          <Input 
+                            type="number" 
+                            value={wsBackoff.min} 
+                            onChange={e => setWsBackoff({...wsBackoff, min: Number(e.target.value)})}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px]">Intervalo Máximo (ms)</Label>
+                          <Input 
+                            type="number" 
+                            value={wsBackoff.max} 
+                            onChange={e => setWsBackoff({...wsBackoff, max: Number(e.target.value)})}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px]">Tentativas Máximas</Label>
+                          <Input 
+                            type="number" 
+                            value={wsBackoff.maxAttempts} 
+                            onChange={e => setWsBackoff({...wsBackoff, maxAttempts: Number(e.target.value)})}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
 
                 <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
                   <span className="text-[8px] uppercase text-muted-foreground font-bold">Janela Dedup</span>
