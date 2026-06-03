@@ -287,8 +287,9 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
     if (sortOrder !== 'desc') params.sort = sortOrder;
     if (currentPage !== 1) params.page = currentPage.toString();
     if (activeTab !== 'config') params.tab = activeTab;
+    if (showHealthStats) params.stats = 'true';
     setSearchParams(params, { replace: true });
-  }, [filterStatus, filterType, filterPeriod, searchTerm, sortOrder, currentPage, activeTab, setSearchParams]);
+  }, [filterStatus, filterType, filterPeriod, searchTerm, sortOrder, currentPage, activeTab, showHealthStats, setSearchParams]);
 
   const [form, setForm] = useState({
     apiUrl: 'https://api.wavoip.com/v1',
