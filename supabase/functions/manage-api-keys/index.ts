@@ -40,16 +40,16 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+    const { data: { user: userData }, error: userError } = await userClient.auth.getUser();
 
-    if (claimsError || !claimsData?.claims) {
+    if (userError || !userData) {
       return new Response(JSON.stringify({ error: "Token inválido" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const user = { id: claimsData.claims.sub };
+    const user = { id: userData.id };
 
     // Check admin role
     const { data: isAdmin } = await supabaseAdmin.rpc("has_role", {
