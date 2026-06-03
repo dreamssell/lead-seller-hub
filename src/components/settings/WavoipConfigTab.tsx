@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Phone, 
   Shield, 
@@ -38,8 +38,23 @@ import {
   Cpu,
   Bookmark,
   Share2,
-  UserCheck
+  UserCheck,
+  BarChart3,
+  TrendingDown,
+  TrendingUp,
+  Timer
 } from 'lucide-react';
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  BarChart,
+  Bar
+} from 'recharts';
 import { 
   Dialog,
   DialogContent,
@@ -121,7 +136,17 @@ export default function WavoipConfigPage() {
   }>({ status: 'none', details: '', logs: [] });
   const [filterPresets, setFilterPresets] = useState<any[]>([]);
   const [isSavingPreset, setIsSavingPreset] = useState(false);
+  const [showHealthStats, setShowHealthStats] = useState(false);
   const itemsPerPage = 5;
+
+  const healthData = useMemo(() => [
+    { name: '00:00', received: 45, deduped: 5, invalid: 0, latency: 120 },
+    { name: '04:00', received: 30, deduped: 2, invalid: 1, latency: 145 },
+    { name: '08:00', received: 85, deduped: 12, invalid: 3, latency: 110 },
+    { name: '12:00', received: 120, deduped: 15, invalid: 2, latency: 130 },
+    { name: '16:00', received: 95, deduped: 8, invalid: 0, latency: 115 },
+    { name: '20:00', received: 60, deduped: 4, invalid: 1, latency: 125 },
+  ], []);
 
 
 
@@ -517,13 +542,25 @@ export default function WavoipConfigPage() {
       const nowTime = Date.now();
       const dedupMs = dedupWindow * 60 * 1000;
       
-      if (prev.some(h => {
+      const duplicate = prev.find(h => {
         const isSame = h.id === eventId || (h.message === mockPayload.message && h.type === mockPayload.type);
         const isRecent = nowTime - new Date(h.date).getTime() < dedupMs;
         return isSame && isRecent;
-      })) {
+      });
+
+      if (duplicate) {
         toast.warning("Evento suprimido pela deduplicação.");
-        return prev;
+        // Registrar supressão no histórico para auditoria
+        const suppressionLog = {
+          id: `sup_${Date.now()}`,
+          date: timestamp,
+          status: 'error',
+          type: 'System',
+          message: `Evento Suprimido: ${mockPayload.message}`,
+          details: `Janela ativa: ${dedupWindow}m. Chave comparada: ${duplicate.id}`,
+          isSuppressed: true
+        };
+        return [suppressionLog, ...prev];
       }
       
       if (mockPayload.status === 'error' && isAlertEnabled) {
@@ -735,15 +772,90 @@ export default function WavoipConfigPage() {
   return (
 
     <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center gap-4 mb-2">
-        <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
-          <Phone className="w-6 h-6" />
+      <div className="flex items-center justify-between gap-4 mb-2">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+            <Phone className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Configuração Wavoip</h1>
+            <p className="text-sm text-muted-foreground">Credenciais de voz e mensagens integradas</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Configuração Wavoip</h1>
-          <p className="text-sm text-muted-foreground">Credenciais de voz e mensagens integradas</p>
-        </div>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className={`gap-2 ${showHealthStats ? 'bg-primary/10 border-primary text-primary' : ''}`}
+          onClick={() => setShowHealthStats(!showHealthStats)}
+        >
+          <BarChart3 className="w-4 h-4" />
+          Dashboard de Saúde
+        </Button>
       </div>
+
+      <AnimatePresence>
+        {showHealthStats && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <Card className="glass-card bg-primary/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    <Activity className="w-3 h-3" /> Volume de Eventos (24h)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="h-[180px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={healthData}>
+                      <defs>
+                        <linearGradient id="colorReceived" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} />
+                      <YAxis fontSize={10} axisLine={false} tickLine={false} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '8px', fontSize: '10px' }}
+                      />
+                      <Area type="monotone" dataKey="received" stroke="#10b981" fillOpacity={1} fill="url(#colorReceived)" />
+                      <Area type="monotone" dataKey="deduped" stroke="#f59e0b" fill="transparent" strokeDasharray="5 5" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card className="glass-card bg-red-500/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    <ShieldAlert className="w-3 h-3 text-red-500" /> Falhas de Assinatura & Latência
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="h-[180px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={healthData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} />
+                      <YAxis yAxisId="left" fontSize={10} axisLine={false} tickLine={false} />
+                      <YAxis yAxisId="right" orientation="right" fontSize={10} axisLine={false} tickLine={false} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '8px', fontSize: '10px' }}
+                      />
+                      <Bar yAxisId="left" dataKey="invalid" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                      <Bar yAxisId="right" dataKey="latency" fill="#3b82f6" opacity={0.5} radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <Card className="glass-card bg-emerald-500/5 border-emerald-500/20">
@@ -1635,7 +1747,15 @@ export default function WavoipConfigPage() {
                                 </Badge>
                               </div>
                             )}
+                            {(item as any).isSuppressed && (
+                              <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-amber-50 text-amber-600 border-amber-200 uppercase">
+                                Deduplicado
+                              </Badge>
+                            )}
                           </div>
+                          {(item as any).details && (
+                            <span className="text-[9px] opacity-60 italic">{(item as any).details}</span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
