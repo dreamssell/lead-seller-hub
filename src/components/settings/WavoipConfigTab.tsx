@@ -2255,6 +2255,8 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
                         <Input 
                           placeholder="Buscar por thread, responsável ou anotação..." 
                           className="pl-8 h-8 text-[10px] w-64"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
                         />
                       </div>
                     </div>
