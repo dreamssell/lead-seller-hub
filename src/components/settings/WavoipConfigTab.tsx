@@ -51,6 +51,8 @@ export default function WavoipConfigPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [isLive, setIsLive] = useState(true);
   const [webhookSecret, setWebhookSecret] = useState('wv_' + Math.random().toString(36).substring(7));
+  const [previousSecret, setPreviousSecret] = useState<string | null>(null);
+  const [isRotating, setIsRotating] = useState(false);
   const [lastValidation, setLastValidation] = useState<{
     status: 'success' | 'error' | 'none';
     timestamp: string | null;
@@ -73,6 +75,7 @@ export default function WavoipConfigPage() {
     { id: 5, date: '2024-05-14 11:20:00', status: 'success', type: 'Webhook', message: 'Configuração de Webhook validada' },
     { id: 6, date: '2024-05-13 15:45:00', status: 'success', type: 'API', message: 'Sincronização de logs completa' },
     { id: 7, date: '2024-05-12 09:30:00', status: 'error', type: 'Auth', message: '403 Forbidden - Permissão insuficiente' },
+    { id: 8, date: '2024-05-11 18:00:00', status: 'error', type: 'Security', message: 'Falha na assinatura do Webhook: Assinatura inválida (Mismatch)' },
   ]);
 
   const filteredHistory = history.filter(item => {
@@ -228,7 +231,7 @@ export default function WavoipConfigPage() {
     setIsExporting(true);
     toast.info(`Iniciando exportação em ${format.toUpperCase()}...`);
     
-    // Simulação de geração de arquivo
+    // Simulação de geração de arquivo com filtros aplicados
     setTimeout(() => {
       const headers = ['Data', 'Status', 'Tipo', 'Mensagem'];
       const data = filteredHistory.map(item => [
@@ -243,13 +246,25 @@ export default function WavoipConfigPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `wavoip-audit-log-${new Date().toISOString().split('T')[0]}.${format}`;
+      const periodLabel = filterPeriod !== 'all' ? `-${filterPeriod}` : '';
+      a.download = `wavoip-audit-log${periodLabel}-${new Date().toISOString().split('T')[0]}.${format}`;
       a.click();
       
       setIsExporting(false);
-      toast.success(`Relatório de auditoria exportado com sucesso!`);
+      toast.success(`Relatório filtrado (${filteredHistory.length} registros) exportado com sucesso!`);
     }, 1500);
   };
+
+  const rotateSecret = () => {
+    setIsRotating(true);
+    setTimeout(() => {
+      setPreviousSecret(webhookSecret);
+      setWebhookSecret('wv_' + Math.random().toString(36).substring(7));
+      setIsRotating(false);
+      toast.success('Segredo rotacionado. O segredo anterior continuará ativo por 24h para migração.');
+    }, 800);
+  };
+
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -456,14 +471,26 @@ export default function WavoipConfigPage() {
                 }}>
                   Copiar
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setWebhookSecret('wv_' + Math.random().toString(36).substring(7))}>
-                  <RefreshCw className="w-3 h-3" />
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={rotateSecret}
+                  disabled={isRotating}
+                >
+                  {isRotating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                 </Button>
               </div>
+              {previousSecret && (
+                <div className="p-2 rounded bg-amber-500/5 border border-amber-500/10 text-[9px] text-amber-600 mt-2 flex items-center justify-between">
+                  <span>Segredo anterior (v-1) ainda aceito: <code className="font-mono">{previousSecret}</code></span>
+                  <Badge variant="outline" className="text-[8px] h-4">v-1 ativo</Badge>
+                </div>
+              )}
               <p className="text-[10px] text-muted-foreground">
-                Utilize este segredo para validar o header <code className="bg-secondary px-1">X-Wavoip-Signature</code> em sua integração e garantir a autenticidade dos dados.
+                Utilize este segredo para validar o header <code className="bg-secondary px-1">X-Wavoip-Signature</code> em sua integração. O versionamento permite migração sem downtime.
               </p>
             </div>
+
             <p className="text-[10px] text-muted-foreground italic">
               Configure esta URL no painel Wavoip para receber atualizações de chamadas e mensagens em tempo real.
             </p>
