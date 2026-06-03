@@ -554,6 +554,46 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
                     </pre>
                   </div>
                 )}
+
+                <div className="pt-4 flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 text-xs gap-2"
+                    onClick={() => {
+                      onOpenAudit();
+                      setSelectedDetailLog(null);
+                      setDrillDownOpen(null); // This is wrong, should be setDrillDownOpen(false)
+                    }}
+                  >
+                    <History className="w-4 h-4" /> Ir para Auditoria
+                  </Button>
+                  
+                  {selectedDetailLog?.status === 'error' && (
+                    <Button 
+                      variant="destructive" 
+                      className="flex-1 text-xs gap-2"
+                      onClick={async () => {
+                        const { data: incident } = await supabase
+                          .from('uaz_incidents')
+                          .select('id')
+                          .eq('original_log_id', selectedDetailLog.id)
+                          .maybeSingle();
+                        
+                        if (incident) {
+                          toast.info('Incidente Encontrado', {
+                            description: 'Navegue até a aba de Incidentes para ver mais detalhes.',
+                          });
+                        } else {
+                          toast.error('Incidente não encontrado', {
+                            description: 'Esta falha ainda não atingiu o limite para gerar um incidente crítico.'
+                          });
+                        }
+                      }}
+                    >
+                      <AlertCircle className="w-4 h-4" /> Verificar Incidente
+                    </Button>
+                  )}
+                </div>
               </div>
             </ScrollArea>
           </DialogContent>
