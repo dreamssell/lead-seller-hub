@@ -55,21 +55,49 @@ export default function WavoipConfigPage() {
   }>({ status: 'none', timestamp: null, message: '' });
 
   const [filterStatus, setFilterStatus] = useState<'all' | 'success' | 'error'>('all');
+  const [filterPeriod, setFilterPeriod] = useState<'today' | '7d' | '30d' | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   const [history, setHistory] = useState([
     { id: 1, date: '2024-05-20 14:30:05', status: 'success', type: 'API', message: 'Conexão estabelecida via API Gateway' },
     { id: 2, date: '2024-05-19 10:15:22', status: 'error', type: 'Auth', message: '401 Unauthorized - Token expirado' },
     { id: 3, date: '2024-05-18 16:45:10', status: 'success', type: 'API', message: 'Validação de credenciais OK' },
     { id: 4, date: '2024-05-15 09:00:00', status: 'error', type: 'Network', message: '503 Service Unavailable - Wavoip API Down' },
+    { id: 5, date: '2024-05-14 11:20:00', status: 'success', type: 'Webhook', message: 'Configuração de Webhook validada' },
+    { id: 6, date: '2024-05-13 15:45:00', status: 'success', type: 'API', message: 'Sincronização de logs completa' },
+    { id: 7, date: '2024-05-12 09:30:00', status: 'error', type: 'Auth', message: '403 Forbidden - Permissão insuficiente' },
   ]);
 
   const filteredHistory = history.filter(item => {
     const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
     const matchesSearch = item.message.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          (item.type && item.type.toLowerCase().includes(searchTerm.toLowerCase()));
-    return matchesStatus && matchesSearch;
+    
+    let matchesPeriod = true;
+    const itemDate = new Date(item.date);
+    const now = new Date();
+    
+    if (filterPeriod === 'today') {
+      matchesPeriod = itemDate.toDateString() === now.toDateString();
+    } else if (filterPeriod === '7d') {
+      const sevenDaysAgo = new Date(now.setDate(now.getDate() - 7));
+      matchesPeriod = itemDate >= sevenDaysAgo;
+    } else if (filterPeriod === '30d') {
+      const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
+      matchesPeriod = itemDate >= thirtyDaysAgo;
+    }
+
+    return matchesStatus && matchesSearch && matchesPeriod;
   });
+
+  const totalPages = Math.ceil(filteredHistory.length / itemsPerPage);
+  const paginatedHistory = filteredHistory.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   
   const [form, setForm] = useState({
     apiUrl: 'https://api.wavoip.com/v1',
@@ -456,10 +484,26 @@ export default function WavoipConfigPage() {
               </div>
               <select 
                 className="h-8 text-[10px] rounded-md border border-input bg-background px-2"
-                value={filterStatus}
-                onChange={e => setFilterStatus(e.target.value as any)}
+                value={filterPeriod}
+                onChange={e => {
+                  setFilterPeriod(e.target.value as any);
+                  setCurrentPage(1);
+                }}
               >
-                <option value="all">Todos</option>
+                <option value="all">Período: Tudo</option>
+                <option value="today">Hoje</option>
+                <option value="7d">Últimos 7 dias</option>
+                <option value="30d">Últimos 30 dias</option>
+              </select>
+              <select 
+                className="h-8 text-[10px] rounded-md border border-input bg-background px-2"
+                value={filterStatus}
+                onChange={e => {
+                  setFilterStatus(e.target.value as any);
+                  setCurrentPage(1);
+                }}
+              >
+                <option value="all">Todos Status</option>
                 <option value="success">Sucessos</option>
                 <option value="error">Falhas</option>
               </select>
@@ -478,7 +522,7 @@ export default function WavoipConfigPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredHistory.map((item) => (
+              {paginatedHistory.map((item) => (
                 <TableRow key={item.id} className="border-border/40 hover:bg-secondary/10 transition-colors">
                   <TableCell className="text-xs font-mono text-muted-foreground">{item.date}</TableCell>
                   <TableCell>
@@ -509,7 +553,7 @@ export default function WavoipConfigPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {filteredHistory.length === 0 && (
+              {paginatedHistory.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-xs italic">
                     Nenhum log encontrado para os filtros selecionados.
@@ -518,6 +562,37 @@ export default function WavoipConfigPage() {
               )}
             </TableBody>
           </Table>
+          
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between p-4 border-t border-border/40 bg-secondary/10">
+              <p className="text-[10px] text-muted-foreground">
+                Mostrando {paginatedHistory.length} de {filteredHistory.length} registros
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[10px]"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <span className="text-[10px] font-medium px-2">
+                  {currentPage} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[10px]"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Próxima
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
