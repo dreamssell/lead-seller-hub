@@ -27,7 +27,7 @@ export default function UazIncidentsTab() {
       if (error) throw error;
       setIncidents(data || []);
     } catch (err: any) {
-      toast({ title: 'Erro ao carregar incidentes', description: err.message, variant: 'destructive' });
+      toast.error('Erro ao carregar incidentes: ' + err.message);
     } finally {
       setLoading(false);
     }
