@@ -463,6 +463,79 @@ export default function WavoipConfigPage() {
   }, [isLive, isAlertEnabled, alertThreshold, access?.sub_company_id, wsBackoff.max, wsBackoff.maxAttempts, wsBackoff.min, filterPeriod, securityAlertLimit]);
 
 
+  const exportThread = (payloadHash: string, format: 'csv' | 'pdf') => {
+    setIsExporting(true);
+    toast.info(`Exportando thread ${payloadHash.substring(7, 12)}...`);
+    
+    setTimeout(() => {
+      const threadEvents = history.filter(item => item.payloadHash === payloadHash);
+      const headers = ['Data', 'Status', 'Tipo', 'Mensagem', 'Versão', 'Request ID', 'Payload Hash'];
+      const data = threadEvents.map(item => [
+        item.date,
+        item.status.toUpperCase(),
+        item.type,
+        item.message,
+        (item as any).version || '-',
+        (item as any).requestId || '-',
+        (item as any).payloadHash || '-'
+      ]);
+      
+      const content = [headers, ...data].map(row => row.join(',')).join('\n');
+      const blob = new Blob([content], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `wavoip-thread-${payloadHash.substring(7, 12)}.${format}`;
+      a.click();
+      
+      setIsExporting(false);
+      toast.success(`Thread com ${threadEvents.length} eventos exportada.`);
+    }, 1000);
+  };
+
+  const simulateEvent = (type: 'Security' | 'Routing' | 'API') => {
+    const timestamp = new Date().toLocaleString();
+    const mockPayload: any = {
+      id: `sim_${Math.random().toString(36).substring(7)}`,
+      date: timestamp,
+      status: type === 'Security' ? 'error' : 'success',
+      type: type,
+      message: type === 'Security' ? 'Simulação: Assinatura Inválida' : 
+               type === 'Routing' ? `Simulação: Roteamento ${form.origin} -> ${form.destination}` :
+               'Simulação: Teste de API',
+      version: 'v0',
+      requestId: `req_sim_${Math.random().toString(36).substring(7)}`,
+      payloadHash: type === 'Security' ? 'sha256:simulated_hash_123' : undefined
+    };
+
+    // Usar toast para simular o efeito visual se o canal não estiver pronto
+    toast.info(`Evento de ${type} disparado para simulação.`);
+    
+    // Injetar diretamente no histórico se for simulação local para teste de dedup
+    const eventId = mockPayload.id;
+    setHistory(prev => {
+      const nowTime = Date.now();
+      const dedupMs = dedupWindow * 60 * 1000;
+      
+      if (prev.some(h => {
+        const isSame = h.id === eventId || (h.message === mockPayload.message && h.type === mockPayload.type);
+        const isRecent = nowTime - new Date(h.date).getTime() < dedupMs;
+        return isSame && isRecent;
+      })) {
+        toast.warning("Evento suprimido pela deduplicação.");
+        return prev;
+      }
+      
+      if (mockPayload.status === 'error' && isAlertEnabled) {
+        toast.error(`Alerta Simulado: ${mockPayload.message}`, {
+          icon: <ShieldAlert className="w-4 h-4 text-red-500" />
+        });
+      }
+
+      return [mockPayload, ...prev];
+    });
+  };
+
   const handleRoutingTest = async () => {
     if (!form.origin || !form.destination) {
       toast.error('Informe origem e destino para testar o roteamento.');
