@@ -818,13 +818,42 @@ export default function WavoipConfigPage() {
                 </div>
               </div>
 
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className={`h-8 text-[10px] gap-2 ${isLive ? 'text-emerald-500 hover:text-emerald-600 bg-emerald-500/5' : 'text-muted-foreground'}`}
-                onClick={() => setIsLive(!isLive)}
-              >
+                <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
+                  <span className="text-[8px] uppercase text-muted-foreground font-bold">WebSocket Status</span>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-1.5 h-1.5 rounded-full ${
+                      wsStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 
+                      wsStatus === 'reconnecting' ? 'bg-amber-500 animate-bounce' : 'bg-red-500'
+                    }`} />
+                    <span className={`text-[9px] font-bold ${
+                      wsStatus === 'connected' ? 'text-emerald-600' : 
+                      wsStatus === 'reconnecting' ? 'text-amber-600' : 'text-red-600'
+                    }`}>
+                      {wsStatus.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
+                  <span className="text-[8px] uppercase text-muted-foreground font-bold">Janela Dedup</span>
+                  <select 
+                    className="h-6 text-[9px] rounded bg-secondary/50 border-none outline-none px-1 font-bold"
+                    value={dedupWindow}
+                    onChange={(e) => setDedupWindow(Number(e.target.value) as any)}
+                  >
+                    <option value={5}>5m</option>
+                    <option value={15}>15m</option>
+                    <option value={60}>1h</option>
+                  </select>
+                </div>
+
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className={`h-8 text-[10px] gap-2 ${isLive ? 'text-emerald-500 hover:text-emerald-600 bg-emerald-500/5' : 'text-muted-foreground'}`}
+                  onClick={() => setIsLive(!isLive)}
+                >
+
                 <div className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
                 {isLive ? 'Live' : 'Pausado'}
               </Button>
