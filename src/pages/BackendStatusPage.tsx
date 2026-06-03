@@ -208,6 +208,9 @@ export default function BackendStatusPage() {
           <TabsTrigger value="uaz-remediation" className="gap-2">
             <HistoryIcon className="w-4 h-4" /> Auditoria Remediação
           </TabsTrigger>
+          <TabsTrigger value="uaz-incidents" className="gap-2">
+            <AlertCircle className="w-4 h-4" /> Incidentes Críticos
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="uaz-remediation">
@@ -220,6 +223,10 @@ export default function BackendStatusPage() {
 
         <TabsContent value="uaz-alerts">
           <UazAlertHistoryTab />
+        </TabsContent>
+
+        <TabsContent value="uaz-incidents">
+          <UazIncidentsTab />
         </TabsContent>
 
         <TabsContent value="overview" className="space-y-6">
