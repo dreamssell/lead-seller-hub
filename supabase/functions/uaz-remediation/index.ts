@@ -78,7 +78,10 @@ Deno.serve(async (req) => {
 
           // Mark original error as remediated to prevent loops
           await supabaseAdmin.from("uaz_audit_logs")
-            .update({ is_remediation: true })
+            .update({ 
+              is_remediation: true,
+              remediation_target_id: err.id
+            })
             .eq("id", err.id);
         }
       }
