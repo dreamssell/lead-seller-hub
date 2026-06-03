@@ -17,6 +17,7 @@ Deno.serve(async (req) => {
 
   const webhookId = req.headers.get("X-Webhook-ID") || req.headers.get("x-webhook-id");
   
+  const startTime = Date.now();
   let responseStatus = 200;
   let responseBody = "Success";
   let payload: any = null;
@@ -25,19 +26,14 @@ Deno.serve(async (req) => {
     const bodyText = await req.text();
     payload = JSON.parse(bodyText);
 
-    // Identificar se é um evento da UAZ
-    // A UAZ costuma enviar o evento no campo 'event' ou similar
     const eventType = payload.event || "unknown";
-    const remoteJid = payload.data?.key?.remoteJid || payload.data?.from; // Depende do payload da UAZ
+    const remoteJid = payload.data?.key?.remoteJid || payload.data?.from;
     const messageText = payload.data?.message?.conversation || payload.data?.text || payload.data?.body;
     
-    console.log(`Recebido evento UAZ [${eventType}] de [${remoteJid}]`);
-
     if (eventType === "messages.upsert" || eventType === "message") {
       if (remoteJid && messageText) {
         const phone = remoteJid.replace("@s.whatsapp.net", "").replace("@g.us", "");
         
-        // 1. Encontrar ou criar o cliente pelo telefone
         let { data: customer } = await supabaseAdmin
           .from("customers")
           .select("id")
@@ -45,25 +41,21 @@ Deno.serve(async (req) => {
           .maybeSingle();
 
         if (!customer) {
-          // Criar um cliente genérico se não existir
-          // Precisamos de um created_by válido se houver RLS estrito. 
-          // Como é service_role, podemos tentar pegar o admin ou deixar nulo se a coluna permitir.
           const { data: newCustomer, error: custError } = await supabaseAdmin
             .from("customers")
             .insert({
               name: `WhatsApp ${phone}`,
               phone: phone,
-              created_by: "00000000-0000-0000-0000-000000000000" // Placeholder ou ID de admin real
+              created_by: "00000000-0000-0000-0000-000000000000"
             })
             .select()
             .single();
           
-          if (custError) console.error("Erro ao criar cliente:", custError);
+          if (custError) throw custError;
           customer = newCustomer;
         }
 
         if (customer) {
-          // 2. Registrar a mensagem
           const { error: msgError } = await supabaseAdmin
             .from("chat_messages")
             .insert({
@@ -76,17 +68,36 @@ Deno.serve(async (req) => {
               }
             });
             
-          if (msgError) console.error("Erro ao registrar mensagem:", msgError);
+          if (msgError) throw msgError;
         }
       }
     }
 
     responseBody = JSON.stringify({ success: true });
 
+    // Auditoria de Sucesso
+    await supabaseAdmin.from("uaz_audit_logs").insert({
+      event_type: 'webhook',
+      status: 'success',
+      message: `Evento [${eventType}] processado com sucesso para [${remoteJid}]`,
+      payload,
+      latency_ms: Date.now() - startTime
+    });
+
   } catch (err) {
     console.error("UAZ Webhook error:", err.message);
     responseStatus = 500;
     responseBody = JSON.stringify({ error: err.message });
+
+    // Auditoria de Erro
+    await supabaseAdmin.from("uaz_audit_logs").insert({
+      event_type: 'webhook',
+      status: 'error',
+      message: `Falha no processamento: ${err.message}`,
+      payload,
+      response: { error: err.message },
+      latency_ms: Date.now() - startTime
+    });
   } finally {
     if (webhookId) {
        await supabaseAdmin.from("webhook_logs").insert({
