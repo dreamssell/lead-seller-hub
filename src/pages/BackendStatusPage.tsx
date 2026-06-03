@@ -12,6 +12,10 @@ interface CheckResult {
   detail?: string;
 }
 
+import UazStatusPanel from '@/components/settings/UazStatusPanel';
+import UazAlertHistoryTab from '@/components/settings/UazAlertHistoryTab';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 export default function BackendStatusPage() {
   const [checks, setChecks] = useState<CheckResult[]>([]);
   const [running, setRunning] = useState(false);
@@ -173,7 +177,28 @@ export default function BackendStatusPage() {
 
   return (
     <AppLayout title="Status do Backend" subtitle="Diagnóstico, conexões e monitoramento">
-      <div className="max-w-5xl space-y-6">
+      <Tabs defaultValue="overview" className="max-w-5xl space-y-6">
+        <TabsList className="bg-secondary/40 p-1 border border-border/40">
+          <TabsTrigger value="overview" className="gap-2">
+            <Activity className="w-4 h-4" /> Geral
+          </TabsTrigger>
+          <TabsTrigger value="uaz-status" className="gap-2">
+            <Zap className="w-4 h-4" /> Status UAZ
+          </TabsTrigger>
+          <TabsTrigger value="uaz-alerts" className="gap-2">
+            <AlertTriangle className="w-4 h-4" /> Alertas UAZ
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="uaz-status">
+          <UazStatusPanel />
+        </TabsContent>
+
+        <TabsContent value="uaz-alerts">
+          <UazAlertHistoryTab />
+        </TabsContent>
+
+        <TabsContent value="overview" className="space-y-6">
         {/* Header status */}
         <div className="glass-card p-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -282,7 +307,8 @@ export default function BackendStatusPage() {
             </div>
           )}
         </div>
-      </div>
+        </TabsContent>
+      </Tabs>
     </AppLayout>
   );
 }
