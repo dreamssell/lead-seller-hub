@@ -1076,9 +1076,11 @@ export type Database = {
           created_at: string
           event_type: string
           id: string
+          is_remediation: boolean | null
           latency_ms: number | null
           message: string | null
           payload: Json | null
+          remediation_target_id: string | null
           response: Json | null
           status: string
         }
@@ -1086,9 +1088,11 @@ export type Database = {
           created_at?: string
           event_type: string
           id?: string
+          is_remediation?: boolean | null
           latency_ms?: number | null
           message?: string | null
           payload?: Json | null
+          remediation_target_id?: string | null
           response?: Json | null
           status: string
         }
@@ -1096,9 +1100,11 @@ export type Database = {
           created_at?: string
           event_type?: string
           id?: string
+          is_remediation?: boolean | null
           latency_ms?: number | null
           message?: string | null
           payload?: Json | null
+          remediation_target_id?: string | null
           response?: Json | null
           status?: string
         }
@@ -1111,6 +1117,7 @@ export type Database = {
           backoff_base_delay: number | null
           backoff_max_retries: number | null
           id: string
+          remediation_interval_minutes: number | null
           request_timeout_ms: number | null
           updated_at: string | null
         }
@@ -1120,6 +1127,7 @@ export type Database = {
           backoff_base_delay?: number | null
           backoff_max_retries?: number | null
           id?: string
+          remediation_interval_minutes?: number | null
           request_timeout_ms?: number | null
           updated_at?: string | null
         }
@@ -1129,6 +1137,7 @@ export type Database = {
           backoff_base_delay?: number | null
           backoff_max_retries?: number | null
           id?: string
+          remediation_interval_minutes?: number | null
           request_timeout_ms?: number | null
           updated_at?: string | null
         }
