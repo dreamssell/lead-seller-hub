@@ -1236,6 +1236,30 @@ export default function WavoipConfigPage() {
                 </div>
 
                 <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
+                  <span className="text-[8px] uppercase text-muted-foreground font-bold">Simular Evento</span>
+                  <div className="flex gap-1">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6 text-red-500 hover:bg-red-50" 
+                      onClick={() => simulateEvent('Security')}
+                      title="Simular Assinatura Inválida"
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6 text-primary hover:bg-primary/5" 
+                      onClick={() => simulateEvent('Routing')}
+                      title="Simular Roteamento"
+                    >
+                      <Navigation className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
                   <span className="text-[8px] uppercase text-muted-foreground font-bold">Janela Dedup</span>
                   <select 
                     className="h-6 text-[9px] rounded bg-secondary/50 border-none outline-none px-1 font-bold"
