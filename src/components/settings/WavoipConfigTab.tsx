@@ -111,9 +111,10 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
   const [filterStatus, setFilterStatus] = useState<'all' | 'success' | 'error'>((searchParams.get('status') as any) || 'all');
   const [filterType, setFilterType] = useState<'all' | 'API' | 'Webhook' | 'Security' | 'Routing' | 'CI'>((searchParams.get('type') as any) || 'all');
   const [filterPeriod, setFilterPeriod] = useState<'today' | '7d' | '30d' | 'all'>((searchParams.get('period') as any) || 'all');
-  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>((searchParams.get('sort') as any) || 'desc');
   const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(Number(searchParams.get('page')) || 1);
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'config');
   const [isAlertEnabled, setIsAlertEnabled] = useState(true);
   const [alertChannels, setAlertChannels] = useState({
     visual: true,
@@ -283,8 +284,11 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
     if (filterType !== 'all') params.type = filterType;
     if (filterPeriod !== 'all') params.period = filterPeriod;
     if (searchTerm) params.q = searchTerm;
-    setSearchParams(params);
-  }, [filterStatus, filterType, filterPeriod, searchTerm, setSearchParams]);
+    if (sortOrder !== 'desc') params.sort = sortOrder;
+    if (currentPage !== 1) params.page = currentPage.toString();
+    if (activeTab !== 'config') params.tab = activeTab;
+    setSearchParams(params, { replace: true });
+  }, [filterStatus, filterType, filterPeriod, searchTerm, sortOrder, currentPage, activeTab, setSearchParams]);
 
   const [form, setForm] = useState({
     apiUrl: 'https://api.wavoip.com/v1',
@@ -774,7 +778,7 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
         className="max-w-7xl mx-auto"
       >
         <div className="space-y-6">
-          <Tabs defaultValue="config" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 h-10 mb-6">
               <TabsTrigger value="config" className="text-xs gap-2">
                 <Settings2 className="w-4 h-4" /> Configuração & Auditoria
