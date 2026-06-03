@@ -14,7 +14,11 @@ import {
   XCircle,
   RefreshCw,
   Search,
-  Webhook
+  Webhook,
+  Download,
+  Eye,
+  EyeOff,
+  Lock
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -40,6 +44,8 @@ export default function WavoipConfigPage() {
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [validated, setTestingValidated] = useState(false);
+  const [showToken, setShowToken] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [lastValidation, setLastValidation] = useState<{
     status: 'success' | 'error' | 'none';
     timestamp: string | null;
