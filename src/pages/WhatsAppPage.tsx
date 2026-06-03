@@ -63,7 +63,7 @@ function statusBadge(status: Status) {
   );
 }
 
-function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSaved: () => void; onOpenAudit: () => void }) {
+function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSaved: () => void; onOpenAudit: (filters?: { tenantId?: string; logId?: string }) => void }) {
   const defaults = PROVIDER_DEFAULTS[conn.provider];
   const [url, setUrl] = useState<string>(conn.metadata?.url ?? defaults.url);
   const [token, setToken] = useState<string>(conn.metadata?.token ?? '');
@@ -571,7 +571,7 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
                                 title="Ver na Auditoria"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onOpenAudit();
+                                  onOpenAudit({ logId: log.id, tenantId: log.payload?.tenant_id || log.payload?.sub_company_id });
                                 }}
                               >
                                 <History className="h-3 w-3" />
@@ -675,7 +675,7 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
                     variant="outline" 
                     className="flex-1 text-xs gap-2"
                     onClick={() => {
-                      onOpenAudit();
+                      onOpenAudit({ logId: selectedDetailLog.id, tenantId: selectedDetailLog.payload?.tenant_id || selectedDetailLog.payload?.sub_company_id });
                       setSelectedDetailLog(null);
                       setDrillDownOpen(false);
                     }}
@@ -745,7 +745,12 @@ export default function WhatsAppPage() {
                 key={c.id} 
                 conn={c} 
                 onSaved={load} 
-                onOpenAudit={() => {
+                onOpenAudit={(filters) => {
+                  const searchParams = new URLSearchParams();
+                  if (filters?.tenantId) searchParams.set('tenantId', filters.tenantId);
+                  if (filters?.logId) searchParams.set('logId', filters.logId);
+                  window.history.replaceState(null, '', `${window.location.pathname}?${searchParams.toString()}`);
+
                   const tabs = document.querySelectorAll('[role="tab"]');
                   const auditTab = Array.from(tabs).find(t => t.textContent?.includes('Auditoria')) as HTMLElement;
                   auditTab?.click();
