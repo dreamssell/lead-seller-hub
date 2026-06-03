@@ -612,6 +612,28 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
                   </pre>
                 </div>
 
+                <div className="pt-2 flex justify-end gap-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 text-[10px] gap-1.5"
+                    onClick={() => {
+                      navigator.clipboard.writeText(JSON.stringify(selectedDetailLog, null, 2));
+                      toast.success('Log copiado para a área de transferência');
+                    }}
+                  >
+                    <Copy className="w-3 h-3" /> Copiar JSON
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 text-[10px] gap-1.5"
+                    onClick={() => exportLogToJSON(selectedDetailLog)}
+                  >
+                    <FileJson className="w-3 h-3" /> Baixar JSON
+                  </Button>
+                </div>
+
                 {selectedDetailLog?.full_trace && (
                   <div>
                     <Label className="text-[10px] uppercase font-bold text-muted-foreground">Trace Completo</Label>
