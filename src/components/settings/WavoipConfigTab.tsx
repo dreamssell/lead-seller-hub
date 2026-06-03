@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { ErrorBoundary } from 'react-error-boundary';
 import { 
   Phone, 
   Shield, 
@@ -90,7 +91,44 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
+function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center p-8 text-center space-y-4 bg-red-50/50 rounded-2xl border border-red-100">
+      <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+        <AlertCircle className="w-6 h-6" />
+      </div>
+      <div className="space-y-2">
+        <h3 className="text-lg font-bold text-red-900">Algo deu errado</h3>
+        <p className="text-sm text-red-700 max-w-md">
+          Houve um erro ao carregar as configurações do Wavoip. Isso pode ser um problema temporário ou de permissão.
+        </p>
+        <pre className="text-[10px] bg-white p-2 rounded border text-red-500 overflow-auto max-w-full">
+          {error.message}
+        </pre>
+      </div>
+      <div className="flex gap-3">
+        <Button onClick={resetErrorBoundary} variant="outline" size="sm">
+          Tentar novamente
+        </Button>
+        <Link to="/developer">
+          <Button variant="ghost" size="sm">
+            Voltar ao Developer Center
+          </Button>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default function WavoipConfigPage({ standalone = false }: { standalone?: boolean }) {
+  return (
+    <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => window.location.reload()}>
+      <WavoipConfigInner standalone={standalone} />
+    </ErrorBoundary>
+  );
+}
+
+function WavoipConfigInner({ standalone = false }: { standalone?: boolean }) {
   const { access } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -108,13 +146,13 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
     message: string;
   }>({ status: 'none', timestamp: null, message: '' });
 
-  const [filterStatus, setFilterStatus] = useState<'all' | 'success' | 'error'>((searchParams.get('status') as any) || 'all');
-  const [filterType, setFilterType] = useState<'all' | 'API' | 'Webhook' | 'Security' | 'Routing' | 'CI'>((searchParams.get('type') as any) || 'all');
-  const [filterPeriod, setFilterPeriod] = useState<'today' | '7d' | '30d' | 'all'>((searchParams.get('period') as any) || 'all');
-  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>((searchParams.get('sort') as any) || 'desc');
-  const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '');
-  const [currentPage, setCurrentPage] = useState(Number(searchParams.get('page')) || 1);
-  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'config');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'success' | 'error'>(() => (searchParams.get('status') as any) || 'all');
+  const [filterType, setFilterType] = useState<'all' | 'API' | 'Webhook' | 'Security' | 'Routing' | 'CI'>(() => (searchParams.get('type') as any) || 'all');
+  const [filterPeriod, setFilterPeriod] = useState<'today' | '7d' | '30d' | 'all'>(() => (searchParams.get('period') as any) || 'all');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>(() => (searchParams.get('sort') as any) || 'desc');
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') || '');
+  const [currentPage, setCurrentPage] = useState(() => Number(searchParams.get('page')) || 1);
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'config');
   const [isAlertEnabled, setIsAlertEnabled] = useState(true);
   const [alertChannels, setAlertChannels] = useState({
     visual: true,

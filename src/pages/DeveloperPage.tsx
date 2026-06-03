@@ -123,6 +123,20 @@ export default function DeveloperPage() {
                 <div className="h-px bg-border/40 my-2 mx-3" />
 
                 <button
+                  onClick={() => navigate('/wavoip')}
+                  className="w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 text-muted-foreground hover:text-foreground hover:bg-secondary group"
+                >
+                  <div className="p-2 rounded-lg bg-secondary">
+                    <Phone className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold">Wavoip Center</p>
+                    <p className="text-[10px]">Auditoria & Configuração</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+
+                <button
                   onClick={() => navigate('/docs')}
                   className="w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 text-muted-foreground hover:text-foreground hover:bg-secondary group"
                 >
