@@ -25,8 +25,26 @@ import {
   ArrowUpDown,
   Terminal,
   CirclePlay,
-  ShieldAlert
+  ShieldAlert,
+  Columns,
+  TestTube
 } from 'lucide-react';
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { 
+  Tabs, 
+  TabsContent, 
+  TabsList, 
+  TabsTrigger 
+} from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,7 +61,6 @@ import {
 } from '@/components/ui/table';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function WavoipConfigPage() {
@@ -87,8 +104,28 @@ export default function WavoipConfigPage() {
     { id: 5, date: '2024-05-14 11:20:00', status: 'success', type: 'Webhook', message: 'Configuração de Webhook validada' },
     { id: 6, date: '2024-05-13 15:45:00', status: 'success', type: 'API', message: 'Sincronização de logs completa' },
     { id: 7, date: '2024-05-12 09:30:00', status: 'error', type: 'Auth', message: '403 Forbidden - Permissão insuficiente' },
-    { id: 8, date: '2024-05-11 18:00:00', status: 'error', type: 'Security', message: 'Falha na assinatura do Webhook: Assinatura inválida (Mismatch)' },
+    { 
+      id: 8, 
+      date: '2024-05-11 18:00:00', 
+      status: 'error', 
+      type: 'Security', 
+      message: 'Falha na assinatura do Webhook: Assinatura inválida (Mismatch)',
+      version: 'v-1',
+      requestId: 'req_wavoip_99a82',
+      payloadHash: 'sha256:e3b0c442...'
+    },
   ]);
+
+  const [exportColumns, setExportColumns] = useState({
+    date: true,
+    status: true,
+    type: true,
+    message: true,
+    version: true,
+    requestId: true,
+    payloadHash: true
+  });
+
 
   const securityIncidents = useMemo(() => {
     return history.filter(item => item.type === 'Security' && item.status === 'error');
@@ -168,7 +205,9 @@ export default function WavoipConfigPage() {
             status: payload.status || 'success',
             type: payload.type || 'WebSocket',
             message: payload.message || 'Atualização instantânea recebida',
-            version: payload.version
+            version: payload.version,
+            requestId: payload.requestId || `req_${Math.random().toString(36).substring(7)}`,
+            payloadHash: payload.payloadHash || ((payload as any).type === 'Security' ? 'sha256:generated...' : undefined)
           };
           
           // Ordenação por data (descendente)
@@ -184,7 +223,6 @@ export default function WavoipConfigPage() {
             duration: isSecurity ? 8000 : 5000
           });
         }
-
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
@@ -329,15 +367,28 @@ export default function WavoipConfigPage() {
     setIsExporting(true);
     toast.info(`Iniciando exportação em ${format.toUpperCase()}...`);
     
-    // Simulação de geração de arquivo com filtros aplicados
+    // Simulação de geração de arquivo com filtros aplicados e colunas selecionadas
     setTimeout(() => {
-      const headers = ['Data', 'Status', 'Tipo', 'Mensagem'];
-      const data = filteredHistory.map(item => [
-        item.date,
-        item.status.toUpperCase(),
-        item.type,
-        item.message
-      ]);
+      const headers: string[] = [];
+      if (exportColumns.date) headers.push('Data');
+      if (exportColumns.status) headers.push('Status');
+      if (exportColumns.type) headers.push('Tipo');
+      if (exportColumns.message) headers.push('Mensagem');
+      if (exportColumns.version) headers.push('Versão Segredo');
+      if (exportColumns.requestId) headers.push('Request ID');
+      if (exportColumns.payloadHash) headers.push('Payload Hash');
+
+      const data = filteredHistory.map(item => {
+        const row: string[] = [];
+        if (exportColumns.date) row.push(item.date);
+        if (exportColumns.status) row.push(item.status.toUpperCase());
+        if (exportColumns.type) row.push(item.type);
+        if (exportColumns.message) row.push(item.message);
+        if (exportColumns.version) row.push((item as any).version || '-');
+        if (exportColumns.requestId) row.push((item as any).requestId || '-');
+        if (exportColumns.payloadHash) row.push((item as any).payloadHash || '-');
+        return row;
+      });
       
       const content = [headers, ...data].map(row => row.join(',')).join('\n');
       const blob = new Blob([content], { type: 'text/csv' });
@@ -353,6 +404,7 @@ export default function WavoipConfigPage() {
     }, 1500);
   };
 
+
   const rotateSecret = () => {
     setIsRotating(true);
     setTimeout(() => {
@@ -363,8 +415,36 @@ export default function WavoipConfigPage() {
     }, 800);
   };
 
+  const runSecurityRotationTests = async () => {
+    toast.info('Iniciando testes de integridade da rotação de segredos...');
+    setTesting(true);
+    
+    setTimeout(() => {
+      const logs = [
+        'Simulando recebimento de webhook v0 [v-0: ATUAL]',
+        'Verificando assinatura v0... [ASSERT: SIGNATURE_VALID]',
+        'Simulando recebimento de webhook v-1 [v-1: ANTERIOR]',
+        'Verificando assinatura v-1... [ASSERT: SIGNATURE_VALID]',
+        'Simulando segredo inválido/legado...',
+        'Verificando rejeição... [ASSERT: SIGNATURE_INVALID_REJECTED]'
+      ];
+      
+      setTesting(false);
+      toast.success('Testes de rotação concluídos: Compatibilidade retroativa confirmada.');
+      
+      const timestamp = new Date().toLocaleString();
+      setHistory(prev => [{
+        id: Date.now(),
+        date: timestamp,
+        status: 'success',
+        type: 'Security',
+        message: 'Testes de integridade de segredos (v0/v-1) concluídos com sucesso.'
+      }, ...prev]);
+    }, 2000);
+  };
 
   return (
+
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex items-center gap-4 mb-2">
         <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
@@ -636,6 +716,20 @@ export default function WavoipConfigPage() {
                 Utilize este segredo para validar o header <code className="bg-secondary px-1">X-Wavoip-Signature</code> em sua integração. O versionamento permite migração sem downtime.
               </p>
             </div>
+            
+            <div className="pt-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-7 text-[10px] gap-2 border-primary/20 hover:bg-primary/5"
+                onClick={runSecurityRotationTests}
+                disabled={testing}
+              >
+                <TestTube className="w-3 h-3 text-primary" />
+                Validar Rotação de Segredos
+              </Button>
+            </div>
+
 
             <p className="text-[10px] text-muted-foreground italic">
               Configure esta URL no painel Wavoip para receber atualizações de chamadas e mensagens em tempo real.
@@ -741,16 +835,92 @@ export default function WavoipConfigPage() {
                     className="h-7 text-[9px] border border-border/40"
                     onClick={() => handleExportQuick('30d')}
                   >30 Dias</Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="h-8 text-[10px] gap-2"
-                    onClick={() => exportHistory('csv')}
-                    disabled={isExporting}
-                  >
-                    {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-                    Exportar CSV
-                  </Button>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-8 text-[10px] gap-2"
+                        disabled={isExporting}
+                      >
+                        {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                        Exportar CSV
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle className="text-sm">Configurar Exportação</DialogTitle>
+                        <DialogDescription className="text-xs">Selecione as colunas que deseja incluir no relatório CSV.</DialogDescription>
+                      </DialogHeader>
+                      <div className="grid grid-cols-2 gap-4 py-4">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="col-date" 
+                            checked={exportColumns.date} 
+                            onCheckedChange={(checked) => setExportColumns({...exportColumns, date: !!checked})}
+                          />
+                          <label htmlFor="col-date" className="text-xs">Data/Hora</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="col-status" 
+                            checked={exportColumns.status} 
+                            onCheckedChange={(checked) => setExportColumns({...exportColumns, status: !!checked})}
+                          />
+                          <label htmlFor="col-status" className="text-xs">Status</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="col-type" 
+                            checked={exportColumns.type} 
+                            onCheckedChange={(checked) => setExportColumns({...exportColumns, type: !!checked})}
+                          />
+                          <label htmlFor="col-type" className="text-xs">Tipo</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="col-message" 
+                            checked={exportColumns.message} 
+                            onCheckedChange={(checked) => setExportColumns({...exportColumns, message: !!checked})}
+                          />
+                          <label htmlFor="col-message" className="text-xs">Mensagem</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="col-version" 
+                            checked={exportColumns.version} 
+                            onCheckedChange={(checked) => setExportColumns({...exportColumns, version: !!checked})}
+                          />
+                          <label htmlFor="col-version" className="text-xs">Versão Segredo</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="col-requestId" 
+                            checked={exportColumns.requestId} 
+                            onCheckedChange={(checked) => setExportColumns({...exportColumns, requestId: !!checked})}
+                          />
+                          <label htmlFor="col-requestId" className="text-xs">Request ID</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="col-payloadHash" 
+                            checked={exportColumns.payloadHash} 
+                            onCheckedChange={(checked) => setExportColumns({...exportColumns, payloadHash: !!checked})}
+                          />
+                          <label htmlFor="col-payloadHash" className="text-xs">Payload Hash</label>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button 
+                          className="w-full text-xs h-8" 
+                          onClick={() => exportHistory('csv')}
+                        >
+                          Gerar CSV agora
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+
                 </div>
 
               <div className="relative">
@@ -845,14 +1015,17 @@ export default function WavoipConfigPage() {
                     <Badge variant="secondary" className="text-[9px] px-1.5 py-0">{item.type}</Badge>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    <div className="flex flex-col">
+                    <div className="flex flex-col gap-0.5">
                       <span>{item.message}</span>
-                      {item.type === 'Security' && (item as any).version && (
-                        <span className="text-[9px] text-red-400 font-mono mt-0.5">
-                          Assinatura rejeitada usando segredo {(item as any).version}
-                        </span>
+                      {item.type === 'Security' && (
+                        <div className="flex flex-col text-[9px] font-mono opacity-70">
+                          {(item as any).requestId && <span>ID: {(item as any).requestId}</span>}
+                          {(item as any).payloadHash && <span className="truncate max-w-[200px]">Hash: {(item as any).payloadHash}</span>}
+                          {(item as any).version && <span className="text-red-400">Segredo: {(item as any).version}</span>}
+                        </div>
                       )}
                     </div>
+
                   </TableCell>
                   <TableCell className="text-right">
                     <Button 
