@@ -84,6 +84,9 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
   const [totalAlerts, setTotalAlerts] = useState(0);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [filterTenant, setFilterTenant] = useState<string>('all');
+  const [filterChannel, setFilterChannel] = useState<string>('whatsapp');
+  const [subCompanies, setSubCompanies] = useState<any[]>([]);
 
   useEffect(() => {
     if (conn.provider === 'uaz' && conn.status === 'connected') {

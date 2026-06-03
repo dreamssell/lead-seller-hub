@@ -14,10 +14,9 @@ Deno.serve(async (req) => {
   );
 
   try {
-    // Current queue size: messages with status 'sending' or 'pending' in the last 24h
-    // Since our current chat_messages schema doesn't have a broad 'status' column yet for ALL messages,
-    // we use a combination of audit logs to estimate "active" or "stuck" messages.
-    // Realistically, we'll count uaz_audit_logs with status='error' or 'warning' that haven't been remediated.
+    const url = new URL(req.url);
+    const tenantId = url.searchParams.get("tenant_id");
+    const channelType = url.searchParams.get("channel_type"); // 'whatsapp', 'voip', 'video'
     
     const now = new Date();
     const history: any[] = [];
@@ -28,12 +27,26 @@ Deno.serve(async (req) => {
       const startTime = new Date(time.getTime() - 30 * 60000).toISOString();
       const endTime = time.toISOString();
 
-      const { count } = await supabaseAdmin
+      let query = supabaseAdmin
         .from('uaz_audit_logs')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'error')
         .gte('created_at', startTime)
         .lte('created_at', endTime);
+
+      if (tenantId) {
+        // Assuming metadata contains tenant info or we filter by related customer's tenant
+        // For now, let's look in payload or metadata if available
+        query = query.or(`payload->>tenant_id.eq.${tenantId},payload->>sub_company_id.eq.${tenantId}`);
+      }
+
+      if (channelType) {
+        // If channelType is provided, filter by it in event_type or metadata
+        // For simplicity, we assume event_type starts with channelType or it's in metadata
+        query = query.filter('event_type', 'ilike', `${channelType}%`);
+      }
+
+      const { count } = await query;
 
       history.push({
         time: time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
