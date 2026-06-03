@@ -855,10 +855,10 @@ export default function WavoipConfigPage() {
                   className={`h-8 text-[10px] gap-2 ${isLive ? 'text-emerald-500 hover:text-emerald-600 bg-emerald-500/5' : 'text-muted-foreground'}`}
                   onClick={() => setIsLive(!isLive)}
                 >
+                  <div className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
+                  {isLive ? 'Live' : 'Pausado'}
+                </Button>
 
-                <div className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
-                {isLive ? 'Live' : 'Pausado'}
-              </Button>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button 
                     variant="ghost" 
