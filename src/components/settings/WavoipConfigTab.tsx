@@ -1228,8 +1228,6 @@ export default function WavoipConfigPage() {
                       Nenhum log encontrado para os filtros selecionados.
                     </TableCell>
                   </TableRow>
-
-            </TableBody>
           </Table>
           
           {totalPages > 1 && (
