@@ -657,13 +657,19 @@ export default function WavoipConfigPage() {
 
       <Card className="glass-card overflow-hidden">
         <CardHeader className="bg-secondary/20 pb-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <CardTitle className="text-base flex items-center gap-2">
-                <History className="w-4 h-4 text-primary" /> Histórico de Auditoria
-              </CardTitle>
-              <CardDescription>Logs de validação e eventos de conectividade</CardDescription>
-            </div>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex flex-col gap-1">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <History className="w-4 h-4 text-primary" /> Histórico de Auditoria
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className={`text-[8px] uppercase tracking-widest px-1.5 py-0 ${isLive ? 'border-emerald-500/50 text-emerald-500' : 'text-muted-foreground'}`}>
+                    {isLive ? 'Conectado Live' : 'Pausado'}
+                  </Badge>
+                  <CardDescription className="text-[10px]">Logs de validação em tempo real</CardDescription>
+                </div>
+              </div>
+
             <div className="flex items-center gap-2">
               <Button 
                 variant="ghost" 
