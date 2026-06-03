@@ -38,20 +38,32 @@ export default function UazAuditTab() {
   const loadLogs = async () => {
     setLoading(true);
     try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const logId = urlParams.get('logId');
+      const tenantId = urlParams.get('tenantId');
+
       let query = supabase
         .from('uaz_audit_logs')
         .select('*', { count: 'exact' });
 
-      if (search) {
-        query = query.ilike('message', `%${search}%`);
-      }
-      
-      if (statusFilter.length > 0) {
-        query = query.in('status', statusFilter);
-      }
+      if (logId) {
+        query = query.eq('id', logId);
+      } else {
+        if (search) {
+          query = query.ilike('message', `%${search}%`);
+        }
+        
+        if (statusFilter.length > 0) {
+          query = query.in('status', statusFilter);
+        }
 
-      if (typeFilter.length > 0) {
-        query = query.in('event_type', typeFilter);
+        if (typeFilter.length > 0) {
+          query = query.in('event_type', typeFilter);
+        }
+
+        if (tenantId) {
+          query = query.eq('customer_id', tenantId);
+        }
       }
 
       const { data, count, error } = await query
