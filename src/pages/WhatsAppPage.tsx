@@ -65,6 +65,29 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
   const [extra, setExtra] = useState<string>(conn.metadata?.phone_number_id ?? '');
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [metrics, setMetrics] = useState<{ sessions?: number; latency?: number; lastSync?: string } | null>(null);
+
+  useEffect(() => {
+    if (conn.provider === 'uaz' && conn.status === 'connected') {
+      const loadMetrics = async () => {
+        const { data } = await supabase
+          .from('uaz_audit_logs')
+          .select('latency_ms, created_at')
+          .order('created_at', { ascending: false })
+          .limit(10);
+        
+        if (data && data.length > 0) {
+          const avgLatency = Math.round(data.reduce((acc, curr) => acc + (curr.latency_ms || 0), 0) / data.length);
+          setMetrics({
+            sessions: 1, // UAZ usually 1 session per instance token
+            latency: avgLatency,
+            lastSync: data[0].created_at
+          });
+        }
+      };
+      loadMetrics();
+    }
+  }, [conn.status, conn.provider]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -116,6 +139,34 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {conn.provider === 'uaz' && conn.status === 'connected' && metrics && (
+          <div className="grid grid-cols-3 gap-2 mb-2">
+            <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Activity className="w-3 h-3 text-primary" />
+                <span className="text-[10px] font-bold text-muted-foreground uppercase">Sessões</span>
+              </div>
+              <p className="text-sm font-bold">{metrics.sessions}</p>
+            </div>
+            <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Zap className="w-3 h-3 text-amber-500" />
+                <span className="text-[10px] font-bold text-muted-foreground uppercase">Latência</span>
+              </div>
+              <p className="text-sm font-bold">{metrics.latency}ms</p>
+            </div>
+            <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Clock className="w-3 h-3 text-emerald-500" />
+                <span className="text-[10px] font-bold text-muted-foreground uppercase">Sync</span>
+              </div>
+              <p className="text-sm font-bold truncate">
+                {metrics.lastSync ? new Date(metrics.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-2">
           <Label htmlFor={`${conn.id}-url`}>URL da API</Label>
           <Input id={`${conn.id}-url`} value={url} onChange={(e) => setUrl(e.target.value)} placeholder={defaults.url} />
