@@ -30,7 +30,11 @@ import {
   TestTube,
   ChevronDown,
   ChevronUp,
-  Fingerprint
+  Fingerprint,
+  Mail,
+  Zap,
+  Settings2,
+  Cpu
 } from 'lucide-react';
 import { 
   Dialog,
@@ -84,13 +88,23 @@ export default function WavoipConfigPage() {
   }>({ status: 'none', timestamp: null, message: '' });
 
   const [filterStatus, setFilterStatus] = useState<'all' | 'success' | 'error'>('all');
-  const [filterType, setFilterType] = useState<'all' | 'API' | 'Webhook' | 'Security' | 'Routing'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'API' | 'Webhook' | 'Security' | 'Routing' | 'CI'>('all');
   const [filterPeriod, setFilterPeriod] = useState<'today' | '7d' | '30d' | 'all'>('all');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [isAlertEnabled, setIsAlertEnabled] = useState(true);
+  const [alertChannels, setAlertChannels] = useState({
+    visual: true,
+    email: false,
+    webhook: false
+  });
   const [wsStatus, setWsStatus] = useState<'connected' | 'reconnecting' | 'offline'>('connected');
+  const [wsBackoff, setWsBackoff] = useState({
+    min: 1000,
+    max: 30000,
+    maxAttempts: 10
+  });
   const [dedupWindow, setDedupWindow] = useState<5 | 15 | 60>(5);
   const [routingTestResult, setRoutingTestResult] = useState<{
     status: 'success' | 'error' | 'none';
@@ -129,6 +143,16 @@ export default function WavoipConfigPage() {
       version: 'v-1',
       requestId: 'req_wavoip_99a83',
       payloadHash: 'sha256:e3b0c442...'
+    },
+    { 
+      id: 10, 
+      date: '2024-05-10 12:00:00', 
+      status: 'success', 
+      type: 'CI', 
+      message: 'CI Execution: Deployment Ready',
+      version: 'v0',
+      artifacts: ['build-log.txt', 'coverage-report.json'],
+      failedCases: 0
     },
   ]);
 
@@ -280,10 +304,23 @@ export default function WavoipConfigPage() {
         
         if (payload.status === 'error' && isAlertEnabled) {
           const isSecurity = (payload as any).type === 'Security';
-          toast.error(`${isSecurity ? 'Incidente de Segurança' : 'Alerta Wavoip'}: ${payload.message}`, {
-            icon: <ShieldAlert className="w-4 h-4 text-red-500" />,
-            duration: isSecurity ? 8000 : 5000
-          });
+          
+          if (alertChannels.visual) {
+            toast.error(`${isSecurity ? 'Incidente de Segurança' : 'Alerta Wavoip'}: ${payload.message}`, {
+              icon: <ShieldAlert className="w-4 h-4 text-red-500" />,
+              duration: isSecurity ? 8000 : 5000
+            });
+          }
+
+          if (alertChannels.email) {
+            // Mock email notification
+            console.log('Sending alert email:', payload.message);
+          }
+
+          if (alertChannels.webhook) {
+            // Mock webhook trigger
+            console.log('Triggering alert webhook:', payload.message);
+          }
         }
       })
       .subscribe((status) => {
@@ -292,9 +329,14 @@ export default function WavoipConfigPage() {
           retryCount = 0;
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
           setWsStatus('offline');
-          const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+          const delay = Math.min(wsBackoff.min * Math.pow(2, retryCount), wsBackoff.max);
           retryCount++;
-          reconnectTimeout = setTimeout(setupChannel, delay);
+          if (retryCount <= wsBackoff.maxAttempts) {
+            reconnectTimeout = setTimeout(setupChannel, delay);
+          } else {
+            setWsStatus('offline');
+            toast.error('Número máximo de tentativas de reconexão atingido.');
+          }
         }
       });
 
@@ -1066,6 +1108,7 @@ export default function WavoipConfigPage() {
                 <option value="Webhook">Webhooks</option>
                 <option value="Security">Segurança</option>
                 <option value="Routing">Roteamento</option>
+                <option value="CI">CI/CD Pipeline</option>
               </select>
               <select 
                 className="h-8 text-[10px] rounded-md border border-input bg-background px-2"
@@ -1125,7 +1168,7 @@ export default function WavoipConfigPage() {
                     <TableRow className="border-border/40 hover:bg-secondary/10 transition-colors cursor-pointer" onClick={() => toggleRow(item.id)}>
                       <TableCell className="text-xs font-mono text-muted-foreground">
                         <div className="flex items-center gap-2">
-                          {item.type === 'Security' ? (
+                          {item.type === 'Security' || item.type === 'CI' ? (
                             expandedRows.has(item.id) ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
                           ) : null}
                           {item.date}
@@ -1175,7 +1218,7 @@ export default function WavoipConfigPage() {
                         </Button>
                       </TableCell>
                     </TableRow>
-                    {expandedRows.has(item.id) && item.type === 'Security' && (
+                    {expandedRows.has(item.id) && (item.type === 'Security' || item.type === 'CI') && (
                       <TableRow className="bg-secondary/20 border-border/40 hover:bg-secondary/20">
                         <TableCell colSpan={5} className="p-4">
                           <motion.div 
@@ -1183,39 +1226,86 @@ export default function WavoipConfigPage() {
                             animate={{ opacity: 1, y: 0 }}
                             className="grid grid-cols-1 md:grid-cols-2 gap-6"
                           >
-                            <div className="space-y-3">
-                              <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                                <ShieldAlert className="w-3.5 h-3.5 text-red-500" /> Detalhes do Incidente
-                              </div>
-                              <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-2">
-                                <div className="flex justify-between text-[10px]">
-                                  <span className="text-muted-foreground">Motivo:</span>
-                                  <span className="font-bold text-red-600">{item.message}</span>
+                            {item.type === 'Security' ? (
+                              <>
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                    <ShieldAlert className="w-3.5 h-3.5 text-red-500" /> Detalhes do Incidente
+                                  </div>
+                                  <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-2">
+                                    <div className="flex justify-between text-[10px]">
+                                      <span className="text-muted-foreground">Motivo:</span>
+                                      <span className="font-bold text-red-600">{item.message}</span>
+                                    </div>
+                                    <div className="flex justify-between text-[10px]">
+                                      <span className="text-muted-foreground">Segredo Usado:</span>
+                                      <span className="font-mono text-primary bg-primary/5 px-1 rounded">{(item as any).version || 'v0'}</span>
+                                    </div>
+                                    <div className="flex justify-between text-[10px]">
+                                      <span className="text-muted-foreground">Request ID:</span>
+                                      <span className="font-mono">{(item as any).requestId}</span>
+                                    </div>
+                                  </div>
                                 </div>
-                                <div className="flex justify-between text-[10px]">
-                                  <span className="text-muted-foreground">Segredo Usado:</span>
-                                  <span className="font-mono text-primary bg-primary/5 px-1 rounded">{(item as any).version || 'v0'}</span>
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                    <Fingerprint className="w-3.5 h-3.5" /> Payload Metadata
+                                  </div>
+                                  <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-2">
+                                    <div className="flex flex-col gap-1 text-[10px]">
+                                      <span className="text-muted-foreground">Payload Hash (SHA-256):</span>
+                                      <span className="font-mono break-all bg-secondary/30 p-1.5 rounded">{(item as any).payloadHash}</span>
+                                    </div>
+                                    <div className="text-[9px] text-amber-600 italic mt-1">
+                                      * Tentativas com o mesmo hash são agrupadas nesta thread para rastreabilidade.
+                                    </div>
+                                  </div>
                                 </div>
-                                <div className="flex justify-between text-[10px]">
-                                  <span className="text-muted-foreground">Request ID:</span>
-                                  <span className="font-mono">{(item as any).requestId}</span>
+                              </>
+                            ) : (
+                              <>
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                    <Cpu className="w-3.5 h-3.5 text-primary" /> Resumo da Execução CI
+                                  </div>
+                                  <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-2">
+                                    <div className="flex justify-between text-[10px]">
+                                      <span className="text-muted-foreground">Build Versão:</span>
+                                      <span className="font-mono bg-primary/5 px-1 rounded">{(item as any).version || 'v1.0.0'}</span>
+                                    </div>
+                                    <div className="flex justify-between text-[10px]">
+                                      <span className="text-muted-foreground">Casos com Falha:</span>
+                                      <span className={`font-bold ${(item as any).failedCases > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                                        {(item as any).failedCases || 0}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between text-[10px]">
+                                      <span className="text-muted-foreground">Status do Deploy:</span>
+                                      <Badge variant="outline" className="text-[8px] h-3.5 uppercase">
+                                        {item.status === 'success' ? 'Aprovado' : 'Bloqueado'}
+                                      </Badge>
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
-                            </div>
-                            <div className="space-y-3">
-                              <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                                <Fingerprint className="w-3.5 h-3.5" /> Payload Metadata
-                              </div>
-                              <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-2">
-                                <div className="flex flex-col gap-1 text-[10px]">
-                                  <span className="text-muted-foreground">Payload Hash (SHA-256):</span>
-                                  <span className="font-mono break-all bg-secondary/30 p-1.5 rounded">{(item as any).payloadHash}</span>
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                    <Terminal className="w-3.5 h-3.5" /> Artefatos e Logs
+                                  </div>
+                                  <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-2">
+                                    <div className="flex flex-col gap-2">
+                                      {((item as any).artifacts || []).map((artifact: string, i: number) => (
+                                        <div key={i} className="flex items-center justify-between text-[10px] bg-secondary/30 p-1.5 rounded">
+                                          <span className="font-mono truncate mr-2">{artifact}</span>
+                                          <Button variant="ghost" size="icon" className="h-4 w-4">
+                                            <Download className="h-2.5 w-2.5" />
+                                          </Button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
                                 </div>
-                                <div className="text-[9px] text-amber-600 italic mt-1">
-                                  * Tentativas com o mesmo hash são agrupadas nesta thread para rastreabilidade.
-                                </div>
-                              </div>
-                            </div>
+                              </>
+                            )}
                           </motion.div>
                         </TableCell>
                       </TableRow>
