@@ -29,7 +29,7 @@ import AiTab from '@/components/settings/AiTab';
 import QuickstartTab from '@/components/settings/QuickstartTab';
 import MCPServerTab from '@/components/settings/MCPServerTab';
 import InboundWebhooksTab from '@/components/settings/InboundWebhooksTab';
-import WavoipConfigTab from '@/components/settings/WavoipConfigTab';
+import WavoipConfigPage from '@/components/settings/WavoipConfigTab';
 import { Card } from '@/components/ui/card';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
