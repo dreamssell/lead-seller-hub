@@ -639,6 +639,7 @@ export default function WavoipConfigPage() {
               : 'bg-red-500/5 border-red-500/20 text-red-700'
             }`}
           >
+
             {lastValidation.status === 'success' ? (
               <CheckCircle2 className="w-5 h-5 shrink-0" />
             ) : (
