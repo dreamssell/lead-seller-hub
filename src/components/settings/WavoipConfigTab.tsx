@@ -35,7 +35,10 @@ import {
   Mail,
   Zap,
   Settings2,
-  Cpu
+  Cpu,
+  Bookmark,
+  Share2,
+  UserCheck
 } from 'lucide-react';
 import { 
   Dialog,
