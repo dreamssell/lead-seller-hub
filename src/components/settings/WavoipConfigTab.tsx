@@ -1963,6 +1963,9 @@ export default function WavoipConfigPage() {
                                       </DialogContent>
                                     </Dialog>
                                   </div>
+                                  {(access as any)?.role !== 'admin' && (
+                                    <p className="text-[8px] text-red-500 italic text-center">Apenas administradores podem executar replay.</p>
+                                  )}
                                 </div>
                               </DialogContent>
                             </Dialog>
