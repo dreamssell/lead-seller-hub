@@ -144,41 +144,55 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
       const loadMetrics = async () => {
         const { data: recentLogs } = await supabase
           .from('uaz_audit_logs')
-          .select('latency_ms, created_at, status, event_type, response, message')
+          .select('latency_ms, created_at, status, event_type, response, message, payload')
           .order('created_at', { ascending: false })
-          .limit(20);
+          .limit(50);
         
         if (recentLogs && recentLogs.length > 0) {
-          const successes = recentLogs.filter(l => l.status === 'success');
+          const filtered = recentLogs.filter(l => {
+            const matchesTenant = filterTenant === 'all' || l.payload?.tenant_id === filterTenant || l.payload?.sub_company_id === filterTenant;
+            const matchesChannel = filterChannel === 'all' || l.event_type.toLowerCase().startsWith(filterChannel.toLowerCase());
+            return matchesTenant && matchesChannel;
+          });
+
+          const successes = filtered.filter(l => l.status === 'success');
           const avgLatency = successes.length > 0 
             ? Math.round(successes.reduce((acc, curr) => acc + (curr.latency_ms || 0), 0) / successes.length)
             : 0;
             
-          const failuresCount = recentLogs.filter(l => l.status === 'error').length;
+          const failuresCount = filtered.filter(l => l.status === 'error').length;
 
           setMetrics({
             sessions: 1,
             latency: avgLatency,
             lastSync: successes[0]?.created_at,
             failures: failuresCount,
-            lastAttempt: recentLogs[0]?.created_at
+            lastAttempt: filtered[0]?.created_at
           });
 
-          const lastSend = recentLogs.find(l => l.event_type === 'send_message');
+          const lastSend = filtered.find(l => l.event_type === 'send_message');
           if (lastSend) setLastSendAttempt(lastSend);
         }
       };
 
       const loadAlerts = async () => {
         setLoadingAlerts(true);
-        const { data, count } = await supabase
+        let query = supabase
           .from('uaz_audit_logs')
           .select('*', { count: 'exact' })
-          .or(`status.eq.error,latency_ms.gt.${latencyThreshold}`)
+          .or(`status.eq.error,latency_ms.gt.${latencyThreshold}`);
+        
+        const { data, count } = await query
           .order('created_at', { ascending: false })
           .range(alertsPage * 5, (alertsPage + 1) * 5 - 1);
         
-        setAlerts(data || []);
+        const filteredAlerts = data?.filter(l => {
+          const matchesTenant = filterTenant === 'all' || l.payload?.tenant_id === filterTenant || l.payload?.sub_company_id === filterTenant;
+          const matchesChannel = filterChannel === 'all' || l.event_type.toLowerCase().startsWith(filterChannel.toLowerCase());
+          return matchesTenant && matchesChannel;
+        }) || [];
+
+        setAlerts(filteredAlerts);
         setTotalAlerts(count || 0);
         setLoadingAlerts(false);
       };
