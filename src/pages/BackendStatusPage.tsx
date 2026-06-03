@@ -113,7 +113,21 @@ export default function BackendStatusPage() {
       results.push({ label: 'Edge Functions', status: 'fail', detail: String(e) });
     }
 
-    // 6) Permissões do usuário (admin?)
+    // 6) UAZ Integration Health
+    const t5 = performance.now();
+    try {
+      const { data: uazHealth } = await supabase.functions.invoke('uaz-healthcheck');
+      results.push({ 
+        label: 'Integração UAZ WhatsApp', 
+        status: uazHealth?.status === 'online' ? 'ok' : 'fail',
+        latencyMs: Math.round(performance.now() - t5),
+        detail: uazHealth?.status === 'online' ? `Operacional (${uazHealth.latency_ms}ms)` : 'Instável ou offline'
+      });
+    } catch (e) {
+      results.push({ label: 'Integração UAZ WhatsApp', status: 'fail', detail: 'Erro ao conectar' });
+    }
+
+    // 7) Permissões do usuário (admin?)
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
