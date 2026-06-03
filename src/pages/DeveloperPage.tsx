@@ -52,6 +52,13 @@ export default function DeveloperPage() {
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get('tab') || 'ativar';
   const [activeTab, setActiveTab] = useState(initialTab);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && TABS.some(t => t.value === tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
   const navigate = useNavigate();
   
   const isMaster = !access?.sub_company_id;
