@@ -1015,14 +1015,17 @@ export default function WavoipConfigPage() {
                     <Badge variant="secondary" className="text-[9px] px-1.5 py-0">{item.type}</Badge>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    <div className="flex flex-col">
+                    <div className="flex flex-col gap-0.5">
                       <span>{item.message}</span>
-                      {item.type === 'Security' && (item as any).version && (
-                        <span className="text-[9px] text-red-400 font-mono mt-0.5">
-                          Assinatura rejeitada usando segredo {(item as any).version}
-                        </span>
+                      {item.type === 'Security' && (
+                        <div className="flex flex-col text-[9px] font-mono opacity-70">
+                          {(item as any).requestId && <span>ID: {(item as any).requestId}</span>}
+                          {(item as any).payloadHash && <span className="truncate max-w-[200px]">Hash: {(item as any).payloadHash}</span>}
+                          {(item as any).version && <span className="text-red-400">Segredo: {(item as any).version}</span>}
+                        </div>
                       )}
                     </div>
+
                   </TableCell>
                   <TableCell className="text-right">
                     <Button 
