@@ -188,6 +188,7 @@ export default function WavoipConfigPage() {
     let retryCount = 0;
 
     const setupChannel = () => {
+      setWsStatus('reconnecting');
       const channel = supabase.channel('wavoip-events', {
         config: {
           broadcast: { self: false },
@@ -196,11 +197,18 @@ export default function WavoipConfigPage() {
       .on('broadcast', { event: 'log' }, (payload) => {
         const timestamp = new Date().toLocaleString();
         
-        // Deduplicação básica por mensagem e timestamp aproximado (se vier id no payload usa ele)
+        // Deduplicação dinâmica baseada na janela selecionada
         const eventId = payload.id || `${payload.message}-${timestamp}`;
         
         setHistory(prev => {
-          if (prev.some(h => h.id === eventId)) return prev;
+          const nowTime = Date.now();
+          const dedupMs = dedupWindow * 60 * 1000;
+          
+          if (prev.some(h => {
+            const isSame = h.id === eventId || (h.message === payload.message && h.type === payload.type);
+            const isRecent = nowTime - new Date(h.date).getTime() < dedupMs;
+            return isSame && isRecent;
+          })) return prev;
           
           const newEvent = {
             id: eventId,
@@ -213,7 +221,6 @@ export default function WavoipConfigPage() {
             payloadHash: payload.payloadHash || ((payload as any).type === 'Security' ? 'sha256:generated...' : undefined)
           };
           
-          // Ordenação por data (descendente)
           return [newEvent, ...prev].sort((a, b) => 
             new Date(b.date).getTime() - new Date(a.date).getTime()
           ).slice(0, 50);
@@ -222,16 +229,17 @@ export default function WavoipConfigPage() {
         if (payload.status === 'error' && isAlertEnabled) {
           const isSecurity = (payload as any).type === 'Security';
           toast.error(`${isSecurity ? 'Incidente de Segurança' : 'Alerta Wavoip'}: ${payload.message}`, {
-            icon: isSecurity ? <ShieldAlert className="w-4 h-4 text-red-500" /> : <Bell className="w-4 h-4" />,
+            icon: <ShieldAlert className="w-4 h-4 text-red-500" />,
             duration: isSecurity ? 8000 : 5000
           });
         }
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
+          setWsStatus('connected');
           retryCount = 0;
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          // Exponential Backoff
+          setWsStatus('offline');
           const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
           retryCount++;
           reconnectTimeout = setTimeout(setupChannel, delay);
@@ -240,6 +248,7 @@ export default function WavoipConfigPage() {
 
       return channel;
     };
+
 
     const channel = setupChannel();
 
