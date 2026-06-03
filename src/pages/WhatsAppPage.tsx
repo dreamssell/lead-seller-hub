@@ -563,7 +563,7 @@ export default function WhatsAppPage() {
 
   return (
     <AppLayout title="WhatsApp Business" subtitle="Integração UAZ e Meta">
-        {/* Tabs List */}
+      <Tabs defaultValue="connections" className="space-y-6">
         <TabsList className="mb-4">
           <TabsTrigger value="connections">Conexões</TabsTrigger>
           <TabsTrigger value="audit">Auditoria</TabsTrigger>
