@@ -34,6 +34,7 @@ export type SidebarPageKey =
   | 'wavoip'
   | 'status'
   | 'profile'
+  | 'documentation'
   | 'white-label';
 
 export type SidebarNavItem = {
@@ -72,6 +73,7 @@ export const navSections: { label: string; items: SidebarNavItem[] }[] = [
       { key: 'developer', icon: Settings, label: 'Desenvolvedor', path: '/developer', desc: 'Preferências e integrações técnicas' },
       { key: 'api-keys', icon: Key, label: 'Chaves API', path: '/api-keys', desc: 'Credenciais e integrações externas' },
       { key: 'status', icon: Activity, label: 'Status do Backend', path: '/status', desc: 'Saúde técnica da plataforma' },
+      { key: 'documentation', icon: FileText, label: 'Documentação', path: '/documentation', desc: 'Manuais técnicos e API' },
     ],
   },
 ];
