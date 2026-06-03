@@ -138,7 +138,7 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
   }>({ status: 'none', details: '', logs: [] });
   const [filterPresets, setFilterPresets] = useState<any[]>([]);
   const [isSavingPreset, setIsSavingPreset] = useState(false);
-  const [showHealthStats, setShowHealthStats] = useState(false);
+  const [showHealthStats, setShowHealthStats] = useState(searchParams.get('stats') === 'true');
   const [resolvedThreads, setResolvedThreads] = useState<Record<string, { note: string; resolvedAt: string; resolvedBy: string }>>({});
   const itemsPerPage = 5;
 
