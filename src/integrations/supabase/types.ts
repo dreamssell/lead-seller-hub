@@ -1071,6 +1071,56 @@ export type Database = {
         }
         Relationships: []
       }
+      uaz_alerts_history: {
+        Row: {
+          alert_type: string
+          channel_type: string
+          created_at: string
+          id: string
+          message: string
+          metadata: Json | null
+          remediated_at: string | null
+          remediation_result: string | null
+          resolved_at: string | null
+          severity: string
+          tenant_id: string | null
+        }
+        Insert: {
+          alert_type: string
+          channel_type: string
+          created_at?: string
+          id?: string
+          message: string
+          metadata?: Json | null
+          remediated_at?: string | null
+          remediation_result?: string | null
+          resolved_at?: string | null
+          severity?: string
+          tenant_id?: string | null
+        }
+        Update: {
+          alert_type?: string
+          channel_type?: string
+          created_at?: string
+          id?: string
+          message?: string
+          metadata?: Json | null
+          remediated_at?: string | null
+          remediation_result?: string | null
+          resolved_at?: string | null
+          severity?: string
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "uaz_alerts_history_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       uaz_audit_logs: {
         Row: {
           created_at: string
@@ -1169,6 +1219,7 @@ export type Database = {
       }
       uaz_system_settings: {
         Row: {
+          alert_persistence_minutes: number | null
           alert_threshold_failure_rate: number | null
           alert_threshold_latency: number | null
           backoff_base_delay: number | null
@@ -1181,10 +1232,13 @@ export type Database = {
           queue_threshold_per_channel: Json | null
           queue_threshold_per_tenant: Json | null
           remediation_interval_minutes: number | null
+          remediation_policy_per_channel: Json | null
+          remediation_policy_per_tenant: Json | null
           request_timeout_ms: number | null
           updated_at: string | null
         }
         Insert: {
+          alert_persistence_minutes?: number | null
           alert_threshold_failure_rate?: number | null
           alert_threshold_latency?: number | null
           backoff_base_delay?: number | null
@@ -1197,10 +1251,13 @@ export type Database = {
           queue_threshold_per_channel?: Json | null
           queue_threshold_per_tenant?: Json | null
           remediation_interval_minutes?: number | null
+          remediation_policy_per_channel?: Json | null
+          remediation_policy_per_tenant?: Json | null
           request_timeout_ms?: number | null
           updated_at?: string | null
         }
         Update: {
+          alert_persistence_minutes?: number | null
           alert_threshold_failure_rate?: number | null
           alert_threshold_latency?: number | null
           backoff_base_delay?: number | null
@@ -1213,6 +1270,8 @@ export type Database = {
           queue_threshold_per_channel?: Json | null
           queue_threshold_per_tenant?: Json | null
           remediation_interval_minutes?: number | null
+          remediation_policy_per_channel?: Json | null
+          remediation_policy_per_tenant?: Json | null
           request_timeout_ms?: number | null
           updated_at?: string | null
         }
