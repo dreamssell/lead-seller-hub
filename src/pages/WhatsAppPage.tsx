@@ -675,7 +675,7 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
                     variant="outline" 
                     className="flex-1 text-xs gap-2"
                     onClick={() => {
-                      onOpenAudit();
+                      onOpenAudit({ logId: selectedDetailLog.id, tenantId: selectedDetailLog.customer_id });
                       setSelectedDetailLog(null);
                       setDrillDownOpen(false);
                     }}
