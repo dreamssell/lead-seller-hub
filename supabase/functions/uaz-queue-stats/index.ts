@@ -14,9 +14,9 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const url = new URL(req.url);
-    const tenantId = url.searchParams.get("tenant_id");
-    const channelType = url.searchParams.get("channel_type"); // 'whatsapp', 'voip', 'video'
+    const body = await req.json().catch(() => ({}));
+    const tenantId = body.tenant_id;
+    const channelType = body.channel_type; // 'whatsapp', 'voip', 'video'
     
     const now = new Date();
     const history: any[] = [];
