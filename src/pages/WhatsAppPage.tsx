@@ -348,10 +348,14 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                     <div className="h-[100px] w-full">
                       {loadingQueue ? <Loader2 className="w-4 h-4 animate-spin m-auto" /> : (
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={queueStats.trend}>
+                          <LineChart data={queueStats.trend} onClick={handleChartClick} style={{ cursor: 'pointer' }}>
                             <XAxis dataKey="time" fontSize={8} hide />
                             <YAxis fontSize={8} hide />
-                            <Line type="monotone" dataKey="pending" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                            <RechartsTooltip 
+                              labelStyle={{ color: 'black', fontSize: '10px' }} 
+                              contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            />
+                            <Line type="monotone" dataKey="pending" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                           </LineChart>
                         </ResponsiveContainer>
                       )}
