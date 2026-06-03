@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Phone, 
@@ -18,7 +18,10 @@ import {
   Download,
   Eye,
   EyeOff,
-  Lock
+  Lock,
+  Bell,
+  Navigation,
+  ArrowRight
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -58,6 +61,8 @@ export default function WavoipConfigPage() {
   const [filterPeriod, setFilterPeriod] = useState<'today' | '7d' | '30d' | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [isAlertEnabled, setIsAlertEnabled] = useState(true);
+  const [routingTestResult, setRoutingTestResult] = useState<'success' | 'error' | 'none'>('none');
   const itemsPerPage = 5;
 
   const [history, setHistory] = useState([
@@ -106,27 +111,57 @@ export default function WavoipConfigPage() {
     destination: ''
   });
 
-  // Simulação de polling para tempo real
+  // Integração Real-time via Supabase Realtime (Canais/Broadcast) que simula o WebSocket do Wavoip
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    if (isLive) {
-      interval = setInterval(() => {
-        // Chance aleatória de surgir um novo evento simulado
-        if (Math.random() > 0.85) {
-          const timestamp = new Date().toLocaleString();
-          const newEvent = {
-            id: Date.now(),
-            date: timestamp,
-            status: Math.random() > 0.2 ? 'success' : 'error' as any,
-            type: 'Webhook',
-            message: 'Evento de chamada recebido via webhook'
-          };
-          setHistory(prev => [newEvent, ...prev.slice(0, 19)]);
+    if (!isLive) return;
+
+    const channel = supabase.channel('wavoip-events')
+      .on('broadcast', { event: 'log' }, (payload) => {
+        const timestamp = new Date().toLocaleString();
+        const newEvent = {
+          id: Date.now(),
+          date: timestamp,
+          status: payload.status || 'success',
+          type: 'WebSocket',
+          message: payload.message || 'Atualização instantânea recebida'
+        };
+        setHistory(prev => [newEvent, ...prev.slice(0, 19)]);
+        
+        if (payload.status === 'error' && isAlertEnabled) {
+          toast.error(`Alerta Wavoip: ${payload.message}`, {
+            icon: <Bell className="w-4 h-4" />,
+            duration: 5000
+          });
         }
-      }, 5000);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isLive, isAlertEnabled]);
+
+  const handleRoutingTest = async () => {
+    if (!form.origin || !form.destination) {
+      toast.error('Informe origem e destino para testar o roteamento.');
+      return;
     }
-    return () => clearInterval(interval);
-  }, [isLive]);
+    
+    setTesting(true);
+    // Simula validação de plano de discagem e roteamento
+    setTimeout(() => {
+      const isOk = Math.random() > 0.2;
+      setRoutingTestResult(isOk ? 'success' : 'error');
+      setTesting(false);
+      
+      if (isOk) {
+        toast.success('Roteamento validado com sucesso!');
+      } else {
+        toast.error('Falha no roteamento: O ramal de origem não tem permissão para o destino informado.');
+      }
+    }, 1500);
+  };
+
 
   const handleSave = async () => {
     if (!validated) {
@@ -262,13 +297,18 @@ export default function WavoipConfigPage() {
         <Card className="glass-card">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Latência Média</p>
-              <div className="p-1.5 rounded-full bg-secondary text-muted-foreground">
-                <Activity className="w-3.5 h-3.5" />
-              </div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Alertas</p>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className={`h-6 w-6 ${isAlertEnabled ? 'text-primary' : 'text-muted-foreground'}`}
+                onClick={() => setIsAlertEnabled(!isAlertEnabled)}
+              >
+                <Bell className={`w-3.5 h-3.5 ${isAlertEnabled ? 'fill-primary' : ''}`} />
+              </Button>
             </div>
-            <p className="text-xl font-bold text-foreground">124ms</p>
-            <p className="text-[10px] text-emerald-600 mt-1">Ótimo desempenho</p>
+            <p className="text-xl font-bold text-foreground">{isAlertEnabled ? 'Ativos' : 'Silenciados'}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Notificação de falhas críticas</p>
           </CardContent>
         </Card>
       </div>
@@ -323,8 +363,20 @@ export default function WavoipConfigPage() {
 
       <Card className="glass-card">
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Activity className="w-4 h-4 text-primary" /> Roteamento de Chamadas
+          <CardTitle className="text-base flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Navigation className="w-4 h-4 text-primary" /> Roteamento de Chamadas
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-7 text-[10px] gap-2"
+              onClick={handleRoutingTest}
+              disabled={testing}
+            >
+              {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Navigation className="w-3 h-3" />}
+              Testar Roteamento
+            </Button>
           </CardTitle>
           <CardDescription>Defina os ramais de origem e destino para as integrações</CardDescription>
         </CardHeader>
@@ -335,6 +387,7 @@ export default function WavoipConfigPage() {
               placeholder="Ex: 551199999999" 
               value={form.origin}
               onChange={e => setForm({...form, origin: e.target.value})}
+              className={routingTestResult === 'error' && !form.origin ? 'border-red-500' : ''}
             />
           </div>
           <div className="space-y-2">
@@ -343,8 +396,33 @@ export default function WavoipConfigPage() {
               placeholder="Ramal ou Fila" 
               value={form.destination}
               onChange={e => setForm({...form, destination: e.target.value})}
+              className={routingTestResult === 'error' && !form.destination ? 'border-red-500' : ''}
             />
           </div>
+
+          {routingTestResult !== 'none' && (
+            <div className={`md:col-span-2 p-3 rounded-lg flex items-center gap-3 text-xs ${
+              routingTestResult === 'success' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 'bg-red-500/10 text-red-600 border border-red-500/20'
+            }`}>
+              {routingTestResult === 'success' ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <div className="flex items-center gap-2">
+                    <span>{form.origin}</span>
+                    <ArrowRight className="w-3 h-3" />
+                    <span>{form.destination}</span>
+                    <span className="font-bold ml-2">Caminho Válido</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Erro na validação do caminho de voz. Verifique as permissões do ramal.</span>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="md:col-span-2 space-y-2 pt-2">
             <Label className="flex items-center gap-2">
               <Webhook className="w-4 h-4 text-primary" /> Webhook de Eventos
