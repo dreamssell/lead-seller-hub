@@ -30,7 +30,6 @@ import QuickstartTab from '@/components/settings/QuickstartTab';
 import MCPServerTab from '@/components/settings/MCPServerTab';
 import InboundWebhooksTab from '@/components/settings/InboundWebhooksTab';
 import WavoipConfigPage from '@/components/settings/WavoipConfigTab';
-import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
