@@ -1104,6 +1104,36 @@ export type Database = {
         }
         Relationships: []
       }
+      uaz_system_settings: {
+        Row: {
+          alert_threshold_failure_rate: number | null
+          alert_threshold_latency: number | null
+          backoff_base_delay: number | null
+          backoff_max_retries: number | null
+          id: string
+          request_timeout_ms: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          alert_threshold_failure_rate?: number | null
+          alert_threshold_latency?: number | null
+          backoff_base_delay?: number | null
+          backoff_max_retries?: number | null
+          id?: string
+          request_timeout_ms?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          alert_threshold_failure_rate?: number | null
+          alert_threshold_latency?: number | null
+          backoff_base_delay?: number | null
+          backoff_max_retries?: number | null
+          id?: string
+          request_timeout_ms?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       user_account_access: {
         Row: {
           allowed_pages: string[]
@@ -1367,9 +1397,11 @@ export type Database = {
       whatsapp_connections: {
         Row: {
           created_at: string
+          degradation_status: string | null
           display_name: string
           id: string
           last_checked_at: string | null
+          last_degradation_at: string | null
           last_error: string | null
           metadata: Json
           phone_number: string | null
@@ -1379,9 +1411,11 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          degradation_status?: string | null
           display_name: string
           id?: string
           last_checked_at?: string | null
+          last_degradation_at?: string | null
           last_error?: string | null
           metadata?: Json
           phone_number?: string | null
@@ -1391,9 +1425,11 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          degradation_status?: string | null
           display_name?: string
           id?: string
           last_checked_at?: string | null
+          last_degradation_at?: string | null
           last_error?: string | null
           metadata?: Json
           phone_number?: string | null
