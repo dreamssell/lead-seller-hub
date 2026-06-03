@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Phone, 
@@ -72,6 +73,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function WavoipConfigPage() {
   const { access } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [validated, setTestingValidated] = useState(false);
@@ -87,11 +89,11 @@ export default function WavoipConfigPage() {
     message: string;
   }>({ status: 'none', timestamp: null, message: '' });
 
-  const [filterStatus, setFilterStatus] = useState<'all' | 'success' | 'error'>('all');
-  const [filterType, setFilterType] = useState<'all' | 'API' | 'Webhook' | 'Security' | 'Routing' | 'CI'>('all');
-  const [filterPeriod, setFilterPeriod] = useState<'today' | '7d' | '30d' | 'all'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'success' | 'error'>((searchParams.get('status') as any) || 'all');
+  const [filterType, setFilterType] = useState<'all' | 'API' | 'Webhook' | 'Security' | 'Routing' | 'CI'>((searchParams.get('type') as any) || 'all');
+  const [filterPeriod, setFilterPeriod] = useState<'today' | '7d' | '30d' | 'all'>((searchParams.get('period') as any) || 'all');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '');
   const [currentPage, setCurrentPage] = useState(1);
   const [isAlertEnabled, setIsAlertEnabled] = useState(true);
   const [alertChannels, setAlertChannels] = useState({
@@ -250,6 +252,16 @@ export default function WavoipConfigPage() {
 
 
   
+  // Persistir filtros na URL
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    if (filterStatus !== 'all') params.status = filterStatus;
+    if (filterType !== 'all') params.type = filterType;
+    if (filterPeriod !== 'all') params.period = filterPeriod;
+    if (searchTerm) params.q = searchTerm;
+    setSearchParams(params);
+  }, [filterStatus, filterType, filterPeriod, searchTerm, setSearchParams]);
+
   const [form, setForm] = useState({
     apiUrl: 'https://api.wavoip.com/v1',
     token: '',
@@ -1384,17 +1396,59 @@ export default function WavoipConfigPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-6 w-6 text-muted-foreground hover:text-primary"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleTest();
-                          }}
-                        >
-                          <RefreshCw className="h-3 w-3" />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          {item.type === 'Security' && (
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-6 w-6 text-primary hover:bg-primary/10"
+                                  title="Reprocessar (Replay)"
+                                >
+                                  <RefreshCw className="h-3 w-3" />
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="sm:max-w-xs">
+                                <DialogHeader>
+                                  <DialogTitle className="text-sm font-bold">Reprocessar Evento</DialogTitle>
+                                  <DialogDescription className="text-[10px]">
+                                    RequestId: <code className="bg-secondary px-1">{(item as any).requestId}</code>
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-3 py-2">
+                                  <p className="text-[10px] text-muted-foreground">Escolha a versão do segredo para o handshake simulado:</p>
+                                  <div className="flex gap-2">
+                                    <Button 
+                                      className="flex-1 text-[10px] h-8" 
+                                      onClick={() => {
+                                        toast.success(`Replay iniciado com segredo v0 (Atual) para ${(item as any).requestId}`);
+                                      }}
+                                    >v0 (Atual)</Button>
+                                    <Button 
+                                      variant="outline"
+                                      className="flex-1 text-[10px] h-8" 
+                                      onClick={() => {
+                                        toast.success(`Replay iniciado com segredo v-1 (Legado) para ${(item as any).requestId}`);
+                                      }}
+                                    >v-1 (Legado)</Button>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          )}
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-6 w-6 text-muted-foreground hover:text-primary"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTest();
+                            }}
+                          >
+                            <Activity className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                     {expandedRows.has(item.id) && (item.type === 'Security' || item.type === 'CI') && (
