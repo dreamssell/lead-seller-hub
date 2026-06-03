@@ -336,7 +336,6 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                   {showSettings && (
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-3 border-t border-border/40 pt-3">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label className="text-[10px] uppercase font-bold text-muted-foreground">Limite por Canal (ms)</Label>
                           <div className="flex items-center gap-2">
@@ -361,23 +360,68 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                         <div className="grid grid-cols-2 gap-3 p-3 bg-secondary/10 rounded-xl border border-border/40">
                           <div className="space-y-1">
                             <p className="text-[9px] font-bold text-muted-foreground uppercase">Backoff Multiplier</p>
-                            <p className="text-xs font-mono">{systemSettings.backoff_multiplier}x</p>
+                            <div className="flex items-center gap-2">
+                              <Input 
+                                type="number" 
+                                defaultValue={systemSettings.backoff_multiplier} 
+                                onBlur={async (e) => {
+                                  const val = Number(e.target.value);
+                                  await supabase.from('uaz_system_settings').update({ backoff_multiplier: val }).eq('id', 'global');
+                                  toast.success('Backoff atualizado');
+                                }}
+                                className="h-6 w-16 text-[10px] px-1"
+                              />
+                              <span className="text-[10px] font-mono">x</span>
+                            </div>
                           </div>
                           <div className="space-y-1">
                             <p className="text-[9px] font-bold text-muted-foreground uppercase">Janela Idempotência</p>
-                            <p className="text-xs font-mono">{systemSettings.idempotency_window_minutes}m</p>
+                            <div className="flex items-center gap-2">
+                              <Input 
+                                type="number" 
+                                defaultValue={systemSettings.idempotency_window_minutes} 
+                                onBlur={async (e) => {
+                                  const val = Number(e.target.value);
+                                  await supabase.from('uaz_system_settings').update({ idempotency_window_minutes: val }).eq('id', 'global');
+                                  toast.success('Janela atualizada');
+                                }}
+                                className="h-6 w-16 text-[10px] px-1"
+                              />
+                              <span className="text-[10px] font-mono">min</span>
+                            </div>
                           </div>
                           <div className="space-y-1">
                             <p className="text-[9px] font-bold text-muted-foreground uppercase">Limite Incidentes</p>
-                            <p className="text-xs font-mono font-bold text-destructive">{systemSettings.incident_threshold_retries} Retentativas</p>
+                            <div className="flex items-center gap-2">
+                              <Input 
+                                type="number" 
+                                defaultValue={systemSettings.incident_threshold_retries} 
+                                onBlur={async (e) => {
+                                  const val = Number(e.target.value);
+                                  await supabase.from('uaz_system_settings').update({ incident_threshold_retries: val }).eq('id', 'global');
+                                  toast.success('Limite atualizado');
+                                }}
+                                className="h-6 w-16 text-[10px] px-1 border-destructive/30"
+                              />
+                            </div>
                           </div>
                           <div className="space-y-1">
                             <p className="text-[9px] font-bold text-muted-foreground uppercase">Retentativas Base</p>
-                            <p className="text-xs font-mono">{systemSettings.backoff_max_retries}</p>
+                            <div className="flex items-center gap-2">
+                              <Input 
+                                type="number" 
+                                defaultValue={systemSettings.backoff_max_retries} 
+                                onBlur={async (e) => {
+                                  const val = Number(e.target.value);
+                                  await supabase.from('uaz_system_settings').update({ backoff_max_retries: val }).eq('id', 'global');
+                                  toast.success('Retentativas atualizadas');
+                                }}
+                                className="h-6 w-16 text-[10px] px-1"
+                              />
+                            </div>
                           </div>
                         </div>
                       )}
-                      </div>
 
                       {lastSendAttempt && (
                         <div className="bg-secondary/10 p-3 rounded-xl border border-border/40 space-y-2">
