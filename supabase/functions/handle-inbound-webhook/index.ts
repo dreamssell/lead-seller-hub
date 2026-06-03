@@ -6,9 +6,7 @@ const corsHeaders = {
 };
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const supabaseAdmin = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -29,8 +27,23 @@ Deno.serve(async (req) => {
     const eventType = payload.event || "unknown";
     const remoteJid = payload.data?.key?.remoteJid || payload.data?.from;
     const messageText = payload.data?.message?.conversation || payload.data?.text || payload.data?.body;
+    const uazMsgId = payload.data?.key?.id || payload.data?.id;
     
-    if (eventType === "messages.upsert" || eventType === "message") {
+    if ((eventType === "messages.upsert" || eventType === "message") && uazMsgId) {
+      // 1. Verificar idempotência: se a mensagem já existe
+      const { data: existing } = await supabaseAdmin
+        .from("chat_messages")
+        .select("id")
+        .eq("uaz_msg_id", uazMsgId)
+        .maybeSingle();
+
+      if (existing) {
+        console.log(`Mensagem duplicada ignorada: ${uazMsgId}`);
+        return new Response(JSON.stringify({ success: true, duplicated: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
       if (remoteJid && messageText) {
         const phone = remoteJid.replace("@s.whatsapp.net", "").replace("@g.us", "");
         
@@ -62,10 +75,8 @@ Deno.serve(async (req) => {
               customer_id: customer.id,
               sender_type: "client",
               content: messageText,
-              metadata: { 
-                uaz_id: payload.data?.key?.id,
-                raw: payload.data
-              }
+              uaz_msg_id: uazMsgId,
+              metadata: { raw: payload.data }
             });
             
           if (msgError) throw msgError;
@@ -75,7 +86,6 @@ Deno.serve(async (req) => {
 
     responseBody = JSON.stringify({ success: true });
 
-    // Auditoria de Sucesso
     await supabaseAdmin.from("uaz_audit_logs").insert({
       event_type: 'webhook',
       status: 'success',
@@ -89,7 +99,6 @@ Deno.serve(async (req) => {
     responseStatus = 500;
     responseBody = JSON.stringify({ error: err.message });
 
-    // Auditoria de Erro
     await supabaseAdmin.from("uaz_audit_logs").insert({
       event_type: 'webhook',
       status: 'error',

@@ -180,10 +180,11 @@ export default function ChatPage() {
   const handleSendMessage = async () => {
     if (!messageText || !selectedConvId) return;
     
-    // 1. Inserir localmente para feedback imediato (otimista)
-    const tempId = crypto.randomUUID();
+    const clientMsgId = crypto.randomUUID();
+    
+    // 1. Feedback imediato na UI (otimista)
     const newMessage = {
-      id: tempId,
+      id: clientMsgId,
       customer_id: selectedConvId,
       sender_type: 'agent',
       content: messageText,
@@ -192,6 +193,7 @@ export default function ChatPage() {
     };
     
     setMessages(prev => [...prev, newMessage]);
+    const currentText = messageText;
     setMessageText('');
 
     // 2. Chamar Edge Function para envio real via UAZ
@@ -199,29 +201,23 @@ export default function ChatPage() {
       const { data, error } = await supabase.functions.invoke('uaz-send-message', {
         body: {
           customer_id: selectedConvId,
-          content: messageText
+          content: currentText,
+          client_msg_id: clientMsgId
         }
       });
 
       if (error) throw error;
 
-      // 3. Atualizar status da mensagem para 'sent'
+      // O Edge Function já inseriu no banco para garantir idempotência.
+      // O Realtime atualizará a lista, mas podemos marcar como 'sent' localmente também.
       setMessages(prev => prev.map(m => 
-        m.id === tempId ? { ...m, status: 'sent', id: data.id || m.id } : m
+        m.id === clientMsgId ? { ...m, status: 'sent', id: data?.data?.key?.id || m.id } : m
       ));
-      
-      // Inserir no banco de forma persistente
-      await supabase.from('chat_messages').insert({
-        customer_id: selectedConvId,
-        sender_type: 'agent',
-        content: messageText,
-        metadata: { uaz_response: data }
-      });
 
     } catch (err: any) {
       toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
       setMessages(prev => prev.map(m => 
-        m.id === tempId ? { ...m, status: 'error' } : m
+        m.id === clientMsgId ? { ...m, status: 'error' } : m
       ));
     }
   };

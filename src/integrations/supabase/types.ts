@@ -265,28 +265,34 @@ export type Database = {
       }
       chat_messages: {
         Row: {
+          client_msg_id: string | null
           content: string
           created_at: string
           customer_id: string | null
           id: string
           metadata: Json | null
           sender_type: string
+          uaz_msg_id: string | null
         }
         Insert: {
+          client_msg_id?: string | null
           content: string
           created_at?: string
           customer_id?: string | null
           id?: string
           metadata?: Json | null
           sender_type: string
+          uaz_msg_id?: string | null
         }
         Update: {
+          client_msg_id?: string | null
           content?: string
           created_at?: string
           customer_id?: string | null
           id?: string
           metadata?: Json | null
           sender_type?: string
+          uaz_msg_id?: string | null
         }
         Relationships: [
           {
