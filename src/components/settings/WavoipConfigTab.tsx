@@ -367,15 +367,28 @@ export default function WavoipConfigPage() {
     setIsExporting(true);
     toast.info(`Iniciando exportação em ${format.toUpperCase()}...`);
     
-    // Simulação de geração de arquivo com filtros aplicados
+    // Simulação de geração de arquivo com filtros aplicados e colunas selecionadas
     setTimeout(() => {
-      const headers = ['Data', 'Status', 'Tipo', 'Mensagem'];
-      const data = filteredHistory.map(item => [
-        item.date,
-        item.status.toUpperCase(),
-        item.type,
-        item.message
-      ]);
+      const headers: string[] = [];
+      if (exportColumns.date) headers.push('Data');
+      if (exportColumns.status) headers.push('Status');
+      if (exportColumns.type) headers.push('Tipo');
+      if (exportColumns.message) headers.push('Mensagem');
+      if (exportColumns.version) headers.push('Versão Segredo');
+      if (exportColumns.requestId) headers.push('Request ID');
+      if (exportColumns.payloadHash) headers.push('Payload Hash');
+
+      const data = filteredHistory.map(item => {
+        const row: string[] = [];
+        if (exportColumns.date) row.push(item.date);
+        if (exportColumns.status) row.push(item.status.toUpperCase());
+        if (exportColumns.type) row.push(item.type);
+        if (exportColumns.message) row.push(item.message);
+        if (exportColumns.version) row.push((item as any).version || '-');
+        if (exportColumns.requestId) row.push((item as any).requestId || '-');
+        if (exportColumns.payloadHash) row.push((item as any).payloadHash || '-');
+        return row;
+      });
       
       const content = [headers, ...data].map(row => row.join(',')).join('\n');
       const blob = new Blob([content], { type: 'text/csv' });
@@ -390,6 +403,7 @@ export default function WavoipConfigPage() {
       toast.success(`Relatório filtrado (${filteredHistory.length} registros) exportado com sucesso!`);
     }, 1500);
   };
+
 
   const rotateSecret = () => {
     setIsRotating(true);
