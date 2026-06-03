@@ -1217,8 +1217,8 @@ export default function WavoipConfigPage() {
                             </div>
                           </motion.div>
                         </TableCell>
-                      </TableRow>
-                    )}
+            </TableBody>
+
                   </Fragment>
                 ))}
 
