@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Phone, 
@@ -27,7 +27,10 @@ import {
   CirclePlay,
   ShieldAlert,
   Columns,
-  TestTube
+  TestTube,
+  ChevronDown,
+  ChevronUp,
+  Fingerprint
 } from 'lucide-react';
 import { 
   Dialog,
@@ -117,7 +120,19 @@ export default function WavoipConfigPage() {
       requestId: 'req_wavoip_99a82',
       payloadHash: 'sha256:e3b0c442...'
     },
+    { 
+      id: 9, 
+      date: '2024-05-11 18:05:00', 
+      status: 'error', 
+      type: 'Security', 
+      message: 'Falha na assinatura do Webhook: Tentativa repetida',
+      version: 'v-1',
+      requestId: 'req_wavoip_99a83',
+      payloadHash: 'sha256:e3b0c442...'
+    },
   ]);
+
+  const [expandedRows, setExpandedRows] = useState<Set<number | string>>(new Set());
 
   const [exportColumns, setExportColumns] = useState({
     date: true,
@@ -128,6 +143,40 @@ export default function WavoipConfigPage() {
     requestId: true,
     payloadHash: true
   });
+
+  const columnPresets = {
+    security: {
+      date: true,
+      status: true,
+      type: true,
+      message: true,
+      version: true,
+      requestId: true,
+      payloadHash: true
+    },
+    routing: {
+      date: true,
+      status: true,
+      type: true,
+      message: true,
+      version: false,
+      requestId: false,
+      payloadHash: false
+    }
+  };
+
+  const applyPreset = (preset: 'security' | 'routing') => {
+    setExportColumns(columnPresets[preset]);
+    toast.success(`Preset de ${preset === 'security' ? 'Segurança' : 'Roteamento'} aplicado.`);
+  };
+
+  const toggleRow = (id: number | string) => {
+    const next = new Set(expandedRows);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setExpandedRows(next);
+  };
+
 
 
   const securityIncidents = useMemo(() => {
@@ -140,7 +189,10 @@ export default function WavoipConfigPage() {
       const matchesType = filterType === 'all' || item.type === filterType;
       const matchesSearch = item.message.toLowerCase().includes(searchTerm.toLowerCase()) || 
                            (item.type && item.type.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                           ((item as any).version && (item as any).version.toLowerCase().includes(searchTerm.toLowerCase()));
+                           ((item as any).version && (item as any).version.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                           ((item as any).payloadHash && (item as any).payloadHash.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                           ((item as any).requestId && (item as any).requestId.toLowerCase().includes(searchTerm.toLowerCase()));
+
       
       let matchesPeriod = true;
       const itemDate = new Date(item.date);
@@ -892,10 +944,36 @@ export default function WavoipConfigPage() {
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-md">
                       <DialogHeader>
-                        <DialogTitle className="text-sm">Configurar Exportação</DialogTitle>
-                        <DialogDescription className="text-xs">Selecione as colunas que deseja incluir no relatório CSV.</DialogDescription>
+                        <DialogTitle className="text-sm font-bold">Configurar Exportação</DialogTitle>
+                        <DialogDescription className="text-xs">Selecione as colunas ou escolha um preset rápido.</DialogDescription>
                       </DialogHeader>
-                      <div className="grid grid-cols-2 gap-4 py-4">
+
+                      <div className="flex flex-col gap-3 py-2">
+                        <Label className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Presets de Relatório</Label>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            className="h-7 text-[9px] flex-1 gap-1"
+                            onClick={() => applyPreset('security')}
+                          >
+                            <Shield className="w-3 h-3 text-red-500" /> Segurança
+                          </Button>
+                          <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            className="h-7 text-[9px] flex-1 gap-1"
+                            onClick={() => applyPreset('routing')}
+                          >
+                            <Navigation className="w-3 h-3 text-primary" /> Roteamento
+                          </Button>
+                        </div>
+                      </div>
+
+                      <Separator className="opacity-40" />
+
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-3 py-4">
+
                         <div className="flex items-center space-x-2">
                           <Checkbox 
                             id="col-date" 
@@ -1040,58 +1118,121 @@ export default function WavoipConfigPage() {
             </TableHeader>
 
             <TableBody>
-              {paginatedHistory.map((item) => (
-                <TableRow key={item.id} className="border-border/40 hover:bg-secondary/10 transition-colors">
-                  <TableCell className="text-xs font-mono text-muted-foreground">{item.date}</TableCell>
-                  <TableCell>
-                    <Badge 
-                      variant="outline" 
-                      className={`text-[9px] font-bold px-1.5 py-0 ${
-                        item.status === 'success' 
-                        ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' 
-                        : 'bg-red-500/10 text-red-600 border-red-500/20'
-                      }`}
-                    >
-                      {item.status === 'success' ? 'SUCESSO' : 'FALHA'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0">{item.type}</Badge>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    <div className="flex flex-col gap-0.5">
-                      <span>{item.message}</span>
-                      {item.type === 'Security' && (
-                        <div className="flex flex-col text-[9px] font-mono opacity-70">
-                          {(item as any).requestId && <span>ID: {(item as any).requestId}</span>}
-                          {(item as any).payloadHash && <span className="truncate max-w-[200px]">Hash: {(item as any).payloadHash}</span>}
-                          {(item as any).version && <span className="text-red-400">Segredo: {(item as any).version}</span>}
-                        </div>
-                      )}
-                    </div>
+                {paginatedHistory.map((item) => (
 
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-6 w-6 text-muted-foreground hover:text-primary"
-                      onClick={handleTest}
-                    >
-                      <RefreshCw className="h-3 w-3" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {paginatedHistory.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-xs italic">
-                    Nenhum log encontrado para os filtros selecionados.
-                  </TableCell>
-                </TableRow>
-              )}
+
+                  <Fragment key={item.id}>
+                    <TableRow className="border-border/40 hover:bg-secondary/10 transition-colors cursor-pointer" onClick={() => toggleRow(item.id)}>
+                      <TableCell className="text-xs font-mono text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          {item.type === 'Security' ? (
+                            expandedRows.has(item.id) ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+                          ) : null}
+                          {item.date}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant="outline" 
+                          className={`text-[9px] font-bold px-1.5 py-0 ${
+                            item.status === 'success' 
+                            ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' 
+                            : 'bg-red-500/10 text-red-600 border-red-500/20'
+                          }`}
+                        >
+                          {item.status === 'success' ? 'SUCESSO' : 'FALHA'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="text-[9px] px-1.5 py-0">{item.type}</Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2">
+                            <span>{item.message}</span>
+                            {(item as any).payloadHash && (
+                              <div className="flex items-center gap-1">
+                                <Fingerprint className="w-3 h-3 text-primary/50" />
+                                <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-primary/5 font-mono border-primary/20">
+                                  thread: {(item as any).payloadHash.substring(7, 12)}
+                                </Badge>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-6 w-6 text-muted-foreground hover:text-primary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTest();
+                          }}
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                    {expandedRows.has(item.id) && item.type === 'Security' && (
+                      <TableRow className="bg-secondary/20 border-border/40 hover:bg-secondary/20">
+                        <TableCell colSpan={5} className="p-4">
+                          <motion.div 
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="grid grid-cols-1 md:grid-cols-2 gap-6"
+                          >
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                <ShieldAlert className="w-3.5 h-3.5 text-red-500" /> Detalhes do Incidente
+                              </div>
+                              <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-2">
+                                <div className="flex justify-between text-[10px]">
+                                  <span className="text-muted-foreground">Motivo:</span>
+                                  <span className="font-bold text-red-600">{item.message}</span>
+                                </div>
+                                <div className="flex justify-between text-[10px]">
+                                  <span className="text-muted-foreground">Segredo Usado:</span>
+                                  <span className="font-mono text-primary bg-primary/5 px-1 rounded">{(item as any).version || 'v0'}</span>
+                                </div>
+                                <div className="flex justify-between text-[10px]">
+                                  <span className="text-muted-foreground">Request ID:</span>
+                                  <span className="font-mono">{(item as any).requestId}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                <Fingerprint className="w-3.5 h-3.5" /> Payload Metadata
+                              </div>
+                              <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-2">
+                                <div className="flex flex-col gap-1 text-[10px]">
+                                  <span className="text-muted-foreground">Payload Hash (SHA-256):</span>
+                                  <span className="font-mono break-all bg-secondary/30 p-1.5 rounded">{(item as any).payloadHash}</span>
+                                </div>
+                                <div className="text-[9px] text-amber-600 italic mt-1">
+                                  * Tentativas com o mesmo hash são agrupadas nesta thread para rastreabilidade.
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
+                ))}
+
+                {paginatedHistory.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-xs italic">
+                      Nenhum log encontrado para os filtros selecionados.
+                    </TableCell>
+                  </TableRow>
+                )}
             </TableBody>
-          </Table>
+            </Table>
+
           
           {totalPages > 1 && (
             <div className="flex items-center justify-between p-4 border-t border-border/40 bg-secondary/10">
