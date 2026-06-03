@@ -1218,8 +1218,8 @@ export default function WavoipConfigPage() {
                             </div>
                           </motion.div>
                         </TableCell>
-            </TableBody>
-
+                      </TableRow>
+                    )}
                   </Fragment>
                 ))}
 
@@ -1229,7 +1229,10 @@ export default function WavoipConfigPage() {
                       Nenhum log encontrado para os filtros selecionados.
                     </TableCell>
                   </TableRow>
-          </Table>
+                )}
+            </TableBody>
+            </Table>
+
           
           {totalPages > 1 && (
             <div className="flex items-center justify-between p-4 border-t border-border/40 bg-secondary/10">
