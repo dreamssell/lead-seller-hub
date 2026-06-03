@@ -518,6 +518,27 @@ export default function WavoipConfigPage() {
     }, 1000);
   };
 
+  const exportHealthMetrics = (format: 'csv' | 'pdf') => {
+    setIsExporting(true);
+    toast.info(`Exportando métricas de saúde em ${format.toUpperCase()}...`);
+    
+    setTimeout(() => {
+      const headers = ['Horário', 'Recebidos', 'Deduplicados', 'Inválidos', 'Latência (ms)'];
+      const data = healthData.map(d => [d.name, d.received, d.deduped, d.invalid, d.latency]);
+      
+      const content = [headers, ...data].map(row => row.join(',')).join('\n');
+      const blob = new Blob([content], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `wavoip-health-metrics-${new Date().toISOString().split('T')[0]}.${format}`;
+      a.click();
+      
+      setIsExporting(false);
+      toast.success('Relatório de métricas exportado.');
+    }, 1000);
+  };
+
   const simulateEvent = (type: 'Security' | 'Routing' | 'API') => {
     const timestamp = new Date().toLocaleString();
     const mockPayload: any = {
@@ -792,15 +813,26 @@ export default function WavoipConfigPage() {
             <p className="text-sm text-muted-foreground">Credenciais de voz e mensagens integradas</p>
           </div>
         </div>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          className={`gap-2 ${showHealthStats ? 'bg-primary/10 border-primary text-primary' : ''}`}
-          onClick={() => setShowHealthStats(!showHealthStats)}
-        >
-          <BarChart3 className="w-4 h-4" />
-          Dashboard de Saúde
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="gap-2 h-8 text-[10px]"
+            onClick={() => exportHealthMetrics('csv')}
+            disabled={!showHealthStats || isExporting}
+          >
+            <Download className="w-3 h-3" /> Relatório Saúde
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className={`gap-2 ${showHealthStats ? 'bg-primary/10 border-primary text-primary' : ''}`}
+            onClick={() => setShowHealthStats(!showHealthStats)}
+          >
+            <BarChart3 className="w-4 h-4" />
+            Dashboard de Saúde
+          </Button>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -1758,9 +1790,66 @@ export default function WavoipConfigPage() {
                               </div>
                             )}
                             {(item as any).isSuppressed && (
-                              <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-amber-50 text-amber-600 border-amber-200 uppercase">
-                                Deduplicado
-                              </Badge>
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Badge 
+                                    variant="outline" 
+                                    className="text-[8px] h-3.5 px-1 bg-amber-50 text-amber-600 border-amber-200 uppercase cursor-pointer hover:bg-amber-100 transition-colors"
+                                  >
+                                    Deduplicado
+                                  </Badge>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-md">
+                                  <DialogHeader>
+                                    <DialogTitle className="text-sm font-bold flex items-center gap-2">
+                                      <Zap className="w-4 h-4 text-amber-500" /> Detalhes da Deduplicação
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs">Rastreamento do evento suprimido pelo motor de sincronização.</DialogDescription>
+                                  </DialogHeader>
+                                  <div className="space-y-4 py-2">
+                                    <div className="bg-secondary/20 p-3 rounded-lg space-y-2 border border-border/40">
+                                      <div className="flex justify-between text-[10px]">
+                                        <span className="text-muted-foreground">Status:</span>
+                                        <span className="font-bold text-amber-600">SUPRIMIDO</span>
+                                      </div>
+                                      <div className="flex justify-between text-[10px]">
+                                        <span className="text-muted-foreground">Motivo:</span>
+                                        <span className="font-medium">Chave idêntica detectada na janela ativa</span>
+                                      </div>
+                                      <div className="flex justify-between text-[10px]">
+                                        <span className="text-muted-foreground">Janela de Config:</span>
+                                        <span className="font-mono">{dedupWindow} minutos</span>
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                      <span className="text-[10px] font-bold uppercase text-muted-foreground">Evento de Origem (Mestre)</span>
+                                      <div className="p-2 border rounded-md text-[10px] flex items-center justify-between hover:bg-secondary/10 cursor-pointer transition-colors">
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                          <span className="font-mono">{(item as any).details?.split('Chave comparada: ')[1] || 'req_...'}</span>
+                                        </div>
+                                        <Button variant="ghost" size="icon" className="h-4 w-4" title="Ir para Auditoria">
+                                          <Eye className="w-3 h-3" />
+                                        </Button>
+                                      </div>
+                                    </div>
+
+                                    <div className="pt-2">
+                                      <Button 
+                                        variant="outline" 
+                                        className="w-full text-[10px] h-8 gap-2"
+                                        onClick={() => {
+                                          toast.info("Exportando log de supressão...");
+                                          // Simulação de exportação específica
+                                        }}
+                                      >
+                                        <Download className="w-3 h-3" /> Baixar Log de Supressão
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
                             )}
                           </div>
                           {(item as any).details && (
