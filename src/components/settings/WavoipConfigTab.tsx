@@ -27,7 +27,10 @@ import {
   CirclePlay,
   ShieldAlert,
   Columns,
-  TestTube
+  TestTube,
+  ChevronDown,
+  ChevronUp,
+  Fingerprint
 } from 'lucide-react';
 import { 
   Dialog,
@@ -117,7 +120,19 @@ export default function WavoipConfigPage() {
       requestId: 'req_wavoip_99a82',
       payloadHash: 'sha256:e3b0c442...'
     },
+    { 
+      id: 9, 
+      date: '2024-05-11 18:05:00', 
+      status: 'error', 
+      type: 'Security', 
+      message: 'Falha na assinatura do Webhook: Tentativa repetida',
+      version: 'v-1',
+      requestId: 'req_wavoip_99a83',
+      payloadHash: 'sha256:e3b0c442...'
+    },
   ]);
+
+  const [expandedRows, setExpandedRows] = useState<Set<number | string>>(new Set());
 
   const [exportColumns, setExportColumns] = useState({
     date: true,
@@ -128,6 +143,40 @@ export default function WavoipConfigPage() {
     requestId: true,
     payloadHash: true
   });
+
+  const columnPresets = {
+    security: {
+      date: true,
+      status: true,
+      type: true,
+      message: true,
+      version: true,
+      requestId: true,
+      payloadHash: true
+    },
+    routing: {
+      date: true,
+      status: true,
+      type: true,
+      message: true,
+      version: false,
+      requestId: false,
+      payloadHash: false
+    }
+  };
+
+  const applyPreset = (preset: 'security' | 'routing') => {
+    setExportColumns(columnPresets[preset]);
+    toast.success(`Preset de ${preset === 'security' ? 'Segurança' : 'Roteamento'} aplicado.`);
+  };
+
+  const toggleRow = (id: number | string) => {
+    const next = new Set(expandedRows);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setExpandedRows(next);
+  };
+
 
 
   const securityIncidents = useMemo(() => {
@@ -140,7 +189,10 @@ export default function WavoipConfigPage() {
       const matchesType = filterType === 'all' || item.type === filterType;
       const matchesSearch = item.message.toLowerCase().includes(searchTerm.toLowerCase()) || 
                            (item.type && item.type.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                           ((item as any).version && (item as any).version.toLowerCase().includes(searchTerm.toLowerCase()));
+                           ((item as any).version && (item as any).version.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                           ((item as any).payloadHash && (item as any).payloadHash.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                           ((item as any).requestId && (item as any).requestId.toLowerCase().includes(searchTerm.toLowerCase()));
+
       
       let matchesPeriod = true;
       const itemDate = new Date(item.date);
