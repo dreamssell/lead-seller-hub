@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CheckCircle2, Loader2, Plug, RefreshCw, ShieldCheck, XCircle, History, Activity, Zap, Clock, LineChart as LineChartIcon, AlertTriangle, Settings, ChevronLeft, ChevronRight, MessageCircle, BarChart3, Filter, ExternalLink, Eye } from 'lucide-react';
+import { CheckCircle2, Loader2, Plug, RefreshCw, ShieldCheck, XCircle, History, Activity, Zap, Clock, LineChart as LineChartIcon, AlertTriangle, Settings, ChevronLeft, ChevronRight, MessageCircle, BarChart3, Filter, ExternalLink, Eye, AlertOctagon, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import UazAuditTab from '@/components/settings/UazAuditTab';
@@ -63,7 +63,7 @@ function statusBadge(status: Status) {
   );
 }
 
-function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => void }) {
+function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSaved: () => void; onOpenAudit: () => void }) {
   const defaults = PROVIDER_DEFAULTS[conn.provider];
   const [url, setUrl] = useState<string>(conn.metadata?.url ?? defaults.url);
   const [token, setToken] = useState<string>(conn.metadata?.token ?? '');
@@ -130,7 +130,16 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
     const { data } = await supabase.functions.invoke('uaz-queue-stats', {
       body: { tenant_id: filterTenant === 'all' ? null : filterTenant, channel_type: filterChannel === 'all' ? null : filterChannel }
     });
-    if (data) setQueueStats(data);
+    if (data) {
+      setQueueStats(data);
+      if (data.alert) {
+        toast.warning('Alerta de Fila UAZ', { 
+          description: data.alert.reason,
+          duration: 10000,
+          icon: <AlertOctagon className="w-4 h-4 text-warning" />
+        });
+      }
+    }
     setLoadingQueue(false);
   };
 
@@ -458,9 +467,23 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                           </TableCell>
                           <TableCell className="text-[10px]">{log.latency_ms ? `${log.latency_ms}ms` : '-'}</TableCell>
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="icon" className="h-6 w-6">
-                              <Eye className="h-3 w-3" />
-                            </Button>
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="icon" className="h-6 w-6" title="Ver Detalhes">
+                                <Eye className="h-3 w-3" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-6 w-6 text-primary" 
+                                title="Ver na Auditoria"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onOpenAudit();
+                                }}
+                              >
+                                <History className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
@@ -531,6 +554,46 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                     </pre>
                   </div>
                 )}
+
+                <div className="pt-4 flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 text-xs gap-2"
+                    onClick={() => {
+                      onOpenAudit();
+                      setSelectedDetailLog(null);
+                      setDrillDownOpen(false);
+                    }}
+                  >
+                    <History className="w-4 h-4" /> Ir para Auditoria
+                  </Button>
+                  
+                  {selectedDetailLog?.status === 'error' && (
+                    <Button 
+                      variant="destructive" 
+                      className="flex-1 text-xs gap-2"
+                      onClick={async () => {
+                        const { data: incident } = await supabase
+                          .from('uaz_incidents')
+                          .select('id')
+                          .eq('original_log_id', selectedDetailLog.id)
+                          .maybeSingle();
+                        
+                        if (incident) {
+                          toast.info('Incidente Encontrado', {
+                            description: 'Navegue até a aba de Incidentes para ver mais detalhes.',
+                          });
+                        } else {
+                          toast.error('Incidente não encontrado', {
+                            description: 'Esta falha ainda não atingiu o limite para gerar um incidente crítico.'
+                          });
+                        }
+                      }}
+                    >
+                      <AlertCircle className="w-4 h-4" /> Verificar Incidente
+                    </Button>
+                  )}
+                </div>
               </div>
             </ScrollArea>
           </DialogContent>
@@ -555,10 +618,25 @@ export default function WhatsAppPage() {
   return (
     <AppLayout title="WhatsApp Business" subtitle="Integração UAZ e Meta">
       <Tabs defaultValue="connections" className="space-y-6">
-        <TabsList><TabsTrigger value="connections">Conexões</TabsTrigger><TabsTrigger value="audit">Auditoria</TabsTrigger></TabsList>
+        <TabsList className="mb-4">
+          <TabsTrigger value="connections">Conexões</TabsTrigger>
+          <TabsTrigger value="audit">Auditoria</TabsTrigger>
+        </TabsList>
+
         <TabsContent value="connections">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {connections.map(c => <ConnectionCard key={c.id} conn={c} onSaved={load} />)}
+            {connections.map(c => (
+              <ConnectionCard 
+                key={c.id} 
+                conn={c} 
+                onSaved={load} 
+                onOpenAudit={() => {
+                  const tabs = document.querySelectorAll('[role="tab"]');
+                  const auditTab = Array.from(tabs).find(t => t.textContent?.includes('Auditoria')) as HTMLElement;
+                  auditTab?.click();
+                }}
+              />
+            ))}
           </div>
         </TabsContent>
         <TabsContent value="audit"><UazAuditTab /></TabsContent>
