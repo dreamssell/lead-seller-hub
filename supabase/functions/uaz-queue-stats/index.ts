@@ -55,9 +55,30 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Check for alerts based on thresholds
+    const { data: settings } = await supabaseAdmin.from('uaz_system_settings').select('*').eq('id', 'global').single();
+    const currentQueue = history[history.length - 1].pending;
+    let alertTriggered = false;
+    let alertReason = "";
+
+    if (settings) {
+      const channelThreshold = settings.queue_threshold_per_channel?.[channelType || 'whatsapp'] || settings.queue_threshold_global;
+      const tenantThreshold = tenantId ? (settings.queue_threshold_per_tenant?.[tenantId] || channelThreshold) : channelThreshold;
+
+      if (currentQueue >= tenantThreshold) {
+        alertTriggered = true;
+        alertReason = `Fila ${channelType || 'geral'} (${currentQueue}) ultrapassou o limite (${tenantThreshold})${tenantId ? ` para o tenant ${tenantId}` : ''}`;
+        
+        // In a real scenario, here we would trigger an external notification (email, slack, etc.)
+        // For now, we log it as a warning in audit logs if it's a significant jump or persistence
+        console.warn(`[UAZ ALERT] ${alertReason}`);
+      }
+    }
+
     return new Response(JSON.stringify({ 
-      current_queue: history[history.length - 1].pending,
-      trend: history 
+      current_queue: currentQueue,
+      trend: history,
+      alert: alertTriggered ? { reason: alertReason } : null
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
