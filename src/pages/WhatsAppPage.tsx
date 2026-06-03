@@ -601,12 +601,40 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                 </div>
 
                 <div className="bg-secondary/20 p-3 rounded-xl border border-border/40">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <BarChart3 className="w-3.5 h-3.5 text-primary" />
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Fila de Mensagens (Erros/Pendentes)</span>
+                  <div className="flex flex-col gap-3 mb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <BarChart3 className="w-3.5 h-3.5 text-primary" />
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Fila de Mensagens (Tendência)</span>
+                      </div>
+                      <Badge variant="outline" className="text-[9px] h-4 py-0 border-primary/30 text-primary">LIVE</Badge>
                     </div>
-                    <Badge variant="outline" className="text-[9px] h-4 py-0 border-primary/30 text-primary">LIVE</Badge>
+                    
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <Filter className="absolute left-2 top-1/2 -translate-y-1/2 w-2.5 h-2.5 text-muted-foreground" />
+                        <select 
+                          value={filterTenant} 
+                          onChange={(e) => setFilterTenant(e.target.value)}
+                          className="w-full bg-background/50 border border-border/40 rounded px-6 py-0.5 text-[9px] font-bold uppercase outline-none appearance-none"
+                        >
+                          <option value="all">Todas Empresas</option>
+                          {subCompanies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+                      <div className="relative flex-1">
+                        <select 
+                          value={filterChannel} 
+                          onChange={(e) => setFilterChannel(e.target.value)}
+                          className="w-full bg-background/50 border border-border/40 rounded px-2 py-0.5 text-[9px] font-bold uppercase outline-none appearance-none"
+                        >
+                          <option value="all">Todos Canais</option>
+                          <option value="whatsapp">WhatsApp</option>
+                          <option value="voip">VoIP</option>
+                          <option value="video">Vídeo</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
                   <div className="h-[80px] w-full">
                     {loadingQueue ? (
