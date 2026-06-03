@@ -674,12 +674,6 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                   </div>
                 </div>
 
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-[10px] text-muted-foreground italic">Sem dados de fila.</div>
-                    )}
-                  </div>
-                </div>
-
                 <div className="bg-secondary/20 p-3 rounded-xl border border-border/40">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
