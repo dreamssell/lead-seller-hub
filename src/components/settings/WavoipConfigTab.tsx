@@ -614,10 +614,11 @@ export default function WavoipConfigPage() {
           {testing ? (
             <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
-            <RefreshCw className="w-4 h-4" />
+            <CirclePlay className="w-4 h-4" />
           )}
-          Testar conexão Wavoip
+          Executar Teste Completo
         </Button>
+
         <Button 
           className="flex-1 gap-2 shadow-lg shadow-primary/20" 
           onClick={handleSave}
