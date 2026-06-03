@@ -464,8 +464,10 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                     )}
                   </div>
                 </div>
-              </div>
+              </>
             )}
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor={`${conn.id}-url`}>URL da API</Label>
