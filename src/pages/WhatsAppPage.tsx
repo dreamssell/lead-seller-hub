@@ -615,8 +615,6 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                     </motion.div>
                   )}
                 </div>
-
-                <div className="bg-secondary/20 p-3 rounded-xl border border-border/40">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <BarChart3 className="w-3.5 h-3.5 text-primary" />
