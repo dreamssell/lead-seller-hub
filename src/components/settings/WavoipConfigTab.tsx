@@ -738,6 +738,20 @@ export default function WavoipConfigPage() {
               </div>
               <select 
                 className="h-8 text-[10px] rounded-md border border-input bg-background px-2"
+                value={filterType}
+                onChange={e => {
+                  setFilterType(e.target.value as any);
+                  setCurrentPage(1);
+                }}
+              >
+                <option value="all">Tipos: Tudo</option>
+                <option value="API">API</option>
+                <option value="Webhook">Webhooks</option>
+                <option value="Security">Segurança</option>
+                <option value="Routing">Roteamento</option>
+              </select>
+              <select 
+                className="h-8 text-[10px] rounded-md border border-input bg-background px-2"
                 value={filterPeriod}
                 onChange={e => {
                   setFilterPeriod(e.target.value as any);
@@ -762,6 +776,7 @@ export default function WavoipConfigPage() {
                 <option value="error">Falhas</option>
               </select>
             </div>
+
           </div>
         </CardHeader>
         <CardContent className="p-0">
