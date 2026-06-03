@@ -13,7 +13,8 @@ import {
   Clock,
   XCircle,
   RefreshCw,
-  Search
+  Search,
+  Webhook
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,7 +33,10 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
+import { useAuth } from '@/contexts/AuthContext';
+
 export default function WavoipConfigPage() {
+  const { access } = useAuth();
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [validated, setTestingValidated] = useState(false);
@@ -42,12 +46,22 @@ export default function WavoipConfigPage() {
     message: string;
   }>({ status: 'none', timestamp: null, message: '' });
 
-  const [history] = useState([
-    { id: 1, date: '2024-05-20 14:30:05', status: 'success', message: 'Conexão estabelecida via API Gateway' },
-    { id: 2, date: '2024-05-19 10:15:22', status: 'error', message: '401 Unauthorized - Token expirado' },
-    { id: 3, date: '2024-05-18 16:45:10', status: 'success', message: 'Validação de credenciais OK' },
-    { id: 4, date: '2024-05-15 09:00:00', status: 'error', message: '503 Service Unavailable - Wavoip API Down' },
+  const [filterStatus, setFilterStatus] = useState<'all' | 'success' | 'error'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const [history, setHistory] = useState([
+    { id: 1, date: '2024-05-20 14:30:05', status: 'success', type: 'API', message: 'Conexão estabelecida via API Gateway' },
+    { id: 2, date: '2024-05-19 10:15:22', status: 'error', type: 'Auth', message: '401 Unauthorized - Token expirado' },
+    { id: 3, date: '2024-05-18 16:45:10', status: 'success', type: 'API', message: 'Validação de credenciais OK' },
+    { id: 4, date: '2024-05-15 09:00:00', status: 'error', type: 'Network', message: '503 Service Unavailable - Wavoip API Down' },
   ]);
+
+  const filteredHistory = history.filter(item => {
+    const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
+    const matchesSearch = item.message.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                         (item.type && item.type.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchesStatus && matchesSearch;
+  });
   
   const [form, setForm] = useState({
     apiUrl: 'https://api.wavoip.com/v1',
@@ -88,11 +102,13 @@ export default function WavoipConfigPage() {
       if (error || data?.error) {
         toast.error('Falha na validação das credenciais.');
         setTestingValidated(false);
+        const errorMsg = error?.message || data?.error || 'Erro na comunicação com o servidor';
         setLastValidation({
           status: 'error',
           timestamp,
-          message: error?.message || data?.error || 'Erro na comunicação com o servidor'
+          message: errorMsg
         });
+        setHistory([{ id: history.length + 1, date: timestamp, status: 'error', type: 'API', message: errorMsg }, ...history]);
       } else {
         toast.success('Conexão validada com sucesso!');
         setTestingValidated(true);
@@ -101,6 +117,7 @@ export default function WavoipConfigPage() {
           timestamp,
           message: 'Conexão estabelecida com sucesso'
         });
+        setHistory([{ id: history.length + 1, date: timestamp, status: 'success', type: 'API', message: 'Teste de conexão manual OK' }, ...history]);
       }
     } catch (err) {
       setTesting(false);
