@@ -207,7 +207,7 @@ export default function WavoipConfigPage() {
             message: payload.message || 'Atualização instantânea recebida',
             version: payload.version,
             requestId: payload.requestId || `req_${Math.random().toString(36).substring(7)}`,
-            payloadHash: payload.payloadHash || (payload.type === 'Security' ? 'sha256:generated...' : undefined)
+            payloadHash: payload.payloadHash || ((payload as any).type === 'Security' ? 'sha256:generated...' : undefined)
           };
           
           // Ordenação por data (descendente)
