@@ -814,16 +814,7 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
                     variant="outline" 
                     size="sm" 
                     className={`gap-2 ${showHealthStats ? 'bg-primary/10 border-primary text-primary' : ''}`}
-                    onClick={() => {
-                      const next = !showHealthStats;
-                      setShowHealthStats(next);
-                      setSearchParams(prev => {
-                        const nextParams = new URLSearchParams(prev);
-                        if (next) nextParams.set('stats', 'true');
-                        else nextParams.delete('stats');
-                        return nextParams;
-                      }, { replace: true });
-                    }}
+                    onClick={() => setShowHealthStats(!showHealthStats)}
                   >
                     <BarChart3 className="w-4 h-4" />
                     Dashboard de Saúde
