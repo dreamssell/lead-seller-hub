@@ -223,7 +223,7 @@ export default function BackendStatusPage() {
         </TabsContent>
 
         <TabsContent value="uaz-alerts">
-          <UazAlertHistoryTab />
+          <UazAlertsAuditTab />
         </TabsContent>
 
         <TabsContent value="uaz-incidents">
