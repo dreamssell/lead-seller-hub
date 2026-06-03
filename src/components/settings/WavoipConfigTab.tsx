@@ -61,11 +61,17 @@ export default function WavoipConfigPage() {
 
   const [filterStatus, setFilterStatus] = useState<'all' | 'success' | 'error'>('all');
   const [filterPeriod, setFilterPeriod] = useState<'today' | '7d' | '30d' | 'all'>('all');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [isAlertEnabled, setIsAlertEnabled] = useState(true);
-  const [routingTestResult, setRoutingTestResult] = useState<'success' | 'error' | 'none'>('none');
+  const [routingTestResult, setRoutingTestResult] = useState<{
+    status: 'success' | 'error' | 'none';
+    details: string;
+    logs: string[];
+  }>({ status: 'none', details: '', logs: [] });
   const itemsPerPage = 5;
+
 
   const [history, setHistory] = useState([
     { id: 1, date: '2024-05-20 14:30:05', status: 'success', type: 'API', message: 'Conexão estabelecida via API Gateway' },
