@@ -4,18 +4,17 @@ import {
   CheckCircle2, 
   XCircle, 
   AlertTriangle, 
-  Zap, 
+  RefreshCw, 
   Clock, 
   Loader2,
-  RefreshCw,
-  Info,
-  ExternalLink,
-  ChevronRight
+  ChevronRight,
+  History as HistoryIcon
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 export default function PublicStatusPage() {
@@ -27,15 +26,13 @@ export default function PublicStatusPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // 1. Healthcheck
       const { data: hData, error: hErr } = await supabase.functions.invoke('uaz-healthcheck');
       if (hErr) throw hErr;
       setHealth(hData);
 
-      // 2. Recent Logs for aggregation
       const { data: logs } = await supabase
         .from('uaz_audit_logs')
-        .select('*')
+        .select('id, message, status, event_type, created_at, response, payload')
         .order('created_at', { ascending: false })
         .limit(20);
       
@@ -49,12 +46,11 @@ export default function PublicStatusPage() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 120000); // 2 min
+    const interval = setInterval(fetchData, 120000);
     return () => clearInterval(interval);
   }, []);
 
   const isHealthy = health?.status === 'online';
-  const lastError = recentLogs.find(l => l.status === 'error');
 
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-primary/20">
@@ -114,7 +110,7 @@ export default function PublicStatusPage() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold flex items-center gap-2">
-              <History className="w-5 h-5 text-primary" />
+              <HistoryIcon className="w-5 h-5 text-primary" />
               Eventos Recentes
             </h2>
             <Button variant="ghost" size="sm" onClick={fetchData} className="h-8 gap-2 text-xs">
@@ -154,11 +150,6 @@ export default function PublicStatusPage() {
 
         <footer className="mt-20 pt-12 border-t border-border/40 flex flex-col md:flex-row items-center justify-between gap-6 text-[10px] text-muted-foreground uppercase font-bold tracking-widest">
           <p>© 2026 Lovable Platform</p>
-          <div className="flex items-center gap-6">
-            <a href="#" className="hover:text-foreground transition-colors">Twitter</a>
-            <a href="#" className="hover:text-foreground transition-colors">Documentation</a>
-            <a href="#" className="hover:text-foreground transition-colors">Privacy</a>
-          </div>
         </footer>
       </div>
 
