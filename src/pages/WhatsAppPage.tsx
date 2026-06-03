@@ -176,12 +176,35 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
         }
       };
 
+      const loadSubCompanies = async () => {
+        const { data } = await supabase.from('sub_companies').select('id, name');
+        if (data) setSubCompanies(data);
+      };
+
       const loadQueue = async () => {
         setLoadingQueue(true);
-        const { data } = await supabase.functions.invoke('uaz-queue-stats');
-        if (data) setQueueStats(data);
+        const queryParams = new URLSearchParams();
+        if (filterTenant !== 'all') queryParams.append('tenant_id', filterTenant);
+        if (filterChannel !== 'all') queryParams.append('channel_type', filterChannel);
+        
+        const { data } = await supabase.functions.invoke('uaz-queue-stats', {
+          method: 'GET',
+          headers: { 'x-url-search': queryParams.toString() } // Custom header or just append to path if invoke supports it
+        });
+        // Actually invoke doesn't take URL params easily in the first arg, we usually just pass in body or headers
+        // Let's retry with body for easier handling in the function if needed, or just append to path if using raw fetch
+        const { data: data2 } = await supabase.functions.invoke('uaz-queue-stats', {
+          body: { tenant_id: filterTenant === 'all' ? null : filterTenant, channel_type: filterChannel === 'all' ? null : filterChannel }
+        });
+        if (data2) setQueueStats(data2);
         setLoadingQueue(false);
       };
+
+      loadMetrics();
+      loadAlerts();
+      loadSettings();
+      loadSubCompanies();
+      loadQueue();
 
       const handleManualResend = async () => {
         if (!lastSendAttempt || lastSendAttempt.status !== 'error') return;
