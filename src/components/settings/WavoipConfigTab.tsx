@@ -2101,14 +2101,25 @@ export default function WavoipConfigPage() {
                                             onClick={() => {
                                               const note = (document.getElementById(`note-${(item as any).payloadHash}`) as HTMLTextAreaElement).value;
                                               if (!note) return;
+                                              
+                                              const resolvedAt = new Date().toLocaleString();
+                                              const resolvedBy = (access as any)?.email || 'System';
+                                              
                                               setResolvedThreads(prev => ({
                                                 ...prev,
                                                 [(item as any).payloadHash]: {
                                                   note,
-                                                  resolvedAt: new Date().toLocaleString(),
-                                                  resolvedBy: (access as any)?.email || 'System'
+                                                  resolvedAt,
+                                                  resolvedBy
                                                 }
                                               }));
+                                              
+                                              // Notificar usuários com role adequada (simulado)
+                                              toast.info('Enviando notificações de resolução...', {
+                                                description: `Resumo enviado para administradores: "Thread ${(item as any).payloadHash.substring(7, 12)} resolvida por ${resolvedBy}"`,
+                                                duration: 5000
+                                              });
+                                              
                                               toast.success('Incidente marcado como resolvido.');
                                             }}
                                           >Salvar Resolução</Button>
