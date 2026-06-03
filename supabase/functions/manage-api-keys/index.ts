@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Verify JWT using getClaims
+    // Verify user session
     const token = authHeader.replace("Bearer ", "");
     const userClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
