@@ -1339,6 +1339,69 @@ export type Database = {
         }
         Relationships: []
       }
+      wavoip_settings: {
+        Row: {
+          alert_channels: Json | null
+          alert_threshold_seconds: number | null
+          created_at: string | null
+          id: string
+          sub_company_id: string
+          updated_at: string | null
+          ws_backoff: Json | null
+        }
+        Insert: {
+          alert_channels?: Json | null
+          alert_threshold_seconds?: number | null
+          created_at?: string | null
+          id?: string
+          sub_company_id: string
+          updated_at?: string | null
+          ws_backoff?: Json | null
+        }
+        Update: {
+          alert_channels?: Json | null
+          alert_threshold_seconds?: number | null
+          created_at?: string | null
+          id?: string
+          sub_company_id?: string
+          updated_at?: string | null
+          ws_backoff?: Json | null
+        }
+        Relationships: []
+      }
+      wavoip_sync_state: {
+        Row: {
+          created_at: string | null
+          dedup_window: number
+          id: string
+          last_ws_status: string | null
+          last_ws_update: string | null
+          recent_event_keys: string[] | null
+          sub_company_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          dedup_window?: number
+          id?: string
+          last_ws_status?: string | null
+          last_ws_update?: string | null
+          recent_event_keys?: string[] | null
+          sub_company_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          dedup_window?: number
+          id?: string
+          last_ws_status?: string | null
+          last_ws_update?: string | null
+          recent_event_keys?: string[] | null
+          sub_company_id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       webhook_idempotency_keys: {
         Row: {
           created_at: string | null
