@@ -12,6 +12,10 @@ interface CheckResult {
   detail?: string;
 }
 
+import UazStatusPanel from '@/components/settings/UazStatusPanel';
+import UazAlertHistoryTab from '@/components/settings/UazAlertHistoryTab';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 export default function BackendStatusPage() {
   const [checks, setChecks] = useState<CheckResult[]>([]);
   const [running, setRunning] = useState(false);

@@ -10,7 +10,9 @@ import {
   History,
   Calendar,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  XCircle,
+  AlertTriangle
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -34,7 +36,6 @@ export default function UazAlertHistoryTab() {
   const [totalCount, setTotalCount] = useState(0);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [severityFilter, setSeverityFilter] = useState<string[]>([]);
   const pageSize = 20;
 
   const loadLogs = async () => {
@@ -71,7 +72,7 @@ export default function UazAlertHistoryTab() {
 
   useEffect(() => {
     loadLogs();
-  }, [page, statusFilter, severityFilter]);
+  }, [page, statusFilter]);
 
   return (
     <div className="space-y-4">
