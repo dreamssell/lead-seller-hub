@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -52,6 +52,13 @@ export default function DeveloperPage() {
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get('tab') || 'ativar';
   const [activeTab, setActiveTab] = useState(initialTab);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && TABS.some(t => t.value === tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
   const navigate = useNavigate();
   
   const isMaster = !access?.sub_company_id;
@@ -78,7 +85,13 @@ export default function DeveloperPage() {
                   return (
                     <button
                       key={tab.value}
-                      onClick={() => setActiveTab(tab.value)}
+                      onClick={() => {
+                        setActiveTab(tab.value);
+                        // Atualiza a URL sem recarregar a página
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('tab', tab.value);
+                        window.history.replaceState(null, '', url.toString());
+                      }}
                       className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 group relative ${
                         isActive 
                         ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' 
@@ -147,7 +160,7 @@ export default function DeveloperPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
             >
-              <CurrentComp />
+              <CurrentComp key={activeTab} />
             </motion.div>
           </main>
         </div>
