@@ -130,7 +130,16 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
     const { data } = await supabase.functions.invoke('uaz-queue-stats', {
       body: { tenant_id: filterTenant === 'all' ? null : filterTenant, channel_type: filterChannel === 'all' ? null : filterChannel }
     });
-    if (data) setQueueStats(data);
+    if (data) {
+      setQueueStats(data);
+      if (data.alert) {
+        toast.warning('Alerta de Fila UAZ', { 
+          description: data.alert.reason,
+          duration: 10000,
+          icon: <AlertOctagon className="w-4 h-4 text-warning" />
+        });
+      }
+    }
     setLoadingQueue(false);
   };
 
