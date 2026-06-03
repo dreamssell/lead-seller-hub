@@ -26,27 +26,12 @@ const channels: Array<{
   { key: 'widget', name: 'Widget de Site', icon: Globe, color: 'text-violet-500', bg: 'bg-violet-500/10', leads: 53, open: 7 },
 ];
 
-const conversationsByChannel: Record<ChannelKey, Array<{ id: number; name: string; msg: string; time: string; online: boolean; botEnabled: boolean; assignedTo: string; }>> = {
-  whatsapp: [
-    { id: 1, name: 'Maria Santos', msg: 'Olá, gostaria de saber sobre o plano Pro', time: '2min', online: true, botEnabled: true, assignedTo: 'bot:vendas' },
-    { id: 2, name: 'Carlos Oliveira', msg: 'Preciso de suporte com o webhook', time: '12min', online: true, botEnabled: false, assignedTo: 'human:joao' },
-    { id: 3, name: 'Ana Paula', msg: 'Posso receber a proposta por aqui?', time: '34min', online: false, botEnabled: true, assignedTo: 'bot:vendas' },
-  ],
-  instagram: [
-    { id: 10, name: '@lucas.dev', msg: 'Vi o anúncio, quero falar com vendedor', time: '5min', online: true, botEnabled: true, assignedTo: 'bot:qualificador' },
-    { id: 11, name: '@marina.costa', msg: 'Tem desconto no plano anual?', time: '20min', online: false, botEnabled: false, assignedTo: 'human:maria' },
-  ],
-  facebook: [
-    { id: 20, name: 'Roberto Lima', msg: 'Quais formas de pagamento aceitam?', time: '8min', online: true, botEnabled: true, assignedTo: 'bot:atendimento' },
-    { id: 21, name: 'Patricia Gomes', msg: 'Obrigada pelo atendimento!', time: '1h', online: false, botEnabled: false, assignedTo: 'human:pedro' },
-  ],
-  linkedin: [
-    { id: 30, name: 'Eduardo Mendes', msg: 'Gostaria de agendar uma demo', time: '15min', online: true, botEnabled: false, assignedTo: 'human:joao' },
-  ],
-  widget: [
-    { id: 40, name: 'Visitante #4821', msg: 'O plano grátis tem limite de mensagens?', time: '1min', online: true, botEnabled: true, assignedTo: 'bot:atendimento' },
-    { id: 41, name: 'Visitante #4815', msg: 'Como faço integração com meu CRM?', time: '40min', online: false, botEnabled: true, assignedTo: 'bot:tecnico' },
-  ],
+const conversationsByChannel: Record<ChannelKey, Array<{ id: string; name: string; msg: string; time: string; online: boolean; botEnabled: boolean; assignedTo: string; phone?: string }>> = {
+  whatsapp: [],
+  instagram: [],
+  facebook: [],
+  linkedin: [],
+  widget: [],
 };
 
 const aiAgents = [
@@ -73,10 +58,11 @@ const mockMessages = [
 export default function ChatPage() {
   const [activeChannel, setActiveChannel] = useState<ChannelKey | null>(null);
   const [convs, setConvs] = useState(conversationsByChannel);
-  const [selectedConvId, setSelectedConvId] = useState<number | null>(null);
+  const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState('');
-  const [message, setMessage] = useState('');
+  const [messageText, setMessageText] = useState('');
   const [uazStatus, setUazStatus] = useState<{ connected: boolean; loading: boolean; phone?: string; error?: string }>({
     connected: false,
     loading: true,
@@ -118,45 +104,93 @@ export default function ChatPage() {
         setUazStatus({ connected: false, loading: false, error: 'Falha ao verificar status' });
       }
     }
-    checkUAZ();
-  }, []);
+    async function loadConversations() {
+      const { data: customers } = await supabase
+        .from('customers')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+      if (customers) {
+        const formatted = customers.map(c => ({
+          id: c.id,
+          name: c.name,
+          msg: 'Ver conversa...',
+          time: new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          online: false,
+          botEnabled: false,
+          assignedTo: '',
+          phone: c.phone
+        }));
+        setConvs(prev => ({ ...prev, whatsapp: formatted }));
+      }
+    }
+
+    loadConversations();
+
+    // Realtime subscription
+    const channel = supabase
+      .channel('chat_updates')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
+        if (payload.new.customer_id === selectedConvId) {
+          setMessages(prev => [...prev, payload.new]);
+        }
+        loadConversations();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedConvId]);
+
+  useEffect(() => {
+    if (selectedConvId) {
+      async function loadMessages() {
+        const { data } = await supabase
+          .from('chat_messages')
+          .select('*')
+          .eq('customer_id', selectedConvId)
+          .order('created_at', { ascending: true });
+        if (data) setMessages(data);
+      }
+      loadMessages();
+    }
+  }, [selectedConvId]);
 
   const list = activeChannel ? convs[activeChannel] : [];
   const selectedConv = list.find((c) => c.id === selectedConvId) || list[0];
 
-  const toggleBot = (id: number) => {
+  const toggleBot = (id: string) => {
     if (!activeChannel) return;
-    setConvs((prev) => ({
-      ...prev,
-      [activeChannel]: prev[activeChannel].map((c) =>
-        c.id === id ? { ...c, botEnabled: !c.botEnabled } : c,
-      ),
-    }));
     toast({ title: 'Bot atualizado', description: 'Estado do agente alterado para essa conversa.' });
   };
 
-  const setBotAgent = (id: number, botId: string) => {
+  const setBotAgent = (id: string, botId: string) => {
     if (!activeChannel) return;
-    setConvs((prev) => ({
-      ...prev,
-      [activeChannel]: prev[activeChannel].map((c) =>
-        c.id === id ? { ...c, assignedTo: botId, botEnabled: true } : c,
-      ),
-    }));
     toast({ title: 'Agente IA atribuído', description: aiAgents.find((a) => a.id === botId)?.name });
   };
 
   const handleTransfer = () => {
     if (!transferTarget || !selectedConv || !activeChannel) return;
-    setConvs((prev) => ({
-      ...prev,
-      [activeChannel]: prev[activeChannel].map((c) =>
-        c.id === selectedConv.id ? { ...c, assignedTo: transferTarget, botEnabled: false } : c,
-      ),
-    }));
     toast({ title: 'Conversa transferida', description: humanAgents.find((h) => h.id === transferTarget)?.name });
     setTransferOpen(false);
     setTransferTarget('');
+  };
+
+  const handleSendMessage = async () => {
+    if (!messageText || !selectedConvId) return;
+    
+    const { error } = await supabase.from('chat_messages').insert({
+      customer_id: selectedConvId,
+      sender_type: 'agent',
+      content: messageText
+    });
+
+    if (error) {
+      toast({ title: 'Erro ao enviar', description: error.message, variant: 'destructive' });
+    } else {
+      setMessageText('');
+    }
   };
 
   // Painel principal: mini-cards de canais
@@ -349,18 +383,20 @@ export default function ChatPage() {
               </div>
 
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {mockMessages.map((m) => (
+                {messages.map((m) => (
                   <motion.div
                     key={m.id}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`flex ${m.from === 'agent' ? 'justify-end' : 'justify-start'}`}
+                    className={`flex ${m.sender_type !== 'client' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm ${
-                      m.from === 'agent' ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-secondary text-foreground rounded-bl-md'
+                      m.sender_type !== 'client' ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-secondary text-foreground rounded-bl-md'
                     }`}>
-                      <p>{m.text}</p>
-                      <p className={`text-[10px] mt-1 ${m.from === 'agent' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>{m.time}</p>
+                      <p>{m.content}</p>
+                      <p className={`text-[10px] mt-1 ${m.sender_type !== 'client' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                        {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
                     </div>
                   </motion.div>
                 ))}
@@ -370,12 +406,19 @@ export default function ChatPage() {
                 <div className="flex items-center gap-2">
                   <button className="p-2 rounded-lg hover:bg-secondary"><Paperclip className="w-4 h-4 text-muted-foreground" /></button>
                   <input
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                     placeholder="Digite sua mensagem..."
                     className="flex-1 bg-secondary rounded-xl px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"
                   />
-                  <button className="p-2.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90"><Send className="w-4 h-4" /></button>
+                  <button 
+                    onClick={handleSendMessage}
+                    disabled={!messageText}
+                    className="p-2.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             </>
