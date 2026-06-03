@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Phone, 
@@ -24,7 +24,8 @@ import {
   ArrowRight,
   ArrowUpDown,
   Terminal,
-  CirclePlay
+  CirclePlay,
+  ShieldAlert
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -89,39 +90,46 @@ export default function WavoipConfigPage() {
     { id: 8, date: '2024-05-11 18:00:00', status: 'error', type: 'Security', message: 'Falha na assinatura do Webhook: Assinatura inválida (Mismatch)' },
   ]);
 
-  const filteredHistory = history.filter(item => {
-    const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
-    const matchesType = filterType === 'all' || item.type === filterType;
-    const matchesSearch = item.message.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         (item.type && item.type.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    let matchesPeriod = true;
-    const itemDate = new Date(item.date);
-    const now = new Date();
-    
-    if (filterPeriod === 'today') {
-      matchesPeriod = itemDate.toDateString() === now.toDateString();
-    } else if (filterPeriod === '7d') {
-      const sevenDaysAgo = new Date(now.setDate(now.getDate() - 7));
-      matchesPeriod = itemDate >= sevenDaysAgo;
-    } else if (filterPeriod === '30d') {
-      const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
-      matchesPeriod = itemDate >= thirtyDaysAgo;
-    }
+  const securityIncidents = useMemo(() => {
+    return history.filter(item => item.type === 'Security' && item.status === 'error');
+  }, [history]);
 
-    return matchesStatus && matchesType && matchesSearch && matchesPeriod;
-  }).sort((a, b) => {
+  const filteredHistory = useMemo(() => {
+    return history.filter(item => {
+      const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
+      const matchesType = filterType === 'all' || item.type === filterType;
+      const matchesSearch = item.message.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           (item.type && item.type.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                           ((item as any).version && (item as any).version.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      let matchesPeriod = true;
+      const itemDate = new Date(item.date);
+      const now = new Date();
+      
+      if (filterPeriod === 'today') {
+        matchesPeriod = itemDate.toDateString() === now.toDateString();
+      } else if (filterPeriod === '7d') {
+        const sevenDaysAgo = new Date(now.setDate(now.getDate() - 7));
+        matchesPeriod = itemDate >= sevenDaysAgo;
+      } else if (filterPeriod === '30d') {
+        const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
+        matchesPeriod = itemDate >= thirtyDaysAgo;
+      }
 
-    const dateA = new Date(a.date).getTime();
-    const dateB = new Date(b.date).getTime();
-    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
-  });
+      return matchesStatus && matchesType && matchesSearch && matchesPeriod;
+    }).sort((a, b) => {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+    });
+  }, [history, filterStatus, filterType, filterPeriod, searchTerm, sortOrder]);
 
   const totalPages = Math.ceil(filteredHistory.length / itemsPerPage);
   const paginatedHistory = filteredHistory.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
 
 
   
@@ -170,11 +178,13 @@ export default function WavoipConfigPage() {
         });
         
         if (payload.status === 'error' && isAlertEnabled) {
-          toast.error(`Alerta Wavoip: ${payload.message}`, {
-            icon: <Bell className="w-4 h-4" />,
-            duration: 5000
+          const isSecurity = (payload as any).type === 'Security';
+          toast.error(`${isSecurity ? 'Incidente de Segurança' : 'Alerta Wavoip'}: ${payload.message}`, {
+            icon: isSecurity ? <ShieldAlert className="w-4 h-4 text-red-500" /> : <Bell className="w-4 h-4" />,
+            duration: isSecurity ? 8000 : 5000
           });
         }
+
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
@@ -366,7 +376,7 @@ export default function WavoipConfigPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <Card className="glass-card bg-emerald-500/5 border-emerald-500/20">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between mb-2">
@@ -379,6 +389,22 @@ export default function WavoipConfigPage() {
             <p className="text-[10px] text-emerald-600/70 mt-1">Sincronização ativa</p>
           </CardContent>
         </Card>
+
+        <Card className={`glass-card transition-all ${securityIncidents.length > 0 ? 'bg-red-500/5 border-red-500/20' : ''}`}>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Segurança</p>
+              <div className={`p-1.5 rounded-full ${securityIncidents.length > 0 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-secondary text-muted-foreground'}`}>
+                <ShieldAlert className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <p className={`text-xl font-bold ${securityIncidents.length > 0 ? 'text-red-600' : 'text-foreground'}`}>
+              {securityIncidents.length}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-1">Incidentes no período</p>
+          </CardContent>
+        </Card>
+
 
         <Card className="glass-card">
           <CardContent className="pt-6">
@@ -730,8 +756,8 @@ export default function WavoipConfigPage() {
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                 <Input 
-                  placeholder="Buscar logs..." 
-                  className="pl-8 h-8 text-[10px] w-40"
+                  placeholder="Buscar logs ou segredos..." 
+                  className="pl-8 h-8 text-[10px] w-48"
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                 />
