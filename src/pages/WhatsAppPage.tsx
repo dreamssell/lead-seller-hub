@@ -370,6 +370,23 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                                   {lastSendAttempt.message || (typeof lastSendAttempt.response === 'string' ? lastSendAttempt.response : JSON.stringify(lastSendAttempt.response))}
                                 </p>
                               </div>
+                              <div className="bg-background/40 p-2 rounded-lg border border-border/20">
+                                <p className="text-[8px] font-bold text-muted-foreground uppercase mb-1 flex items-center gap-1">
+                                  <Zap className="w-2.5 h-2.5" /> Payload Enviado
+                                </p>
+                                <pre className="text-[9px] font-mono text-muted-foreground overflow-auto max-h-20 leading-tight">
+                                  {JSON.stringify({
+                                    url: lastSendAttempt.payload?.url || 'https://api.uazapi.dev',
+                                    headers: { Authorization: 'Bearer [TOKEN_HIDDEN]', 'Content-Type': 'application/json' },
+                                    body: {
+                                      customer_id: lastSendAttempt.payload?.customer_id,
+                                      content: lastSendAttempt.payload?.content,
+                                      client_msg_id: lastSendAttempt.payload?.client_msg_id
+                                    }
+                                  }, null, 2)}
+                                </pre>
+                              </div>
+
                               <Button 
                                 size="sm" 
                                 variant="outline" 
