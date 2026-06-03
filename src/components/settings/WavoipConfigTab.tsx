@@ -476,7 +476,7 @@ export default function WavoipConfigPage() {
               placeholder="Ex: 551199999999" 
               value={form.origin}
               onChange={e => setForm({...form, origin: e.target.value})}
-              className={routingTestResult === 'error' && !form.origin ? 'border-red-500' : ''}
+              className={routingTestResult.status === 'error' && !form.origin ? 'border-red-500' : ''}
             />
           </div>
           <div className="space-y-2">
@@ -485,8 +485,9 @@ export default function WavoipConfigPage() {
               placeholder="Ramal ou Fila" 
               value={form.destination}
               onChange={e => setForm({...form, destination: e.target.value})}
-              className={routingTestResult === 'error' && !form.destination ? 'border-red-500' : ''}
+              className={routingTestResult.status === 'error' && !form.destination ? 'border-red-500' : ''}
             />
+
           </div>
 
           {routingTestResult.status !== 'none' && (
