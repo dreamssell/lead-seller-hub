@@ -166,8 +166,18 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
       };
 
       const loadSettings = async () => {
-        const { data } = await supabase.from('uaz_system_settings').select('alert_threshold_latency').eq('id', 'global').single();
-        if (data) setGlobalThreshold(data.alert_threshold_latency);
+        const { data } = await supabase.from('uaz_system_settings').select('*').eq('id', 'global').single();
+        if (data) {
+          setGlobalThreshold(data.alert_threshold_latency);
+          setSystemSettings(data);
+        }
+      };
+
+      const loadQueue = async () => {
+        setLoadingQueue(true);
+        const { data } = await supabase.functions.invoke('uaz-queue-stats');
+        if (data) setQueueStats(data);
+        setLoadingQueue(false);
       };
 
       const handleManualResend = async () => {
@@ -194,6 +204,7 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
       loadMetrics();
       loadAlerts();
       loadSettings();
+      loadQueue();
       
       const channel = supabase
         .channel(`uaz_metrics_${conn.id}`)
