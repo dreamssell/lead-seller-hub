@@ -300,7 +300,7 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-3 border-t border-border/40 pt-3">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label className="text-[10px] uppercase font-bold text-muted-foreground">Alerta de Latência (ms)</Label>
+                          <Label className="text-[10px] uppercase font-bold text-muted-foreground">Limite por Canal (ms)</Label>
                           <div className="flex items-center gap-2">
                             <Input 
                               type="number" 
@@ -309,6 +309,12 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                               className="h-8 text-xs"
                             />
                             <Badge variant="outline" className="h-8">ms</Badge>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[10px] uppercase font-bold text-muted-foreground">Limite Global (Empresa)</Label>
+                          <div className="flex items-center gap-2 h-8 px-3 rounded-md bg-secondary/30 border border-border/40 text-xs font-medium">
+                            {globalThreshold} ms
                           </div>
                         </div>
                       </div>
