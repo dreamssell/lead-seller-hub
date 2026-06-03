@@ -204,7 +204,7 @@ export default function BackendStatusPage() {
             <AlertTriangle className="w-4 h-4" /> Alertas UAZ
           </TabsTrigger>
           <TabsTrigger value="uaz-remediation" className="gap-2">
-            <History className="w-4 h-4" /> Auditoria Remediação
+            <HistoryIcon className="w-4 h-4" /> Auditoria Remediação
           </TabsTrigger>
         </TabsList>
 
