@@ -2,7 +2,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { motion } from 'framer-motion';
-import { Activity, CheckCircle2, XCircle, RefreshCw, Database, Shield, Zap, AlertTriangle, Download } from 'lucide-react';
+import { Activity, CheckCircle2, XCircle, RefreshCw, Database, Shield, Zap, AlertTriangle, Download, History as HistoryIcon } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 interface CheckResult {
