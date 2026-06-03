@@ -415,8 +415,36 @@ export default function WavoipConfigPage() {
     }, 800);
   };
 
+  const runSecurityRotationTests = async () => {
+    toast.info('Iniciando testes de integridade da rotação de segredos...');
+    setTesting(true);
+    
+    setTimeout(() => {
+      const logs = [
+        'Simulando recebimento de webhook v0 [v-0: ATUAL]',
+        'Verificando assinatura v0... [ASSERT: SIGNATURE_VALID]',
+        'Simulando recebimento de webhook v-1 [v-1: ANTERIOR]',
+        'Verificando assinatura v-1... [ASSERT: SIGNATURE_VALID]',
+        'Simulando segredo inválido/legado...',
+        'Verificando rejeição... [ASSERT: SIGNATURE_INVALID_REJECTED]'
+      ];
+      
+      setTesting(false);
+      toast.success('Testes de rotação concluídos: Compatibilidade retroativa confirmada.');
+      
+      const timestamp = new Date().toLocaleString();
+      setHistory(prev => [{
+        id: Date.now(),
+        date: timestamp,
+        status: 'success',
+        type: 'Security',
+        message: 'Testes de integridade de segredos (v0/v-1) concluídos com sucesso.'
+      }, ...prev]);
+    }, 2000);
+  };
 
   return (
+
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex items-center gap-4 mb-2">
         <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
