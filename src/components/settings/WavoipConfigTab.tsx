@@ -63,6 +63,7 @@ export default function WavoipConfigPage() {
   }>({ status: 'none', timestamp: null, message: '' });
 
   const [filterStatus, setFilterStatus] = useState<'all' | 'success' | 'error'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'API' | 'Webhook' | 'Security' | 'Routing'>('all');
   const [filterPeriod, setFilterPeriod] = useState<'today' | '7d' | '30d' | 'all'>('all');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [searchTerm, setSearchTerm] = useState('');
@@ -74,6 +75,7 @@ export default function WavoipConfigPage() {
     logs: string[];
   }>({ status: 'none', details: '', logs: [] });
   const itemsPerPage = 5;
+
 
 
   const [history, setHistory] = useState([
