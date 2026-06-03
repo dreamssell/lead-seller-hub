@@ -225,7 +225,17 @@ export default function WavoipConfigPage() {
         logs: isOk ? logs : [...logs, 'ERRO: Permissão de discagem negada pelo gateway.']
       });
       
+      const timestamp = new Date().toLocaleString();
+      setHistory(prev => [{
+        id: Date.now(),
+        date: timestamp,
+        status: isOk ? 'success' : 'error',
+        type: 'Routing',
+        message: `Teste de roteamento manual: ${isOk ? 'PASSED' : 'FAILED'} (${form.origin} -> ${form.destination})`
+      }, ...prev]);
+
       setTesting(false);
+
       
       if (isOk) {
         toast.success('Roteamento validado com asserts automatizados!');
