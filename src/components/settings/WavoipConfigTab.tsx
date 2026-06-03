@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { 
   Phone, 
   Shield, 
@@ -2368,6 +2369,17 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
       </Card>
     </TabsContent>
   </Tabs>
-</div>
-);
+      </motion.div>
+    </div>
+  );
+
+  if (standalone) {
+    return (
+      <AppLayout title="Wavoip Center" subtitle="Ambiente avançado de auditoria e configuração.">
+        {mainContent}
+      </AppLayout>
+    );
+  }
+
+  return mainContent;
 }
