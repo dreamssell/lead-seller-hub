@@ -29,6 +29,9 @@ export default function UazStatusPanel() {
   const [subCompanies, setSubCompanies] = useState<any[]>([]);
   const [queueStats, setQueueStats] = useState<any>(null);
   const [loadingQueue, setLoadingQueue] = useState(false);
+  const [settings, setSettings] = useState<any>(null);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
