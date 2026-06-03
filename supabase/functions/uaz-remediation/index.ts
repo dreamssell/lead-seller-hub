@@ -40,22 +40,43 @@ Deno.serve(async (req) => {
       console.log(`Persistent degradation detected: ${recentErrors.length} errors in ${interval}m`);
       
       // ACTION: Re-enqueue failed send_message tasks that haven't been remediated yet
-      const sendErrors = recentErrors.filter(l => l.event_type === 'send_message' && !l.is_remediation);
+      // Filters for send_message errors that are not already remediations and haven't exceeded max retry attempts
+      const sendErrors = recentErrors.filter(l => 
+        l.event_type === 'send_message' && 
+        !l.is_remediation && 
+        (l.payload?.remediation_count || 0) < 3
+      );
       
       for (const err of sendErrors) {
         if (err.payload?.customer_id && err.payload?.content) {
-          // Re-trigger send-message via internal call or just record for worker
-          remediations.push(`Retrying msg for customer ${err.payload.customer_id}`);
+          const currentRetryCount = (err.payload?.remediation_count || 0) + 1;
+          
+          // Exponential backoff logic check based on created_at and retry count
+          // 1st retry: 2min, 2nd: 8min, 3rd: 16min
+          const minDelay = Math.pow(2, currentRetryCount) * 60000;
+          const timeSinceError = Date.now() - new Date(err.created_at).getTime();
+          
+          if (timeSinceError < minDelay) {
+            console.log(`Skipping remediation for ${err.id}: too early (delay ${minDelay}ms)`);
+            continue;
+          }
+
+          remediations.push(`Retrying msg for customer ${err.payload.customer_id} (Attempt ${currentRetryCount})`);
           
           await supabaseAdmin.functions.invoke('uaz-send-message', {
             body: {
               customer_id: err.payload.customer_id,
               content: err.payload.content,
-              client_msg_id: `retry-${err.id}` // New ID to allow retry
+              client_msg_id: `remedy-${err.id}-${currentRetryCount}`, // unique ID for idempotency per attempt
+              metadata: {
+                ...err.payload.metadata,
+                remediation_count: currentRetryCount,
+                original_error_id: err.id
+              }
             }
           });
 
-          // Mark as remediated
+          // Mark original error as remediated to prevent loops
           await supabaseAdmin.from("uaz_audit_logs")
             .update({ is_remediation: true })
             .eq("id", err.id);
