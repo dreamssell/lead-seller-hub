@@ -64,7 +64,7 @@ const App = () => (
               <Route path="/settings" element={<ProtectedRoute><AccountSettingsPage /></ProtectedRoute>} />
               <Route path="/developer" element={<ProtectedRoute><DeveloperPage /></ProtectedRoute>} />
               <Route path="/api-keys" element={<ProtectedRoute><APIKeysPage /></ProtectedRoute>} />
-              <Route path="/wavoip" element={<ProtectedRoute><WavoipPage standalone={true} /></ProtectedRoute>} />
+              <Route path="/wavoip" element={<ProtectedRoute pageKey="wavoip"><WavoipPage standalone={true} /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
               <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppPage /></ProtectedRoute>} />
               <Route path="/video" element={<ProtectedRoute><VideoCallsPage /></ProtectedRoute>} />

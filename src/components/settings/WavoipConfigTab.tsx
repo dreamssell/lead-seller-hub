@@ -111,9 +111,10 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
   const [filterStatus, setFilterStatus] = useState<'all' | 'success' | 'error'>((searchParams.get('status') as any) || 'all');
   const [filterType, setFilterType] = useState<'all' | 'API' | 'Webhook' | 'Security' | 'Routing' | 'CI'>((searchParams.get('type') as any) || 'all');
   const [filterPeriod, setFilterPeriod] = useState<'today' | '7d' | '30d' | 'all'>((searchParams.get('period') as any) || 'all');
-  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>((searchParams.get('sort') as any) || 'desc');
   const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(Number(searchParams.get('page')) || 1);
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'config');
   const [isAlertEnabled, setIsAlertEnabled] = useState(true);
   const [alertChannels, setAlertChannels] = useState({
     visual: true,
@@ -137,7 +138,7 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
   }>({ status: 'none', details: '', logs: [] });
   const [filterPresets, setFilterPresets] = useState<any[]>([]);
   const [isSavingPreset, setIsSavingPreset] = useState(false);
-  const [showHealthStats, setShowHealthStats] = useState(false);
+  const [showHealthStats, setShowHealthStats] = useState(searchParams.get('stats') === 'true');
   const [resolvedThreads, setResolvedThreads] = useState<Record<string, { note: string; resolvedAt: string; resolvedBy: string }>>({});
   const itemsPerPage = 5;
 
@@ -283,8 +284,12 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
     if (filterType !== 'all') params.type = filterType;
     if (filterPeriod !== 'all') params.period = filterPeriod;
     if (searchTerm) params.q = searchTerm;
-    setSearchParams(params);
-  }, [filterStatus, filterType, filterPeriod, searchTerm, setSearchParams]);
+    if (sortOrder !== 'desc') params.sort = sortOrder;
+    if (currentPage !== 1) params.page = currentPage.toString();
+    if (activeTab !== 'config') params.tab = activeTab;
+    if (showHealthStats) params.stats = 'true';
+    setSearchParams(params, { replace: true });
+  }, [filterStatus, filterType, filterPeriod, searchTerm, sortOrder, currentPage, activeTab, showHealthStats, setSearchParams]);
 
   const [form, setForm] = useState({
     apiUrl: 'https://api.wavoip.com/v1',
@@ -774,7 +779,7 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
         className="max-w-7xl mx-auto"
       >
         <div className="space-y-6">
-          <Tabs defaultValue="config" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 h-10 mb-6">
               <TabsTrigger value="config" className="text-xs gap-2">
                 <Settings2 className="w-4 h-4" /> Configuração & Auditoria
@@ -2251,6 +2256,8 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
                         <Input 
                           placeholder="Buscar por thread, responsável ou anotação..." 
                           className="pl-8 h-8 text-[10px] w-64"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
                         />
                       </div>
                     </div>
@@ -2268,8 +2275,16 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {Object.entries(resolvedThreads).length > 0 ? (
-                        Object.entries(resolvedThreads).map(([hash, data]) => (
+                      {Object.entries(resolvedThreads).filter(([hash, data]) => 
+                        hash.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                        data.note.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                        data.resolvedBy.toLowerCase().includes(searchTerm.toLowerCase())
+                      ).length > 0 ? (
+                        Object.entries(resolvedThreads).filter(([hash, data]) => 
+                          hash.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          data.note.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          data.resolvedBy.toLowerCase().includes(searchTerm.toLowerCase())
+                        ).map(([hash, data]) => (
                           <TableRow key={hash} className="border-border/40 hover:bg-secondary/10">
                             <TableCell className="text-xs font-mono">
                               <div className="flex items-center gap-2">
@@ -2292,9 +2307,7 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
                                 onClick={() => {
                                   setFilterType('all');
                                   setSearchTerm(hash.substring(7, 12));
-                                  const tabs = document.querySelector('[role="tablist"]');
-                                  const firstTab = tabs?.querySelector('[value="config"]') as HTMLElement;
-                                  firstTab?.click();
+                                  setActiveTab('config');
                                 }}
                               >
                                 <Eye className="w-3 h-3" /> Ver Auditoria
