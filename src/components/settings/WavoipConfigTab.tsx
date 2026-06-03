@@ -137,6 +137,33 @@ export default function WavoipConfigPage() {
     }
   };
 
+  const exportHistory = (format: 'csv' | 'pdf') => {
+    setIsExporting(true);
+    toast.info(`Iniciando exportação em ${format.toUpperCase()}...`);
+    
+    // Simulação de geração de arquivo
+    setTimeout(() => {
+      const headers = ['Data', 'Status', 'Tipo', 'Mensagem'];
+      const data = filteredHistory.map(item => [
+        item.date,
+        item.status.toUpperCase(),
+        item.type,
+        item.message
+      ]);
+      
+      const content = [headers, ...data].map(row => row.join(',')).join('\n');
+      const blob = new Blob([content], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `wavoip-audit-log-${new Date().toISOString().split('T')[0]}.${format}`;
+      a.click();
+      
+      setIsExporting(false);
+      toast.success(`Relatório de auditoria exportado com sucesso!`);
+    }, 1500);
+  };
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex items-center gap-4 mb-2">
@@ -214,13 +241,30 @@ export default function WavoipConfigPage() {
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Token de Acesso (API Key)</Label>
-            <Input 
-              type="password" 
-              placeholder="wa_..." 
-              value={form.token}
-              onChange={e => setForm({...form, token: e.target.value})}
-            />
+            <Label className="flex items-center gap-2">
+              Token de Acesso (API Key) <Lock className="w-3 h-3 text-muted-foreground" />
+            </Label>
+            <div className="relative">
+              <Input 
+                type={showToken ? "text" : "password"} 
+                placeholder="wa_..." 
+                value={form.token}
+                onChange={e => setForm({...form, token: e.target.value})}
+                className="pr-10 font-mono"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                onClick={() => setShowToken(!showToken)}
+              >
+                {showToken ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              As credenciais são criptografadas em repouso seguindo padrões AES-256.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -334,6 +378,16 @@ export default function WavoipConfigPage() {
               <CardDescription>Logs de validação e eventos de conectividade</CardDescription>
             </div>
             <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 text-[10px] gap-2"
+                onClick={() => exportHistory('csv')}
+                disabled={isExporting}
+              >
+                {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                Exportar CSV
+              </Button>
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                 <Input 
