@@ -114,21 +114,42 @@ export default function WavoipConfigPage() {
     destination: ''
   });
 
-  // Integração Real-time via Supabase Realtime (Canais/Broadcast) que simula o WebSocket do Wavoip
+  // Deduplicação e Reconexão via Supabase Realtime
   useEffect(() => {
     if (!isLive) return;
 
-    const channel = supabase.channel('wavoip-events')
+    let reconnectTimeout: ReturnType<typeof setTimeout>;
+    let retryCount = 0;
+
+    const setupChannel = () => {
+      const channel = supabase.channel('wavoip-events', {
+        config: {
+          broadcast: { self: false },
+        }
+      })
       .on('broadcast', { event: 'log' }, (payload) => {
         const timestamp = new Date().toLocaleString();
-        const newEvent = {
-          id: Date.now(),
-          date: timestamp,
-          status: payload.status || 'success',
-          type: 'WebSocket',
-          message: payload.message || 'Atualização instantânea recebida'
-        };
-        setHistory(prev => [newEvent, ...prev.slice(0, 19)]);
+        
+        // Deduplicação básica por mensagem e timestamp aproximado (se vier id no payload usa ele)
+        const eventId = payload.id || `${payload.message}-${timestamp}`;
+        
+        setHistory(prev => {
+          if (prev.some(h => h.id === eventId)) return prev;
+          
+          const newEvent = {
+            id: eventId,
+            date: timestamp,
+            status: payload.status || 'success',
+            type: payload.type || 'WebSocket',
+            message: payload.message || 'Atualização instantânea recebida',
+            version: payload.version
+          };
+          
+          // Ordenação por data (descendente)
+          return [newEvent, ...prev].sort((a, b) => 
+            new Date(b.date).getTime() - new Date(a.date).getTime()
+          ).slice(0, 50);
+        });
         
         if (payload.status === 'error' && isAlertEnabled) {
           toast.error(`Alerta Wavoip: ${payload.message}`, {
@@ -137,12 +158,28 @@ export default function WavoipConfigPage() {
           });
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          retryCount = 0;
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          // Exponential Backoff
+          const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+          retryCount++;
+          reconnectTimeout = setTimeout(setupChannel, delay);
+        }
+      });
+
+      return channel;
+    };
+
+    const channel = setupChannel();
 
     return () => {
       supabase.removeChannel(channel);
+      clearTimeout(reconnectTimeout);
     };
   }, [isLive, isAlertEnabled]);
+
 
   const handleRoutingTest = async () => {
     if (!form.origin || !form.destination) {
@@ -165,6 +202,13 @@ export default function WavoipConfigPage() {
     }, 1500);
   };
 
+
+  const handleExportQuick = (period: 'today' | '7d' | '30d') => {
+    setFilterPeriod(period);
+    setCurrentPage(1);
+    // Pequeno delay para garantir que o filtro foi aplicado antes de disparar o download
+    setTimeout(() => exportHistory('csv'), 100);
+  };
 
   const handleSave = async () => {
     if (!validated) {
@@ -568,16 +612,37 @@ export default function WavoipConfigPage() {
                 <div className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
                 {isLive ? 'Live' : 'Pausado'}
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-8 text-[10px] gap-2"
-                onClick={() => exportHistory('csv')}
-                disabled={isExporting}
-              >
-                {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-                Exportar CSV
-              </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 text-[9px] border border-border/40"
+                    onClick={() => handleExportQuick('today')}
+                  >Hoje</Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 text-[9px] border border-border/40"
+                    onClick={() => handleExportQuick('7d')}
+                  >7 Dias</Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 text-[9px] border border-border/40"
+                    onClick={() => handleExportQuick('30d')}
+                  >30 Dias</Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 text-[10px] gap-2"
+                    onClick={() => exportHistory('csv')}
+                    disabled={isExporting}
+                  >
+                    {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                    Exportar CSV
+                  </Button>
+                </div>
+
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                 <Input 
@@ -645,7 +710,16 @@ export default function WavoipConfigPage() {
                   <TableCell>
                     <Badge variant="secondary" className="text-[9px] px-1.5 py-0">{item.type}</Badge>
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{item.message}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    <div className="flex flex-col">
+                      <span>{item.message}</span>
+                      {item.type === 'Security' && (item as any).version && (
+                        <span className="text-[9px] text-red-400 font-mono mt-0.5">
+                          Assinatura rejeitada usando segredo {(item as any).version}
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button 
                       variant="ghost" 
