@@ -205,7 +205,9 @@ export default function WavoipConfigPage() {
             status: payload.status || 'success',
             type: payload.type || 'WebSocket',
             message: payload.message || 'Atualização instantânea recebida',
-            version: payload.version
+            version: payload.version,
+            requestId: payload.requestId || `req_${Math.random().toString(36).substring(7)}`,
+            payloadHash: payload.payloadHash || (payload.type === 'Security' ? 'sha256:generated...' : undefined)
           };
           
           // Ordenação por data (descendente)
@@ -221,7 +223,6 @@ export default function WavoipConfigPage() {
             duration: isSecurity ? 8000 : 5000
           });
         }
-
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
