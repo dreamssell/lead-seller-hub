@@ -226,6 +226,27 @@ export default function WavoipConfigPage() {
               onChange={e => setForm({...form, destination: e.target.value})}
             />
           </div>
+          <div className="md:col-span-2 space-y-2 pt-2">
+            <Label className="flex items-center gap-2">
+              <Webhook className="w-4 h-4 text-primary" /> Webhook de Eventos
+            </Label>
+            <div className="flex gap-2">
+              <Input 
+                className="font-mono text-[10px] bg-secondary/30" 
+                value={`https://api.lovable.dev/v1/webhooks/wavoip/${access?.sub_company_id || 'master'}`} 
+                readOnly
+              />
+              <Button variant="outline" size="sm" onClick={() => {
+                navigator.clipboard.writeText(`https://api.lovable.dev/v1/webhooks/wavoip/${access?.sub_company_id || 'master'}`);
+                toast.success('URL copiada!');
+              }}>
+                Copiar
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground italic">
+              Configure esta URL no painel Wavoip para receber atualizações de chamadas e mensagens em tempo real.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
@@ -281,17 +302,34 @@ export default function WavoipConfigPage() {
       )}
 
       <Card className="glass-card overflow-hidden">
-        <CardHeader className="bg-secondary/20">
-          <div className="flex items-center justify-between">
+        <CardHeader className="bg-secondary/20 pb-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <CardTitle className="text-base flex items-center gap-2">
                 <History className="w-4 h-4 text-primary" /> Histórico de Auditoria
               </CardTitle>
               <CardDescription>Logs de validação e eventos de conectividade</CardDescription>
             </div>
-            <Badge variant="outline" className="text-[10px] border-border/60">
-              Últimos 30 dias
-            </Badge>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <Input 
+                  placeholder="Buscar logs..." 
+                  className="pl-8 h-8 text-[10px] w-40"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <select 
+                className="h-8 text-[10px] rounded-md border border-input bg-background px-2"
+                value={filterStatus}
+                onChange={e => setFilterStatus(e.target.value as any)}
+              >
+                <option value="all">Todos</option>
+                <option value="success">Sucessos</option>
+                <option value="error">Falhas</option>
+              </select>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -299,13 +337,14 @@ export default function WavoipConfigPage() {
             <TableHeader>
               <TableRow className="hover:bg-transparent border-border/40">
                 <TableHead className="w-[180px] text-[10px] uppercase font-bold tracking-wider">Data/Hora</TableHead>
-                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
+                <TableHead className="w-[100px] text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
+                <TableHead className="w-[100px] text-[10px] uppercase font-bold tracking-wider">Tipo</TableHead>
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider">Resultado/Mensagem</TableHead>
                 <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider">Ação</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {history.map((item) => (
+              {filteredHistory.map((item) => (
                 <TableRow key={item.id} className="border-border/40 hover:bg-secondary/10 transition-colors">
                   <TableCell className="text-xs font-mono text-muted-foreground">{item.date}</TableCell>
                   <TableCell>
@@ -320,14 +359,29 @@ export default function WavoipConfigPage() {
                       {item.status === 'success' ? 'SUCESSO' : 'FALHA'}
                     </Badge>
                   </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0">{item.type}</Badge>
+                  </TableCell>
                   <TableCell className="text-xs text-muted-foreground">{item.message}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary">
-                      <Search className="h-3 w-3" />
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6 text-muted-foreground hover:text-primary"
+                      onClick={handleTest}
+                    >
+                      <RefreshCw className="h-3 w-3" />
                     </Button>
                   </TableCell>
                 </TableRow>
               ))}
+              {filteredHistory.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-xs italic">
+                    Nenhum log encontrado para os filtros selecionados.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>
