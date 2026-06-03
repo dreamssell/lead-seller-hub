@@ -1886,9 +1886,9 @@ export default function WavoipConfigPage() {
                                       <DialogTrigger asChild>
                                         <Button 
                                           className="flex-1 text-[10px] h-8" 
-                                          disabled={access?.role !== 'admin'}
+                                          disabled={(access as any)?.role !== 'admin'}
                                         >
-                                          {access?.role === 'admin' ? 'v0 (Atual)' : <><Lock className="w-3 h-3 mr-1" /> v0</>}
+                                          {(access as any)?.role === 'admin' ? 'v0 (Atual)' : <><Lock className="w-3 h-3 mr-1" /> v0</>}
                                         </Button>
                                       </DialogTrigger>
                                       <DialogContent className="sm:max-w-xs">
@@ -1927,9 +1927,9 @@ export default function WavoipConfigPage() {
                                         <Button 
                                           variant="outline"
                                           className="flex-1 text-[10px] h-8" 
-                                          disabled={access?.role !== 'admin'}
+                                          disabled={(access as any)?.role !== 'admin'}
                                         >
-                                          {access?.role === 'admin' ? 'v-1 (Legado)' : <><Lock className="w-3 h-3 mr-1" /> v-1</>}
+                                          {(access as any)?.role === 'admin' ? 'v-1 (Legado)' : <><Lock className="w-3 h-3 mr-1" /> v-1</>}
                                         </Button>
                                       </DialogTrigger>
                                       <DialogContent className="sm:max-w-xs">
