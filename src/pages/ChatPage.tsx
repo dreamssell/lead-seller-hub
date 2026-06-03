@@ -2,15 +2,17 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Paperclip, Phone, Video, MoreVertical, Search, Circle,
-  Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft,
+  Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle,
 } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { Link } from 'react-router-dom';
 
 type ChannelKey = 'instagram' | 'facebook' | 'linkedin' | 'whatsapp' | 'widget';
 
@@ -75,6 +77,49 @@ export default function ChatPage() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState('');
   const [message, setMessage] = useState('');
+  const [uazStatus, setUazStatus] = useState<{ connected: boolean; loading: boolean; phone?: string; error?: string }>({
+    connected: false,
+    loading: true,
+  });
+
+  useEffect(() => {
+    async function checkUAZ() {
+      try {
+        const { data: conn } = await supabase
+          .from('whatsapp_connections')
+          .select('*')
+          .eq('provider', 'uaz')
+          .single();
+
+        const metadata = (conn.metadata as any) || {};
+        if (!metadata.token) {
+          setUazStatus({ connected: false, loading: false });
+          return;
+        }
+
+        const { data, error } = await supabase.functions.invoke('whatsapp-status', {
+          body: {
+            provider: 'uaz',
+            url: metadata.url || 'https://api.uazapi.dev',
+            token: metadata.token,
+          },
+        });
+
+        if (error) throw error;
+
+        setUazStatus({
+          connected: !!data?.connected,
+          loading: false,
+          phone: data?.phone,
+          error: data?.error,
+        });
+      } catch (err) {
+        console.error('Error checking UAZ status:', err);
+        setUazStatus({ connected: false, loading: false, error: 'Falha ao verificar status' });
+      }
+    }
+    checkUAZ();
+  }, []);
 
   const list = activeChannel ? convs[activeChannel] : [];
   const selectedConv = list.find((c) => c.id === selectedConvId) || list[0];
@@ -121,20 +166,43 @@ export default function ChatPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {channels.map((ch, i) => {
             const Icon = ch.icon;
+            const isWhatsApp = ch.key === 'whatsapp';
+            
             return (
               <motion.button
                 key={ch.key}
                 onClick={() => setActiveChannel(ch.key)}
-                className="glass-card p-5 text-left hover:border-primary/40 transition-all group"
+                className="glass-card p-5 text-left hover:border-primary/40 transition-all group relative overflow-hidden"
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
                 whileHover={{ y: -3 }}
               >
+                {isWhatsApp && (
+                  <div className="absolute top-3 right-3">
+                    {uazStatus.loading ? (
+                      <RefreshCw className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
+                    ) : uazStatus.connected ? (
+                      <div className="flex items-center gap-1.5 bg-success/10 px-2 py-0.5 rounded-full border border-success/20">
+                        <CheckCircle2 className="w-3 h-3 text-success" />
+                        <span className="text-[10px] font-bold text-success uppercase tracking-wider">UAZ Ativo</span>
+                      </div>
+                    ) : (
+                      <Link to="/whatsapp" onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 bg-destructive/10 px-2 py-0.5 rounded-full border border-destructive/20 hover:bg-destructive/20 transition-colors">
+                        <AlertCircle className="w-3 h-3 text-destructive" />
+                        <span className="text-[10px] font-bold text-destructive uppercase tracking-wider">Desconectado</span>
+                      </Link>
+                    )}
+                  </div>
+                )}
+
                 <div className={`w-12 h-12 rounded-2xl ${ch.bg} flex items-center justify-center mb-4`}>
                   <Icon className={`w-6 h-6 ${ch.color}`} />
                 </div>
                 <h3 className="text-sm font-semibold text-foreground mb-1">{ch.name}</h3>
+                {isWhatsApp && uazStatus.phone && !uazStatus.loading && (
+                  <p className="text-[10px] text-muted-foreground mb-2 font-medium">{uazStatus.phone}</p>
+                )}
                 <div className="flex items-center gap-3 mt-3">
                   <div>
                     <p className="text-xl font-bold text-foreground">{ch.leads}</p>
@@ -172,8 +240,17 @@ export default function ChatPage() {
         </Button>
         <div className={`flex items-center gap-2 px-2.5 py-1 rounded-full ${channelInfo.bg}`}>
           <ChannelIcon className={`w-3.5 h-3.5 ${channelInfo.color}`} />
-          <span className={`text-xs font-medium ${channelInfo.color}`}>{channelInfo.name}</span>
+          <span className={`text-xs font-medium ${channelInfo.color}`}>
+            {channelInfo.name} 
+            {channelInfo.key === 'whatsapp' && uazStatus.connected && ' (UAZ)'}
+          </span>
         </div>
+        {channelInfo.key === 'whatsapp' && uazStatus.connected && (
+          <Badge variant="outline" className="border-success/30 text-success text-[10px] h-5 gap-1">
+            <CheckCircle2 className="w-2.5 h-2.5" />
+            LIVE
+          </Badge>
+        )}
       </div>
 
       <div className="flex h-[calc(100vh-13rem)] glass-card overflow-hidden">
