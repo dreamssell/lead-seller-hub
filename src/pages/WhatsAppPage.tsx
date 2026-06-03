@@ -571,7 +571,7 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
                                 title="Ver na Auditoria"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onOpenAudit();
+                                  onOpenAudit({ logId: log.id, tenantId: log.customer_id });
                                 }}
                               >
                                 <History className="h-3 w-3" />
