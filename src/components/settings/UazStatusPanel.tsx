@@ -8,23 +8,31 @@ import {
   RefreshCw, 
   XCircle,
   Zap,
-  History,
-  ShieldCheck
+  Filter,
+  BarChart3
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
 export default function UazStatusPanel() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
+  const [filterTenant, setFilterTenant] = useState<string>('all');
+  const [filterChannel, setFilterChannel] = useState<string>('all');
+  const [subCompanies, setSubCompanies] = useState<any[]>([]);
+  const [queueStats, setQueueStats] = useState<any>(null);
+  const [loadingQueue, setLoadingQueue] = useState(false);
 
-  const fetchStatus = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
-      const { data: res, error } = await supabase.functions.invoke('uaz-healthcheck');
+      const { data: res, error } = await supabase.functions.invoke('uaz-healthcheck', {
+        body: { tenant_id: filterTenant === 'all' ? null : filterTenant, channel_type: filterChannel === 'all' ? null : filterChannel }
+      });
       if (error) throw error;
       setData(res);
     } catch (err) {
@@ -34,11 +42,38 @@ export default function UazStatusPanel() {
     }
   };
 
+  const fetchQueue = async () => {
+    setLoadingQueue(true);
+    try {
+      const { data: res } = await supabase.functions.invoke('uaz-queue-stats', {
+        body: { tenant_id: filterTenant === 'all' ? null : filterTenant, channel_type: filterChannel === 'all' ? null : filterChannel }
+      });
+      if (res) setQueueStats(res);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingQueue(false);
+    }
+  };
+
+  const fetchSubCompanies = async () => {
+    const { data } = await supabase.from('sub_companies').select('id, name');
+    if (data) setSubCompanies(data);
+  };
+
   useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 60000);
-    return () => clearInterval(interval);
+    fetchSubCompanies();
   }, []);
+
+  useEffect(() => {
+    fetchData();
+    fetchQueue();
+    const interval = setInterval(() => {
+      fetchData();
+      fetchQueue();
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [filterTenant, filterChannel]);
 
   if (loading && !data) {
     return (
@@ -110,14 +145,72 @@ export default function UazStatusPanel() {
         </Card>
       </div>
 
-      <div className="flex items-center justify-between px-2">
-        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-          <Clock className="w-3 h-3" />
-          Última verificação: {new Date(data?.last_check).toLocaleString()}
+      <div className="flex flex-col sm:flex-row items-center gap-4 bg-secondary/20 p-4 rounded-xl border border-border/40">
+        <div className="flex items-center gap-2 flex-1 w-full">
+          <Filter className="w-4 h-4 text-muted-foreground" />
+          <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Filtros de Monitoramento:</span>
         </div>
-        <Button variant="ghost" size="sm" onClick={fetchStatus} className="h-7 text-[10px] gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <select 
+            value={filterTenant} 
+            onChange={(e) => setFilterTenant(e.target.value)}
+            className="flex-1 sm:w-48 bg-background border border-border/40 rounded px-3 py-1.5 text-xs font-medium outline-none"
+          >
+            <option value="all">Todas Empresas (Multi-tenant)</option>
+            {subCompanies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select 
+            value={filterChannel} 
+            onChange={(e) => setFilterChannel(e.target.value)}
+            className="flex-1 sm:w-32 bg-background border border-border/40 rounded px-3 py-1.5 text-xs font-medium outline-none"
+          >
+            <option value="all">Todos Canais</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="voip">VoIP</option>
+            <option value="video">Vídeo</option>
+          </select>
+        </div>
+      </div>
+
+      <Card className="glass-card">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-bold uppercase flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-primary" />
+            Tendência da Fila de Mensagens
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[200px] w-full mt-4">
+            {loadingQueue && !queueStats ? (
+              <div className="h-full flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+            ) : queueStats?.trend?.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={queueStats.trend}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="time" fontSize={10} tickLine={false} axisLine={false} stroke="#888888" />
+                  <YAxis fontSize={10} tickLine={false} axisLine={false} stroke="#888888" />
+                  <RechartsTooltip 
+                    contentStyle={{ backgroundColor: 'rgba(23, 23, 23, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '12px' }}
+                    itemStyle={{ color: '#3b82f6' }}
+                  />
+                  <Line type="monotone" dataKey="pending" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6' }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-sm text-muted-foreground italic">Sem dados de fila para os filtros selecionados.</div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center justify-between px-2">
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase font-bold tracking-widest">
+          <Clock className="w-3 h-3" />
+          Sincronizado: {new Date(data?.last_check || Date.now()).toLocaleTimeString()}
+        </div>
+        <Button variant="ghost" size="sm" onClick={() => { fetchData(); fetchQueue(); }} className="h-7 text-[10px] gap-2">
           <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
-          Atualizar agora
+          RE-SINCRONIZAR
         </Button>
       </div>
     </div>
