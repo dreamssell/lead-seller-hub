@@ -29,6 +29,7 @@ import CEODashboardPage from "./pages/CEODashboardPage";
 import BackendStatusPage from "./pages/BackendStatusPage";
 import SubLoginPage from "./pages/SubLoginPage";
 import DocumentationPage from "./pages/DocumentationPage";
+import PublicStatusPage from "./pages/PublicStatusPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -46,6 +47,7 @@ const App = () => (
               {/* Rota pública — recebe tokens da página externa */}
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
               <Route path="/s/:subId/login" element={<SubLoginPage />} />
+              <Route path="/status-view" element={<PublicStatusPage />} />
 
 
               {/* Rotas protegidas */}
