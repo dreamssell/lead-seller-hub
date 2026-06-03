@@ -269,9 +269,9 @@ export default function WavoipConfigPage() {
         .single();
         
       if (settings) {
-        setAlertChannels(settings.alert_channels);
-        setWsBackoff(settings.ws_backoff);
-        setAlertThreshold(settings.alert_threshold_seconds);
+        if (settings.alert_channels) setAlertChannels(settings.alert_channels as any);
+        if (settings.ws_backoff) setWsBackoff(settings.ws_backoff as any);
+        if (settings.alert_threshold_seconds) setAlertThreshold(settings.alert_threshold_seconds);
       }
 
       const { data: syncState } = await supabase
@@ -382,6 +382,16 @@ export default function WavoipConfigPage() {
         if (status === 'SUBSCRIBED') {
           setWsStatus('connected');
           retryCount = 0;
+          clearTimeout(offlineTimer);
+          
+          // Persistir status no backend
+          if (access?.sub_company_id) {
+            supabase.from('wavoip_sync_state').upsert({
+              sub_company_id: access.sub_company_id,
+              last_ws_status: 'connected',
+              last_ws_update: new Date().toISOString()
+            }).then();
+          }
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
           setWsStatus('offline');
           const delay = Math.min(wsBackoff.min * Math.pow(2, retryCount), wsBackoff.max);
@@ -404,8 +414,9 @@ export default function WavoipConfigPage() {
     return () => {
       supabase.removeChannel(channel);
       clearTimeout(reconnectTimeout);
+      clearTimeout(offlineTimer);
     };
-  }, [isLive, isAlertEnabled]);
+  }, [isLive, isAlertEnabled, alertThreshold, access?.sub_company_id, wsBackoff.max, wsBackoff.maxAttempts, wsBackoff.min]);
 
 
   const handleRoutingTest = async () => {
