@@ -2274,8 +2274,16 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {Object.entries(resolvedThreads).length > 0 ? (
-                        Object.entries(resolvedThreads).map(([hash, data]) => (
+                      {Object.entries(resolvedThreads).filter(([hash, data]) => 
+                        hash.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                        data.note.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                        data.resolvedBy.toLowerCase().includes(searchTerm.toLowerCase())
+                      ).length > 0 ? (
+                        Object.entries(resolvedThreads).filter(([hash, data]) => 
+                          hash.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          data.note.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          data.resolvedBy.toLowerCase().includes(searchTerm.toLowerCase())
+                        ).map(([hash, data]) => (
                           <TableRow key={hash} className="border-border/40 hover:bg-secondary/10">
                             <TableCell className="text-xs font-mono">
                               <div className="flex items-center gap-2">
