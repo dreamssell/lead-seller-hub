@@ -404,6 +404,137 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
           <Button onClick={handleSave} disabled={saving}>{saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Salvar</Button>
           <Button variant="outline" onClick={handleTest} disabled={testing}>{testing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Testar</Button>
         </div>
+
+        {/* Drill-down Dialog */}
+        <Dialog open={drillDownOpen} onOpenChange={setDrillDownOpen}>
+          <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Activity className="w-5 h-5 text-primary" />
+                Drill-down: Logs no Intervalo Selecionado
+              </DialogTitle>
+              <p className="text-xs text-muted-foreground">
+                {selectedRange ? `${new Date(selectedRange.start).toLocaleString()} - ${new Date(selectedRange.end).toLocaleString()}` : ''}
+              </p>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-hidden flex flex-col gap-4">
+              <ScrollArea className="flex-1 border rounded-md">
+                <Table>
+                  <TableHeader className="bg-muted/50 sticky top-0 z-10">
+                    <TableRow>
+                      <TableHead className="w-[150px]">Data/Hora</TableHead>
+                      <TableHead>Evento</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Latência</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loadingDrillDown ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-32 text-center">
+                          <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+                          Carregando logs...
+                        </TableCell>
+                      </TableRow>
+                    ) : drillDownLogs.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                          Nenhum log encontrado para este intervalo.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      drillDownLogs.map((log) => (
+                        <TableRow key={log.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedDetailLog(log)}>
+                          <TableCell className="text-[10px] font-medium">
+                            {new Date(log.created_at).toLocaleString([], { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </TableCell>
+                          <TableCell className="font-mono text-[10px]">{log.event_type}</TableCell>
+                          <TableCell>
+                            <Badge variant={log.status === 'success' ? 'outline' : 'destructive'} className="text-[9px] h-5">
+                              {log.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-[10px]">{log.latency_ms ? `${log.latency_ms}ms` : '-'}</TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="icon" className="h-6 w-6">
+                              <Eye className="h-3 w-3" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Log Detail Dialog */}
+        <Dialog open={!!selectedDetailLog} onOpenChange={() => setSelectedDetailLog(null)}>
+          <DialogContent className="max-w-2xl max-h-[70vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                Detalhes do Log
+                <Badge variant={selectedDetailLog?.status === 'success' ? 'outline' : 'destructive'}>
+                  {selectedDetailLog?.status}
+                </Badge>
+              </DialogTitle>
+            </DialogHeader>
+            <ScrollArea className="flex-1 pr-4">
+              <div className="space-y-4 py-2">
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Data/Hora</Label>
+                    <p className="font-medium">{selectedDetailLog?.created_at && new Date(selectedDetailLog.created_at).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Latência</Label>
+                    <p className="font-medium">{selectedDetailLog?.latency_ms}ms</p>
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Evento</Label>
+                    <p className="font-mono bg-secondary/30 p-1 rounded">{selectedDetailLog?.event_type}</p>
+                  </div>
+                </div>
+
+                {selectedDetailLog?.final_cause && (
+                  <div>
+                    <Label className="text-[10px] uppercase font-bold text-destructive">Última Causa</Label>
+                    <p className="text-sm font-medium text-destructive bg-destructive/5 p-2 rounded border border-destructive/20 mt-1">
+                      {selectedDetailLog.final_cause}
+                    </p>
+                  </div>
+                )}
+
+                <div>
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">Payload (Inclui Headers se disponível)</Label>
+                  <pre className="mt-1 p-2 bg-secondary/50 rounded-md text-[10px] overflow-auto max-h-[200px] font-mono border border-border/40">
+                    {JSON.stringify(selectedDetailLog?.payload, null, 2)}
+                  </pre>
+                </div>
+
+                <div>
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">Resposta</Label>
+                  <pre className="mt-1 p-2 bg-secondary/50 rounded-md text-[10px] overflow-auto max-h-[200px] font-mono border border-border/40">
+                    {JSON.stringify(selectedDetailLog?.response, null, 2)}
+                  </pre>
+                </div>
+
+                {selectedDetailLog?.full_trace && (
+                  <div>
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Trace Completo</Label>
+                    <pre className="mt-1 p-2 bg-secondary/50 rounded-md text-[10px] overflow-auto max-h-[200px] font-mono border border-border/40">
+                      {JSON.stringify(selectedDetailLog.full_trace, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );
