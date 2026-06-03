@@ -563,11 +563,26 @@ export default function WhatsAppPage() {
 
   return (
     <AppLayout title="WhatsApp Business" subtitle="Integração UAZ e Meta">
-      <Tabs defaultValue="connections" className="space-y-6">
-        <TabsList><TabsTrigger value="connections">Conexões</TabsTrigger><TabsTrigger value="audit">Auditoria</TabsTrigger></TabsList>
+        {/* Tabs List */}
+        <TabsList className="mb-4">
+          <TabsTrigger value="connections">Conexões</TabsTrigger>
+          <TabsTrigger value="audit">Auditoria</TabsTrigger>
+        </TabsList>
+
         <TabsContent value="connections">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {connections.map(c => <ConnectionCard key={c.id} conn={c} onSaved={load} />)}
+            {connections.map(c => (
+              <ConnectionCard 
+                key={c.id} 
+                conn={c} 
+                onSaved={load} 
+                onOpenAudit={() => {
+                  const tabs = document.querySelectorAll('[role="tab"]');
+                  const auditTab = Array.from(tabs).find(t => t.textContent?.includes('Auditoria')) as HTMLElement;
+                  auditTab?.click();
+                }}
+              />
+            ))}
           </div>
         </TabsContent>
         <TabsContent value="audit"><UazAuditTab /></TabsContent>
