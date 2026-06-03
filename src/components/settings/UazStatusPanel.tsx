@@ -236,6 +236,79 @@ export default function UazStatusPanel() {
           RE-SINCRONIZAR
         </Button>
       </div>
+
+      <div className="border-t border-border/40 pt-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-bold uppercase text-muted-foreground flex items-center gap-2">
+            <Settings2 className="w-4 h-4" /> Políticas de Remediação & Alertas
+          </h3>
+          <Button variant="ghost" size="sm" onClick={() => setShowConfig(!showConfig)}>
+            {showConfig ? 'Ocultar Configuração' : 'Ajustar Parâmetros'}
+          </Button>
+        </div>
+
+        {showConfig && settings && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-2">
+            <div className="glass-card p-4 space-y-4">
+              <h4 className="text-[10px] font-bold uppercase text-primary mb-2">Prazos e Persistência</h4>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Tempo de Persistência do Alerta (minutos)</Label>
+                  <Input 
+                    type="number" 
+                    value={settings.alert_persistence_minutes} 
+                    onChange={e => setSettings({...settings, alert_persistence_minutes: parseInt(e.target.value)})}
+                    className="h-8 text-xs"
+                  />
+                  <p className="text-[9px] text-muted-foreground italic">Quanto tempo o problema deve persistir antes de disparar alerta crítico.</p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Intervalo de Remediação Automática (minutos)</Label>
+                  <Input 
+                    type="number" 
+                    value={settings.remediation_interval_minutes} 
+                    onChange={e => setSettings({...settings, remediation_interval_minutes: parseInt(e.target.value)})}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-card p-4 space-y-4">
+              <h4 className="text-[10px] font-bold uppercase text-primary mb-2">Políticas por Canal</h4>
+              <div className="space-y-3">
+                {Object.entries(settings.remediation_policy_per_channel || {}).map(([channel, policy]) => (
+                  <div key={channel} className="flex items-center justify-between gap-4">
+                    <Label className="text-xs capitalize">{channel}</Label>
+                    <select 
+                      value={policy as string}
+                      onChange={e => setSettings({
+                        ...settings, 
+                        remediation_policy_per_channel: {
+                          ...settings.remediation_policy_per_channel,
+                          [channel]: e.target.value
+                        }
+                      })}
+                      className="bg-background border border-border/40 rounded px-2 py-1 text-xs outline-none"
+                    >
+                      <option value="alert_only">Apenas Alerta</option>
+                      <option value="retry_queue">Reenfileirar Mensagens</option>
+                      <option value="restart_worker">Reiniciar Worker</option>
+                      <option value="all">Todas as Ações</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+              <div className="pt-2">
+                <Button className="w-full h-8 text-xs" onClick={saveSettings} disabled={savingSettings}>
+                  {savingSettings ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <CheckCircle2 className="w-3 h-3 mr-2" />}
+                  Salvar Configurações
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
