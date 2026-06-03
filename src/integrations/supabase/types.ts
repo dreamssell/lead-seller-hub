@@ -1116,7 +1116,10 @@ export type Database = {
           alert_threshold_latency: number | null
           backoff_base_delay: number | null
           backoff_max_retries: number | null
+          backoff_multiplier: number | null
           id: string
+          idempotency_window_minutes: number | null
+          incident_threshold_retries: number | null
           remediation_interval_minutes: number | null
           request_timeout_ms: number | null
           updated_at: string | null
@@ -1126,7 +1129,10 @@ export type Database = {
           alert_threshold_latency?: number | null
           backoff_base_delay?: number | null
           backoff_max_retries?: number | null
+          backoff_multiplier?: number | null
           id?: string
+          idempotency_window_minutes?: number | null
+          incident_threshold_retries?: number | null
           remediation_interval_minutes?: number | null
           request_timeout_ms?: number | null
           updated_at?: string | null
@@ -1136,7 +1142,10 @@ export type Database = {
           alert_threshold_latency?: number | null
           backoff_base_delay?: number | null
           backoff_max_retries?: number | null
+          backoff_multiplier?: number | null
           id?: string
+          idempotency_window_minutes?: number | null
+          incident_threshold_retries?: number | null
           remediation_interval_minutes?: number | null
           request_timeout_ms?: number | null
           updated_at?: string | null

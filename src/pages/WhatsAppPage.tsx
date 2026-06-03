@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CheckCircle2, Loader2, Plug, RefreshCw, ShieldCheck, XCircle, History, Activity, Zap, Clock, LineChart as LineChartIcon, AlertTriangle, Settings, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, Plug, RefreshCw, ShieldCheck, XCircle, History, Activity, Zap, Clock, LineChart as LineChartIcon, AlertTriangle, Settings, ChevronLeft, ChevronRight, MessageCircle, BarChart3 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import UazAuditTab from '@/components/settings/UazAuditTab';
@@ -75,7 +75,10 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [latencyThreshold, setLatencyThreshold] = useState<number>(conn.metadata?.latency_threshold ?? 500);
   const [globalThreshold, setGlobalThreshold] = useState<number>(500);
+  const [systemSettings, setSystemSettings] = useState<any>(null);
   const [lastSendAttempt, setLastSendAttempt] = useState<any>(null);
+  const [queueStats, setQueueStats] = useState<{ current_queue: number; trend: any[] }>({ current_queue: 0, trend: [] });
+  const [loadingQueue, setLoadingQueue] = useState(false);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [alertsPage, setAlertsPage] = useState(0);
   const [totalAlerts, setTotalAlerts] = useState(0);
@@ -163,8 +166,18 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
       };
 
       const loadSettings = async () => {
-        const { data } = await supabase.from('uaz_system_settings').select('alert_threshold_latency').eq('id', 'global').single();
-        if (data) setGlobalThreshold(data.alert_threshold_latency);
+        const { data } = await supabase.from('uaz_system_settings').select('*').eq('id', 'global').single();
+        if (data) {
+          setGlobalThreshold(data.alert_threshold_latency);
+          setSystemSettings(data);
+        }
+      };
+
+      const loadQueue = async () => {
+        setLoadingQueue(true);
+        const { data } = await supabase.functions.invoke('uaz-queue-stats');
+        if (data) setQueueStats(data);
+        setLoadingQueue(false);
       };
 
       const handleManualResend = async () => {
@@ -191,6 +204,7 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
       loadMetrics();
       loadAlerts();
       loadSettings();
+      loadQueue();
       
       const channel = supabase
         .channel(`uaz_metrics_${conn.id}`)
@@ -342,6 +356,73 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                         </div>
                       </div>
 
+                      {systemSettings && (
+                        <div className="grid grid-cols-2 gap-3 p-3 bg-secondary/10 rounded-xl border border-border/40">
+                          <div className="space-y-1">
+                            <p className="text-[9px] font-bold text-muted-foreground uppercase">Backoff Multiplier</p>
+                            <div className="flex items-center gap-2">
+                              <Input 
+                                type="number" 
+                                defaultValue={systemSettings.backoff_multiplier} 
+                                onBlur={async (e) => {
+                                  const val = Number(e.target.value);
+                                  await supabase.from('uaz_system_settings').update({ backoff_multiplier: val }).eq('id', 'global');
+                                  toast.success('Backoff atualizado');
+                                }}
+                                className="h-6 w-16 text-[10px] px-1"
+                              />
+                              <span className="text-[10px] font-mono">x</span>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[9px] font-bold text-muted-foreground uppercase">Janela Idempotência</p>
+                            <div className="flex items-center gap-2">
+                              <Input 
+                                type="number" 
+                                defaultValue={systemSettings.idempotency_window_minutes} 
+                                onBlur={async (e) => {
+                                  const val = Number(e.target.value);
+                                  await supabase.from('uaz_system_settings').update({ idempotency_window_minutes: val }).eq('id', 'global');
+                                  toast.success('Janela atualizada');
+                                }}
+                                className="h-6 w-16 text-[10px] px-1"
+                              />
+                              <span className="text-[10px] font-mono">min</span>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[9px] font-bold text-muted-foreground uppercase">Limite Incidentes</p>
+                            <div className="flex items-center gap-2">
+                              <Input 
+                                type="number" 
+                                defaultValue={systemSettings.incident_threshold_retries} 
+                                onBlur={async (e) => {
+                                  const val = Number(e.target.value);
+                                  await supabase.from('uaz_system_settings').update({ incident_threshold_retries: val }).eq('id', 'global');
+                                  toast.success('Limite atualizado');
+                                }}
+                                className="h-6 w-16 text-[10px] px-1 border-destructive/30"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[9px] font-bold text-muted-foreground uppercase">Retentativas Base</p>
+                            <div className="flex items-center gap-2">
+                              <Input 
+                                type="number" 
+                                defaultValue={systemSettings.backoff_max_retries} 
+                                onBlur={async (e) => {
+                                  const val = Number(e.target.value);
+                                  await supabase.from('uaz_system_settings').update({ backoff_max_retries: val }).eq('id', 'global');
+                                  toast.success('Retentativas atualizadas');
+                                }}
+                                className="h-6 w-16 text-[10px] px-1"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {lastSendAttempt && (
                         <div className="bg-secondary/10 p-3 rounded-xl border border-border/40 space-y-2">
                           <div className="flex items-center gap-2 mb-1">
@@ -476,6 +557,66 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                       </div>
                     </motion.div>
                   )}
+                </div>
+
+                <div className="bg-secondary/20 p-3 rounded-xl border border-border/40">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="w-3.5 h-3.5 text-primary" />
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Fila de Mensagens (Erros/Pendentes)</span>
+                    </div>
+                    <Badge variant="outline" className="text-[9px] h-4 py-0 border-primary/30 text-primary">LIVE</Badge>
+                  </div>
+                  <div className="h-[80px] w-full">
+                    {loadingQueue ? (
+                      <div className="h-full flex items-center justify-center"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
+                    ) : queueStats.trend.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={queueStats.trend}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                          <XAxis dataKey="time" fontSize={7} tickLine={false} axisLine={false} stroke="#888888" />
+                          <YAxis fontSize={7} tickLine={false} axisLine={false} stroke="#888888" />
+                          <RechartsTooltip 
+                            contentStyle={{ backgroundColor: 'rgba(23, 23, 23, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '9px' }}
+                            itemStyle={{ color: '#3b82f6' }}
+                          />
+                          <Line type="stepAfter" dataKey="pending" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-[10px] text-muted-foreground italic">Sem dados de fila.</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-secondary/20 p-3 rounded-xl border border-border/40">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="w-3.5 h-3.5 text-primary" />
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Fila de Mensagens (Erros/Pendentes)</span>
+                    </div>
+                    <Badge variant="outline" className="text-[9px] h-4 py-0 border-primary/30 text-primary">LIVE</Badge>
+                  </div>
+                  <div className="h-[80px] w-full">
+                    {loadingQueue ? (
+                      <div className="h-full flex items-center justify-center"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
+                    ) : queueStats.trend.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={queueStats.trend}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                          <XAxis dataKey="time" fontSize={7} tickLine={false} axisLine={false} stroke="#888888" />
+                          <YAxis fontSize={7} tickLine={false} axisLine={false} stroke="#888888" />
+                          <RechartsTooltip 
+                            contentStyle={{ backgroundColor: 'rgba(23, 23, 23, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '9px' }}
+                            itemStyle={{ color: '#3b82f6' }}
+                          />
+                          <Line type="stepAfter" dataKey="pending" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-[10px] text-muted-foreground italic">Sem dados de fila.</div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="bg-secondary/20 p-3 rounded-xl border border-border/40">
