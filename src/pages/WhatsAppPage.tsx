@@ -73,6 +73,12 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
   const [latencyPeriod, setLatencyPeriod] = useState<'24h' | '7d' | '30d'>('24h');
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [latencyThreshold, setLatencyThreshold] = useState<number>(conn.metadata?.latency_threshold ?? 500);
+  const [lastSendAttempt, setLastSendAttempt] = useState<any>(null);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [alertsPage, setAlertsPage] = useState(0);
+  const [totalAlerts, setTotalAlerts] = useState(0);
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     if (conn.provider === 'uaz' && conn.status === 'connected') {
