@@ -944,10 +944,36 @@ export default function WavoipConfigPage() {
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-md">
                       <DialogHeader>
-                        <DialogTitle className="text-sm">Configurar Exportação</DialogTitle>
-                        <DialogDescription className="text-xs">Selecione as colunas que deseja incluir no relatório CSV.</DialogDescription>
+                        <DialogTitle className="text-sm font-bold">Configurar Exportação</DialogTitle>
+                        <DialogDescription className="text-xs">Selecione as colunas ou escolha um preset rápido.</DialogDescription>
                       </DialogHeader>
-                      <div className="grid grid-cols-2 gap-4 py-4">
+
+                      <div className="flex flex-col gap-3 py-2">
+                        <Label className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Presets de Relatório</Label>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            className="h-7 text-[9px] flex-1 gap-1"
+                            onClick={() => applyPreset('security')}
+                          >
+                            <Shield className="w-3 h-3 text-red-500" /> Segurança
+                          </Button>
+                          <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            className="h-7 text-[9px] flex-1 gap-1"
+                            onClick={() => applyPreset('routing')}
+                          >
+                            <Navigation className="w-3 h-3 text-primary" /> Roteamento
+                          </Button>
+                        </div>
+                      </div>
+
+                      <Separator className="opacity-40" />
+
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-3 py-4">
+
                         <div className="flex items-center space-x-2">
                           <Checkbox 
                             id="col-date" 
