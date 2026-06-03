@@ -263,6 +263,41 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_messages: {
+        Row: {
+          content: string
+          created_at: string
+          customer_id: string | null
+          id: string
+          metadata: Json | null
+          sender_type: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          metadata?: Json | null
+          sender_type: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          metadata?: Json | null
+          sender_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       company_settings: {
         Row: {
           address: string | null
