@@ -31,7 +31,7 @@ const sections = [
         tags: ['WHATSAPP + VOIP', 'BETA'],
         desc: 'Integração avançada para chamadas de voz e mensagens integradas via WhatsApp',
         cta: 'Configurar Wavoip',
-        to: '/whatsapp',
+        to: '/developer?tab=wavoip',
       }
     ],
   },

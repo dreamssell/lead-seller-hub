@@ -15,7 +15,8 @@ import {
   ChevronRight,
   BookOpen,
   ArrowRightLeft,
-  Zap
+  Zap,
+  Phone
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import GeneralTab from '@/components/settings/GeneralTab';
@@ -28,8 +29,9 @@ import AiTab from '@/components/settings/AiTab';
 import QuickstartTab from '@/components/settings/QuickstartTab';
 import MCPServerTab from '@/components/settings/MCPServerTab';
 import InboundWebhooksTab from '@/components/settings/InboundWebhooksTab';
+import WavoipConfigTab from '@/components/settings/WavoipConfigTab';
 import { Card } from '@/components/ui/card';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const TABS = [
   { value: 'ativar',      label: 'Ativar',       subtitle: 'Primeira chamada', icon: Zap,         Comp: QuickstartTab, advanced: false },
@@ -42,11 +44,14 @@ const TABS = [
   { value: 'fields',      label: 'Campos',       subtitle: 'Dados personalizados', icon: ListChecks,   Comp: CustomFieldsTab, advanced: true },
   { value: 'smtp',        label: 'SMTP',         subtitle: 'Envio de e-mail', icon: Mail,         Comp: SmtpTab, advanced: true },
   { value: 'ai',          label: 'IA',           subtitle: 'Modelos e prompt', icon: Sparkles,     Comp: AiTab, advanced: true },
+  { value: 'wavoip',      label: 'Wavoip',       subtitle: 'WhatsApp + VoIP',  icon: Phone,        Comp: WavoipConfigTab, advanced: false },
 ];
 
 export default function DeveloperPage() {
   const { access } = useAuth();
-  const [activeTab, setActiveTab] = useState('ativar');
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'ativar';
+  const [activeTab, setActiveTab] = useState(initialTab);
   const navigate = useNavigate();
   
   const isMaster = !access?.sub_company_id;
