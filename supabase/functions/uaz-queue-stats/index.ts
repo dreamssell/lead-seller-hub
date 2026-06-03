@@ -69,8 +69,16 @@ Deno.serve(async (req) => {
         alertTriggered = true;
         alertReason = `Fila ${channelType || 'geral'} (${currentQueue}) ultrapassou o limite (${tenantThreshold})${tenantId ? ` para o tenant ${tenantId}` : ''}`;
         
-        // In a real scenario, here we would trigger an external notification (email, slack, etc.)
-        // For now, we log it as a warning in audit logs if it's a significant jump or persistence
+        // Log alert to history
+        await supabaseAdmin.from('uaz_alerts_history').insert({
+          tenant_id: tenantId,
+          channel_type: channelType || 'whatsapp',
+          alert_type: 'queue_threshold',
+          severity: 'warning',
+          message: alertReason,
+          metadata: { current_queue: currentQueue, threshold: tenantThreshold }
+        });
+
         console.warn(`[UAZ ALERT] ${alertReason}`);
       }
     }

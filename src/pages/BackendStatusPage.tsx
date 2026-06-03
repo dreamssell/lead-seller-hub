@@ -13,7 +13,7 @@ interface CheckResult {
 }
 
 import UazStatusPanel from '@/components/settings/UazStatusPanel';
-import UazAlertHistoryTab from '@/components/settings/UazAlertHistoryTab';
+import UazAlertsAuditTab from '@/components/settings/UazAlertsAuditTab';
 import UazRemediationTab from '@/components/settings/UazRemediationTab';
 import UazIncidentsTab from '@/components/settings/UazIncidentsTab';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -223,7 +223,7 @@ export default function BackendStatusPage() {
         </TabsContent>
 
         <TabsContent value="uaz-alerts">
-          <UazAlertHistoryTab />
+          <UazAlertsAuditTab />
         </TabsContent>
 
         <TabsContent value="uaz-incidents">
