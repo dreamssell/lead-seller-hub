@@ -35,7 +35,10 @@ import {
   Mail,
   Zap,
   Settings2,
-  Cpu
+  Cpu,
+  Bookmark,
+  Share2,
+  UserCheck
 } from 'lucide-react';
 import { 
   Dialog,
@@ -116,6 +119,8 @@ export default function WavoipConfigPage() {
     details: string;
     logs: string[];
   }>({ status: 'none', details: '', logs: [] });
+  const [filterPresets, setFilterPresets] = useState<any[]>([]);
+  const [isSavingPreset, setIsSavingPreset] = useState(false);
   const itemsPerPage = 5;
 
 
@@ -297,8 +302,15 @@ export default function WavoipConfigPage() {
         
       if (syncState) {
         setDedupWindow(syncState.dedup_window as any);
-        // Em um cenário real, recarregaríamos as chaves recentes aqui se necessário
       }
+
+      // Load presets
+      const { data: presets } = await supabase
+        .from('wavoip_filter_presets')
+        .select('*')
+        .eq('sub_company_id', access.sub_company_id);
+      
+      if (presets) setFilterPresets(presets);
     };
 
     loadPersistedConfig();
@@ -1208,6 +1220,95 @@ export default function WavoipConfigPage() {
                     className="h-7 text-[9px] border border-border/40"
                     onClick={() => handleExportQuick('30d')}
                   >30 Dias</Button>
+
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-7 text-[9px] gap-1 px-2">
+                        <Bookmark className="w-3 h-3" />
+                        Presets
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-xs">
+                      <DialogHeader>
+                        <DialogTitle className="text-sm font-bold">Presets de Filtro</DialogTitle>
+                        <DialogDescription className="text-[10px]">Salve ou carregue configurações de filtros.</DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-2">
+                        <div className="flex gap-2">
+                          <Input 
+                            placeholder="Nome do preset..." 
+                            className="h-8 text-xs" 
+                            id="new-preset-name"
+                          />
+                          <Button 
+                            size="sm" 
+                            className="h-8 text-xs"
+                            disabled={isSavingPreset}
+                            onClick={async () => {
+                              const nameInput = document.getElementById('new-preset-name') as HTMLInputElement;
+                              const name = nameInput.value;
+                              if (!name) return;
+                              setIsSavingPreset(true);
+                              const filters = { filterStatus, filterType, filterPeriod, searchTerm };
+                              const { error } = await supabase.from('wavoip_filter_presets').insert({
+                                sub_company_id: access?.sub_company_id,
+                                name,
+                                filters
+                              });
+                              if (!error) {
+                                toast.success('Preset salvo!');
+                                setFilterPresets([...filterPresets, { name, filters }]);
+                                nameInput.value = '';
+                              }
+                              setIsSavingPreset(false);
+                            }}
+                          >
+                            {isSavingPreset ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                          </Button>
+                        </div>
+                        <Separator />
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                          {filterPresets.map((p, i) => (
+                            <div key={i} className="flex items-center justify-between bg-secondary/20 p-2 rounded text-[10px]">
+                              <span className="font-medium">{p.name}</span>
+                              <div className="flex gap-1">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-5 w-5"
+                                  onClick={() => {
+                                    setFilterStatus(p.filters.filterStatus);
+                                    setFilterType(p.filters.filterType);
+                                    setFilterPeriod(p.filters.filterPeriod);
+                                    setSearchTerm(p.filters.searchTerm);
+                                    toast.success(`Preset "${p.name}" aplicado.`);
+                                  }}
+                                >
+                                  <RefreshCw className="w-2.5 h-2.5" />
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-5 w-5"
+                                  onClick={() => {
+                                    const url = new URL(window.location.href);
+                                    url.searchParams.set('status', p.filters.filterStatus);
+                                    url.searchParams.set('type', p.filters.filterType);
+                                    url.searchParams.set('period', p.filters.filterPeriod);
+                                    url.searchParams.set('q', p.filters.searchTerm);
+                                    navigator.clipboard.writeText(url.toString());
+                                    toast.success('Link compartilhado copiado!');
+                                  }}
+                                >
+                                  <Share2 className="w-2.5 h-2.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button 
