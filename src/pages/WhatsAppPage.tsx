@@ -373,8 +373,14 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                     </div>
                     <div className="h-[100px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={latencyHistory}>
-                          <Line type="monotone" dataKey="latency" stroke="#10b981" strokeWidth={2} dot={false} />
+                        <LineChart data={latencyHistory} onClick={handleChartClick} style={{ cursor: 'pointer' }}>
+                          <XAxis dataKey="time" fontSize={8} hide />
+                          <YAxis fontSize={8} hide />
+                          <RechartsTooltip 
+                            labelStyle={{ color: 'black', fontSize: '10px' }} 
+                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                          />
+                          <Line type="monotone" dataKey="latency" stroke="#10b981" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
