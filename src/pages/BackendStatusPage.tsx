@@ -15,6 +15,7 @@ interface CheckResult {
 import UazStatusPanel from '@/components/settings/UazStatusPanel';
 import UazAlertHistoryTab from '@/components/settings/UazAlertHistoryTab';
 import UazRemediationTab from '@/components/settings/UazRemediationTab';
+import UazIncidentsTab from '@/components/settings/UazIncidentsTab';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { AlertCircle, MoreHorizontal, User } from 'lucide-react';
