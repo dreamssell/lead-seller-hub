@@ -703,6 +703,9 @@ export default function WavoipConfigPage() {
       if (exportColumns.version) headers.push('Versão Segredo');
       if (exportColumns.requestId) headers.push('Request ID');
       if (exportColumns.payloadHash) headers.push('Payload Hash');
+      
+      // Adicionar colunas de replay na exportação
+      headers.push('É Replay', 'Reprocessado Por', 'Versão Replay', 'Status Replay');
 
       const data = filteredHistory.map(item => {
         const row: string[] = [];
@@ -713,6 +716,13 @@ export default function WavoipConfigPage() {
         if (exportColumns.version) row.push((item as any).version || '-');
         if (exportColumns.requestId) row.push((item as any).requestId || '-');
         if (exportColumns.payloadHash) row.push((item as any).payloadHash || '-');
+        
+        row.push(
+          (item as any).isReplay ? 'SIM' : 'NÃO',
+          (item as any).replayUser || '-',
+          (item as any).replayVersion || '-',
+          (item as any).replayStatus || '-'
+        );
         return row;
       });
       
