@@ -818,6 +818,7 @@ export default function WavoipConfigPage() {
                 </div>
               </div>
 
+              <div className="flex items-center gap-2">
                 <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
                   <span className="text-[8px] uppercase text-muted-foreground font-bold">WebSocket Status</span>
                   <div className="flex items-center gap-2">
@@ -833,6 +834,7 @@ export default function WavoipConfigPage() {
                     </span>
                   </div>
                 </div>
+
 
                 <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
                   <span className="text-[8px] uppercase text-muted-foreground font-bold">Janela Dedup</span>
