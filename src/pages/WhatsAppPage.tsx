@@ -119,7 +119,7 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
       const loadMetrics = async () => {
         const { data: recentLogs } = await supabase
           .from('uaz_audit_logs')
-          .select('latency_ms, created_at, status')
+          .select('latency_ms, created_at, status, event_type, response, message')
           .order('created_at', { ascending: false })
           .limit(20);
         
@@ -138,20 +138,40 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
             failures: failuresCount,
             lastAttempt: recentLogs[0]?.created_at
           });
+
+          const lastSend = recentLogs.find(l => l.event_type === 'send_message');
+          if (lastSend) setLastSendAttempt(lastSend);
         }
       };
+
+      const loadAlerts = async () => {
+        setLoadingAlerts(true);
+        const { data, count } = await supabase
+          .from('uaz_audit_logs')
+          .select('*', { count: 'exact' })
+          .or(`status.eq.error,latency_ms.gt.${latencyThreshold}`)
+          .order('created_at', { ascending: false })
+          .range(alertsPage * 5, (alertsPage + 1) * 5 - 1);
+        
+        setAlerts(data || []);
+        setTotalCount(count || 0);
+        setLoadingAlerts(false);
+      };
+
       loadMetrics();
+      loadAlerts();
       
       const channel = supabase
-        .channel('uaz_metrics_realtime')
+        .channel(`uaz_metrics_${conn.id}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'uaz_audit_logs' }, () => {
           loadMetrics();
+          loadAlerts();
         })
         .subscribe();
         
       return () => { supabase.removeChannel(channel); };
     }
-  }, [conn.status, conn.provider]);
+  }, [conn.status, conn.provider, alertsPage, latencyThreshold]);
 
   const updateThreshold = async (val: number) => {
     setLatencyThreshold(val);
