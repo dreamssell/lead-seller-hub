@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Camera, ChevronRight, Settings2, MessageSquare, TrendingUp, Phone, Share2, Youtube } from 'lucide-react';
+import { Camera, ChevronRight, Settings2, MessageSquare, TrendingUp, Phone, Share2, Video } from 'lucide-react';
 
 const sections = [
   {
@@ -55,7 +55,7 @@ const sections = [
         to: '#',
       },
       {
-        icon: <Youtube className="w-6 h-6 text-red-600" />,
+        icon: <Video className="w-6 h-6 text-red-600" />,
         name: 'YouTube Business',
         tags: ['CHAT LIVE', 'MÉTRICAS', 'ANALYTICS'],
         desc: 'Gerencie comentários de vídeos e chats de transmissões ao vivo com métricas detalhadas',
