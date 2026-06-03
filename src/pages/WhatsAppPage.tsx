@@ -154,7 +154,7 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
           .range(alertsPage * 5, (alertsPage + 1) * 5 - 1);
         
         setAlerts(data || []);
-        setTotalCount(count || 0);
+        setTotalAlerts(count || 0);
         setLoadingAlerts(false);
       };
 
