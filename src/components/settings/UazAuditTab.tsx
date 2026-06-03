@@ -62,7 +62,7 @@ export default function UazAuditTab() {
         }
 
         if (tenantId) {
-          query = query.eq('customer_id', tenantId);
+          query = query.or(`payload->>tenant_id.eq.${tenantId},payload->>sub_company_id.eq.${tenantId}`);
         }
       }
 
