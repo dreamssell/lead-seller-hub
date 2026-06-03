@@ -90,6 +90,12 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
   const [subCompanies, setSubCompanies] = useState<any[]>([]);
   const [resendingLast, setResendingLast] = useState(false);
 
+  const [drillDownOpen, setDrillDownOpen] = useState(false);
+  const [drillDownLogs, setDrillDownLogs] = useState<any[]>([]);
+  const [loadingDrillDown, setLoadingDrillDown] = useState(false);
+  const [selectedRange, setSelectedRange] = useState<{ start: string; end: string } | null>(null);
+  const [selectedDetailLog, setSelectedDetailLog] = useState<any>(null);
+
   const loadHistory = async () => {
     setLoadingHistory(true);
     const now = new Date();
@@ -112,6 +118,7 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
           minute: '2-digit',
           ...(latencyPeriod !== '24h' && { day: '2-digit', month: '2-digit' })
         }),
+        timestamp: d.created_at,
         latency: d.latency_ms
       })));
     }
