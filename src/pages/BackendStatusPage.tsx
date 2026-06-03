@@ -2,7 +2,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { motion } from 'framer-motion';
-import { Activity, CheckCircle2, XCircle, RefreshCw, Database, Shield, Zap, AlertTriangle, Download } from 'lucide-react';
+import { Activity, CheckCircle2, XCircle, RefreshCw, Database, Shield, Zap, AlertTriangle, Download, History as HistoryIcon } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 interface CheckResult {
@@ -14,7 +14,11 @@ interface CheckResult {
 
 import UazStatusPanel from '@/components/settings/UazStatusPanel';
 import UazAlertHistoryTab from '@/components/settings/UazAlertHistoryTab';
+import UazRemediationTab from '@/components/settings/UazRemediationTab';
+import UazIncidentsTab from '@/components/settings/UazIncidentsTab';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+import { AlertCircle, MoreHorizontal, User } from 'lucide-react';
 
 export default function BackendStatusPage() {
   const [checks, setChecks] = useState<CheckResult[]>([]);
@@ -202,7 +206,17 @@ export default function BackendStatusPage() {
           <TabsTrigger value="uaz-alerts" className="gap-2">
             <AlertTriangle className="w-4 h-4" /> Alertas UAZ
           </TabsTrigger>
+          <TabsTrigger value="uaz-remediation" className="gap-2">
+            <HistoryIcon className="w-4 h-4" /> Auditoria Remediação
+          </TabsTrigger>
+          <TabsTrigger value="uaz-incidents" className="gap-2">
+            <AlertCircle className="w-4 h-4" /> Incidentes Críticos
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="uaz-remediation">
+          <UazRemediationTab />
+        </TabsContent>
 
         <TabsContent value="uaz-status">
           <UazStatusPanel />
@@ -210,6 +224,10 @@ export default function BackendStatusPage() {
 
         <TabsContent value="uaz-alerts">
           <UazAlertHistoryTab />
+        </TabsContent>
+
+        <TabsContent value="uaz-incidents">
+          <UazIncidentsTab />
         </TabsContent>
 
         <TabsContent value="overview" className="space-y-6">
