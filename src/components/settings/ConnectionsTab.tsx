@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Camera, ChevronRight, Settings2, MessageSquare, TrendingUp, Phone, Linkedin, Share2 } from 'lucide-react';
+import { Camera, ChevronRight, Settings2, MessageSquare, TrendingUp, Phone, Share2 } from 'lucide-react';
 
 const sections = [
   {
@@ -39,7 +39,7 @@ const sections = [
     title: 'Social Business',
     items: [
       {
-        icon: <Linkedin className="w-6 h-6 text-blue-700" />,
+        icon: <MessageSquare className="w-6 h-6 text-blue-700" />,
         name: 'LinkedIn Business',
         tags: ['CHAT', 'MÉTRICAS', 'ANALYTICS'],
         desc: 'Gerencie mensagens diretas e acompanhe o engajamento da sua página ou perfil',
