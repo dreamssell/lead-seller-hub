@@ -467,9 +467,23 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
                           </TableCell>
                           <TableCell className="text-[10px]">{log.latency_ms ? `${log.latency_ms}ms` : '-'}</TableCell>
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="icon" className="h-6 w-6">
-                              <Eye className="h-3 w-3" />
-                            </Button>
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="icon" className="h-6 w-6" title="Ver Detalhes">
+                                <Eye className="h-3 w-3" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-6 w-6 text-primary" 
+                                title="Ver na Auditoria"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onOpenAudit();
+                                }}
+                              >
+                                <History className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
