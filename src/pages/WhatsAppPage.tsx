@@ -745,7 +745,12 @@ export default function WhatsAppPage() {
                 key={c.id} 
                 conn={c} 
                 onSaved={load} 
-                onOpenAudit={() => {
+                onOpenAudit={(filters) => {
+                  const searchParams = new URLSearchParams();
+                  if (filters?.tenantId) searchParams.set('tenantId', filters.tenantId);
+                  if (filters?.logId) searchParams.set('logId', filters.logId);
+                  window.history.replaceState(null, '', `${window.location.pathname}?${searchParams.toString()}`);
+
                   const tabs = document.querySelectorAll('[role="tab"]');
                   const auditTab = Array.from(tabs).find(t => t.textContent?.includes('Auditoria')) as HTMLElement;
                   auditTab?.click();
