@@ -812,39 +812,49 @@ export default function WavoipConfigPage() {
   };
 
   return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      <Tabs defaultValue="config" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 h-10 mb-6">
+          <TabsTrigger value="config" className="text-xs gap-2">
+            <Settings2 className="w-4 h-4" /> Configuração & Auditoria
+          </TabsTrigger>
+          <TabsTrigger value="incidents" className="text-xs gap-2">
+            <ShieldAlert className="w-4 h-4" /> Gestão de Incidentes
+          </TabsTrigger>
+        </TabsList>
 
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-4 mb-2">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
-            <Phone className="w-6 h-6" />
+        <TabsContent value="config" className="space-y-6 outline-none">
+          <div className="flex items-center justify-between gap-4 mb-2">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+                <Phone className="w-6 h-6" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">Configuração Wavoip</h1>
+                <p className="text-sm text-muted-foreground">Credenciais de voz e mensagens integradas</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2 h-8 text-[10px]"
+                onClick={() => exportHealthMetrics('csv')}
+                disabled={!showHealthStats || isExporting}
+              >
+                <Download className="w-3 h-3" /> Relatório Saúde
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className={`gap-2 ${showHealthStats ? 'bg-primary/10 border-primary text-primary' : ''}`}
+                onClick={() => setShowHealthStats(!showHealthStats)}
+              >
+                <BarChart3 className="w-4 h-4" />
+                Dashboard de Saúde
+              </Button>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Configuração Wavoip</h1>
-            <p className="text-sm text-muted-foreground">Credenciais de voz e mensagens integradas</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="gap-2 h-8 text-[10px]"
-            onClick={() => exportHealthMetrics('csv')}
-            disabled={!showHealthStats || isExporting}
-          >
-            <Download className="w-3 h-3" /> Relatório Saúde
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className={`gap-2 ${showHealthStats ? 'bg-primary/10 border-primary text-primary' : ''}`}
-            onClick={() => setShowHealthStats(!showHealthStats)}
-          >
-            <BarChart3 className="w-4 h-4" />
-            Dashboard de Saúde
-          </Button>
-        </div>
-      </div>
 
       <AnimatePresence>
         {showHealthStats && (
