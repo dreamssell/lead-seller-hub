@@ -30,6 +30,7 @@ import QuickstartTab from '@/components/settings/QuickstartTab';
 import MCPServerTab from '@/components/settings/MCPServerTab';
 import InboundWebhooksTab from '@/components/settings/InboundWebhooksTab';
 import WavoipConfigPage from '@/components/settings/WavoipConfigTab';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -44,7 +45,7 @@ const TABS = [
   { value: 'fields',      label: 'Campos',       subtitle: 'Dados personalizados', icon: ListChecks,   Comp: CustomFieldsTab, advanced: true },
   { value: 'smtp',        label: 'SMTP',         subtitle: 'Envio de e-mail', icon: Mail,         Comp: SmtpTab, advanced: true },
   { value: 'ai',          label: 'IA',           subtitle: 'Modelos e prompt', icon: Sparkles,     Comp: AiTab, advanced: true },
-  { value: 'wavoip',      label: 'Wavoip',       subtitle: 'WhatsApp + VoIP',  icon: Phone,        Comp: WavoipConfigPage, advanced: false },
+  
 ];
 
 export default function DeveloperPage() {
