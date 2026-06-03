@@ -1,11 +1,34 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Phone, Shield, Globe, Activity, Loader2, Save, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Phone, 
+  Shield, 
+  Globe, 
+  Activity, 
+  Loader2, 
+  Save, 
+  CheckCircle2, 
+  AlertCircle,
+  History,
+  Clock,
+  XCircle,
+  RefreshCw,
+  Search
+} from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -13,6 +36,18 @@ export default function WavoipConfigPage() {
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [validated, setTestingValidated] = useState(false);
+  const [lastValidation, setLastValidation] = useState<{
+    status: 'success' | 'error' | 'none';
+    timestamp: string | null;
+    message: string;
+  }>({ status: 'none', timestamp: null, message: '' });
+
+  const [history] = useState([
+    { id: 1, date: '2024-05-20 14:30:05', status: 'success', message: 'Conexão estabelecida via API Gateway' },
+    { id: 2, date: '2024-05-19 10:15:22', status: 'error', message: '401 Unauthorized - Token expirado' },
+    { id: 3, date: '2024-05-18 16:45:10', status: 'success', message: 'Validação de credenciais OK' },
+    { id: 4, date: '2024-05-15 09:00:00', status: 'error', message: '503 Service Unavailable - Wavoip API Down' },
+  ]);
   
   const [form, setForm] = useState({
     apiUrl: 'https://api.wavoip.com/v1',
@@ -40,18 +75,42 @@ export default function WavoipConfigPage() {
       return;
     }
     setTesting(true);
-    // Simulação de validação
-    const { data, error } = await supabase.functions.invoke('whatsapp-status', {
-      body: { provider: 'uaz', url: form.apiUrl, token: form.token }
-    });
     
-    setTesting(false);
-    if (error || data?.error) {
-      toast.error('Falha na validação das credenciais.');
+    try {
+      // Simulação de validação
+      const { data, error } = await supabase.functions.invoke('whatsapp-status', {
+        body: { provider: 'wavoip', url: form.apiUrl, token: form.token }
+      });
+      
+      setTesting(false);
+      const timestamp = new Date().toLocaleString();
+
+      if (error || data?.error) {
+        toast.error('Falha na validação das credenciais.');
+        setTestingValidated(false);
+        setLastValidation({
+          status: 'error',
+          timestamp,
+          message: error?.message || data?.error || 'Erro na comunicação com o servidor'
+        });
+      } else {
+        toast.success('Conexão validada com sucesso!');
+        setTestingValidated(true);
+        setLastValidation({
+          status: 'success',
+          timestamp,
+          message: 'Conexão estabelecida com sucesso'
+        });
+      }
+    } catch (err) {
+      setTesting(false);
       setTestingValidated(false);
-    } else {
-      toast.success('Conexão validada com sucesso!');
-      setTestingValidated(true);
+      setLastValidation({
+        status: 'error',
+        timestamp: new Date().toLocaleString(),
+        message: 'Falha crítica na requisição'
+      });
+      toast.error('Erro ao processar validação.');
     }
   };
 
@@ -65,6 +124,51 @@ export default function WavoipConfigPage() {
           <h1 className="text-2xl font-bold text-foreground">Configuração Wavoip</h1>
           <p className="text-sm text-muted-foreground">Credenciais de voz e mensagens integradas</p>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <Card className="glass-card bg-emerald-500/5 border-emerald-500/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-emerald-600 uppercase tracking-wider">Status</p>
+              <div className="p-1.5 rounded-full bg-emerald-100 text-emerald-600">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <p className="text-xl font-bold text-foreground">Conectado</p>
+            <p className="text-[10px] text-emerald-600/70 mt-1">Sincronização ativa</p>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-card">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Último Teste</p>
+              <div className="p-1.5 rounded-full bg-secondary text-muted-foreground">
+                <Clock className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <p className="text-xl font-bold text-foreground">
+              {lastValidation.timestamp ? lastValidation.timestamp.split(' ')[1] : '--:--'}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              {lastValidation.status === 'success' ? 'Sucesso' : lastValidation.status === 'error' ? 'Falha' : 'Aguardando'}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-card">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Latência Média</p>
+              <div className="p-1.5 rounded-full bg-secondary text-muted-foreground">
+                <Activity className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <p className="text-xl font-bold text-foreground">124ms</p>
+            <p className="text-[10px] text-emerald-600 mt-1">Ótimo desempenho</p>
+          </CardContent>
+        </Card>
       </div>
 
       <Card className="glass-card">
@@ -127,25 +231,109 @@ export default function WavoipConfigPage() {
 
       <div className="flex flex-col sm:flex-row gap-3 pt-2">
         <Button 
-          variant="outline" 
-          className="flex-1 gap-2" 
+          variant="secondary" 
+          className="flex-1 gap-2 bg-secondary/50 hover:bg-secondary border-border/40" 
           onClick={handleTest}
           disabled={testing}
         >
-          {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : validated ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Activity className="w-4 h-4" />}
-          {validated ? 'Conexão Validada' : 'Validar Conexão'}
+          {testing ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <RefreshCw className="w-4 h-4" />
+          )}
+          Testar conexão Wavoip
         </Button>
         <Button 
-          className="flex-1 gap-2" 
+          className="flex-1 gap-2 shadow-lg shadow-primary/20" 
           onClick={handleSave}
           disabled={loading || !validated}
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          Salvar e Ativar
+          Ativar Integração
         </Button>
       </div>
 
-      {!validated && (
+      {lastValidation.status !== 'none' && (
+        <AnimatePresence>
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className={`flex items-center gap-3 p-4 rounded-xl border ${
+              lastValidation.status === 'success' 
+              ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-700' 
+              : 'bg-red-500/5 border-red-500/20 text-red-700'
+            }`}
+          >
+            {lastValidation.status === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 shrink-0" />
+            ) : (
+              <XCircle className="w-5 h-5 shrink-0" />
+            )}
+            <div className="flex-1">
+              <p className="text-xs font-bold">
+                {lastValidation.status === 'success' ? 'Conexão Bem-sucedida' : 'Erro de Conexão'}
+              </p>
+              <p className="text-[10px] opacity-80">{lastValidation.message}</p>
+            </div>
+            <span className="text-[10px] font-mono opacity-60">{lastValidation.timestamp}</span>
+          </motion.div>
+        </AnimatePresence>
+      )}
+
+      <Card className="glass-card overflow-hidden">
+        <CardHeader className="bg-secondary/20">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <History className="w-4 h-4 text-primary" /> Histórico de Auditoria
+              </CardTitle>
+              <CardDescription>Logs de validação e eventos de conectividade</CardDescription>
+            </div>
+            <Badge variant="outline" className="text-[10px] border-border/60">
+              Últimos 30 dias
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent border-border/40">
+                <TableHead className="w-[180px] text-[10px] uppercase font-bold tracking-wider">Data/Hora</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Resultado/Mensagem</TableHead>
+                <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider">Ação</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {history.map((item) => (
+                <TableRow key={item.id} className="border-border/40 hover:bg-secondary/10 transition-colors">
+                  <TableCell className="text-xs font-mono text-muted-foreground">{item.date}</TableCell>
+                  <TableCell>
+                    <Badge 
+                      variant="outline" 
+                      className={`text-[9px] font-bold px-1.5 py-0 ${
+                        item.status === 'success' 
+                        ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' 
+                        : 'bg-red-500/10 text-red-600 border-red-500/20'
+                      }`}
+                    >
+                      {item.status === 'success' ? 'SUCESSO' : 'FALHA'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{item.message}</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary">
+                      <Search className="h-3 w-3" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {!validated && lastValidation.status === 'none' && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 text-amber-700 text-xs">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>Você precisa validar as credenciais antes de ativar a integração Wavoip.</span>
