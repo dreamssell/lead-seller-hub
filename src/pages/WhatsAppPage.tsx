@@ -63,7 +63,7 @@ function statusBadge(status: Status) {
   );
 }
 
-function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSaved: () => void; onOpenAudit: () => void }) {
+function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSaved: () => void; onOpenAudit: (filters?: { tenantId?: string; logId?: string }) => void }) {
   const defaults = PROVIDER_DEFAULTS[conn.provider];
   const [url, setUrl] = useState<string>(conn.metadata?.url ?? defaults.url);
   const [token, setToken] = useState<string>(conn.metadata?.token ?? '');
