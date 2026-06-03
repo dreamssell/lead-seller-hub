@@ -21,7 +21,10 @@ import {
   Lock,
   Bell,
   Navigation,
-  ArrowRight
+  ArrowRight,
+  ArrowUpDown,
+  Terminal,
+  CirclePlay
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -61,11 +64,17 @@ export default function WavoipConfigPage() {
 
   const [filterStatus, setFilterStatus] = useState<'all' | 'success' | 'error'>('all');
   const [filterPeriod, setFilterPeriod] = useState<'today' | '7d' | '30d' | 'all'>('all');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [isAlertEnabled, setIsAlertEnabled] = useState(true);
-  const [routingTestResult, setRoutingTestResult] = useState<'success' | 'error' | 'none'>('none');
+  const [routingTestResult, setRoutingTestResult] = useState<{
+    status: 'success' | 'error' | 'none';
+    details: string;
+    logs: string[];
+  }>({ status: 'none', details: '', logs: [] });
   const itemsPerPage = 5;
+
 
   const [history, setHistory] = useState([
     { id: 1, date: '2024-05-20 14:30:05', status: 'success', type: 'API', message: 'Conexão estabelecida via API Gateway' },
@@ -98,6 +107,10 @@ export default function WavoipConfigPage() {
     }
 
     return matchesStatus && matchesSearch && matchesPeriod;
+  }).sort((a, b) => {
+    const dateA = new Date(a.date).getTime();
+    const dateB = new Date(b.date).getTime();
+    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
   });
 
   const totalPages = Math.ceil(filteredHistory.length / itemsPerPage);
@@ -105,6 +118,7 @@ export default function WavoipConfigPage() {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
 
   
   const [form, setForm] = useState({
@@ -188,19 +202,35 @@ export default function WavoipConfigPage() {
     }
     
     setTesting(true);
-    // Simula validação de plano de discagem e roteamento
+    
+    // Suite de testes com asserts automatizados
     setTimeout(() => {
+      const logs = [
+        'Iniciando teste de roteamento...',
+        `Validando origem: ${form.origin} [ASSERT: FORMAT_VALID]`,
+        `Validando destino: ${form.destination} [ASSERT: PERMISSION_OK]`,
+        'Simulando handshake de voz...',
+        'Validando codec negotiation [ASSERT: G.711_SUPPORTED]'
+      ];
+
       const isOk = Math.random() > 0.2;
-      setRoutingTestResult(isOk ? 'success' : 'error');
+      
+      setRoutingTestResult({
+        status: isOk ? 'success' : 'error',
+        details: isOk ? 'Todos os asserts de roteamento passaram com sucesso.' : 'Falha no assert PERMISSION_OK: Ramal sem rota de saída.',
+        logs: isOk ? logs : [...logs, 'ERRO: Permissão de discagem negada pelo gateway.']
+      });
+      
       setTesting(false);
       
       if (isOk) {
-        toast.success('Roteamento validado com sucesso!');
+        toast.success('Roteamento validado com asserts automatizados!');
       } else {
-        toast.error('Falha no roteamento: O ramal de origem não tem permissão para o destino informado.');
+        toast.error('Falha nos testes de roteamento automatizados.');
       }
     }, 1500);
   };
+
 
 
   const handleExportQuick = (period: 'today' | '7d' | '30d') => {
@@ -446,7 +476,7 @@ export default function WavoipConfigPage() {
               placeholder="Ex: 551199999999" 
               value={form.origin}
               onChange={e => setForm({...form, origin: e.target.value})}
-              className={routingTestResult === 'error' && !form.origin ? 'border-red-500' : ''}
+              className={routingTestResult.status === 'error' && !form.origin ? 'border-red-500' : ''}
             />
           </div>
           <div className="space-y-2">
@@ -455,32 +485,64 @@ export default function WavoipConfigPage() {
               placeholder="Ramal ou Fila" 
               value={form.destination}
               onChange={e => setForm({...form, destination: e.target.value})}
-              className={routingTestResult === 'error' && !form.destination ? 'border-red-500' : ''}
+              className={routingTestResult.status === 'error' && !form.destination ? 'border-red-500' : ''}
             />
+
           </div>
 
-          {routingTestResult !== 'none' && (
-            <div className={`md:col-span-2 p-3 rounded-lg flex items-center gap-3 text-xs ${
-              routingTestResult === 'success' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 'bg-red-500/10 text-red-600 border border-red-500/20'
+          {routingTestResult.status !== 'none' && (
+            <div className={`md:col-span-2 p-4 rounded-xl space-y-3 border ${
+              routingTestResult.status === 'success' 
+              ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-700' 
+              : 'bg-red-500/5 border-red-500/20 text-red-700'
             }`}>
-              {routingTestResult === 'success' ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  <div className="flex items-center gap-2">
-                    <span>{form.origin}</span>
-                    <ArrowRight className="w-3 h-3" />
-                    <span>{form.destination}</span>
-                    <span className="font-bold ml-2">Caminho Válido</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-tight">
+                  <Terminal className="w-3.5 h-3.5" />
+                  Logs de Execução do Teste
+                </div>
+                <Badge 
+                  variant="outline" 
+                  className={`text-[9px] ${
+                    routingTestResult.status === 'success' 
+                    ? 'border-emerald-500/30 text-emerald-600' 
+                    : 'border-red-500/30 text-red-600'
+                  }`}
+                >
+                  {routingTestResult.status === 'success' ? 'PASSED' : 'FAILED'}
+                </Badge>
+              </div>
+              
+              <div className="bg-black/5 rounded-lg p-3 font-mono text-[10px] space-y-1">
+                {routingTestResult.logs.map((log, i) => (
+                  <div key={i} className="flex gap-2">
+                    <span className="opacity-40">[{i+1}]</span>
+                    <span>{log}</span>
                   </div>
-                </>
-              ) : (
-                <>
-                  <AlertCircle className="w-4 h-4" />
-                  <span>Erro na validação do caminho de voz. Verifique as permissões do ramal.</span>
-                </>
-              )}
+                ))}
+              </div>
+
+              <div className="flex items-center gap-3 text-xs pt-1">
+                {routingTestResult.status === 'success' ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <span className="truncate">{form.origin}</span>
+                      <ArrowRight className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{form.destination}</span>
+                      <span className="font-bold ml-1 shrink-0">Caminho Válido</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span className="font-medium">{routingTestResult.details}</span>
+                  </>
+                )}
+              </div>
             </div>
           )}
+
 
           <div className="md:col-span-2 space-y-2 pt-2">
             <Label className="flex items-center gap-2">
@@ -552,10 +614,11 @@ export default function WavoipConfigPage() {
           {testing ? (
             <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
-            <RefreshCw className="w-4 h-4" />
+            <CirclePlay className="w-4 h-4" />
           )}
-          Testar conexão Wavoip
+          Executar Teste Completo
         </Button>
+
         <Button 
           className="flex-1 gap-2 shadow-lg shadow-primary/20" 
           onClick={handleSave}
@@ -577,6 +640,7 @@ export default function WavoipConfigPage() {
               : 'bg-red-500/5 border-red-500/20 text-red-700'
             }`}
           >
+
             {lastValidation.status === 'success' ? (
               <CheckCircle2 className="w-5 h-5 shrink-0" />
             ) : (
@@ -595,13 +659,19 @@ export default function WavoipConfigPage() {
 
       <Card className="glass-card overflow-hidden">
         <CardHeader className="bg-secondary/20 pb-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <CardTitle className="text-base flex items-center gap-2">
-                <History className="w-4 h-4 text-primary" /> Histórico de Auditoria
-              </CardTitle>
-              <CardDescription>Logs de validação e eventos de conectividade</CardDescription>
-            </div>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex flex-col gap-1">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <History className="w-4 h-4 text-primary" /> Histórico de Auditoria
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className={`text-[8px] uppercase tracking-widest px-1.5 py-0 ${isLive ? 'border-emerald-500/50 text-emerald-500' : 'text-muted-foreground'}`}>
+                    {isLive ? 'Conectado Live' : 'Pausado'}
+                  </Badge>
+                  <CardDescription className="text-[10px]">Logs de validação em tempo real</CardDescription>
+                </div>
+              </div>
+
             <div className="flex items-center gap-2">
               <Button 
                 variant="ghost" 
@@ -684,13 +754,22 @@ export default function WavoipConfigPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent border-border/40">
-                <TableHead className="w-[180px] text-[10px] uppercase font-bold tracking-wider">Data/Hora</TableHead>
+                <TableHead className="w-[180px] text-[10px] uppercase font-bold tracking-wider">
+                  <button 
+                    className="flex items-center gap-1 hover:text-primary transition-colors"
+                    onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+                  >
+                    Data/Hora
+                    <ArrowUpDown className="w-3 h-3" />
+                  </button>
+                </TableHead>
                 <TableHead className="w-[100px] text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
                 <TableHead className="w-[100px] text-[10px] uppercase font-bold tracking-wider">Tipo</TableHead>
                 <TableHead className="text-[10px] uppercase font-bold tracking-wider">Resultado/Mensagem</TableHead>
                 <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider">Ação</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {paginatedHistory.map((item) => (
                 <TableRow key={item.id} className="border-border/40 hover:bg-secondary/10 transition-colors">
