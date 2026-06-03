@@ -116,6 +116,8 @@ export default function WavoipConfigPage() {
     details: string;
     logs: string[];
   }>({ status: 'none', details: '', logs: [] });
+  const [filterPresets, setFilterPresets] = useState<any[]>([]);
+  const [isSavingPreset, setIsSavingPreset] = useState(false);
   const itemsPerPage = 5;
 
 
@@ -297,8 +299,15 @@ export default function WavoipConfigPage() {
         
       if (syncState) {
         setDedupWindow(syncState.dedup_window as any);
-        // Em um cenário real, recarregaríamos as chaves recentes aqui se necessário
       }
+
+      // Load presets
+      const { data: presets } = await supabase
+        .from('wavoip_filter_presets')
+        .select('*')
+        .eq('sub_company_id', access.sub_company_id);
+      
+      if (presets) setFilterPresets(presets);
     };
 
     loadPersistedConfig();
