@@ -89,7 +89,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
-export default function WavoipConfigPage() {
+export default function WavoipConfigPage({ standalone = false }: { standalone?: boolean }) {
   const { access } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
