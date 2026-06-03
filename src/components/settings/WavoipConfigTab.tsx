@@ -87,12 +87,15 @@ export default function WavoipConfigPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [isAlertEnabled, setIsAlertEnabled] = useState(true);
+  const [wsStatus, setWsStatus] = useState<'connected' | 'reconnecting' | 'offline'>('connected');
+  const [dedupWindow, setDedupWindow] = useState<5 | 15 | 60>(5);
   const [routingTestResult, setRoutingTestResult] = useState<{
     status: 'success' | 'error' | 'none';
     details: string;
     logs: string[];
   }>({ status: 'none', details: '', logs: [] });
   const itemsPerPage = 5;
+
 
 
 
@@ -185,6 +188,7 @@ export default function WavoipConfigPage() {
     let retryCount = 0;
 
     const setupChannel = () => {
+      setWsStatus('reconnecting');
       const channel = supabase.channel('wavoip-events', {
         config: {
           broadcast: { self: false },
@@ -193,11 +197,18 @@ export default function WavoipConfigPage() {
       .on('broadcast', { event: 'log' }, (payload) => {
         const timestamp = new Date().toLocaleString();
         
-        // Deduplicação básica por mensagem e timestamp aproximado (se vier id no payload usa ele)
+        // Deduplicação dinâmica baseada na janela selecionada
         const eventId = payload.id || `${payload.message}-${timestamp}`;
         
         setHistory(prev => {
-          if (prev.some(h => h.id === eventId)) return prev;
+          const nowTime = Date.now();
+          const dedupMs = dedupWindow * 60 * 1000;
+          
+          if (prev.some(h => {
+            const isSame = h.id === eventId || (h.message === payload.message && h.type === payload.type);
+            const isRecent = nowTime - new Date(h.date).getTime() < dedupMs;
+            return isSame && isRecent;
+          })) return prev;
           
           const newEvent = {
             id: eventId,
@@ -210,7 +221,6 @@ export default function WavoipConfigPage() {
             payloadHash: payload.payloadHash || ((payload as any).type === 'Security' ? 'sha256:generated...' : undefined)
           };
           
-          // Ordenação por data (descendente)
           return [newEvent, ...prev].sort((a, b) => 
             new Date(b.date).getTime() - new Date(a.date).getTime()
           ).slice(0, 50);
@@ -219,16 +229,17 @@ export default function WavoipConfigPage() {
         if (payload.status === 'error' && isAlertEnabled) {
           const isSecurity = (payload as any).type === 'Security';
           toast.error(`${isSecurity ? 'Incidente de Segurança' : 'Alerta Wavoip'}: ${payload.message}`, {
-            icon: isSecurity ? <ShieldAlert className="w-4 h-4 text-red-500" /> : <Bell className="w-4 h-4" />,
+            icon: <ShieldAlert className="w-4 h-4 text-red-500" />,
             duration: isSecurity ? 8000 : 5000
           });
         }
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
+          setWsStatus('connected');
           retryCount = 0;
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          // Exponential Backoff
+          setWsStatus('offline');
           const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
           retryCount++;
           reconnectTimeout = setTimeout(setupChannel, delay);
@@ -237,6 +248,7 @@ export default function WavoipConfigPage() {
 
       return channel;
     };
+
 
     const channel = setupChannel();
 
@@ -806,16 +818,47 @@ export default function WavoipConfigPage() {
                 </div>
               </div>
 
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className={`h-8 text-[10px] gap-2 ${isLive ? 'text-emerald-500 hover:text-emerald-600 bg-emerald-500/5' : 'text-muted-foreground'}`}
-                onClick={() => setIsLive(!isLive)}
-              >
-                <div className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
-                {isLive ? 'Live' : 'Pausado'}
-              </Button>
+              <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
+                  <span className="text-[8px] uppercase text-muted-foreground font-bold">WebSocket Status</span>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-1.5 h-1.5 rounded-full ${
+                      wsStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 
+                      wsStatus === 'reconnecting' ? 'bg-amber-500 animate-bounce' : 'bg-red-500'
+                    }`} />
+                    <span className={`text-[9px] font-bold ${
+                      wsStatus === 'connected' ? 'text-emerald-600' : 
+                      wsStatus === 'reconnecting' ? 'text-amber-600' : 'text-red-600'
+                    }`}>
+                      {wsStatus.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+
+
+                <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
+                  <span className="text-[8px] uppercase text-muted-foreground font-bold">Janela Dedup</span>
+                  <select 
+                    className="h-6 text-[9px] rounded bg-secondary/50 border-none outline-none px-1 font-bold"
+                    value={dedupWindow}
+                    onChange={(e) => setDedupWindow(Number(e.target.value) as any)}
+                  >
+                    <option value={5}>5m</option>
+                    <option value={15}>15m</option>
+                    <option value={60}>1h</option>
+                  </select>
+                </div>
+
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className={`h-8 text-[10px] gap-2 ${isLive ? 'text-emerald-500 hover:text-emerald-600 bg-emerald-500/5' : 'text-muted-foreground'}`}
+                  onClick={() => setIsLive(!isLive)}
+                >
+                  <div className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
+                  {isLive ? 'Live' : 'Pausado'}
+                </Button>
+
                 <div className="flex flex-wrap items-center gap-2">
                   <Button 
                     variant="ghost" 
@@ -975,6 +1018,7 @@ export default function WavoipConfigPage() {
 
           </div>
         </CardHeader>
+
         <CardContent className="p-0">
           <Table>
             <TableHeader>
