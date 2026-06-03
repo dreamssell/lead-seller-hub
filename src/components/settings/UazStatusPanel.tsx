@@ -67,8 +67,22 @@ export default function UazStatusPanel() {
     if (data) setSubCompanies(data);
   };
 
+  const fetchSettings = async () => {
+    const { data } = await supabase.from('uaz_system_settings').select('*').eq('id', 'global').single();
+    if (data) setSettings(data);
+  };
+
+  const saveSettings = async () => {
+    setSavingSettings(true);
+    const { error } = await supabase.from('uaz_system_settings').update(settings).eq('id', 'global');
+    if (error) toast.error('Erro ao salvar configurações');
+    else toast.success('Configurações atualizadas');
+    setSavingSettings(false);
+  };
+
   useEffect(() => {
     fetchSubCompanies();
+    fetchSettings();
   }, []);
 
   useEffect(() => {
