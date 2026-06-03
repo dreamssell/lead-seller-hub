@@ -2,20 +2,15 @@ import { useState, useEffect } from 'react';
 import { 
   AlertCircle, 
   CheckCircle2, 
-  Clock, 
   Loader2, 
-  Search, 
-  Filter,
-  AlertTriangle,
   ChevronLeft,
-  ChevronRight,
-  MoreHorizontal
+  ChevronRight
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 export default function UazIncidentsTab() {
   const [incidents, setIncidents] = useState<any[]>([]);
