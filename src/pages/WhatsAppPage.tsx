@@ -562,7 +562,7 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
                     onClick={() => {
                       onOpenAudit();
                       setSelectedDetailLog(null);
-                      setDrillDownOpen(null); // This is wrong, should be setDrillDownOpen(false)
+                      setDrillDownOpen(false);
                     }}
                   >
                     <History className="w-4 h-4" /> Ir para Auditoria
