@@ -78,7 +78,13 @@ export default function DeveloperPage() {
                   return (
                     <button
                       key={tab.value}
-                      onClick={() => setActiveTab(tab.value)}
+                      onClick={() => {
+                        setActiveTab(tab.value);
+                        // Atualiza a URL sem recarregar a página
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('tab', tab.value);
+                        window.history.replaceState(null, '', url.toString());
+                      }}
                       className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 group relative ${
                         isActive 
                         ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' 
