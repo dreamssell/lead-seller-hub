@@ -180,16 +180,49 @@ export default function ChatPage() {
   const handleSendMessage = async () => {
     if (!messageText || !selectedConvId) return;
     
-    const { error } = await supabase.from('chat_messages').insert({
+    // 1. Inserir localmente para feedback imediato (otimista)
+    const tempId = crypto.randomUUID();
+    const newMessage = {
+      id: tempId,
       customer_id: selectedConvId,
       sender_type: 'agent',
-      content: messageText
-    });
+      content: messageText,
+      created_at: new Date().toISOString(),
+      status: 'sending'
+    };
+    
+    setMessages(prev => [...prev, newMessage]);
+    setMessageText('');
 
-    if (error) {
-      toast({ title: 'Erro ao enviar', description: error.message, variant: 'destructive' });
-    } else {
-      setMessageText('');
+    // 2. Chamar Edge Function para envio real via UAZ
+    try {
+      const { data, error } = await supabase.functions.invoke('uaz-send-message', {
+        body: {
+          customer_id: selectedConvId,
+          content: messageText
+        }
+      });
+
+      if (error) throw error;
+
+      // 3. Atualizar status da mensagem para 'sent'
+      setMessages(prev => prev.map(m => 
+        m.id === tempId ? { ...m, status: 'sent', id: data.id || m.id } : m
+      ));
+      
+      // Inserir no banco de forma persistente
+      await supabase.from('chat_messages').insert({
+        customer_id: selectedConvId,
+        sender_type: 'agent',
+        content: messageText,
+        metadata: { uaz_response: data }
+      });
+
+    } catch (err: any) {
+      toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
+      setMessages(prev => prev.map(m => 
+        m.id === tempId ? { ...m, status: 'error' } : m
+      ));
     }
   };
 
@@ -390,13 +423,26 @@ export default function ChatPage() {
                     animate={{ opacity: 1, y: 0 }}
                     className={`flex ${m.sender_type !== 'client' ? 'justify-end' : 'justify-start'}`}
                   >
-                    <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm ${
+                    <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm relative group ${
                       m.sender_type !== 'client' ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-secondary text-foreground rounded-bl-md'
                     }`}>
                       <p>{m.content}</p>
-                      <p className={`text-[10px] mt-1 ${m.sender_type !== 'client' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                        {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+                      <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
+                        <p className="text-[10px]">
+                          {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        {m.sender_type !== 'client' && (
+                          <div className="ml-1">
+                            {m.status === 'sending' ? (
+                              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                            ) : m.status === 'error' ? (
+                              <AlertCircle className="w-2.5 h-2.5 text-destructive-foreground" />
+                            ) : (
+                              <CheckCircle2 className="w-2.5 h-2.5" />
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </motion.div>
                 ))}
