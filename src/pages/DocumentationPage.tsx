@@ -5,7 +5,8 @@ import {
   Search, Book, Code, Terminal, Zap, Shield, Globe, 
   MessageSquare, ChevronRight, Hash, Server, Play, 
   Copy, Check, Info, AlertTriangle, Cpu, Activity,
-  Webhook, Key, FileJson, CheckCircle2, Brackets, Download
+  Webhook, Key, FileJson, CheckCircle2, Brackets, Download,
+  RefreshCw
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +15,39 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import MCPConsole from '@/components/settings/MCPConsole';
+import { ErrorBoundary } from 'react-error-boundary';
+
+function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
+  return (
+    <div className="min-h-[400px] flex items-center justify-center p-6 bg-background">
+      <Card className="max-w-md w-full border-destructive/20 shadow-xl rounded-2xl overflow-hidden">
+        <div className="h-2 bg-destructive" />
+        <CardHeader className="text-center pt-8">
+          <div className="mx-auto w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mb-4">
+            <AlertTriangle className="w-8 h-8 text-destructive" />
+          </div>
+          <CardTitle className="text-xl font-bold">Algo deu errado</CardTitle>
+          <CardDescription className="text-sm px-4">
+            Não foi possível carregar a documentação. Isso pode ser um problema de conexão ou permissão.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6 pb-8 text-center">
+          <div className="p-3 bg-secondary/50 rounded-lg text-xs font-mono text-left overflow-auto max-h-32">
+            {error.message}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Button onClick={resetErrorBoundary} className="w-full rounded-xl gap-2 h-11">
+              <RefreshCw className="w-4 h-4" /> Tentar novamente
+            </Button>
+            <Button variant="ghost" onClick={() => window.location.href = '/'} className="w-full rounded-xl h-11">
+              Voltar ao Início
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 const DOC_SECTIONS = [
   {
@@ -39,6 +73,14 @@ const DOC_SECTIONS = [
 ];
 
 export default function DocumentationPage() {
+  return (
+    <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => window.location.reload()}>
+      <DocumentationContent />
+    </ErrorBoundary>
+  );
+}
+
+function DocumentationContent() {
   const [activeSection, setActiveSection] = useState("MCP Server");
   const [copied, setCopied] = useState<string | null>(null);
 
