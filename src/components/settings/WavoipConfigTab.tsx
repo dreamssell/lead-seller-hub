@@ -137,6 +137,7 @@ export default function WavoipConfigPage() {
   const [filterPresets, setFilterPresets] = useState<any[]>([]);
   const [isSavingPreset, setIsSavingPreset] = useState(false);
   const [showHealthStats, setShowHealthStats] = useState(false);
+  const [resolvedThreads, setResolvedThreads] = useState<Record<string, { note: string; resolvedAt: string; resolvedBy: string }>>({});
   const itemsPerPage = 5;
 
   const healthData = useMemo(() => [
@@ -1985,8 +1986,72 @@ export default function WavoipConfigPage() {
                                   </div>
                                 </div>
 
-                                <div className="text-[9px] text-amber-600 italic mt-1">
-                                  * Tentativas com o mesmo hash são agrupadas nesta thread para rastreabilidade.
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[9px] font-bold uppercase text-muted-foreground">Ações da Thread</span>
+                                    {resolvedThreads[(item as any).payloadHash] ? (
+                                      <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200 text-[8px] h-4 gap-1">
+                                        <UserCheck className="w-2 h-2" /> Resolvido
+                                      </Badge>
+                                    ) : null}
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Dialog>
+                                      <DialogTrigger asChild>
+                                        <Button variant="outline" size="sm" className="h-7 text-[9px] flex-1 gap-1">
+                                          <UserCheck className="w-3 h-3" />
+                                          {resolvedThreads[(item as any).payloadHash] ? 'Editar Resolução' : 'Marcar Resolvido'}
+                                        </Button>
+                                      </DialogTrigger>
+                                      <DialogContent className="sm:max-w-xs">
+                                        <DialogHeader>
+                                          <DialogTitle className="text-sm font-bold">Resolver Incidente</DialogTitle>
+                                          <DialogDescription className="text-xs">Deixe uma anotação sobre a causa e solução.</DialogDescription>
+                                        </DialogHeader>
+                                        <div className="space-y-3 py-2">
+                                          <Label className="text-[10px]">Anotação Auditável</Label>
+                                          <textarea 
+                                            id={`note-${(item as any).payloadHash}`}
+                                            className="w-full min-h-[80px] text-xs p-2 rounded-md border bg-background"
+                                            placeholder="Ex: Segredo v-1 rotacionado com sucesso. Tráfego normalizado."
+                                            defaultValue={resolvedThreads[(item as any).payloadHash]?.note || ''}
+                                          />
+                                          <Button 
+                                            className="w-full h-8 text-xs"
+                                            onClick={() => {
+                                              const note = (document.getElementById(`note-${(item as any).payloadHash}`) as HTMLTextAreaElement).value;
+                                              if (!note) return;
+                                              setResolvedThreads(prev => ({
+                                                ...prev,
+                                                [(item as any).payloadHash]: {
+                                                  note,
+                                                  resolvedAt: new Date().toLocaleString(),
+                                                  resolvedBy: access?.email || 'System'
+                                                }
+                                              }));
+                                              toast.success('Incidente marcado como resolvido.');
+                                            }}
+                                          >Salvar Resolução</Button>
+                                        </div>
+                                      </DialogContent>
+                                    </Dialog>
+                                  </div>
+
+                                  {resolvedThreads[(item as any).payloadHash] && (
+                                    <div className="bg-emerald-500/5 border border-emerald-500/20 p-2 rounded-md space-y-1">
+                                      <div className="flex justify-between items-center text-[8px] text-emerald-700 font-bold uppercase">
+                                        <span>Resolução por: {resolvedThreads[(item as any).payloadHash].resolvedBy}</span>
+                                        <span>{resolvedThreads[(item as any).payloadHash].resolvedAt}</span>
+                                      </div>
+                                      <p className="text-[9px] text-emerald-800 italic">
+                                        "{resolvedThreads[(item as any).payloadHash].note}"
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  <div className="text-[9px] text-amber-600 italic mt-1">
+                                    * Tentativas com o mesmo hash são agrupadas nesta thread para rastreabilidade.
+                                  </div>
                                 </div>
                               </div>
                             </div>
