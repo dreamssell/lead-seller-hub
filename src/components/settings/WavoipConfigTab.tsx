@@ -114,21 +114,42 @@ export default function WavoipConfigPage() {
     destination: ''
   });
 
-  // Integração Real-time via Supabase Realtime (Canais/Broadcast) que simula o WebSocket do Wavoip
+  // Deduplicação e Reconexão via Supabase Realtime
   useEffect(() => {
     if (!isLive) return;
 
-    const channel = supabase.channel('wavoip-events')
+    let reconnectTimeout: ReturnType<typeof setTimeout>;
+    let retryCount = 0;
+
+    const setupChannel = () => {
+      const channel = supabase.channel('wavoip-events', {
+        config: {
+          broadcast: { self: false },
+        }
+      })
       .on('broadcast', { event: 'log' }, (payload) => {
         const timestamp = new Date().toLocaleString();
-        const newEvent = {
-          id: Date.now(),
-          date: timestamp,
-          status: payload.status || 'success',
-          type: 'WebSocket',
-          message: payload.message || 'Atualização instantânea recebida'
-        };
-        setHistory(prev => [newEvent, ...prev.slice(0, 19)]);
+        
+        // Deduplicação básica por mensagem e timestamp aproximado (se vier id no payload usa ele)
+        const eventId = payload.id || `${payload.message}-${timestamp}`;
+        
+        setHistory(prev => {
+          if (prev.some(h => h.id === eventId)) return prev;
+          
+          const newEvent = {
+            id: eventId,
+            date: timestamp,
+            status: payload.status || 'success',
+            type: payload.type || 'WebSocket',
+            message: payload.message || 'Atualização instantânea recebida',
+            version: payload.version
+          };
+          
+          // Ordenação por data (descendente)
+          return [newEvent, ...prev].sort((a, b) => 
+            new Date(b.date).getTime() - new Date(a.date).getTime()
+          ).slice(0, 50);
+        });
         
         if (payload.status === 'error' && isAlertEnabled) {
           toast.error(`Alerta Wavoip: ${payload.message}`, {
@@ -137,12 +158,28 @@ export default function WavoipConfigPage() {
           });
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          retryCount = 0;
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          // Exponential Backoff
+          const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+          retryCount++;
+          reconnectTimeout = setTimeout(setupChannel, delay);
+        }
+      });
+
+      return channel;
+    };
+
+    const channel = setupChannel();
 
     return () => {
       supabase.removeChannel(channel);
+      clearTimeout(reconnectTimeout);
     };
   }, [isLive, isAlertEnabled]);
+
 
   const handleRoutingTest = async () => {
     if (!form.origin || !form.destination) {
