@@ -17,7 +17,6 @@ import UazAlertHistoryTab from '@/components/settings/UazAlertHistoryTab';
 import UazRemediationTab from '@/components/settings/UazRemediationTab';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-import { supabase } from '@/integrations/supabase/client';
 import { AlertCircle, MoreHorizontal, User } from 'lucide-react';
 
 export default function BackendStatusPage() {
