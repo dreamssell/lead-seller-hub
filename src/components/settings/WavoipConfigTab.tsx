@@ -495,6 +495,8 @@ export default function WavoipConfigPage() {
     
     setTimeout(() => {
       const threadEvents = history.filter(item => item.payloadHash === payloadHash);
+      const resolution = resolvedThreads[payloadHash];
+      
       const headers = ['Data', 'Status', 'Tipo', 'Mensagem', 'Versão', 'Request ID', 'Payload Hash'];
       const data = threadEvents.map(item => [
         item.date,
@@ -506,7 +508,15 @@ export default function WavoipConfigPage() {
         (item as any).payloadHash || '-'
       ]);
       
-      const content = [headers, ...data].map(row => row.join(',')).join('\n');
+      let content = [headers, ...data].map(row => row.join(',')).join('\n');
+      
+      // Adicionar seção de anotações auditáveis se houver resolução
+      if (resolution) {
+        content += '\n\nANOTAÇÕES DE RESOLUÇÃO\n';
+        content += `Data Resolução,Resolvido Por,Anotação\n`;
+        content += `"${resolution.resolvedAt}","${resolution.resolvedBy}","${resolution.note.replace(/"/g, '""')}"\n`;
+      }
+      
       const blob = new Blob([content], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
