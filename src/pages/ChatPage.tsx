@@ -91,7 +91,8 @@ export default function ChatPage() {
           .eq('provider', 'uaz')
           .single();
 
-        if (!conn || !conn.metadata?.token) {
+        const metadata = (conn.metadata as any) || {};
+        if (!metadata.token) {
           setUazStatus({ connected: false, loading: false });
           return;
         }
@@ -99,8 +100,8 @@ export default function ChatPage() {
         const { data, error } = await supabase.functions.invoke('whatsapp-status', {
           body: {
             provider: 'uaz',
-            url: conn.metadata.url || 'https://api.uazapi.dev',
-            token: conn.metadata.token,
+            url: metadata.url || 'https://api.uazapi.dev',
+            token: metadata.token,
           },
         });
 
