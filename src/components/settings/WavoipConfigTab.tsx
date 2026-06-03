@@ -374,7 +374,7 @@ export default function WavoipConfigPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <Card className="glass-card bg-emerald-500/5 border-emerald-500/20">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between mb-2">
@@ -387,6 +387,22 @@ export default function WavoipConfigPage() {
             <p className="text-[10px] text-emerald-600/70 mt-1">Sincronização ativa</p>
           </CardContent>
         </Card>
+
+        <Card className={`glass-card transition-all ${securityIncidents.length > 0 ? 'bg-red-500/5 border-red-500/20' : ''}`}>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Segurança</p>
+              <div className={`p-1.5 rounded-full ${securityIncidents.length > 0 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-secondary text-muted-foreground'}`}>
+                <ShieldAlert className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <p className={`text-xl font-bold ${securityIncidents.length > 0 ? 'text-red-600' : 'text-foreground'}`}>
+              {securityIncidents.length}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-1">Incidentes no período</p>
+          </CardContent>
+        </Card>
+
 
         <Card className="glass-card">
           <CardContent className="pt-6">
