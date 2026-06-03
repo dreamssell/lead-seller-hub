@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Camera, ChevronRight, Settings2, MessageSquare, TrendingUp } from 'lucide-react';
+import { Camera, ChevronRight, Settings2, MessageSquare, TrendingUp, Phone, Share2 } from 'lucide-react';
 
 const sections = [
   {
@@ -14,16 +14,47 @@ const sections = [
     }],
   },
   {
-    title: 'WhatsApp Business',
-    items: [{
-      icon: <MessageSquare className="w-6 h-6 text-emerald-500" />,
-      name: 'Conexões WhatsApp',
-      tags: ['UAZ API', 'API OFICIAL'],
-      desc: 'Gerencie todas as suas conexões WhatsApp em um só lugar (UAZ e API Oficial)',
-      cta: 'Gerenciar Conexões',
-      to: '/whatsapp',
-      primary: true,
-    }],
+    title: 'WhatsApp Business & VoIP',
+    items: [
+      {
+        icon: <MessageSquare className="w-6 h-6 text-emerald-500" />,
+        name: 'Conexões WhatsApp',
+        tags: ['UAZ API', 'API OFICIAL'],
+        desc: 'Gerencie todas as suas conexões WhatsApp em um só lugar (UAZ e API Oficial)',
+        cta: 'Gerenciar Conexões',
+        to: '/whatsapp',
+        primary: true,
+      },
+      {
+        icon: <Phone className="w-6 h-6 text-emerald-600" />,
+        name: 'Wavoip WhatsApp',
+        tags: ['WHATSAPP + VOIP', 'BETA'],
+        desc: 'Integração avançada para chamadas de voz e mensagens integradas via WhatsApp',
+        cta: 'Configurar Wavoip',
+        to: '/whatsapp',
+      }
+    ],
+  },
+  {
+    title: 'Social Business',
+    items: [
+      {
+        icon: <MessageSquare className="w-6 h-6 text-blue-700" />,
+        name: 'LinkedIn Business',
+        tags: ['CHAT', 'MÉTRICAS', 'ANALYTICS'],
+        desc: 'Gerencie mensagens diretas e acompanhe o engajamento da sua página ou perfil',
+        cta: 'Conectar LinkedIn',
+        to: '#',
+      },
+      {
+        icon: <Share2 className="w-6 h-6 text-black" />,
+        name: 'TikTok Business',
+        tags: ['FULL INTEGRATION', 'CONTENT', 'ADS'],
+        desc: 'Integração completa para gestão de conteúdo, comentários e analytics de anúncios',
+        cta: 'Conectar TikTok',
+        to: '#',
+      }
+    ],
   },
   {
     title: 'Meta Ads & Conversões',
@@ -50,7 +81,7 @@ export default function ConnectionsTab() {
         <div key={sec.title}>
           <h3 className="text-sm font-semibold text-foreground mb-3">{sec.title}</h3>
           {sec.items.map((it) => (
-            <div key={it.name} className="glass-card p-5 hover:border-primary/40 transition-all">
+            <div key={it.name} className="glass-card p-5 hover:border-primary/40 transition-all mb-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3 flex-1">
                   <div className="w-11 h-11 rounded-xl bg-secondary flex items-center justify-center shrink-0">
