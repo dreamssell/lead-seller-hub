@@ -821,16 +821,92 @@ export default function WavoipConfigPage() {
                     className="h-7 text-[9px] border border-border/40"
                     onClick={() => handleExportQuick('30d')}
                   >30 Dias</Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="h-8 text-[10px] gap-2"
-                    onClick={() => exportHistory('csv')}
-                    disabled={isExporting}
-                  >
-                    {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-                    Exportar CSV
-                  </Button>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-8 text-[10px] gap-2"
+                        disabled={isExporting}
+                      >
+                        {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                        Exportar CSV
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle className="text-sm">Configurar Exportação</DialogTitle>
+                        <DialogDescription className="text-xs">Selecione as colunas que deseja incluir no relatório CSV.</DialogDescription>
+                      </DialogHeader>
+                      <div className="grid grid-cols-2 gap-4 py-4">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="col-date" 
+                            checked={exportColumns.date} 
+                            onCheckedChange={(checked) => setExportColumns({...exportColumns, date: !!checked})}
+                          />
+                          <label htmlFor="col-date" className="text-xs">Data/Hora</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="col-status" 
+                            checked={exportColumns.status} 
+                            onCheckedChange={(checked) => setExportColumns({...exportColumns, status: !!checked})}
+                          />
+                          <label htmlFor="col-status" className="text-xs">Status</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="col-type" 
+                            checked={exportColumns.type} 
+                            onCheckedChange={(checked) => setExportColumns({...exportColumns, type: !!checked})}
+                          />
+                          <label htmlFor="col-type" className="text-xs">Tipo</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="col-message" 
+                            checked={exportColumns.message} 
+                            onCheckedChange={(checked) => setExportColumns({...exportColumns, message: !!checked})}
+                          />
+                          <label htmlFor="col-message" className="text-xs">Mensagem</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="col-version" 
+                            checked={exportColumns.version} 
+                            onCheckedChange={(checked) => setExportColumns({...exportColumns, version: !!checked})}
+                          />
+                          <label htmlFor="col-version" className="text-xs">Versão Segredo</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="col-requestId" 
+                            checked={exportColumns.requestId} 
+                            onCheckedChange={(checked) => setExportColumns({...exportColumns, requestId: !!checked})}
+                          />
+                          <label htmlFor="col-requestId" className="text-xs">Request ID</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="col-payloadHash" 
+                            checked={exportColumns.payloadHash} 
+                            onCheckedChange={(checked) => setExportColumns({...exportColumns, payloadHash: !!checked})}
+                          />
+                          <label htmlFor="col-payloadHash" className="text-xs">Payload Hash</label>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button 
+                          className="w-full text-xs h-8" 
+                          onClick={() => exportHistory('csv')}
+                        >
+                          Gerar CSV agora
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+
                 </div>
 
               <div className="relative">
