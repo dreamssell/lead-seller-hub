@@ -160,7 +160,7 @@ export default function DeveloperPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
             >
-              <CurrentComp key={activeTab} standalone={false} />
+              <CurrentComp key={activeTab} />
             </motion.div>
           </main>
         </div>
