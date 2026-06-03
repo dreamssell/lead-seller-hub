@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Phone, 
@@ -1118,8 +1118,8 @@ export default function WavoipConfigPage() {
             </TableHeader>
 
             <TableBody>
-              {paginatedHistory.map((item) => (
                 {paginatedHistory.map((item) => (
+
                   <Fragment key={item.id}>
                     <TableRow className="border-border/40 hover:bg-secondary/10 transition-colors cursor-pointer" onClick={() => toggleRow(item.id)}>
                       <TableCell className="text-xs font-mono text-muted-foreground">
