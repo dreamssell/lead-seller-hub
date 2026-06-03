@@ -463,6 +463,79 @@ export default function WavoipConfigPage() {
   }, [isLive, isAlertEnabled, alertThreshold, access?.sub_company_id, wsBackoff.max, wsBackoff.maxAttempts, wsBackoff.min, filterPeriod, securityAlertLimit]);
 
 
+  const exportThread = (payloadHash: string, format: 'csv' | 'pdf') => {
+    setIsExporting(true);
+    toast.info(`Exportando thread ${payloadHash.substring(7, 12)}...`);
+    
+    setTimeout(() => {
+      const threadEvents = history.filter(item => item.payloadHash === payloadHash);
+      const headers = ['Data', 'Status', 'Tipo', 'Mensagem', 'Versão', 'Request ID', 'Payload Hash'];
+      const data = threadEvents.map(item => [
+        item.date,
+        item.status.toUpperCase(),
+        item.type,
+        item.message,
+        (item as any).version || '-',
+        (item as any).requestId || '-',
+        (item as any).payloadHash || '-'
+      ]);
+      
+      const content = [headers, ...data].map(row => row.join(',')).join('\n');
+      const blob = new Blob([content], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `wavoip-thread-${payloadHash.substring(7, 12)}.${format}`;
+      a.click();
+      
+      setIsExporting(false);
+      toast.success(`Thread com ${threadEvents.length} eventos exportada.`);
+    }, 1000);
+  };
+
+  const simulateEvent = (type: 'Security' | 'Routing' | 'API') => {
+    const timestamp = new Date().toLocaleString();
+    const mockPayload: any = {
+      id: `sim_${Math.random().toString(36).substring(7)}`,
+      date: timestamp,
+      status: type === 'Security' ? 'error' : 'success',
+      type: type,
+      message: type === 'Security' ? 'Simulação: Assinatura Inválida' : 
+               type === 'Routing' ? `Simulação: Roteamento ${form.origin} -> ${form.destination}` :
+               'Simulação: Teste de API',
+      version: 'v0',
+      requestId: `req_sim_${Math.random().toString(36).substring(7)}`,
+      payloadHash: type === 'Security' ? 'sha256:simulated_hash_123' : undefined
+    };
+
+    // Usar toast para simular o efeito visual se o canal não estiver pronto
+    toast.info(`Evento de ${type} disparado para simulação.`);
+    
+    // Injetar diretamente no histórico se for simulação local para teste de dedup
+    const eventId = mockPayload.id;
+    setHistory(prev => {
+      const nowTime = Date.now();
+      const dedupMs = dedupWindow * 60 * 1000;
+      
+      if (prev.some(h => {
+        const isSame = h.id === eventId || (h.message === mockPayload.message && h.type === mockPayload.type);
+        const isRecent = nowTime - new Date(h.date).getTime() < dedupMs;
+        return isSame && isRecent;
+      })) {
+        toast.warning("Evento suprimido pela deduplicação.");
+        return prev;
+      }
+      
+      if (mockPayload.status === 'error' && isAlertEnabled) {
+        toast.error(`Alerta Simulado: ${mockPayload.message}`, {
+          icon: <ShieldAlert className="w-4 h-4 text-red-500" />
+        });
+      }
+
+      return [mockPayload, ...prev];
+    });
+  };
+
   const handleRoutingTest = async () => {
     if (!form.origin || !form.destination) {
       toast.error('Informe origem e destino para testar o roteamento.');
@@ -1163,6 +1236,30 @@ export default function WavoipConfigPage() {
                 </div>
 
                 <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
+                  <span className="text-[8px] uppercase text-muted-foreground font-bold">Simular Evento</span>
+                  <div className="flex gap-1">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6 text-red-500 hover:bg-red-50" 
+                      onClick={() => simulateEvent('Security')}
+                      title="Simular Assinatura Inválida"
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6 text-primary hover:bg-primary/5" 
+                      onClick={() => simulateEvent('Routing')}
+                      title="Simular Roteamento"
+                    >
+                      <Navigation className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1 pr-2 border-r border-border/40 mr-2">
                   <span className="text-[8px] uppercase text-muted-foreground font-bold">Janela Dedup</span>
                   <select 
                     className="h-6 text-[9px] rounded bg-secondary/50 border-none outline-none px-1 font-bold"
@@ -1626,20 +1723,54 @@ export default function WavoipConfigPage() {
                                     </div>
                                   </div>
                                 </div>
-                                <div className="space-y-3">
-                                  <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                                    <Fingerprint className="w-3.5 h-3.5" /> Payload Metadata
-                                  </div>
-                                  <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-2">
-                                    <div className="flex flex-col gap-1 text-[10px]">
-                                      <span className="text-muted-foreground">Payload Hash (SHA-256):</span>
-                                      <span className="font-mono break-all bg-secondary/30 p-1.5 rounded">{(item as any).payloadHash}</span>
-                                    </div>
-                                    <div className="text-[9px] text-amber-600 italic mt-1">
-                                      * Tentativas com o mesmo hash são agrupadas nesta thread para rastreabilidade.
-                                    </div>
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                  <Fingerprint className="w-3.5 h-3.5" /> Payload Metadata
+                                </div>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="h-6 text-[8px] gap-1 px-2 border border-border/40"
+                                  onClick={() => exportThread((item as any).payloadHash, 'csv')}
+                                >
+                                  <Download className="w-2.5 h-2.5" />
+                                  Exportar Thread
+                                </Button>
+                              </div>
+                              <div className="bg-background/50 rounded-lg p-3 border border-border/40 space-y-4">
+                                <div className="flex flex-col gap-1 text-[10px]">
+                                  <span className="text-muted-foreground">Payload Hash (SHA-256):</span>
+                                  <span className="font-mono break-all bg-secondary/30 p-1.5 rounded">{(item as any).payloadHash}</span>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                  <span className="text-[9px] font-bold uppercase text-muted-foreground">Timeline da Thread</span>
+                                  <div className="relative pl-4 space-y-3 border-l-2 border-primary/20">
+                                    {history
+                                      .filter(h => h.payloadHash === (item as any).payloadHash)
+                                      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                                      .map((h, i) => (
+                                        <div key={i} className="relative">
+                                          <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-background" />
+                                          <div className="flex flex-col gap-0.5 text-[9px]">
+                                            <div className="flex justify-between items-center">
+                                              <span className="font-bold text-foreground">{h.date}</span>
+                                              <Badge variant="outline" className="text-[7px] h-3.5 px-1 uppercase">{h.status}</Badge>
+                                            </div>
+                                            <span className="text-muted-foreground">Endpoint: {h.type === 'Webhook' ? 'Wavoip Gateway' : 'Wavoip API'}</span>
+                                            <span className="text-[8px] opacity-70">RID: {(h as any).requestId}</span>
+                                          </div>
+                                        </div>
+                                      ))}
                                   </div>
                                 </div>
+
+                                <div className="text-[9px] text-amber-600 italic mt-1">
+                                  * Tentativas com o mesmo hash são agrupadas nesta thread para rastreabilidade.
+                                </div>
+                              </div>
+                            </div>
                               </>
                             ) : (
                               <>
