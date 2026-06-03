@@ -307,7 +307,8 @@ export default function BackendStatusPage() {
             </div>
           )}
         </div>
-      </div>
+        </TabsContent>
+      </Tabs>
     </AppLayout>
   );
 }
