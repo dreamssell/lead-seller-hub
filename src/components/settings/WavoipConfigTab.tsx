@@ -91,6 +91,7 @@ export default function WavoipConfigPage() {
 
   const filteredHistory = history.filter(item => {
     const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
+    const matchesType = filterType === 'all' || item.type === filterType;
     const matchesSearch = item.message.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          (item.type && item.type.toLowerCase().includes(searchTerm.toLowerCase()));
     
@@ -108,8 +109,9 @@ export default function WavoipConfigPage() {
       matchesPeriod = itemDate >= thirtyDaysAgo;
     }
 
-    return matchesStatus && matchesSearch && matchesPeriod;
+    return matchesStatus && matchesType && matchesSearch && matchesPeriod;
   }).sort((a, b) => {
+
     const dateA = new Date(a.date).getTime();
     const dateB = new Date(b.date).getTime();
     return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
