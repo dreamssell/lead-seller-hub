@@ -44,6 +44,7 @@ const TABS = [
   { value: 'fields',      label: 'Campos',       subtitle: 'Dados personalizados', icon: ListChecks,   Comp: CustomFieldsTab, advanced: true },
   { value: 'smtp',        label: 'SMTP',         subtitle: 'Envio de e-mail', icon: Mail,         Comp: SmtpTab, advanced: true },
   { value: 'ai',          label: 'IA',           subtitle: 'Modelos e prompt', icon: Sparkles,     Comp: AiTab, advanced: true },
+];
 
 export default function DeveloperPage() {
   const { access } = useAuth();
