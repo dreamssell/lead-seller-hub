@@ -439,7 +439,34 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
 
                   <div className="bg-secondary/20 p-3 rounded-xl border border-border/40">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase">Latência Histórica</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase">Latência Histórica</span>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-5 w-5 text-muted-foreground hover:text-primary" 
+                          onClick={() => {
+                            if (!latencyHistory || latencyHistory.length === 0) {
+                              toast.error('Sem dados para exportar');
+                              return;
+                            }
+                            const headers = ['Horário', 'Latência (ms)'];
+                            const csvContent = [headers.join(','), ...latencyHistory.map(p => [p.time, p.latency].join(','))].join('\n');
+                            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.setAttribute('href', url);
+                            link.setAttribute('download', `uaz_latency_${latencyPeriod}_${new Date().getTime()}.csv`);
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            toast.success('Latência exportada em CSV');
+                          }}
+                          title="Exportar latência em CSV"
+                        >
+                          <FileSpreadsheet className="w-3 h-3" />
+                        </Button>
+                      </div>
                       <div className="flex gap-1">
                         {(['24h', '7d', '30d'] as const).map(p => (
                           <Button key={p} variant={latencyPeriod === p ? 'default' : 'ghost'} size="sm" className="h-5 px-1.5 text-[8px]" onClick={() => setLatencyPeriod(p)}>{p.toUpperCase()}</Button>
