@@ -150,7 +150,8 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
         
         if (recentLogs && recentLogs.length > 0) {
           const filtered = recentLogs.filter(l => {
-            const matchesTenant = filterTenant === 'all' || l.payload?.tenant_id === filterTenant || l.payload?.sub_company_id === filterTenant;
+            const payload = l.payload as any;
+            const matchesTenant = filterTenant === 'all' || payload?.tenant_id === filterTenant || payload?.sub_company_id === filterTenant;
             const matchesChannel = filterChannel === 'all' || l.event_type.toLowerCase().startsWith(filterChannel.toLowerCase());
             return matchesTenant && matchesChannel;
           });
@@ -187,7 +188,8 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
           .range(alertsPage * 5, (alertsPage + 1) * 5 - 1);
         
         const filteredAlerts = data?.filter(l => {
-          const matchesTenant = filterTenant === 'all' || l.payload?.tenant_id === filterTenant || l.payload?.sub_company_id === filterTenant;
+          const payload = l.payload as any;
+          const matchesTenant = filterTenant === 'all' || payload?.tenant_id === filterTenant || payload?.sub_company_id === filterTenant;
           const matchesChannel = filterChannel === 'all' || l.event_type.toLowerCase().startsWith(filterChannel.toLowerCase());
           return matchesTenant && matchesChannel;
         }) || [];
