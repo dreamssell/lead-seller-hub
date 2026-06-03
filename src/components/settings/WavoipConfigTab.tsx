@@ -1882,19 +1882,86 @@ export default function WavoipConfigPage() {
                                 <div className="space-y-3 py-2">
                                   <p className="text-[10px] text-muted-foreground">Escolha a versão do segredo para o handshake simulado:</p>
                                   <div className="flex gap-2">
-                                    <Button 
-                                      className="flex-1 text-[10px] h-8" 
-                                      onClick={() => {
-                                        toast.success(`Replay iniciado com segredo v0 (Atual) para ${(item as any).requestId}`);
-                                      }}
-                                    >v0 (Atual)</Button>
-                                    <Button 
-                                      variant="outline"
-                                      className="flex-1 text-[10px] h-8" 
-                                      onClick={() => {
-                                        toast.success(`Replay iniciado com segredo v-1 (Legado) para ${(item as any).requestId}`);
-                                      }}
-                                    >v-1 (Legado)</Button>
+                                    <Dialog>
+                                      <DialogTrigger asChild>
+                                        <Button 
+                                          className="flex-1 text-[10px] h-8" 
+                                          disabled={access?.role !== 'admin'}
+                                        >
+                                          {access?.role === 'admin' ? 'v0 (Atual)' : <><Lock className="w-3 h-3 mr-1" /> v0</>}
+                                        </Button>
+                                      </DialogTrigger>
+                                      <DialogContent className="sm:max-w-xs">
+                                        <DialogHeader>
+                                          <DialogTitle className="text-sm font-bold">Confirmar Replay v0</DialogTitle>
+                                          <DialogDescription className="text-xs">
+                                            Deseja reprocessar o request {(item as any).requestId} usando o segredo atual (v0)?
+                                          </DialogDescription>
+                                        </DialogHeader>
+                                        <DialogFooter className="gap-2 sm:gap-0">
+                                          <DialogTrigger asChild>
+                                            <Button variant="outline" className="h-8 text-xs">Cancelar</Button>
+                                          </DialogTrigger>
+                                          <Button 
+                                            className="h-8 text-xs"
+                                            onClick={() => {
+                                              toast.success(`Replay iniciado com segredo v0 (Atual) para ${(item as any).requestId}`);
+                                              const replayEntry = {
+                                                ...item,
+                                                id: Date.now(),
+                                                date: new Date().toLocaleString(),
+                                                isReplay: true,
+                                                replayUser: (access as any)?.email || 'Admin',
+                                                replayVersion: 'v0',
+                                                replayStatus: 'success'
+                                              };
+                                              setHistory(prev => [replayEntry, ...prev]);
+                                            }}
+                                          >Confirmar Replay</Button>
+                                        </DialogFooter>
+                                      </DialogContent>
+                                    </Dialog>
+
+                                    <Dialog>
+                                      <DialogTrigger asChild>
+                                        <Button 
+                                          variant="outline"
+                                          className="flex-1 text-[10px] h-8" 
+                                          disabled={access?.role !== 'admin'}
+                                        >
+                                          {access?.role === 'admin' ? 'v-1 (Legado)' : <><Lock className="w-3 h-3 mr-1" /> v-1</>}
+                                        </Button>
+                                      </DialogTrigger>
+                                      <DialogContent className="sm:max-w-xs">
+                                        <DialogHeader>
+                                          <DialogTitle className="text-sm font-bold">Confirmar Replay v-1</DialogTitle>
+                                          <DialogDescription className="text-xs">
+                                            Deseja reprocessar o request {(item as any).requestId} usando o segredo anterior (v-1)?
+                                          </DialogDescription>
+                                        </DialogHeader>
+                                        <DialogFooter className="gap-2 sm:gap-0">
+                                          <DialogTrigger asChild>
+                                            <Button variant="outline" className="h-8 text-xs">Cancelar</Button>
+                                          </DialogTrigger>
+                                          <Button 
+                                            className="h-8 text-xs"
+                                            onClick={() => {
+                                              toast.success(`Replay iniciado com segredo v-1 (Legado) para ${(item as any).requestId}`);
+                                              const replayEntry = {
+                                                ...item,
+                                                id: Date.now(),
+                                                date: new Date().toLocaleString(),
+                                                isReplay: true,
+                                                replayUser: (access as any)?.email || 'Admin',
+                                                replayVersion: 'v-1',
+                                                replayStatus: 'success'
+                                              };
+                                              setHistory(prev => [replayEntry, ...prev]);
+                                            }}
+                                          >Confirmar Replay</Button>
+                                        </DialogFooter>
+                                      </DialogContent>
+                                    </Dialog>
                                   </div>
                                 </div>
                               </DialogContent>
@@ -2026,7 +2093,7 @@ export default function WavoipConfigPage() {
                                                 [(item as any).payloadHash]: {
                                                   note,
                                                   resolvedAt: new Date().toLocaleString(),
-                                                  resolvedBy: access?.email || 'System'
+                                                  resolvedBy: (access as any)?.email || 'System'
                                                 }
                                               }));
                                               toast.success('Incidente marcado como resolvido.');
