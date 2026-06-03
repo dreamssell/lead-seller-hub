@@ -2288,6 +2288,86 @@ export default function WavoipConfigPage() {
           <span>Você precisa validar as credenciais antes de ativar a integração Wavoip.</span>
         </div>
       )}
-    </div>
-  );
+    </TabsContent>
+
+    <TabsContent value="incidents" className="space-y-6 outline-none">
+      <Card className="glass-card">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg font-bold">Gestão de Incidentes</CardTitle>
+              <CardDescription className="text-xs">Visualize e gerencie threads resolvidas ou pendentes.</CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <Input 
+                  placeholder="Buscar por thread, responsável ou anotação..." 
+                  className="pl-8 h-8 text-[10px] w-64"
+                />
+              </div>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-border/40">
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Thread</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Status</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Responsável</TableHead>
+                <TableHead className="text-[10px] uppercase font-bold tracking-wider">Data Resolução</TableHead>
+                <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Object.entries(resolvedThreads).length > 0 ? (
+                Object.entries(resolvedThreads).map(([hash, data]) => (
+                  <TableRow key={hash} className="border-border/40 hover:bg-secondary/10">
+                    <TableCell className="text-xs font-mono">
+                      <div className="flex items-center gap-2">
+                        <Fingerprint className="w-3 h-3 text-primary/50" />
+                        {hash.substring(7, 12)}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200 text-[9px] h-4 gap-1">
+                        <UserCheck className="w-2.5 h-2.5" /> Resolvido
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs">{data.resolvedBy}</TableCell>
+                    <TableCell className="text-xs">{data.resolvedAt}</TableCell>
+                    <TableCell className="text-right">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-7 text-[10px] gap-1"
+                        onClick={() => {
+                          setFilterType('all');
+                          setSearchTerm(hash.substring(7, 12));
+                          const tabs = document.querySelector('[role="tablist"]');
+                          const firstTab = tabs?.querySelector('[value="config"]') as HTMLElement;
+                          firstTab?.click();
+                        }}
+                      >
+                        <Eye className="w-3 h-3" /> Ver Auditoria
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-12 text-muted-foreground text-xs italic">
+                    Nenhum incidente resolvido encontrado.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </TabsContent>
+  </Tabs>
+</div>
+);
 }
