@@ -178,9 +178,10 @@ export default function WavoipConfigPage() {
         });
         
         if (payload.status === 'error' && isAlertEnabled) {
-          toast.error(`Alerta Wavoip: ${payload.message}`, {
-            icon: <Bell className="w-4 h-4" />,
-            duration: 5000
+          const isSecurity = payload.type === 'Security';
+          toast.error(`${isSecurity ? 'Incidente de Segurança' : 'Alerta Wavoip'}: ${payload.message}`, {
+            icon: isSecurity ? <ShieldAlert className="w-4 h-4 text-red-500" /> : <Bell className="w-4 h-4" />,
+            duration: isSecurity ? 8000 : 5000
           });
         }
       })
