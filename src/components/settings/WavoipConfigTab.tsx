@@ -297,13 +297,18 @@ export default function WavoipConfigPage() {
         <Card className="glass-card">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Latência Média</p>
-              <div className="p-1.5 rounded-full bg-secondary text-muted-foreground">
-                <Activity className="w-3.5 h-3.5" />
-              </div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Alertas</p>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className={`h-6 w-6 ${isAlertEnabled ? 'text-primary' : 'text-muted-foreground'}`}
+                onClick={() => setIsAlertEnabled(!isAlertEnabled)}
+              >
+                <Bell className={`w-3.5 h-3.5 ${isAlertEnabled ? 'fill-primary' : ''}`} />
+              </Button>
             </div>
-            <p className="text-xl font-bold text-foreground">124ms</p>
-            <p className="text-[10px] text-emerald-600 mt-1">Ótimo desempenho</p>
+            <p className="text-xl font-bold text-foreground">{isAlertEnabled ? 'Ativos' : 'Silenciados'}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Notificação de falhas críticas</p>
           </CardContent>
         </Card>
       </div>
