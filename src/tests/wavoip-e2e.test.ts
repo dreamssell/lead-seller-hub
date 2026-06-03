@@ -44,7 +44,7 @@ describe('Wavoip History E2E Logic', () => {
       const dedupMs = dedupWindow * 60 * 1000;
       const isDuplicate = currentHistory.some(h => {
         const isSameContent = h.message === event.message;
-        const isWithinWindow = (now - new Date(h.date).getTime()) < dedupMs;
+        const isWithinWindow = (now - new Date(h.date).getTime()) <= dedupMs;
         return isSameContent && isWithinWindow;
       });
       
