@@ -6,9 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { CheckCircle2, Loader2, Plug, RefreshCw, ShieldCheck, XCircle } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CheckCircle2, Loader2, Plug, RefreshCw, ShieldCheck, XCircle, History } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import UazAuditTab from '@/components/settings/UazAuditTab';
 
 type Provider = 'uaz' | 'meta';
 type Status = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -176,17 +178,36 @@ export default function WhatsAppPage() {
 
   return (
     <AppLayout title="WhatsApp Business" subtitle="Escolha o provedor e configure a integração por cliente">
-      {loading ? (
-        <div className="flex items-center justify-center py-20 text-muted-foreground">
-          <Loader2 className="w-5 h-5 mr-2 animate-spin" /> Carregando...
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {connections.map((c) => (
-            <ConnectionCard key={c.id} conn={c} onSaved={load} />
-          ))}
-        </div>
-      )}
+      <Tabs defaultValue="connections" className="space-y-6">
+        <TabsList className="bg-secondary/40 border border-border/40 p-1">
+          <TabsTrigger value="connections" className="gap-2">
+            <Plug className="w-4 h-4" />
+            Conexões
+          </TabsTrigger>
+          <TabsTrigger value="audit" className="gap-2">
+            <History className="w-4 h-4" />
+            Auditoria UAZ
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="connections">
+          {loading ? (
+            <div className="flex items-center justify-center py-20 text-muted-foreground">
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" /> Carregando...
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {connections.map((c) => (
+                <ConnectionCard key={c.id} conn={c} onSaved={load} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="audit">
+          <UazAuditTab />
+        </TabsContent>
+      </Tabs>
     </AppLayout>
   );
 }
