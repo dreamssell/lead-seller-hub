@@ -8,23 +8,31 @@ import {
   RefreshCw, 
   XCircle,
   Zap,
-  History,
-  ShieldCheck
+  Filter,
+  BarChart3
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
 export default function UazStatusPanel() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
+  const [filterTenant, setFilterTenant] = useState<string>('all');
+  const [filterChannel, setFilterChannel] = useState<string>('all');
+  const [subCompanies, setSubCompanies] = useState<any[]>([]);
+  const [queueStats, setQueueStats] = useState<any>(null);
+  const [loadingQueue, setLoadingQueue] = useState(false);
 
-  const fetchStatus = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
-      const { data: res, error } = await supabase.functions.invoke('uaz-healthcheck');
+      const { data: res, error } = await supabase.functions.invoke('uaz-healthcheck', {
+        body: { tenant_id: filterTenant === 'all' ? null : filterTenant, channel_type: filterChannel === 'all' ? null : filterChannel }
+      });
       if (error) throw error;
       setData(res);
     } catch (err) {
@@ -34,11 +42,38 @@ export default function UazStatusPanel() {
     }
   };
 
+  const fetchQueue = async () => {
+    setLoadingQueue(true);
+    try {
+      const { data: res } = await supabase.functions.invoke('uaz-queue-stats', {
+        body: { tenant_id: filterTenant === 'all' ? null : filterTenant, channel_type: filterChannel === 'all' ? null : filterChannel }
+      });
+      if (res) setQueueStats(res);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingQueue(false);
+    }
+  };
+
+  const fetchSubCompanies = async () => {
+    const { data } = await supabase.from('sub_companies').select('id, name');
+    if (data) setSubCompanies(data);
+  };
+
   useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 60000);
-    return () => clearInterval(interval);
+    fetchSubCompanies();
   }, []);
+
+  useEffect(() => {
+    fetchData();
+    fetchQueue();
+    const interval = setInterval(() => {
+      fetchData();
+      fetchQueue();
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [filterTenant, filterChannel]);
 
   if (loading && !data) {
     return (
