@@ -716,6 +716,20 @@ export default function WavoipConfigPage() {
                 Utilize este segredo para validar o header <code className="bg-secondary px-1">X-Wavoip-Signature</code> em sua integração. O versionamento permite migração sem downtime.
               </p>
             </div>
+            
+            <div className="pt-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-7 text-[10px] gap-2 border-primary/20 hover:bg-primary/5"
+                onClick={runSecurityRotationTests}
+                disabled={testing}
+              >
+                <TestTube className="w-3 h-3 text-primary" />
+                Validar Rotação de Segredos
+              </Button>
+            </div>
+
 
             <p className="text-[10px] text-muted-foreground italic">
               Configure esta URL no painel Wavoip para receber atualizações de chamadas e mensagens em tempo real.
