@@ -2296,9 +2296,7 @@ export default function WavoipConfigPage({ standalone = false }: { standalone?: 
                                 onClick={() => {
                                   setFilterType('all');
                                   setSearchTerm(hash.substring(7, 12));
-                                  const tabs = document.querySelector('[role="tablist"]');
-                                  const firstTab = tabs?.querySelector('[value="config"]') as HTMLElement;
-                                  firstTab?.click();
+                                  setActiveTab('config');
                                 }}
                               >
                                 <Eye className="w-3 h-3" /> Ver Auditoria
