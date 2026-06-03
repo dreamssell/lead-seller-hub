@@ -1120,6 +1120,7 @@ export default function WavoipConfigPage() {
             <TableBody>
                 {paginatedHistory.map((item) => (
 
+
                   <Fragment key={item.id}>
                     <TableRow className="border-border/40 hover:bg-secondary/10 transition-colors cursor-pointer" onClick={() => toggleRow(item.id)}>
                       <TableCell className="text-xs font-mono text-muted-foreground">
