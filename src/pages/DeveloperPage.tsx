@@ -44,7 +44,7 @@ const TABS = [
   { value: 'fields',      label: 'Campos',       subtitle: 'Dados personalizados', icon: ListChecks,   Comp: CustomFieldsTab, advanced: true },
   { value: 'smtp',        label: 'SMTP',         subtitle: 'Envio de e-mail', icon: Mail,         Comp: SmtpTab, advanced: true },
   { value: 'ai',          label: 'IA',           subtitle: 'Modelos e prompt', icon: Sparkles,     Comp: AiTab, advanced: true },
-  { value: 'wavoip',      label: 'Wavoip',       subtitle: 'WhatsApp + VoIP',  icon: Phone,        Comp: WavoipConfigTab, advanced: false },
+  { value: 'wavoip',      label: 'Wavoip',       subtitle: 'WhatsApp + VoIP',  icon: Phone,        Comp: WavoipConfigPage, advanced: false },
 ];
 
 export default function DeveloperPage() {
