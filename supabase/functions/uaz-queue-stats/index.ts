@@ -50,6 +50,7 @@ Deno.serve(async (req) => {
 
       history.push({
         time: time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: time.toISOString(),
         pending: count || 0
       });
     }

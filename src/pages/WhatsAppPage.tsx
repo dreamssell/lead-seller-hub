@@ -7,12 +7,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CheckCircle2, Loader2, Plug, RefreshCw, ShieldCheck, XCircle, History, Activity, Zap, Clock, LineChart as LineChartIcon, AlertTriangle, Settings, ChevronLeft, ChevronRight, MessageCircle, BarChart3, Filter } from 'lucide-react';
+import { CheckCircle2, Loader2, Plug, RefreshCw, ShieldCheck, XCircle, History, Activity, Zap, Clock, LineChart as LineChartIcon, AlertTriangle, Settings, ChevronLeft, ChevronRight, MessageCircle, BarChart3, Filter, ExternalLink, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import UazAuditTab from '@/components/settings/UazAuditTab';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { motion } from 'framer-motion';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 type Provider = 'uaz' | 'meta';
 type Status = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -87,6 +90,12 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
   const [subCompanies, setSubCompanies] = useState<any[]>([]);
   const [resendingLast, setResendingLast] = useState(false);
 
+  const [drillDownOpen, setDrillDownOpen] = useState(false);
+  const [drillDownLogs, setDrillDownLogs] = useState<any[]>([]);
+  const [loadingDrillDown, setLoadingDrillDown] = useState(false);
+  const [selectedRange, setSelectedRange] = useState<{ start: string; end: string } | null>(null);
+  const [selectedDetailLog, setSelectedDetailLog] = useState<any>(null);
+
   const loadHistory = async () => {
     setLoadingHistory(true);
     const now = new Date();
@@ -109,6 +118,7 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
           minute: '2-digit',
           ...(latencyPeriod !== '24h' && { day: '2-digit', month: '2-digit' })
         }),
+        timestamp: d.created_at,
         latency: d.latency_ms
       })));
     }
@@ -189,6 +199,40 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
   const loadSubCompanies = async () => {
     const { data } = await supabase.from('sub_companies').select('id, name');
     if (data) setSubCompanies(data);
+  };
+
+  const handleChartClick = async (data: any) => {
+    if (!data || !data.activePayload || data.activePayload.length === 0) return;
+    
+    const point = data.activePayload[0].payload;
+    if (!point.timestamp) return;
+
+    const clickedTime = new Date(point.timestamp);
+    const start = new Date(clickedTime.getTime() - 15 * 60000).toISOString(); // 15 mins before
+    const end = new Date(clickedTime.getTime() + 15 * 60000).toISOString();   // 15 mins after
+
+    setSelectedRange({ start, end });
+    setDrillDownOpen(true);
+    setLoadingDrillDown(true);
+
+    let query = supabase
+      .from('uaz_audit_logs')
+      .select('*')
+      .gte('created_at', start)
+      .lte('created_at', end)
+      .order('created_at', { ascending: false });
+
+    if (filterTenant !== 'all') {
+      query = query.or(`payload->>tenant_id.eq.${filterTenant},payload->>sub_company_id.eq.${filterTenant}`);
+    }
+
+    if (filterChannel !== 'all') {
+      query = query.filter('event_type', 'ilike', `${filterChannel}%`);
+    }
+
+    const { data: logs } = await query;
+    setDrillDownLogs(logs || []);
+    setLoadingDrillDown(false);
   };
 
   useEffect(() => {
@@ -304,10 +348,14 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                     <div className="h-[100px] w-full">
                       {loadingQueue ? <Loader2 className="w-4 h-4 animate-spin m-auto" /> : (
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={queueStats.trend}>
+                          <LineChart data={queueStats.trend} onClick={handleChartClick} style={{ cursor: 'pointer' }}>
                             <XAxis dataKey="time" fontSize={8} hide />
                             <YAxis fontSize={8} hide />
-                            <Line type="monotone" dataKey="pending" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                            <RechartsTooltip 
+                              labelStyle={{ color: 'black', fontSize: '10px' }} 
+                              contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            />
+                            <Line type="monotone" dataKey="pending" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                           </LineChart>
                         </ResponsiveContainer>
                       )}
@@ -325,8 +373,14 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                     </div>
                     <div className="h-[100px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={latencyHistory}>
-                          <Line type="monotone" dataKey="latency" stroke="#10b981" strokeWidth={2} dot={false} />
+                        <LineChart data={latencyHistory} onClick={handleChartClick} style={{ cursor: 'pointer' }}>
+                          <XAxis dataKey="time" fontSize={8} hide />
+                          <YAxis fontSize={8} hide />
+                          <RechartsTooltip 
+                            labelStyle={{ color: 'black', fontSize: '10px' }} 
+                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                          />
+                          <Line type="monotone" dataKey="latency" stroke="#10b981" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
@@ -350,6 +404,137 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
           <Button onClick={handleSave} disabled={saving}>{saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Salvar</Button>
           <Button variant="outline" onClick={handleTest} disabled={testing}>{testing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Testar</Button>
         </div>
+
+        {/* Drill-down Dialog */}
+        <Dialog open={drillDownOpen} onOpenChange={setDrillDownOpen}>
+          <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Activity className="w-5 h-5 text-primary" />
+                Drill-down: Logs no Intervalo Selecionado
+              </DialogTitle>
+              <p className="text-xs text-muted-foreground">
+                {selectedRange ? `${new Date(selectedRange.start).toLocaleString()} - ${new Date(selectedRange.end).toLocaleString()}` : ''}
+              </p>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-hidden flex flex-col gap-4">
+              <ScrollArea className="flex-1 border rounded-md">
+                <Table>
+                  <TableHeader className="bg-muted/50 sticky top-0 z-10">
+                    <TableRow>
+                      <TableHead className="w-[150px]">Data/Hora</TableHead>
+                      <TableHead>Evento</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Latência</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loadingDrillDown ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-32 text-center">
+                          <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+                          Carregando logs...
+                        </TableCell>
+                      </TableRow>
+                    ) : drillDownLogs.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                          Nenhum log encontrado para este intervalo.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      drillDownLogs.map((log) => (
+                        <TableRow key={log.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedDetailLog(log)}>
+                          <TableCell className="text-[10px] font-medium">
+                            {new Date(log.created_at).toLocaleString([], { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </TableCell>
+                          <TableCell className="font-mono text-[10px]">{log.event_type}</TableCell>
+                          <TableCell>
+                            <Badge variant={log.status === 'success' ? 'outline' : 'destructive'} className="text-[9px] h-5">
+                              {log.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-[10px]">{log.latency_ms ? `${log.latency_ms}ms` : '-'}</TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="icon" className="h-6 w-6">
+                              <Eye className="h-3 w-3" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Log Detail Dialog */}
+        <Dialog open={!!selectedDetailLog} onOpenChange={() => setSelectedDetailLog(null)}>
+          <DialogContent className="max-w-2xl max-h-[70vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                Detalhes do Log
+                <Badge variant={selectedDetailLog?.status === 'success' ? 'outline' : 'destructive'}>
+                  {selectedDetailLog?.status}
+                </Badge>
+              </DialogTitle>
+            </DialogHeader>
+            <ScrollArea className="flex-1 pr-4">
+              <div className="space-y-4 py-2">
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Data/Hora</Label>
+                    <p className="font-medium">{selectedDetailLog?.created_at && new Date(selectedDetailLog.created_at).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Latência</Label>
+                    <p className="font-medium">{selectedDetailLog?.latency_ms}ms</p>
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Evento</Label>
+                    <p className="font-mono bg-secondary/30 p-1 rounded">{selectedDetailLog?.event_type}</p>
+                  </div>
+                </div>
+
+                {selectedDetailLog?.final_cause && (
+                  <div>
+                    <Label className="text-[10px] uppercase font-bold text-destructive">Última Causa</Label>
+                    <p className="text-sm font-medium text-destructive bg-destructive/5 p-2 rounded border border-destructive/20 mt-1">
+                      {selectedDetailLog.final_cause}
+                    </p>
+                  </div>
+                )}
+
+                <div>
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">Payload (Inclui Headers se disponível)</Label>
+                  <pre className="mt-1 p-2 bg-secondary/50 rounded-md text-[10px] overflow-auto max-h-[200px] font-mono border border-border/40">
+                    {JSON.stringify(selectedDetailLog?.payload, null, 2)}
+                  </pre>
+                </div>
+
+                <div>
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">Resposta</Label>
+                  <pre className="mt-1 p-2 bg-secondary/50 rounded-md text-[10px] overflow-auto max-h-[200px] font-mono border border-border/40">
+                    {JSON.stringify(selectedDetailLog?.response, null, 2)}
+                  </pre>
+                </div>
+
+                {selectedDetailLog?.full_trace && (
+                  <div>
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Trace Completo</Label>
+                    <pre className="mt-1 p-2 bg-secondary/50 rounded-md text-[10px] overflow-auto max-h-[200px] font-mono border border-border/40">
+                      {JSON.stringify(selectedDetailLog.full_trace, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );
