@@ -15,7 +15,8 @@ import {
   ChevronRight,
   BookOpen,
   ArrowRightLeft,
-  Zap
+  Zap,
+  Phone
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import GeneralTab from '@/components/settings/GeneralTab';
