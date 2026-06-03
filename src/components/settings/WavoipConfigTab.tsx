@@ -46,6 +46,8 @@ export default function WavoipConfigPage() {
   const [validated, setTestingValidated] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isLive, setIsLive] = useState(true);
+  const [webhookSecret, setWebhookSecret] = useState('wv_' + Math.random().toString(36).substring(7));
   const [lastValidation, setLastValidation] = useState<{
     status: 'success' | 'error' | 'none';
     timestamp: string | null;
