@@ -116,6 +116,8 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
     }
   }, [conn.status, conn.provider, latencyPeriod]);
 
+  const [resendingLast, setResendingLast] = useState(false);
+
   useEffect(() => {
     if (conn.provider === 'uaz' && conn.status === 'connected') {
       const loadMetrics = async () => {
@@ -163,6 +165,27 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
       const loadSettings = async () => {
         const { data } = await supabase.from('uaz_system_settings').select('alert_threshold_latency').eq('id', 'global').single();
         if (data) setGlobalThreshold(data.alert_threshold_latency);
+      };
+
+      const handleManualResend = async () => {
+        if (!lastSendAttempt || lastSendAttempt.status !== 'error') return;
+        setResendingLast(true);
+        try {
+          const { data, error } = await supabase.functions.invoke('uaz-send-message', {
+            body: {
+              customer_id: lastSendAttempt.payload?.customer_id,
+              content: lastSendAttempt.payload?.content,
+              client_msg_id: lastSendAttempt.payload?.client_msg_id || `manual-retry-${lastSendAttempt.id}`
+            }
+          });
+          if (error) throw error;
+          toast.success('Mensagem reenviada com sucesso');
+          loadMetrics();
+        } catch (err: any) {
+          toast.error('Erro ao reenviar', { description: err.message });
+        } finally {
+          setResendingLast(false);
+        }
       };
 
       loadMetrics();
@@ -341,10 +364,44 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                             </div>
                           </div>
                           {lastSendAttempt.status === 'error' && (
-                            <div className="mt-2 p-2 bg-destructive/5 rounded-lg border border-destructive/20">
-                              <p className="text-[10px] text-destructive font-medium leading-relaxed">
-                                {lastSendAttempt.message || (typeof lastSendAttempt.response === 'string' ? lastSendAttempt.response : JSON.stringify(lastSendAttempt.response))}
-                              </p>
+                            <div className="mt-2 space-y-2">
+                              <div className="p-2 bg-destructive/5 rounded-lg border border-destructive/20">
+                                <p className="text-[10px] text-destructive font-medium leading-relaxed">
+                                  {lastSendAttempt.message || (typeof lastSendAttempt.response === 'string' ? lastSendAttempt.response : JSON.stringify(lastSendAttempt.response))}
+                                </p>
+                              </div>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="w-full h-8 text-[10px] gap-2 border-destructive/30 hover:bg-destructive/10 text-destructive font-bold"
+                                onClick={() => {
+                                  if (lastSendAttempt.payload?.customer_id && lastSendAttempt.payload?.content) {
+                                    const retry = async () => {
+                                      setResendingLast(true);
+                                      try {
+                                        const { error } = await supabase.functions.invoke('uaz-send-message', {
+                                          body: {
+                                            customer_id: lastSendAttempt.payload.customer_id,
+                                            content: lastSendAttempt.payload.content,
+                                            client_msg_id: `manual-retry-${lastSendAttempt.id}`
+                                          }
+                                        });
+                                        if (error) throw error;
+                                        toast.success('Reenvio solicitado com sucesso');
+                                      } catch (e: any) {
+                                        toast.error('Falha no reenvio', { description: e.message });
+                                      } finally {
+                                        setResendingLast(false);
+                                      }
+                                    };
+                                    retry();
+                                  }
+                                }}
+                                disabled={resendingLast}
+                              >
+                                {resendingLast ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                                REENVIAR AGORA
+                              </Button>
                             </div>
                           )}
                         </div>
