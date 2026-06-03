@@ -7,11 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CheckCircle2, Loader2, Plug, RefreshCw, ShieldCheck, XCircle, History, Activity, Zap, Clock, LineChart as LineChartIcon, AlertTriangle, Settings } from 'lucide-react';
+import { CheckCircle2, Loader2, Plug, RefreshCw, ShieldCheck, XCircle, History, Activity, Zap, Clock, LineChart as LineChartIcon, AlertTriangle, Settings, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import UazAuditTab from '@/components/settings/UazAuditTab';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { motion } from 'framer-motion';
 
 type Provider = 'uaz' | 'meta';
 type Status = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -73,6 +74,13 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
   const [latencyPeriod, setLatencyPeriod] = useState<'24h' | '7d' | '30d'>('24h');
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [latencyThreshold, setLatencyThreshold] = useState<number>(conn.metadata?.latency_threshold ?? 500);
+  const [globalThreshold, setGlobalThreshold] = useState<number>(500);
+  const [lastSendAttempt, setLastSendAttempt] = useState<any>(null);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [alertsPage, setAlertsPage] = useState(0);
+  const [totalAlerts, setTotalAlerts] = useState(0);
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     if (conn.provider === 'uaz' && conn.status === 'connected') {
@@ -113,7 +121,7 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
       const loadMetrics = async () => {
         const { data: recentLogs } = await supabase
           .from('uaz_audit_logs')
-          .select('latency_ms, created_at, status')
+          .select('latency_ms, created_at, status, event_type, response, message')
           .order('created_at', { ascending: false })
           .limit(20);
         
@@ -132,20 +140,46 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
             failures: failuresCount,
             lastAttempt: recentLogs[0]?.created_at
           });
+
+          const lastSend = recentLogs.find(l => l.event_type === 'send_message');
+          if (lastSend) setLastSendAttempt(lastSend);
         }
       };
+
+      const loadAlerts = async () => {
+        setLoadingAlerts(true);
+        const { data, count } = await supabase
+          .from('uaz_audit_logs')
+          .select('*', { count: 'exact' })
+          .or(`status.eq.error,latency_ms.gt.${latencyThreshold}`)
+          .order('created_at', { ascending: false })
+          .range(alertsPage * 5, (alertsPage + 1) * 5 - 1);
+        
+        setAlerts(data || []);
+        setTotalAlerts(count || 0);
+        setLoadingAlerts(false);
+      };
+
+      const loadSettings = async () => {
+        const { data } = await supabase.from('uaz_system_settings').select('alert_threshold_latency').eq('id', 'global').single();
+        if (data) setGlobalThreshold(data.alert_threshold_latency);
+      };
+
       loadMetrics();
+      loadAlerts();
+      loadSettings();
       
       const channel = supabase
-        .channel('uaz_metrics_realtime')
+        .channel(`uaz_metrics_${conn.id}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'uaz_audit_logs' }, () => {
           loadMetrics();
+          loadAlerts();
         })
         .subscribe();
         
       return () => { supabase.removeChannel(channel); };
     }
-  }, [conn.status, conn.provider]);
+  }, [conn.status, conn.provider, alertsPage, latencyThreshold]);
 
   const updateThreshold = async (val: number) => {
     setLatencyThreshold(val);
@@ -251,98 +285,201 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 px-3 py-2 bg-secondary/10 rounded-lg border border-border/40">
-                  <div className="flex items-center gap-2 flex-1">
-                    <Settings className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Alerta de Latência:</span>
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Settings className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-xs font-bold text-foreground uppercase tracking-wider">Configurações & Diagnóstico</span>
+                    </div>
+                    <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={() => setShowSettings(!showSettings)}>
+                      {showSettings ? 'Ocultar' : 'Ver Detalhes'}
+                    </Button>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Input 
-                      type="number" 
-                      value={latencyThreshold} 
-                      onChange={(e) => updateThreshold(Number(e.target.value))}
-                      className="w-20 h-7 text-xs px-2"
-                    />
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase">ms</span>
+
+                  {showSettings && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-3 border-t border-border/40 pt-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-[10px] uppercase font-bold text-muted-foreground">Limite por Canal (ms)</Label>
+                          <div className="flex items-center gap-2">
+                            <Input 
+                              type="number" 
+                              value={latencyThreshold} 
+                              onChange={(e) => updateThreshold(Number(e.target.value))}
+                              className="h-8 text-xs"
+                            />
+                            <Badge variant="outline" className="h-8">ms</Badge>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[10px] uppercase font-bold text-muted-foreground">Limite Global (Empresa)</Label>
+                          <div className="flex items-center gap-2 h-8 px-3 rounded-md bg-secondary/30 border border-border/40 text-xs font-medium">
+                            {globalThreshold} ms
+                          </div>
+                        </div>
+                      </div>
+
+                      {lastSendAttempt && (
+                        <div className="bg-secondary/10 p-3 rounded-xl border border-border/40 space-y-2">
+                          <div className="flex items-center gap-2 mb-1">
+                            <MessageCircle className="w-3.5 h-3.5 text-primary" />
+                            <span className="text-[10px] font-bold text-foreground uppercase">Última Tentativa de Envio</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-[10px]">
+                            <div>
+                              <p className="text-muted-foreground uppercase font-bold">Status</p>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                {lastSendAttempt.status === 'success' ? <CheckCircle2 className="w-3 h-3 text-success" /> : <XCircle className="w-3 h-3 text-destructive" />}
+                                <span className={lastSendAttempt.status === 'success' ? 'text-success' : 'text-destructive font-bold'}>
+                                  {lastSendAttempt.status.toUpperCase()}
+                                </span>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground uppercase font-bold">Data/Hora</p>
+                              <p className="mt-0.5 font-medium">{new Date(lastSendAttempt.created_at).toLocaleString('pt-BR')}</p>
+                            </div>
+                          </div>
+                          {lastSendAttempt.status === 'error' && (
+                            <div className="mt-2 p-2 bg-destructive/5 rounded-lg border border-destructive/20">
+                              <p className="text-[10px] text-destructive font-medium leading-relaxed">
+                                {lastSendAttempt.message || (typeof lastSendAttempt.response === 'string' ? lastSendAttempt.response : JSON.stringify(lastSendAttempt.response))}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between px-1">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                            <span className="text-[10px] font-bold text-foreground uppercase">Histórico de Alertas</span>
+                          </div>
+                          <p className="text-[9px] text-muted-foreground uppercase font-bold">{totalAlerts} Alertas</p>
+                        </div>
+                        <div className="bg-background/50 rounded-xl border border-border/20 overflow-hidden">
+                          {loadingAlerts ? (
+                            <div className="p-8 flex justify-center"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
+                          ) : alerts.length > 0 ? (
+                            <div className="divide-y divide-border/20">
+                              {alerts.map(alert => (
+                                <div key={alert.id} className="p-2.5 hover:bg-secondary/20 transition-colors">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="text-[10px] font-medium truncate">{alert.message || 'Alerta de degradação'}</p>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <Badge variant="outline" className={`text-[8px] h-4 py-0 ${alert.status === 'error' ? 'text-destructive' : 'text-amber-500'}`}>
+                                          {alert.event_type.toUpperCase()}
+                                        </Badge>
+                                        <span className="text-[9px] text-muted-foreground">
+                                          {new Date(alert.created_at).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                      <p className="text-[10px] font-bold">{alert.latency_ms}ms</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="p-8 text-center text-[10px] text-muted-foreground italic">Nenhum alerta recente.</div>
+                          )}
+                        </div>
+                        {totalAlerts > 5 && (
+                          <div className="flex items-center justify-center gap-2 pt-1">
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setAlertsPage(p => Math.max(0, p - 1))} disabled={alertsPage === 0}>
+                              <ChevronLeft className="w-3 h-3" />
+                            </Button>
+                            <span className="text-[9px] font-bold tabular-nums">{alertsPage + 1} / {Math.ceil(totalAlerts / 5)}</span>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setAlertsPage(p => p + 1)} disabled={alertsPage >= Math.ceil(totalAlerts / 5) - 1}>
+                              <ChevronRight className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+
+                <div className="bg-secondary/20 p-3 rounded-xl border border-border/40">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <LineChartIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Desempenho da Rede</span>
+                    </div>
+                    <div className="flex bg-background/50 p-0.5 rounded-md border border-border/40">
+                      {(['24h', '7d', '30d'] as const).map((p) => (
+                        <button
+                          key={p}
+                          onClick={() => setLatencyPeriod(p)}
+                          className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all ${
+                            latencyPeriod === p 
+                              ? 'bg-primary text-primary-foreground shadow-sm' 
+                              : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {p.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="h-[120px] w-full">
+                    {loadingHistory ? (
+                      <div className="h-full flex items-center justify-center">
+                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : latencyHistory.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={latencyHistory}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                          <XAxis 
+                            dataKey="time" 
+                            fontSize={8} 
+                            tickLine={false} 
+                            axisLine={false} 
+                            stroke="#888888"
+                            interval="preserveStartEnd"
+                            minTickGap={20}
+                          />
+                          <YAxis 
+                            fontSize={8} 
+                            tickLine={false} 
+                            axisLine={false} 
+                            stroke="#888888"
+                            tickFormatter={(v) => `${v}ms`}
+                          />
+                          <RechartsTooltip 
+                            contentStyle={{ 
+                              backgroundColor: 'rgba(23, 23, 23, 0.95)', 
+                              border: '1px solid rgba(255,255,255,0.1)',
+                              borderRadius: '8px',
+                              fontSize: '10px'
+                            }}
+                            itemStyle={{ color: '#10b981' }}
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="latency" 
+                            stroke="#10b981" 
+                            strokeWidth={2} 
+                            dot={false}
+                            activeDot={{ r: 4, fill: '#10b981' }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-[10px] text-muted-foreground italic">
+                        Sem dados de latência no período.
+                      </div>
+                    )}
                   </div>
                 </div>
               </>
             )}
-
-            <div className="bg-secondary/20 p-3 rounded-xl border border-border/40">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <LineChartIcon className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Histórico de Latência</span>
-                </div>
-                <div className="flex bg-background/50 p-0.5 rounded-md border border-border/40">
-                  {(['24h', '7d', '30d'] as const).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => setLatencyPeriod(p)}
-                      className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all ${
-                        latencyPeriod === p 
-                          ? 'bg-primary text-primary-foreground shadow-sm' 
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {p.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="h-[120px] w-full">
-                {loadingHistory ? (
-                  <div className="h-full flex items-center justify-center">
-                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                  </div>
-                ) : latencyHistory.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={latencyHistory}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                      <XAxis 
-                        dataKey="time" 
-                        fontSize={8} 
-                        tickLine={false} 
-                        axisLine={false} 
-                        stroke="#888888"
-                        interval="preserveStartEnd"
-                        minTickGap={20}
-                      />
-                      <YAxis 
-                        fontSize={8} 
-                        tickLine={false} 
-                        axisLine={false} 
-                        stroke="#888888"
-                        tickFormatter={(v) => `${v}ms`}
-                      />
-                      <RechartsTooltip 
-                        contentStyle={{ 
-                          backgroundColor: 'rgba(23, 23, 23, 0.95)', 
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          borderRadius: '8px',
-                          fontSize: '10px'
-                        }}
-                        itemStyle={{ color: '#10b981' }}
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="latency" 
-                        stroke="#10b981" 
-                        strokeWidth={2} 
-                        dot={false}
-                        activeDot={{ r: 4, fill: '#10b981' }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-[10px] text-muted-foreground italic">
-                    Sem dados de latência no período.
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
         )}
 
