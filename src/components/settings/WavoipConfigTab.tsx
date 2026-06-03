@@ -1222,13 +1222,14 @@ export default function WavoipConfigPage() {
                   </Fragment>
                 ))}
 
+                {paginatedHistory.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-xs italic">
+                      Nenhum log encontrado para os filtros selecionados.
+                    </TableCell>
+                  </TableRow>
+                )}
 
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-xs italic">
-                    Nenhum log encontrado para os filtros selecionados.
-                  </TableCell>
-                </TableRow>
-              )}
             </TableBody>
           </Table>
           
