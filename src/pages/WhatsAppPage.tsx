@@ -160,8 +160,14 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
         setLoadingAlerts(false);
       };
 
+      const loadSettings = async () => {
+        const { data } = await supabase.from('uaz_system_settings').select('alert_threshold_latency').eq('id', 'global').single();
+        if (data) setGlobalThreshold(data.alert_threshold_latency);
+      };
+
       loadMetrics();
       loadAlerts();
+      loadSettings();
       
       const channel = supabase
         .channel(`uaz_metrics_${conn.id}`)
