@@ -617,6 +617,8 @@ function ConnectionCard({ conn, onSaved }: { conn: Connection; onSaved: () => vo
                 </div>
 
                 <div className="bg-secondary/20 p-3 rounded-xl border border-border/40">
+                  <div className="flex flex-col gap-3 mb-3">
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <BarChart3 className="w-3.5 h-3.5 text-primary" />
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Fila de Mensagens (Tendência)</span>
