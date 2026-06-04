@@ -92,14 +92,18 @@ describe('DocumentationPage', () => {
     expect(screen.getByText('Endpoints REST')).toBeInTheDocument();
 
     // 2. Alternar para MCP Server
-    const mcpTab = screen.getByRole('tab', { name: /MCP Server/i });
+    const tabs = screen.getAllByRole('tab');
+    const mcpTab = tabs.find(t => t.textContent?.includes('MCP Server'));
+    if (!mcpTab) throw new Error('MCP Tab not found');
     fireEvent.click(mcpTab);
     expect(await screen.findByText(/Model Context Protocol/i)).toBeInTheDocument();
 
     // 3. Alternar para Webhooks
-    const webhooksTab = screen.getByRole('tab', { name: /Webhooks/i });
+    const webhooksTab = tabs.find(t => t.textContent?.includes('Webhooks'));
+    if (!webhooksTab) throw new Error('Webhooks Tab not found');
     fireEvent.click(webhooksTab);
     expect(await screen.findByText(/Webhooks de Saída/i)).toBeInTheDocument();
+
 
 
     // 4. Alternar para Console
