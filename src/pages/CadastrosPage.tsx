@@ -1935,21 +1935,28 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let intervalId: any;
+
     if (d.correlation_id === currentCorrId && currentCorrId && cardRef.current) {
       cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setShowDetail(true);
-      // Sincronizar com o banco de dados se houver alteração
+      
       const syncStatus = async () => {
         const { data, error } = await supabase.from('crm_webhook_logs').select('*, crm_webhooks(url)').eq('id', d.id).single();
-        if (!error && data && (data.status !== d.status || data.retry_count !== d.retry_count)) {
-           // Em um cenário real com gerenciamento de estado global, atualizaríamos o estado pai
-           // Por enquanto, logamos e poderíamos forçar um re-fetch se necessário
-           console.log('Status out of sync for correlation_id:', d.correlation_id);
+        if (!error && data && (data.status !== d.status || data.retry_count !== (d.retry_count || 0))) {
+           setD(data);
+           console.log('Status synchronized for correlation_id:', d.correlation_id);
         }
       };
+      
       syncStatus();
+      intervalId = setInterval(syncStatus, 3000); // Polling cada 3s enquanto aberto/destacado
     }
-  }, [currentCorrId, d.correlation_id, d.status, d.retry_count]);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [currentCorrId, d.correlation_id]);
   
   return (
     <>
