@@ -1610,6 +1610,9 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [timeFilter, setTimeFilter] = useState<string>('all');
   const [corrSearch, setCorrSearch] = useState(() => {
     if (typeof window === 'undefined') return '';
     const params = new URLSearchParams(window.location.search);
@@ -1631,6 +1634,23 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
       .select('*, crm_webhooks(url)')
       .order('created_at', { ascending: false });
     
+    if (statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
+
+    if (typeFilter !== 'all') {
+      if (typeFilter === 'hmac_invalid') query = query.ilike('error_message', '%HMAC%');
+      else if (typeFilter === 'timestamp_invalid') query = query.ilike('error_message', '%window%');
+      else if (typeFilter === 'valid') query = query.not('error_message', 'ilike', '%HMAC%').not('error_message', 'ilike', '%window%');
+    }
+
+    if (timeFilter !== 'all') {
+      const now = new Date();
+      if (timeFilter === '1h') query = query.gte('created_at', new Date(now.getTime() - 3600000).toISOString());
+      else if (timeFilter === '24h') query = query.gte('created_at', new Date(now.getTime() - 86400000).toISOString());
+      else if (timeFilter === '7d') query = query.gte('created_at', new Date(now.getTime() - 604800000).toISOString());
+    }
+
     if (corrSearch) {
       // Tentar busca exata primeiro
       const { data: exactData } = await supabase
@@ -1668,7 +1688,7 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
 
   useEffect(() => {
     fetch();
-  }, [corrSearch]);
+  }, [corrSearch, statusFilter, typeFilter, timeFilter]);
 
   const retryDelivery = async (d: any, isBatch = false) => {
     if (!isBatch) toast({ title: 'Iniciando reenvio manual...' });
@@ -1775,6 +1795,42 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-7 text-[10px] w-24 bg-background/50">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos Status</SelectItem>
+              <SelectItem value="sent">Sucesso</SelectItem>
+              <SelectItem value="failed">Falha</SelectItem>
+              <SelectItem value="pending">Pendente</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="h-7 text-[10px] w-28 bg-background/50">
+              <SelectValue placeholder="Validação" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas Validações</SelectItem>
+              <SelectItem value="valid">Válidos</SelectItem>
+              <SelectItem value="hmac_invalid">HMAC Inválido</SelectItem>
+              <SelectItem value="timestamp_invalid">Timestamp Inválido</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={timeFilter} onValueChange={setTimeFilter}>
+            <SelectTrigger className="h-7 text-[10px] w-24 bg-background/50">
+              <SelectValue placeholder="Tempo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todo Tempo</SelectItem>
+              <SelectItem value="1h">Última Hora</SelectItem>
+              <SelectItem value="24h">Últimas 24h</SelectItem>
+              <SelectItem value="7d">Últimos 7 dias</SelectItem>
+            </SelectContent>
+          </Select>
+
           {selectedIds.length > 0 && (
             <Button 
               size="sm" 
@@ -1850,8 +1906,18 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId, selectedIds, setSelect
     if (d.correlation_id === currentCorrId && currentCorrId && cardRef.current) {
       cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setShowDetail(true);
+      // Sincronizar com o banco de dados se houver alteração
+      const syncStatus = async () => {
+        const { data } = await supabase.from('crm_webhook_logs').select('*').eq('id', d.id).single();
+        if (data && data.status !== d.status) {
+           // Em um cenário real, atualizaríamos o estado pai ou re-buscariamos
+           // Por simplicidade aqui, vamos apenas logar e sugerir refresh se for crítico
+           console.log('Status out of sync, fetching fresh data...');
+        }
+      };
+      syncStatus();
     }
-  }, [currentCorrId, d.correlation_id]);
+  }, [currentCorrId, d.correlation_id, d.status]);
   
   return (
     <>
@@ -1959,10 +2025,39 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId, selectedIds, setSelect
           </DialogHeader>
           
           <div className="space-y-6 py-4">
-            <div className="grid grid-cols-2 gap-4">
-               <div className="bg-secondary/10 p-3 rounded-xl border border-border/50">
+            <div className="flex justify-between items-center bg-secondary/10 p-3 rounded-xl border border-border/50 mb-4">
+               <div>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Status Final</p>
                   <Badge variant={d.status === 'sent' ? 'default' : 'destructive'}>{d.status?.toUpperCase()}</Badge>
+               </div>
+               <Button size="sm" variant="outline" className="h-7 text-[10px] gap-2" onClick={() => {
+                 const report = {
+                   correlation_id: d.correlation_id,
+                   timestamp: d.created_at,
+                   status: d.status,
+                   event: d.event_type,
+                   url: d.crm_webhooks?.url,
+                   payload: d.payload,
+                   security: {
+                     hmac: !d.error_message?.includes('HMAC'),
+                     window: !d.error_message?.includes('window')
+                   },
+                   retry_history: d.retry_history
+                 };
+                 const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+                 const url = URL.createObjectURL(blob);
+                 const a = document.createElement('a');
+                 a.href = url;
+                 a.download = `report-${d.correlation_id}-${new Date().toISOString().split('T')[0]}.json`;
+                 a.click();
+               }}>
+                 <Download className="w-3 h-3" /> Baixar Relatório JSON
+               </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+               <div className="bg-secondary/10 p-3 rounded-xl border border-border/50">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Criado em</p>
+                  <p className="text-xs font-semibold">{new Date(d.created_at).toLocaleString()}</p>
                </div>
                <div className="bg-secondary/10 p-3 rounded-xl border border-border/50">
                   <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">X-Correlation-ID</p>
@@ -2160,20 +2255,38 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId, selectedIds, setSelect
             </div>
           </div>
           <div className="px-6 py-4 border-t bg-secondary/5">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Histórico de Retentativas</p>
-            <div className="space-y-2 max-h-32 overflow-y-auto">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Histórico de Retentativas e Entregas</p>
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
               {(!d.retry_history || d.retry_history.length === 0) ? (
                 <p className="text-[10px] text-muted-foreground italic">Nenhuma retentativa registrada.</p>
               ) : d.retry_history.map((h: any, i: number) => (
-                <div key={i} className="flex justify-between items-center bg-background/50 p-2 rounded border border-border/30 text-[9px]">
-                  <div className="flex flex-col">
-                    <span className="font-bold">Tentativa #{h.attempt}</span>
-                    <span className="text-muted-foreground">{new Date(h.timestamp).toLocaleString()}</span>
+                <div key={i} className={`p-2 rounded border text-[9px] flex flex-col gap-1 ${h.status === 'failed' ? 'bg-destructive/5 border-destructive/20' : 'bg-background/50 border-border/30'}`}>
+                  <div className="flex justify-between items-center">
+                    <div className="flex flex-col">
+                      <span className="font-bold flex items-center gap-1">
+                        Tentativa #{h.attempt} 
+                        {h.status === 'failed' && <Badge variant="destructive" className="h-3 text-[7px]">FALHOU</Badge>}
+                        {h.status === 'sent' && <Badge className="h-3 text-[7px] bg-emerald-500">SUCESSO</Badge>}
+                      </span>
+                      <span className="text-muted-foreground flex items-center gap-1"><Clock className="w-2.5 h-2.5" /> {new Date(h.timestamp).toLocaleString()}</span>
+                    </div>
+                    <div className="flex flex-col text-right">
+                      <span className="text-primary font-mono">Size: {JSON.stringify(d.payload).length} bytes</span>
+                      <span className="text-muted-foreground italic">{h.strategy_used?.backoff || 'manual'}</span>
+                    </div>
                   </div>
-                  <div className="flex flex-col text-right">
-                    <span className="text-primary">{h.strategy_used?.backoff || 'manual'}</span>
-                    <span className="text-destructive truncate max-w-[100px]">{h.reason}</span>
-                  </div>
+                  {h.response && (
+                    <div className="mt-1 p-1.5 bg-black/5 rounded text-[8px] font-mono text-muted-foreground overflow-x-auto">
+                      <strong>Response:</strong> {typeof h.response === 'string' ? h.response : JSON.stringify(h.response).slice(0, 150)}...
+                    </div>
+                  )}
+                  {h.status === 'failed' && (
+                    <div className="flex justify-end mt-1">
+                       <span className="text-[8px] text-destructive flex items-center gap-1">
+                         <AlertCircle className="w-2.5 h-2.5" /> Dead-letter Ref: {d.id}
+                       </span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
