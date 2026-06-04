@@ -680,7 +680,7 @@ function DocumentationContent({ correlationId }: { correlationId: string }) {
                             </p>
                             <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                               {telemetryHistory.length > 0 ? (
-                                telemetryHistory.map((log) => (
+                                telemetryHistory.map((log: any) => (
                                   <div key={log.id} className="p-3 bg-background/50 rounded-xl border border-border/10 flex items-start justify-between gap-4">
                                     <div className="space-y-1">
                                       <div className="flex items-center gap-2">
