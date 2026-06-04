@@ -1592,13 +1592,14 @@ export default function CadastrosPage() {
   return (
     <AppLayout title="Cadastros & CRM" subtitle="Gestão centralizada de contatos, leads, clientes e auditoria">
       <Tabs defaultValue="contacts" className="w-full">
-        <TabsList className={`grid grid-cols-3 ${showWhiteLabel ? 'md:grid-cols-8' : 'md:grid-cols-7'} mb-6`}>
+        <TabsList className={`grid grid-cols-3 ${showWhiteLabel ? 'md:grid-cols-9' : 'md:grid-cols-8'} mb-6`}>
           <TabsTrigger value="contacts"><UserPlus className="w-4 h-4 mr-2" />CRM</TabsTrigger>
           <TabsTrigger value="leads"><Users className="w-4 h-4 mr-2" />Leads</TabsTrigger>
           <TabsTrigger value="customers"><Briefcase className="w-4 h-4 mr-2" />Clientes</TabsTrigger>
           <TabsTrigger value="products"><Package className="w-4 h-4 mr-2" />Produtos</TabsTrigger>
           <TabsTrigger value="tasks"><CheckSquare className="w-4 h-4 mr-2" />Tarefas</TabsTrigger>
           <TabsTrigger value="users"><UserCog className="w-4 h-4 mr-2" />Usuários</TabsTrigger>
+          <TabsTrigger value="templates"><Mail className="w-4 h-4 mr-2" />Templates</TabsTrigger>
           {showWhiteLabel && <TabsTrigger value="whitelabel"><Sparkles className="w-4 h-4 mr-2" />White Label</TabsTrigger>}
           <TabsTrigger value="audit"><History className="w-4 h-4 mr-2" />Auditoria</TabsTrigger>
         </TabsList>
@@ -1608,6 +1609,7 @@ export default function CadastrosPage() {
         <TabsContent value="products"><CrudTab entity="products" /></TabsContent>
         <TabsContent value="tasks"><CrudTab entity="tasks" /></TabsContent>
         <TabsContent value="users"><UsersTab /></TabsContent>
+        <TabsContent value="templates"><EmailTemplatesTab /></TabsContent>
         {showWhiteLabel && <TabsContent value="whitelabel"><WhiteLabelTab /></TabsContent>}
         <TabsContent value="audit"><AuditTab /></TabsContent>
       </Tabs>
