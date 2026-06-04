@@ -1795,6 +1795,42 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-7 text-[10px] w-24 bg-background/50">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos Status</SelectItem>
+              <SelectItem value="sent">Sucesso</SelectItem>
+              <SelectItem value="failed">Falha</SelectItem>
+              <SelectItem value="pending">Pendente</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="h-7 text-[10px] w-28 bg-background/50">
+              <SelectValue placeholder="Validação" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas Validações</SelectItem>
+              <SelectItem value="valid">Válidos</SelectItem>
+              <SelectItem value="hmac_invalid">HMAC Inválido</SelectItem>
+              <SelectItem value="timestamp_invalid">Timestamp Inválido</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={timeFilter} onValueChange={setTimeFilter}>
+            <SelectTrigger className="h-7 text-[10px] w-24 bg-background/50">
+              <SelectValue placeholder="Tempo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todo Tempo</SelectItem>
+              <SelectItem value="1h">Última Hora</SelectItem>
+              <SelectItem value="24h">Últimas 24h</SelectItem>
+              <SelectItem value="7d">Últimos 7 dias</SelectItem>
+            </SelectContent>
+          </Select>
+
           {selectedIds.length > 0 && (
             <Button 
               size="sm" 
