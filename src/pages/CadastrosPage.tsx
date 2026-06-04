@@ -1662,10 +1662,38 @@ function EmailTemplatesTab() {
         ))}
       </div>
 
+      <div className="bg-secondary/20 p-4 rounded-2xl border border-border/50">
+        <div className="flex items-center gap-2 mb-4">
+          <Sparkles className="w-4 h-4 text-primary" />
+          <h4 className="text-sm font-bold">Modo de Teste de Templates</h4>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+          <div className="space-y-1">
+            <Label className="text-[10px]">Nome do Contato</Label>
+            <Input className="h-8" placeholder="Ex: João Silva" defaultValue="Carlos Teste" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[10px]">Agente Responsável</Label>
+            <Input className="h-8" placeholder="Ex: Agente I.A." defaultValue="Sistema Autônomo" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[10px]">Status Atual</Label>
+            <Input className="h-8" defaultValue="Qualificado" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[10px]">X-Correlation-ID</Label>
+            <Input className="h-8" defaultValue="TEST-SIM-999" />
+          </div>
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-3 italic">Os dados acima são usados apenas para simular a prévia visual dos templates abaixo.</p>
+      </div>
+
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Editar Template: {editing?.name}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-4 h-4" /> Editar Template: {editing?.name}
+            </DialogTitle>
             <SheetDescription>Use variáveis como {"{{contact_name}}" }, {"{{agent_name}}" }, {"{{correlation_id}}" }</SheetDescription>
           </DialogHeader>
           
@@ -1685,23 +1713,28 @@ function EmailTemplatesTab() {
               </div>
             </div>
             <div className="space-y-4 border-l pl-6">
-              <Label className="flex items-center gap-2"><Eye className="w-4 h-4" /> Prévia do Conteúdo</Label>
-              <div className="bg-white rounded-xl border border-border p-6 min-h-[400px] text-black">
+              <Label className="flex items-center gap-2 text-primary"><Eye className="w-4 h-4" /> Prévia do Conteúdo Formatado</Label>
+              <div className="bg-white rounded-xl border border-border p-6 min-h-[400px] shadow-sm">
                 <div className="mb-4 pb-2 border-b">
-                  <span className="text-xs font-bold text-gray-500">Assunto:</span>
-                  <p className="text-sm">{editing ? renderPreview(editing.subject) : ''}</p>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase">Assunto</span>
+                  <p className="text-sm font-semibold text-gray-900">{editing ? renderPreview(editing.subject) : ''}</p>
                 </div>
                 <div 
-                  className="prose prose-sm max-w-none"
+                  className="prose prose-sm max-w-none text-gray-800"
                   dangerouslySetInnerHTML={{ __html: editing ? renderPreview(editing.body_html) : '' }} 
                 />
+                <div className="mt-8 pt-4 border-t border-dashed">
+                   <p className="text-[9px] text-gray-400 text-center italic">Esta é uma simulação de envio do sistema CRM</p>
+                </div>
               </div>
             </div>
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button>
-            <Button onClick={save}>Salvar Alterações</Button>
+            <Button onClick={save} className="gap-2">
+              <CheckSquare className="w-4 h-4" /> Salvar Template
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

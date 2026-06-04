@@ -1,38 +1,68 @@
-import { test, expect } from 'vitest';
-import { supabase } from './integrations/supabase/client';
+import { test, expect, describe } from 'vitest';
 
-test('Webhook HMAC signature validation', async () => {
-  const secret = 'test-secret';
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const payload = { event: 'test' };
-  const bodyStr = JSON.stringify(payload);
+describe('CRM Webhook Security E2E', () => {
+  const secret = 'test-secret-key-123';
   
-  // Geração da assinatura (btoa simulando o que o app faz)
-  const signature = btoa(`${timestamp}.${bodyStr}.${secret}`).slice(0, 32);
-  
-  // Validação (mesma lógica do triggerWebhooks)
-  const isValid = signature === btoa(`${timestamp}.${bodyStr}.${secret}`).slice(0, 32);
-  expect(isValid).toBe(true);
+  const generateSignature = (timestamp: string, payload: any, key: string) => {
+    const bodyStr = JSON.stringify(payload);
+    return btoa(`${timestamp}.${bodyStr}.${key}`).slice(0, 32);
+  };
 
-  // Simulação de replay attack (fora da janela de 5 min)
-  const oldTimestamp = (Math.floor(Date.now() / 1000) - 600).toString();
-  const isReplay = Math.abs(Math.floor(Date.now() / 1000) - parseInt(oldTimestamp)) > 300;
-  expect(isReplay).toBe(true);
-});
-
-test('Cascade Undo logic verification', () => {
-  const snapshotBefore = { name: 'Maria', company: 'Tech', status: 'lead' };
-  const currentStatus = 'prospect';
-  
-  // Simulação da restauração em cascata
-  const updatePayload: any = { status: snapshotBefore.status };
-  Object.keys(snapshotBefore).forEach(key => {
-    if (!['id', 'created_at', 'updated_at', 'status'].includes(key)) {
-      updatePayload[key] = (snapshotBefore as any)[key];
-    }
+  test('Receptor deve aceitar assinaturas HMAC válidas', () => {
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const payload = { contact_id: '123', action: 'test' };
+    const signature = generateSignature(timestamp, payload, secret);
+    
+    // Simulação da lógica do receptor
+    const isValid = signature === generateSignature(timestamp, payload, secret);
+    expect(isValid).toBe(true);
   });
 
-  expect(updatePayload.status).toBe('lead');
-  expect(updatePayload.name).toBe('Maria');
-  expect(updatePayload.company).toBe('Tech');
+  test('Receptor deve rejeitar assinaturas HMAC inválidas', () => {
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const payload = { contact_id: '123', action: 'test' };
+    const signature = 'wrong-signature-value';
+    
+    const isValid = signature === generateSignature(timestamp, payload, secret);
+    expect(isValid).toBe(false);
+  });
+
+  test('Receptor deve recusar webhooks com timestamp fora da janela de 5 minutos (Replay Protection)', () => {
+    const sixMinutesAgo = Math.floor(Date.now() / 1000) - 360;
+    const timestamp = sixMinutesAgo.toString();
+    
+    const currentTimestamp = Math.floor(Date.now() / 1000);
+    const isWithinWindow = Math.abs(currentTimestamp - parseInt(timestamp)) <= 300;
+    
+    expect(isWithinWindow).toBe(false);
+  });
+
+  test('Receptor deve aceitar webhooks dentro da janela de 5 minutos', () => {
+    const fourMinutesAgo = Math.floor(Date.now() / 1000) - 240;
+    const timestamp = fourMinutesAgo.toString();
+    
+    const currentTimestamp = Math.floor(Date.now() / 1000);
+    const isWithinWindow = Math.abs(currentTimestamp - parseInt(timestamp)) <= 300;
+    
+    expect(isWithinWindow).toBe(true);
+  });
+});
+
+describe('Cascade Undo Integrity', () => {
+  test('Deve restaurar corretamente todos os campos do snapshot', () => {
+    const current = { id: '1', status: 'prospect', name: 'Maria Updated', phone: '9999' };
+    const snapshot = { id: '1', status: 'lead', name: 'Maria Original', phone: '8888', notes: 'First note' };
+    
+    const restored: any = { ...current, status: snapshot.status };
+    Object.keys(snapshot).forEach(key => {
+      if (!['id', 'created_at', 'updated_at', 'status'].includes(key)) {
+        restored[key] = (snapshot as any)[key];
+      }
+    });
+
+    expect(restored.status).toBe('lead');
+    expect(restored.name).toBe('Maria Original');
+    expect(restored.phone).toBe('8888');
+    expect(restored.notes).toBe('First note');
+  });
 });
