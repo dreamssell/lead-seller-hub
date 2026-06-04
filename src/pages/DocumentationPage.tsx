@@ -25,6 +25,9 @@ import { toast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import MCPConsole from '@/components/settings/MCPConsole';
+import RestApiDocs from '@/components/docs/RestApiDocs';
+import McpDocs from '@/components/docs/McpDocs';
+import WebhookDocs from '@/components/docs/WebhookDocs';
 import { ErrorBoundary } from 'react-error-boundary';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -283,16 +286,16 @@ function DocumentationContent({ correlationId, onRegenerateId }: { correlationId
                 <TabsTrigger value="test">Console</TabsTrigger>
               </TabsList>
               
-              <TabsContent value="rest">
-                {/* Conteúdo da API REST aqui */}
+              <TabsContent value="rest" className="animate-in fade-in duration-500">
+                <RestApiDocs />
               </TabsContent>
               
-              <TabsContent value="mcp">
-                {/* Conteúdo do MCP aqui */}
+              <TabsContent value="mcp" className="animate-in fade-in duration-500">
+                <McpDocs />
               </TabsContent>
 
-              <TabsContent value="webhooks">
-                {/* Conteúdo de Webhooks aqui */}
+              <TabsContent value="webhooks" className="animate-in fade-in duration-500">
+                <WebhookDocs />
               </TabsContent>
 
               <TabsContent value="test" className="pt-4">
