@@ -31,7 +31,7 @@ describe('Webhook Polling and Fallback Logic', () => {
     
     // Lógica simplificada do componente para teste
     let updateMethod = 'none';
-    const status = 'SUBSCRIBED';
+    const status: any = 'SUBSCRIBED';
     if (status === 'SUBSCRIBED') {
       updateMethod = 'realtime';
     } else {
@@ -46,7 +46,7 @@ describe('Webhook Polling and Fallback Logic', () => {
     mockSubscribe.mockImplementation((cb) => cb('CLOSED'));
     
     let updateMethod = 'none';
-    const status = 'CLOSED';
+    const status: any = 'CLOSED';
     if (status === 'SUBSCRIBED') {
       updateMethod = 'realtime';
     } else {
