@@ -1249,6 +1249,24 @@ function ContactActivityTimeline({ contactId }: { contactId: string }) {
               <time className="text-[10px] text-muted-foreground font-mono">{new Date(ev.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</time>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">{ev.description}</p>
+            {ev.payload?.correlation_id && (
+              <p className="text-[9px] font-mono text-primary bg-primary/5 px-1.5 py-0.5 rounded w-fit mt-1">
+                ID: {ev.payload.correlation_id}
+              </p>
+            )}
+            {ev.title === 'Desfazer em Cascata' && ev.payload?.snapshot_before && (
+              <details className="mt-2 border-t border-border/50 pt-2">
+                <summary className="text-[10px] cursor-pointer hover:text-primary text-muted-foreground">Ver campos restaurados</summary>
+                <div className="grid grid-cols-1 gap-1 mt-1">
+                  {Object.keys(ev.payload.snapshot_before).filter(k => !['id', 'created_at', 'updated_at', 'status', 'last_interaction_at'].includes(k)).map(k => (
+                    <div key={k} className="text-[9px] flex justify-between bg-secondary/20 p-1 rounded">
+                      <span className="font-mono text-muted-foreground">{k}:</span>
+                      <span className="font-bold text-emerald-600">{String(ev.payload.snapshot_before[k] || '—')}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         </div>
       ))}
@@ -1541,6 +1559,15 @@ function WebhookDeliveryList() {
         <div className="flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs font-semibold">Webhooks Ativos & Rejeitados</span>
+          <div className="relative ml-4">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+            <Input 
+              placeholder="Buscar X-Correlation-ID..." 
+              className="h-7 text-[10px] pl-7 w-48 bg-background/50" 
+              value={corrSearch}
+              onChange={e => setCorrSearch(e.target.value)}
+            />
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => exportData('json')}>Exportar JSON</Button>
