@@ -1611,7 +1611,9 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
   const [corrSearch, setCorrSearch] = useState(() => {
     if (typeof window === 'undefined') return '';
     const params = new URLSearchParams(window.location.search);
-    return params.get('correlation_id') || '';
+    const urlId = params.get('correlation_id');
+    const savedId = localStorage.getItem('last_correlation_id');
+    return urlId || savedId || '';
   });
 
   useEffect(() => {
