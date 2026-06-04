@@ -1814,7 +1814,14 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
         {deliveries.length === 0 ? (
           <p className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma entrega registrada.</p>
         ) : deliveries.map(d => (
-          <WebhookDeliveryCard key={d.id} d={d} onRetry={() => retryDelivery(d)} currentCorrId={corrSearch} />
+          <WebhookDeliveryCard 
+            key={d.id} 
+            d={d} 
+            onRetry={() => retryDelivery(d)} 
+            currentCorrId={corrSearch}
+            selectedIds={selectedIds}
+            setSelectedIds={setSelectedIds}
+          />
         ))}
       </div>
     </div>
