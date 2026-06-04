@@ -22,7 +22,13 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
   const { signOut } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
-  const [correlationId] = useState(() => crypto.randomUUID());
+  const [correlationId] = useState(() => {
+    const stored = sessionStorage.getItem('doc_correlation_id');
+    if (stored) return stored;
+    const newId = crypto.randomUUID();
+    sessionStorage.setItem('doc_correlation_id', newId);
+    return newId;
+  });
   const [nextRetryTime, setNextRetryTime] = useState<number | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [stats, setStats] = useState({ network: 0, auth: 0 });
@@ -48,21 +54,21 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
 
     console.error(`[DocumentationError] ID: ${correlationId}`, errorPayload);
 
-    // Enviar telemetria para o endpoint de monitoramento
+    // Enviar telemetria para o endpoint de monitoramento (simulado para este ambiente)
     const sendTelemetria = async () => {
       try {
-        // Usando a instância do supabase para chamar um RPC ou edge function se necessário, 
-        // ou um fetch direto se houver um endpoint específico.
-        // Aqui simulamos o envio para telemetria
-        await fetch('/api/telemetry/error', {
+        // Em produção, isso seria uma Edge Function ou um serviço de logs externo
+        const response = await fetch('/api/telemetry/error', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(errorPayload)
-        }).catch(() => {
-          // Falha silenciosa no envio da telemetria para não causar loops de erro
         });
+        
+        if (response.ok) {
+          console.info(`[TelemetrySuccess] ID: ${correlationId} - Log enviado.`);
+        }
       } catch (e) {
-        // Ignorar erros de envio de telemetria
+        // Falha silenciosa no envio da telemetria
       }
     };
     
