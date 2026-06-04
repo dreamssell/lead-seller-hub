@@ -1756,6 +1756,14 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
 function WebhookDeliveryCard({ d, onRetry, currentCorrId }: { d: any, onRetry: () => void, currentCorrId?: string }) {
   const [showDetail, setShowDetail] = useState(false);
   const [showPayload, setShowPayload] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (d.correlation_id === currentCorrId && currentCorrId && cardRef.current) {
+      cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setShowDetail(true);
+    }
+  }, [currentCorrId, d.correlation_id]);
   
   return (
     <>
