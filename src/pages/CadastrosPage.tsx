@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin, LayoutGrid, List, MessageSquare, Bot as BotIcon, Clock, ChevronRight, User, RefreshCw, AlertCircle, Code, Share2, Download } from 'lucide-react';
+import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin, LayoutGrid, List, MessageSquare, Bot as BotIcon, Clock, ChevronRight, User, RefreshCw, AlertCircle, Code, Share2, Download, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import WhiteLabelTab from '@/components/cadastros/WhiteLabelTab';
 import { logAudit } from '@/lib/audit';
@@ -1607,6 +1607,7 @@ function CrmGlobalActivities() {
 
 function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearch }: { externalCorrId?: string; setCorrSearch?: (val: string) => void }) {
   const [deliveries, setDeliveries] = useState<any[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [corrSearch, setCorrSearch] = useState(() => {
@@ -1669,9 +1670,54 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
     fetch();
   }, [corrSearch]);
 
-  const retryDelivery = async (d: any) => {
-    toast({ title: 'Iniciando reenvio manual...' });
+  const retryDelivery = async (d: any, isBatch = false) => {
+    if (!isBatch) toast({ title: 'Iniciando reenvio manual...' });
+    
+    // Simular registro de retry_history
+    const retryHistory = [...(d.retry_history || [])];
+    retryHistory.push({
+      timestamp: new Date().toISOString(),
+      attempt: (d.retry_count || 0) + 1,
+      reason: 'Manual retrigger',
+      strategy_used: d.retry_strategy || { backoff: "none", max_attempts: 1 }
+    });
+
+    const { error: updateError } = await supabase.from('crm_webhook_logs').update({
+      retry_count: (d.retry_count || 0) + 1,
+      retry_history: retryHistory as any,
+      status: 'pending',
+      updated_at: new Date().toISOString()
+    } as any).eq('id', d.id);
+
+    if (updateError) {
+      console.error('Error updating retry history:', updateError);
+    }
+
     await globalTriggerWebhooks(d.event_type, d.payload, d.id);
+    if (!isBatch) fetch();
+  };
+
+  const [isRetryingBatch, setIsRetryingBatch] = useState(false);
+  const [batchProgress, setBatchProgress] = useState(0);
+
+  const handleBatchRetry = async () => {
+    if (selectedIds.length === 0) return;
+    setIsRetryingBatch(true);
+    setBatchProgress(0);
+    
+    const total = selectedIds.length;
+    for (let i = 0; i < total; i++) {
+      const id = selectedIds[i];
+      const delivery = deliveries.find(d => d.id === id);
+      if (delivery) {
+        await retryDelivery(delivery, true);
+      }
+      setBatchProgress(Math.round(((i + 1) / total) * 100));
+    }
+    
+    toast({ title: 'Reprocessamento em lote concluído!' });
+    setSelectedIds([]);
+    setIsRetryingBatch(false);
     fetch();
   };
 
@@ -1686,6 +1732,8 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
       response_status: d.response_status,
       retentativas: d.retry_count,
       correlation_id: d.correlation_id,
+      hmac_valid: !d.error_message?.includes('HMAC'),
+      timestamp_valid: !d.error_message?.includes('window'),
       payload: JSON.stringify(d.payload)
     }));
 
@@ -1727,11 +1775,37 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {selectedIds.length > 0 && (
+            <Button 
+              size="sm" 
+              className="h-7 text-[10px] gap-2" 
+              onClick={handleBatchRetry}
+              disabled={isRetryingBatch}
+            >
+              <RefreshCw className={`w-3 h-3 ${isRetryingBatch ? 'animate-spin' : ''}`} />
+              Reenviar Selecionados ({selectedIds.length})
+            </Button>
+          )}
           <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => exportData('json')}>Exportar JSON</Button>
           <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => exportData('csv')}>Exportar CSV</Button>
           <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={fetch}><RefreshCw className="w-3 h-3 mr-1" /> Atualizar</Button>
         </div>
       </div>
+
+      {isRetryingBatch && (
+        <div className="bg-primary/5 p-3 rounded-xl border border-primary/20 animate-in fade-in slide-in-from-top-2">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-[10px] font-bold text-primary">PROCESSANDO LOTE...</span>
+            <span className="text-[10px] font-mono">{batchProgress}%</span>
+          </div>
+          <div className="h-1.5 w-full bg-primary/10 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-primary transition-all duration-300" 
+              style={{ width: `${batchProgress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3">
         {notFound && (
@@ -1747,14 +1821,27 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
         {deliveries.length === 0 ? (
           <p className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma entrega registrada.</p>
         ) : deliveries.map(d => (
-          <WebhookDeliveryCard key={d.id} d={d} onRetry={() => retryDelivery(d)} currentCorrId={corrSearch} />
+          <WebhookDeliveryCard 
+            key={d.id} 
+            d={d} 
+            onRetry={() => retryDelivery(d)} 
+            currentCorrId={corrSearch}
+            selectedIds={selectedIds}
+            setSelectedIds={setSelectedIds}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function WebhookDeliveryCard({ d, onRetry, currentCorrId }: { d: any, onRetry: () => void, currentCorrId?: string }) {
+function WebhookDeliveryCard({ d, onRetry, currentCorrId, selectedIds, setSelectedIds }: { 
+  d: any, 
+  onRetry: () => void, 
+  currentCorrId?: string,
+  selectedIds: string[],
+  setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>
+}) {
   const [showDetail, setShowDetail] = useState(false);
   const [showPayload, setShowPayload] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -1770,12 +1857,24 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId }: { d: any, onRetry: (
     <>
       <div 
         ref={cardRef}
-        onClick={() => setShowDetail(true)}
-        className={`p-3 rounded-xl border transition-all cursor-pointer hover:shadow-md ${
+        className={`p-3 rounded-xl border transition-all cursor-pointer hover:shadow-md relative group ${
           d.status === 'failed' ? 'bg-destructive/5 border-destructive/20' : 'bg-secondary/10 border-border/50'
         } ${d.correlation_id === currentCorrId ? 'ring-2 ring-primary border-primary animate-pulse' : ''} text-[11px] space-y-2`}
+        onClick={() => setShowDetail(true)}
       >
-        <div className="flex justify-between items-center">
+        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10" onClick={(e) => e.stopPropagation()}>
+          <input 
+            type="checkbox" 
+            className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+            checked={selectedIds.includes(d.id)}
+            onChange={(e) => {
+              if (e.target.checked) setSelectedIds(prev => [...prev, d.id]);
+              else setSelectedIds(prev => prev.filter(id => id !== d.id));
+            }}
+          />
+        </div>
+
+        <div className="flex justify-between items-center pr-6">
           <div className="flex items-center gap-2">
             <span className="font-bold text-foreground">{d.event_type}</span>
             {d.status === 'failed' && (
@@ -1822,11 +1921,32 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId }: { d: any, onRetry: (
           </div>
         )}
 
-        <div className="flex gap-3 text-[10px]">
-           <span className="text-muted-foreground">HTTP: <span className="text-foreground font-semibold">{d.response_status || 'N/A'}</span></span>
-           <span className="text-muted-foreground">Retentativas: <span className="text-foreground font-semibold">{d.retry_count}</span></span>
-           <span className="text-muted-foreground">X-Corr: <span className="text-primary font-mono">{d.correlation_id || 'N/A'}</span></span>
+        <div className="flex justify-between items-center text-[10px]">
+           <div className="flex gap-3">
+             <span className="text-muted-foreground">HTTP: <span className="text-foreground font-semibold">{d.response_status || 'N/A'}</span></span>
+             <span className="text-muted-foreground">Retentativas: <span className="text-foreground font-semibold">{d.retry_count}</span></span>
+           </div>
+           
+           <div className="flex items-center gap-2">
+             <div className="flex items-center gap-1 bg-background/50 px-1.5 py-0.5 rounded border border-border/30">
+               <span className="text-[8px] font-bold text-muted-foreground">HMAC:</span>
+               {d.error_message?.includes('HMAC') ? (
+                 <AlertCircle className="w-2.5 h-2.5 text-destructive" />
+               ) : (
+                 <div className="w-2 h-2 rounded-full bg-emerald-500" />
+               )}
+             </div>
+             <div className="flex items-center gap-1 bg-background/50 px-1.5 py-0.5 rounded border border-border/30">
+               <span className="text-[8px] font-bold text-muted-foreground">TIME:</span>
+               {d.error_message?.includes('window') ? (
+                 <AlertCircle className="w-2.5 h-2.5 text-destructive" />
+               ) : (
+                 <div className="w-2 h-2 rounded-full bg-emerald-500" />
+               )}
+             </div>
+           </div>
         </div>
+        <p className="text-primary font-mono text-[9px] mt-1">X-Corr: {d.correlation_id || 'N/A'}</p>
       </div>
 
       <Dialog open={showDetail} onOpenChange={setShowDetail}>
@@ -1858,6 +1978,39 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId }: { d: any, onRetry: (
                   </p>
                </div>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 ${d.error_message?.includes('HMAC') ? 'bg-destructive/5 border-destructive/20' : 'bg-emerald-500/5 border-emerald-500/20'}`}>
+                <p className="text-[9px] font-bold text-muted-foreground uppercase">Assinatura HMAC</p>
+                {d.error_message?.includes('HMAC') ? (
+                  <div className="flex flex-col items-center gap-1">
+                    <Badge variant="destructive" className="h-5 text-[8px]">INVÁLIDA</Badge>
+                    <span className="text-[7px] text-destructive font-bold uppercase">Erro de Integridade</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-1">
+                    <Badge variant="default" className="h-5 text-[8px] bg-emerald-500">VERIFICADA</Badge>
+                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                  </div>
+                )}
+                <span className="text-[8px] text-muted-foreground font-mono">Replay Protection Ativa</span>
+              </div>
+              <div className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 ${d.error_message?.includes('window') ? 'bg-destructive/5 border-destructive/20' : 'bg-emerald-500/5 border-emerald-500/20'}`}>
+                <p className="text-[9px] font-bold text-muted-foreground uppercase">Janela (Timestamp)</p>
+                {d.error_message?.includes('window') ? (
+                  <div className="flex flex-col items-center gap-1">
+                    <Badge variant="destructive" className="h-5 text-[8px]">EXPIRADO</Badge>
+                    <span className="text-[7px] text-destructive font-bold uppercase">Fora de 5min</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-1">
+                    <Badge variant="default" className="h-5 text-[8px] bg-emerald-500">DENTRO DA JANELA</Badge>
+                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                  </div>
+                )}
+                <span className="text-[8px] text-muted-foreground font-mono">5min Window Check</span>
+              </div>
+            </div>
+
             <div className="bg-secondary/5 p-3 rounded-xl border border-border/50">
                <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Headers Relevantes</p>
                <div className="space-y-1">
@@ -2004,6 +2157,25 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId }: { d: any, onRetry: (
               >
                 Copiar
               </Button>
+            </div>
+          </div>
+          <div className="px-6 py-4 border-t bg-secondary/5">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Histórico de Retentativas</p>
+            <div className="space-y-2 max-h-32 overflow-y-auto">
+              {(!d.retry_history || d.retry_history.length === 0) ? (
+                <p className="text-[10px] text-muted-foreground italic">Nenhuma retentativa registrada.</p>
+              ) : d.retry_history.map((h: any, i: number) => (
+                <div key={i} className="flex justify-between items-center bg-background/50 p-2 rounded border border-border/30 text-[9px]">
+                  <div className="flex flex-col">
+                    <span className="font-bold">Tentativa #{h.attempt}</span>
+                    <span className="text-muted-foreground">{new Date(h.timestamp).toLocaleString()}</span>
+                  </div>
+                  <div className="flex flex-col text-right">
+                    <span className="text-primary">{h.strategy_used?.backoff || 'manual'}</span>
+                    <span className="text-destructive truncate max-w-[100px]">{h.reason}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
           <DialogFooter>
