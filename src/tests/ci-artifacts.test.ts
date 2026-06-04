@@ -35,18 +35,23 @@ describe('CI Artifact Generation (Webhook Validation Failures)', () => {
         junit: `${baseUrl}/reports/junit.xml`,
         html: `${baseUrl}/reports/junit.html`
       },
-      events: mockFailures.map(f => ({
-        correlation_id: f.correlation_id,
-        type: f.type,
-        error: f.error,
-        artifacts: {
-          logs: `${baseUrl}/logs/${f.correlation_id}.log`,
-          screenshot: `${baseUrl}/screenshots/${f.correlation_id}.png`,
-          payload: `${baseUrl}/payloads/${f.correlation_id}.json`,
-          junit_report: `${baseUrl}/reports/junit.xml#${f.correlation_id}`,
-          html_report: `${baseUrl}/reports/junit.html?correlation_id=${f.correlation_id}`
-        }
-      }))
+      events: mockFailures.map(f => {
+        const hasArtifacts = f.status === 'failed'; // Lógica real de existência
+        const fallbackUrl = `${baseUrl}/reports/not-found.html`;
+        
+        return {
+          correlation_id: f.correlation_id,
+          type: f.type,
+          error: f.error,
+          artifacts: {
+            logs: hasArtifacts ? `${baseUrl}/logs/${f.correlation_id}.log` : fallbackUrl,
+            screenshot: hasArtifacts ? `${baseUrl}/screenshots/${f.correlation_id}.png` : fallbackUrl,
+            payload: hasArtifacts ? `${baseUrl}/payloads/${f.correlation_id}.json` : fallbackUrl,
+            junit_report: hasArtifacts ? `${baseUrl}/reports/junit.xml#${f.correlation_id}` : fallbackUrl,
+            html_report: hasArtifacts ? `${baseUrl}/reports/junit.html?correlation_id=${f.correlation_id}` : fallbackUrl
+          }
+        };
+      })
     };
 
     expect(manifest.failures_count).toBe(2);
