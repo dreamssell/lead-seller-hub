@@ -82,7 +82,7 @@ describe('DocumentationPage', () => {
     // Switch to MCP Server
     const mcpTab = screen.getByRole('tab', { name: /MCP Server/i });
     fireEvent.click(mcpTab);
-    expect(screen.getByText(/Model Context Protocol/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Model Context Protocol/i)).toBeInTheDocument();
     
     // Switch to Webhooks
     const webhooksTab = screen.getByRole('tab', { name: /Webhooks/i });
