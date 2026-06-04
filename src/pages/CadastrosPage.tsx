@@ -358,17 +358,27 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
           card.scrollIntoView({ behavior: 'smooth', block: 'center' });
           card.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
           setTimeout(() => card.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 5000);
+        } else {
+          // Limpeza segura se o card não existir
+          console.log(`Card ${cardId} not found, cleaning highlight state.`);
+          localStorage.removeItem('kanban_highlighted_card');
+          localStorage.removeItem('kanban_highlighted_time');
         }
       };
 
-      // Restaurar destaque inicial do Kanban
+      // Restaurar destaque inicial do Kanban e verificar expiração
       if (viewMode === 'kanban') {
-        const savedCard = localStorage.getItem('kanban_highlighted_card');
+        const params = new URLSearchParams(window.location.search);
+        const urlCardId = params.get('highlight_card');
+        const savedCard = urlCardId || localStorage.getItem('kanban_highlighted_card');
         const savedTime = localStorage.getItem('kanban_highlighted_time');
         
-        if (savedCard && savedTime) {
-          const timeDiff = Date.now() - parseInt(savedTime);
-          if (timeDiff < 1800000) { // 30 min
+        if (savedCard) {
+          const isExpired = savedTime && (Date.now() - parseInt(savedTime) > 1800000);
+          if (isExpired) {
+            localStorage.removeItem('kanban_highlighted_card');
+            localStorage.removeItem('kanban_highlighted_time');
+          } else {
             setTimeout(() => applyHighlight(savedCard), 600);
           }
         }
@@ -1501,18 +1511,51 @@ function CrmGlobalActivities() {
   const [externalCorrId, setExternalCorrId] = useState('');
   const [corrSearch, setCorrSearch] = useState('');
 
+  // Persistir e sincronizar URL e localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const cid = params.get('correlation_id') || localStorage.getItem('last_correlation_id');
+      const urlCid = params.get('correlation_id');
+      const savedCid = localStorage.getItem('last_correlation_id');
+      
+      const cid = urlCid || savedCid;
+      
       if (cid) {
         setExternalCorrId(cid);
         setCorrSearch(cid);
         setActiveTab('deliveries');
         setOpen(true);
+        
+        // Se veio apenas do localStorage, atualizar URL para persistência em navegação direta
+        if (!urlCid) {
+          params.set('correlation_id', cid);
+          window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+        }
       }
     }
   }, []);
+
+  // Assinatura em tempo real para mudanças globais em webhooks
+  useEffect(() => {
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'crm_webhook_logs' },
+        (payload: any) => {
+          console.log('Real-time update in crm_webhook_logs:', payload);
+          // Recarregar a lista se o item alterado estiver sendo visualizado ou se for uma mudança importante
+          if (activeTab === 'deliveries') {
+            // fetch(); // Poderia chamar o fetch do WebhookDeliveryList se exposto via ref ou contexto
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeTab]);
 
   useEffect(() => {
     if (!open) return;
@@ -2024,18 +2067,33 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
         const { data, error } = await supabase.from('crm_webhook_logs').select('*, crm_webhooks(url)').eq('id', d.id).single();
         if (!error && data && (data.status !== d.status || data.retry_count !== (d.retry_count || 0) || JSON.stringify(data.retry_history) !== JSON.stringify(d.retry_history))) {
            setD(data);
-           console.log('Full sync for correlation_id:', d.correlation_id);
+           console.log('Real-time sync for correlation_id:', d.correlation_id);
         }
       };
       
       syncStatus();
-      intervalId = setInterval(syncStatus, 3000); // Polling cada 3s enquanto aberto/destacado
-    }
 
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [currentCorrId, d.correlation_id]);
+      // Assinatura específica para o card em destaque
+      const channel = supabase
+        .channel(`webhook-sync-${d.id}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'crm_webhook_logs', filter: `id=eq.${d.id}` },
+          (payload) => {
+             console.log('Specific card update detected via realtime:', payload);
+             setD(payload.new);
+          }
+        )
+        .subscribe();
+      
+      intervalId = setInterval(syncStatus, 5000); // Polling de segurança (mais lento se tiver realtime)
+
+      return () => {
+        if (intervalId) clearInterval(intervalId);
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [currentCorrId, d.correlation_id, d.id]);
   
   return (
     <>
