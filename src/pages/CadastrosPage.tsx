@@ -2075,9 +2075,11 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
     let intervalId: any;
     let channel: any;
 
-    if (d.correlation_id === currentCorrId && currentCorrId && cardRef.current && pollingActive) {
-      cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setShowDetail(true);
+    // A assinatura só deve ser criada se o modal estiver aberto E for o card correspondente ao X-Correlation-ID
+    if (showDetail && d.correlation_id === currentCorrId && currentCorrId && pollingActive) {
+      if (cardRef.current) {
+        cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       
       const syncStatus = async () => {
         const { data, error } = await supabase.from('crm_webhook_logs').select('*, crm_webhooks(url)').eq('id', d.id).single();
@@ -2090,7 +2092,7 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
 
       // Estratégia de Fallback: WebSocket (Channel) -> Polling
       channel = supabase
-        .channel(`webhook-sync-${d.id}`)
+        .channel(`webhook-sync-${d.id}-${Date.now()}`) // Nome único para evitar conflitos
         .on(
           'postgres_changes',
           { event: 'UPDATE', schema: 'public', table: 'crm_webhook_logs', filter: `id=eq.${d.id}` },
@@ -2116,9 +2118,12 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
 
     return () => {
       if (intervalId) clearInterval(intervalId);
-      if (channel) supabase.removeChannel(channel);
+      if (channel) {
+        supabase.removeChannel(channel);
+        console.log(`Unsubscribed from webhook-sync-${d.id}`);
+      }
     };
-  }, [currentCorrId, d.correlation_id, d.id, pollingActive, updateMethod]);
+  }, [currentCorrId, d.correlation_id, d.id, pollingActive, updateMethod, showDetail]);
   
   return (
     <>
