@@ -517,6 +517,8 @@ export type Database = {
           response_body: string | null
           response_status: number | null
           retry_count: number | null
+          retry_history: Json | null
+          retry_strategy: Json | null
           status: string | null
           webhook_id: string
         }
@@ -534,6 +536,8 @@ export type Database = {
           response_body?: string | null
           response_status?: number | null
           retry_count?: number | null
+          retry_history?: Json | null
+          retry_strategy?: Json | null
           status?: string | null
           webhook_id: string
         }
@@ -551,6 +555,8 @@ export type Database = {
           response_body?: string | null
           response_status?: number | null
           retry_count?: number | null
+          retry_history?: Json | null
+          retry_strategy?: Json | null
           status?: string | null
           webhook_id?: string
         }
