@@ -89,7 +89,7 @@ function useDocTelemetry() {
     }
   };
 
-  return { correlationId, sendLog };
+  return { correlationId, sendLog, regenerateId };
 }
 
 function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
