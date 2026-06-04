@@ -1290,66 +1290,119 @@ function CrmGlobalActivities() {
       <Button variant="outline" size="sm" onClick={() => setOpen(true)} className="gap-2 h-10 rounded-xl">
         <Clock className="w-4 h-4" /> Atividades
       </Button>
-      <SheetContent className="sm:max-w-md overflow-y-auto">
+      <SheetContent className="sm:max-w-2xl overflow-y-auto">
         <SheetHeader className="mb-6">
           <SheetTitle className="flex items-center gap-2">
-            <History className="w-5 h-5 text-primary" /> Auditoria CRM
+            <History className="w-5 h-5 text-primary" /> Auditoria CRM & Entregas
           </SheetTitle>
-          <SheetDescription>Últimas interações manuais e automatizadas de todos os contatos.</SheetDescription>
+          <SheetDescription>Interações, e-mails e webhooks com status de entrega e X-Correlation-ID.</SheetDescription>
         </SheetHeader>
-        <div className="space-y-4">
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-2">
-              <Input 
-                placeholder="Filtrar responsável..." 
-                className="h-8 text-xs" 
-                onChange={(e) => setInternalSearch(e.target.value)}
-              />
-              <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => {
-                const data = logs.map(l => ({
-                  data: new Date(l.created_at).toLocaleString(),
-                  contato: l.contacts?.name,
-                  tipo: l.actor_type,
-                  acao: l.description,
-                  correlation_id: l.metadata?.correlation_id || 'N/A'
-                }));
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `crm-audit-${new Date().getTime()}.json`;
-                a.click();
-              }}>
-                JSON
-              </Button>
-            </div>
-            <div className="flex gap-2">
-              <Input type="date" className="h-8 text-xs" />
-              <Input type="date" className="h-8 text-xs" />
-            </div>
-          </div>
-          <div className="space-y-4 mt-4">
-            {logs.map(log => (
-              <div key={log.id} className="p-3 bg-secondary/20 rounded-2xl border border-border/40 space-y-2 hover:border-primary/30 transition-colors">
-                <div className="flex justify-between items-start">
-                  <Badge variant={log.actor_type === 'ai' ? 'default' : log.title === 'Movimento Desfeito' ? 'outline' : 'secondary'} className="text-[9px]">
-                    {log.actor_type === 'ai' ? 'AUTÔNOMO' : log.title === 'Movimento Desfeito' ? 'REVERSÃO' : 'HUMANO'}
-                  </Badge>
-                  <span className="text-[10px] text-muted-foreground">{new Date(log.created_at).toLocaleString()}</span>
-                </div>
-                <p className="text-xs font-bold text-foreground">{log.contacts?.name || 'Contato desconhecido'}</p>
-                <p className="text-xs text-muted-foreground">{log.description}</p>
-                {(log.payload as any)?.correlation_id && (
-                  <p className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded w-fit">
-                    ID: {(log.payload as any).correlation_id}
-                  </p>
-                )}
+        
+        <Tabs defaultValue="events" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsTrigger value="events">Histórico</TabsTrigger>
+            <TabsTrigger value="deliveries">Notificações</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="events" className="space-y-4">
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <Input 
+                  placeholder="Filtrar responsável..." 
+                  className="h-8 text-xs" 
+                  onChange={(e) => setInternalSearch(e.target.value)}
+                />
+                <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => {
+                  const data = logs.map(l => ({
+                    data: new Date(l.created_at).toLocaleString(),
+                    contato: l.contacts?.name,
+                    tipo: l.actor_type,
+                    acao: l.description,
+                    correlation_id: l.payload?.correlation_id || 'N/A'
+                  }));
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `crm-audit-${new Date().getTime()}.json`;
+                  a.click();
+                }}>
+                  JSON
+                </Button>
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+            <div className="space-y-4 mt-4">
+              {logs.map(log => (
+                <div key={log.id} className="p-3 bg-secondary/20 rounded-2xl border border-border/40 space-y-2 hover:border-primary/30 transition-colors">
+                  <div className="flex justify-between items-start">
+                    <Badge variant={log.actor_type === 'ai' ? 'default' : log.title === 'Movimento Desfeito' ? 'outline' : 'secondary'} className="text-[9px]">
+                      {log.actor_type === 'ai' ? 'AUTÔNOMO' : log.title === 'Movimento Desfeito' ? 'REVERSÃO' : 'HUMANO'}
+                    </Badge>
+                    <span className="text-[10px] text-muted-foreground">{new Date(log.created_at).toLocaleString()}</span>
+                  </div>
+                  <p className="text-xs font-bold text-foreground">{log.contacts?.name || 'Contato desconhecido'}</p>
+                  <p className="text-xs text-muted-foreground">{log.description}</p>
+                  {(log.payload as any)?.correlation_id && (
+                    <p className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded w-fit">
+                      ID: {(log.payload as any).correlation_id}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="deliveries">
+             <WebhookDeliveryList />
+          </TabsContent>
+        </Tabs>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function WebhookDeliveryList() {
+  const [deliveries, setDeliveries] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetch = async () => {
+      const { data } = await supabase
+        .from('crm_webhook_logs')
+        .select('*, crm_webhooks(url)')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (data) setDeliveries(data);
+      setLoading(false);
+    };
+    fetch();
+  }, []);
+
+  if (loading) return <div className="text-center py-10 text-xs text-muted-foreground">Carregando entregas...</div>;
+
+  return (
+    <div className="space-y-3">
+      {deliveries.map(d => (
+        <div key={d.id} className="p-3 bg-secondary/10 rounded-xl border border-border/50 text-[11px] space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="font-mono text-muted-foreground">{d.event_type}</span>
+            <Badge variant={d.status === 'sent' ? 'default' : d.status === 'failed' ? 'destructive' : 'secondary'} className="text-[9px]">
+              {d.status?.toUpperCase()}
+            </Badge>
+          </div>
+          <p className="text-muted-foreground truncate">{d.crm_webhooks?.url}</p>
+          <div className="flex gap-2">
+             <span className="text-muted-foreground">Status: {d.response_status || 'N/A'}</span>
+             <span className="text-muted-foreground">Retentativas: {d.retry_count}</span>
+          </div>
+          {d.correlation_id && <p className="font-mono text-[9px] text-primary">ID: {d.correlation_id}</p>}
+          <details>
+             <summary className="cursor-pointer hover:text-primary mt-1">Ver Payload</summary>
+             <pre className="bg-background/50 p-2 rounded mt-1 overflow-x-auto">{JSON.stringify(d.payload, null, 2)}</pre>
+          </details>
+        </div>
+      ))}
+    </div>
   );
 }
 
