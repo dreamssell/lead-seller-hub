@@ -75,26 +75,23 @@ describe('DocumentationPage', () => {
       </MemoryRouter>
     );
 
-    // REST API is default
-    expect(screen.getByText('REST API')).toBeInTheDocument();
+    // REST API is default - Check section title instead of tab text
     expect(screen.getByText('Endpoints REST')).toBeInTheDocument();
     
     // Switch to MCP Server
     const mcpTab = screen.getByRole('tab', { name: /MCP Server/i });
     fireEvent.click(mcpTab);
-    expect(await screen.findByText(/Conecte sua conta/i)).toBeInTheDocument();
+    // Use part of the subtitle which is less likely to be broken up
+    expect(await screen.findByText(/Conecte sua conta do Leadseller diretamente/i)).toBeInTheDocument();
     
     // Switch to Webhooks
     const webhooksTab = screen.getByRole('tab', { name: /Webhooks/i });
     fireEvent.click(webhooksTab);
-    expect(await screen.findByText(/Receba notificações em tempo real/i)).toBeInTheDocument();
-
+    expect(await screen.findByText(/notificações em tempo real no seu servidor/i)).toBeInTheDocument();
 
     // Switch to Console
     const consoleTab = screen.getByRole('tab', { name: /Console/i });
     fireEvent.click(consoleTab);
     expect(await screen.findByText(/Console de Teste MCP/i)).toBeInTheDocument();
-
-
   });
 });
