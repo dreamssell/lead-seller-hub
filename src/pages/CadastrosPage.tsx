@@ -1530,7 +1530,11 @@ function CrmGlobalActivities() {
                   <p className="text-xs font-bold text-foreground">{log.contacts?.name || 'Contato desconhecido'}</p>
                   <p className="text-xs text-muted-foreground">{log.description}</p>
                   {(log.payload as any)?.correlation_id && (
-                    <p className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded w-fit">
+                    <p 
+                      className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded w-fit cursor-pointer hover:bg-background/80"
+                      onClick={() => setCorrSearch((log.payload as any).correlation_id)}
+                      title="Clique para pesquisar nas notificações"
+                    >
                       ID: {(log.payload as any).correlation_id}
                     </p>
                   )}
