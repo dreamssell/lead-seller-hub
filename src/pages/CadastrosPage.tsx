@@ -1249,9 +1249,40 @@ function ContactActivityTimeline({ contactId }: { contactId: string }) {
               <time className="text-[10px] text-muted-foreground font-mono">{new Date(ev.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</time>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">{ev.description}</p>
+            {ev.payload?.correlation_id && (
+              <p className="text-[9px] font-mono text-primary bg-primary/5 px-1.5 py-0.5 rounded w-fit mt-1">
+                ID: {ev.payload.correlation_id}
+              </p>
+            )}
+            {ev.title === 'Desfazer em Cascata' && <ContactTimelineDetails ev={ev} />}
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function ContactTimelineDetails({ ev }: { ev: any }) {
+  return (
+    <div className="space-y-3 mt-3 border-t border-border/50 pt-3">
+      <div className="flex justify-between items-center text-[10px]">
+        <span className="text-muted-foreground font-bold uppercase">Campos Restaurados (Diff)</span>
+        <Badge variant="outline" className="text-primary font-mono h-4">X-CORR: {ev.payload?.correlation_id || 'N/A'}</Badge>
+      </div>
+      <div className="grid grid-cols-1 gap-1.5">
+        {ev.payload?.snapshot_before && Object.keys(ev.payload.snapshot_before).filter(k => !['id', 'created_at', 'updated_at', 'status', 'last_interaction_at'].includes(k)).map(k => (
+          <div key={k} className="text-[10px] bg-secondary/30 p-2 rounded-lg border border-border/20 flex flex-col gap-0.5">
+            <span className="font-mono text-[9px] text-muted-foreground uppercase">{k}</span>
+            <div className="flex items-center gap-2">
+               <span className="font-bold text-emerald-600 truncate">{String(ev.payload.snapshot_before[k] || '—')}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="bg-primary/5 p-2 rounded-lg text-[9px] text-muted-foreground flex items-center gap-2">
+         <User className="w-3 h-3" />
+         <span>Solicitado por: <strong>{ev.payload?.agent_name || 'Agente'}</strong></span>
+      </div>
     </div>
   );
 }
@@ -1486,21 +1517,27 @@ function CrmGlobalActivities() {
 function WebhookDeliveryList() {
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [corrSearch, setCorrSearch] = useState('');
 
   const fetch = async () => {
     setLoading(true);
-    const { data } = await supabase
+    let query = supabase
       .from('crm_webhook_logs')
       .select('*, crm_webhooks(url)')
-      .order('created_at', { ascending: false })
-      .limit(100);
+      .order('created_at', { ascending: false });
+    
+    if (corrSearch) {
+      query = query.ilike('correlation_id', `%${corrSearch}%`);
+    }
+
+    const { data } = await query.limit(100);
     if (data) setDeliveries(data);
     setLoading(false);
   };
 
   useEffect(() => {
     fetch();
-  }, []);
+  }, [corrSearch]);
 
   const exportData = (format: 'json' | 'csv') => {
     const data = deliveries.map(d => ({
@@ -1541,6 +1578,15 @@ function WebhookDeliveryList() {
         <div className="flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs font-semibold">Webhooks Ativos & Rejeitados</span>
+          <div className="relative ml-4">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+            <Input 
+              placeholder="Buscar X-Correlation-ID..." 
+              className="h-7 text-[10px] pl-7 w-48 bg-background/50" 
+              value={corrSearch}
+              onChange={e => setCorrSearch(e.target.value)}
+            />
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => exportData('json')}>Exportar JSON</Button>
@@ -1553,45 +1599,105 @@ function WebhookDeliveryList() {
         {deliveries.length === 0 ? (
           <p className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma entrega registrada.</p>
         ) : deliveries.map(d => (
-          <div key={d.id} className={`p-3 rounded-xl border transition-all ${
-            d.status === 'failed' ? 'bg-destructive/5 border-destructive/20' : 'bg-secondary/10 border-border/50'
-          } text-[11px] space-y-2`}>
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-foreground">{d.event_type}</span>
-                {d.status === 'failed' && (
-                  <Badge variant="destructive" className="text-[8px] h-4">REJEITADO</Badge>
-                )}
-              </div>
-              <Badge variant={d.status === 'sent' ? 'default' : d.status === 'failed' ? 'destructive' : 'secondary'} className="text-[9px]">
-                {d.status?.toUpperCase()}
-              </Badge>
-            </div>
-            <p className="text-muted-foreground truncate font-mono text-[10px]">{d.crm_webhooks?.url}</p>
-            
-            {d.error_message && (
-              <div className="bg-destructive/10 text-destructive p-2 rounded-lg text-[10px] flex items-start gap-2">
-                <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
-                <span><strong>Motivo:</strong> {d.error_message}</span>
-              </div>
-            )}
-
-            <div className="flex gap-3 text-[10px]">
-               <span className="text-muted-foreground">HTTP: <span className="text-foreground font-semibold">{d.response_status || 'N/A'}</span></span>
-               <span className="text-muted-foreground">Retentativas: <span className="text-foreground font-semibold">{d.retry_count}</span></span>
-               <span className="text-muted-foreground">X-Corr: <span className="text-primary font-mono">{d.correlation_id || 'N/A'}</span></span>
-            </div>
-            
-            <details className="border-t border-border/20 pt-2">
-               <summary className="cursor-pointer hover:text-primary text-[10px] text-muted-foreground flex items-center gap-1">
-                 <Search className="w-3 h-3" /> Ver Payload Auditável
-               </summary>
-               <pre className="bg-background/50 p-2 rounded mt-2 overflow-x-auto font-mono text-[9px] max-h-40">{JSON.stringify(d.payload, null, 2)}</pre>
-            </details>
-          </div>
+          <WebhookDeliveryCard key={d.id} d={d} />
         ))}
       </div>
     </div>
+  );
+}
+
+function WebhookDeliveryCard({ d }: { d: any }) {
+  const [showDetail, setShowDetail] = useState(false);
+  return (
+    <>
+      <div 
+        onClick={() => setShowDetail(true)}
+        className={`p-3 rounded-xl border transition-all cursor-pointer hover:shadow-md ${
+          d.status === 'failed' ? 'bg-destructive/5 border-destructive/20' : 'bg-secondary/10 border-border/50'
+        } text-[11px] space-y-2`}
+      >
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-foreground">{d.event_type}</span>
+            {d.status === 'failed' && (
+              <Badge variant="destructive" className="text-[8px] h-4">REJEITADO</Badge>
+            )}
+          </div>
+          <Badge variant={d.status === 'sent' ? 'default' : d.status === 'failed' ? 'destructive' : 'secondary'} className="text-[9px]">
+            {d.status?.toUpperCase()}
+          </Badge>
+        </div>
+        <p className="text-muted-foreground truncate font-mono text-[10px]">{d.crm_webhooks?.url}</p>
+        
+        {d.error_message && (
+          <div className="bg-destructive/10 text-destructive p-2 rounded-lg text-[10px] flex items-start gap-2">
+            <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
+            <span><strong>Motivo:</strong> {d.error_message}</span>
+          </div>
+        )}
+
+        <div className="flex gap-3 text-[10px]">
+           <span className="text-muted-foreground">HTTP: <span className="text-foreground font-semibold">{d.response_status || 'N/A'}</span></span>
+           <span className="text-muted-foreground">Retentativas: <span className="text-foreground font-semibold">{d.retry_count}</span></span>
+           <span className="text-muted-foreground">X-Corr: <span className="text-primary font-mono">{d.correlation_id || 'N/A'}</span></span>
+        </div>
+      </div>
+
+      <Dialog open={showDetail} onOpenChange={setShowDetail}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="w-5 h-5 text-primary" /> Detalhes da Entrega Auditável
+            </DialogTitle>
+            <SheetDescription>Análise técnica do disparo e validações de segurança.</SheetDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            <div className="grid grid-cols-2 gap-4">
+               <div className="bg-secondary/10 p-3 rounded-xl border border-border/50">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Status Final</p>
+                  <Badge variant={d.status === 'sent' ? 'default' : 'destructive'}>{d.status?.toUpperCase()}</Badge>
+               </div>
+               <div className="bg-secondary/10 p-3 rounded-xl border border-border/50">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">X-Correlation-ID</p>
+                  <p className="font-mono text-xs text-primary">{d.correlation_id || 'N/A'}</p>
+               </div>
+            </div>
+
+            <div className="space-y-2">
+               <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                 <AlertCircle className="w-3 h-3" /> Verificações de Segurança (E2E)
+               </p>
+               <div className="grid grid-cols-1 gap-2">
+                  <div className={`p-2 rounded-lg border flex justify-between items-center ${d.error_message?.includes('HMAC') ? 'bg-destructive/5 border-destructive/30' : 'bg-emerald-500/5 border-emerald-500/20'}`}>
+                     <span className="text-[11px]">Assinatura HMAC (Corpo + Timestamp)</span>
+                     <Badge variant={d.error_message?.includes('HMAC') ? 'destructive' : 'default'} className="text-[8px] h-4">
+                        {d.error_message?.includes('HMAC') ? 'INVÁLIDA' : 'VERIFICADA'}
+                     </Badge>
+                  </div>
+                  <div className={`p-2 rounded-lg border flex justify-between items-center ${d.error_message?.includes('window') ? 'bg-destructive/5 border-destructive/30' : 'bg-emerald-500/5 border-emerald-500/20'}`}>
+                     <span className="text-[11px]">Janela de Tempo (Replay Protection)</span>
+                     <Badge variant={d.error_message?.includes('window') ? 'destructive' : 'default'} className="text-[8px] h-4">
+                        {d.error_message?.includes('window') ? 'FORA DA JANELA' : 'DENTRO DA JANELA'}
+                     </Badge>
+                  </div>
+               </div>
+            </div>
+
+            <div className="space-y-2">
+               <p className="text-[10px] font-bold text-muted-foreground uppercase">Payload Completo</p>
+               <pre className="bg-muted p-4 rounded-xl font-mono text-[10px] overflow-x-auto whitespace-pre-wrap max-h-60 border border-border/50">
+                 {JSON.stringify(d.payload, null, 2)}
+               </pre>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDetail(false)}>Fechar Detalhes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
