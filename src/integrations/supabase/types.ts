@@ -307,6 +307,7 @@ export type Database = {
       company_settings: {
         Row: {
           address: string | null
+          config: Json | null
           created_at: string
           document: string | null
           email: string | null
@@ -320,6 +321,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          config?: Json | null
           created_at?: string
           document?: string | null
           email?: string | null
@@ -333,6 +335,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          config?: Json | null
           created_at?: string
           document?: string | null
           email?: string | null
