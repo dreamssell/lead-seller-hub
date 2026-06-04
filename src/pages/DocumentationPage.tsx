@@ -156,13 +156,13 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
           <CardDescription className="text-sm px-6 mt-2 leading-relaxed">
             {is403 
               ? 'Sua conta não possui permissão para visualizar a documentação. Contate o administrador.' 
-              : retryCount >= 3 
+              : retryCount >= alertLimit 
                 ? 'Detectamos múltiplas falhas. Por favor, reporte o Correlation ID abaixo ao suporte.'
                 : 'Não foi possível carregar a documentação.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 pb-10 text-center px-8">
-          {retryCount >= 3 && (
+          {retryCount >= alertLimit && (
             <div className="flex items-center gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-700 text-xs font-bold animate-pulse">
               <AlertCircle className="w-5 h-5 shrink-0" />
               <span>Limite de resiliência atingido.</span>
