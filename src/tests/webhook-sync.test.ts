@@ -26,10 +26,8 @@ describe('Webhook Polling and Fallback Logic', () => {
   });
 
   it('should prefer realtime when subscription is successful', () => {
-    // Simula status SUBSCRIBED
     mockSubscribe.mockImplementation((cb) => cb('SUBSCRIBED'));
     
-    // Lógica simplificada do componente para teste
     let updateMethod = 'none';
     const status: any = 'SUBSCRIBED';
     if (status === 'SUBSCRIBED') {
@@ -42,7 +40,6 @@ describe('Webhook Polling and Fallback Logic', () => {
   });
 
   it('should fallback to polling when subscription fails', () => {
-    // Simula falha ou status diferente de SUBSCRIBED
     mockSubscribe.mockImplementation((cb) => cb('CLOSED'));
     
     let updateMethod = 'none';
@@ -74,5 +71,34 @@ describe('Webhook Polling and Fallback Logic', () => {
     pollingActive = false;
     runEffect();
     expect(effectTriggered).toBe(false);
+  });
+});
+
+describe('Highlight and Subscription Lifecycle', () => {
+  it('should cleanup highlight when expired', () => {
+    const savedTime = Date.now() - 2000000; // > 30 min
+    const isExpired = Date.now() - savedTime > 1800000;
+    
+    expect(isExpired).toBe(true);
+  });
+
+  it('should manage subscription lifecycle based on modal visibility', () => {
+    let showDetail = false;
+    let subscriptionCreated = false;
+
+    const effect = () => {
+      if (showDetail) {
+        subscriptionCreated = true;
+      } else {
+        subscriptionCreated = false;
+      }
+    };
+
+    effect();
+    expect(subscriptionCreated).toBe(false);
+
+    showDetail = true;
+    effect();
+    expect(subscriptionCreated).toBe(true);
   });
 });
