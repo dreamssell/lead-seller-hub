@@ -26,35 +26,34 @@ test.describe('Documentation Page Integrity & Polling', () => {
   });
 
   test('should persist polling state via URL without localStorage', async ({ browser }) => {
-    // Criar um contexto novo sem nenhum dado persistido
-    const context = await browser.newContext({
-      storageState: { cookies: [], origins: [] }
-    });
+    // Criar um contexto novo sem nenhum dado persistido para garantir que o localStorage não influencie
+    const context = await browser.newContext();
     const page = await context.newPage();
 
     const correlationId = 'test-e2e-' + Date.now();
-    // Iniciar com polling ativo (default)
-    await page.goto(`/cadastros?correlation_id=${correlationId}&entity=contacts&polling=true`);
+    // 1. Iniciar com polling pausado (via URL)
+    await page.goto(`/cadastros?correlation_id=${correlationId}&entity=contacts&polling=false`);
     
-    // Localizar botão de pausa
-    const pauseButton = page.getByRole('button', { name: /pausar/i });
-    await expect(pauseButton).toBeVisible();
-    
-    // Pausar
-    await pauseButton.click();
-    await expect(page.url()).toContain('polling=false');
+    // 2. Verificar se o modal está aberto e o botão "Retomar" está visível (indicando que está pausado)
     await expect(page.getByRole('button', { name: /retomar/i })).toBeVisible();
+    await expect(page.url()).toContain('polling=false');
 
-    // Navegar para outra rota (simulando clique na sidebar)
+    // 3. Retomar o polling
+    await page.getByRole('button', { name: /retomar/i }).click();
+    await expect(page.getByRole('button', { name: /pausar/i })).toBeVisible();
+    await expect(page.url()).toContain('polling=true');
+
+    // 4. Navegar para outra rota (simulando clique na sidebar)
     await page.goto('/dashboard');
     await expect(page).toHaveURL(/\/dashboard/);
 
-    // Voltar usando o link que contém o estado na URL (ou simulando o retorno do usuário)
-    await page.goto(`/cadastros?correlation_id=${correlationId}&entity=contacts&polling=false`);
+    // 5. Voltar para a página original informando polling=true na URL
+    await page.goto(`/cadastros?correlation_id=${correlationId}&entity=contacts&polling=true`);
     
-    // Verificar se o estado de pausa persiste (botão de retomar visível)
-    await expect(page.getByRole('button', { name: /retomar/i })).toBeVisible();
+    // 6. Verificar se o estado "Pausar" permanece (polling ativo)
+    await expect(page.getByRole('button', { name: /pausar/i })).toBeVisible();
     
     await context.close();
   });
+
 });
