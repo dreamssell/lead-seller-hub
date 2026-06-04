@@ -2048,6 +2048,8 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>
 }) {
   const [d, setD] = useState(initialData);
+  const [pollingActive, setPollingActive] = useState(true);
+  const [updateMethod, setUpdateMethod] = useState<'realtime' | 'polling' | 'none'>('none');
 
   useEffect(() => {
     setD(initialData);
@@ -2058,8 +2060,9 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
 
   useEffect(() => {
     let intervalId: any;
+    let channel: any;
 
-    if (d.correlation_id === currentCorrId && currentCorrId && cardRef.current) {
+    if (d.correlation_id === currentCorrId && currentCorrId && cardRef.current && pollingActive) {
       cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setShowDetail(true);
       
@@ -2067,33 +2070,42 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
         const { data, error } = await supabase.from('crm_webhook_logs').select('*, crm_webhooks(url)').eq('id', d.id).single();
         if (!error && data && (data.status !== d.status || data.retry_count !== (d.retry_count || 0) || JSON.stringify(data.retry_history) !== JSON.stringify(d.retry_history))) {
            setD(data);
-           console.log('Real-time sync for correlation_id:', d.correlation_id);
         }
       };
       
       syncStatus();
 
-      // Assinatura específica para o card em destaque
-      const channel = supabase
+      // Estratégia de Fallback: WebSocket (Channel) -> Polling
+      channel = supabase
         .channel(`webhook-sync-${d.id}`)
         .on(
           'postgres_changes',
           { event: 'UPDATE', schema: 'public', table: 'crm_webhook_logs', filter: `id=eq.${d.id}` },
-          (payload) => {
-             console.log('Specific card update detected via realtime:', payload);
+          (payload: any) => {
              setD(payload.new);
+             setUpdateMethod('realtime');
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            setUpdateMethod('realtime');
+          } else {
+            setUpdateMethod('polling');
+          }
+        });
       
-      intervalId = setInterval(syncStatus, 5000); // Polling de segurança (mais lento se tiver realtime)
-
-      return () => {
-        if (intervalId) clearInterval(intervalId);
-        supabase.removeChannel(channel);
-      };
+      intervalId = setInterval(() => {
+        if (updateMethod !== 'realtime') syncStatus();
+      }, 5000); 
+    } else {
+      setUpdateMethod('none');
     }
-  }, [currentCorrId, d.correlation_id, d.id]);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [currentCorrId, d.correlation_id, d.id, pollingActive, updateMethod]);
   
   return (
     <>
