@@ -1547,7 +1547,7 @@ function WebhookDeliveryList() {
 
   const retryDelivery = async (d: any) => {
     toast({ title: 'Iniciando reenvio manual...' });
-    await triggerWebhooks(d.event_type, d.payload, d.id);
+    await globalTriggerWebhooks(d.event_type, d.payload, d.id);
     fetch();
   };
 
