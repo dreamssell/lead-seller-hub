@@ -1389,43 +1389,199 @@ function WebhookDeliveryList() {
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetch = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('crm_webhook_logs')
+      .select('*, crm_webhooks(url)')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (data) setDeliveries(data);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const fetch = async () => {
-      const { data } = await supabase
-        .from('crm_webhook_logs')
-        .select('*, crm_webhooks(url)')
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (data) setDeliveries(data);
-      setLoading(false);
-    };
     fetch();
   }, []);
+
+  const exportData = (format: 'json' | 'csv') => {
+    const data = deliveries.map(d => ({
+      data: new Date(d.created_at).toLocaleString(),
+      evento: d.event_type,
+      url: d.crm_webhooks?.url,
+      status: d.status,
+      response_status: d.response_status,
+      retentativas: d.retry_count,
+      correlation_id: d.correlation_id,
+      payload: JSON.stringify(d.payload)
+    }));
+
+    if (format === 'json') {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `crm-deliveries-${new Date().getTime()}.json`;
+      a.click();
+    } else {
+      const headers = Object.keys(data[0]).join(',');
+      const rows = data.map(row => Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob([`${headers}\n${rows}`], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `crm-deliveries-${new Date().getTime()}.csv`;
+      a.click();
+    }
+  };
 
   if (loading) return <div className="text-center py-10 text-xs text-muted-foreground">Carregando entregas...</div>;
 
   return (
-    <div className="space-y-3">
-      {deliveries.map(d => (
-        <div key={d.id} className="p-3 bg-secondary/10 rounded-xl border border-border/50 text-[11px] space-y-2">
-          <div className="flex justify-between items-center">
-            <span className="font-mono text-muted-foreground">{d.event_type}</span>
-            <Badge variant={d.status === 'sent' ? 'default' : d.status === 'failed' ? 'destructive' : 'secondary'} className="text-[9px]">
-              {d.status?.toUpperCase()}
-            </Badge>
+    <div className="space-y-4">
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => exportData('json')}>Exportar JSON</Button>
+        <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => exportData('csv')}>Exportar CSV</Button>
+        <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={fetch}><RefreshCw className="w-3 h-3 mr-1" /> Atualizar</Button>
+      </div>
+      <div className="space-y-3">
+        {deliveries.length === 0 ? (
+          <p className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma entrega registrada.</p>
+        ) : deliveries.map(d => (
+          <div key={d.id} className="p-3 bg-secondary/10 rounded-xl border border-border/50 text-[11px] space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="font-mono text-muted-foreground">{d.event_type}</span>
+              <Badge variant={d.status === 'sent' ? 'default' : d.status === 'failed' ? 'destructive' : 'secondary'} className="text-[9px]">
+                {d.status?.toUpperCase()}
+              </Badge>
+            </div>
+            <p className="text-muted-foreground truncate">{d.crm_webhooks?.url}</p>
+            <div className="flex gap-2">
+               <span className="text-muted-foreground">Status: {d.response_status || 'N/A'}</span>
+               <span className="text-muted-foreground">Retentativas: {d.retry_count}</span>
+            </div>
+            {d.correlation_id && <p className="font-mono text-[9px] text-primary">ID: {d.correlation_id}</p>}
+            <details>
+               <summary className="cursor-pointer hover:text-primary mt-1">Ver Payload</summary>
+               <pre className="bg-background/50 p-2 rounded mt-1 overflow-x-auto">{JSON.stringify(d.payload, null, 2)}</pre>
+            </details>
           </div>
-          <p className="text-muted-foreground truncate">{d.crm_webhooks?.url}</p>
-          <div className="flex gap-2">
-             <span className="text-muted-foreground">Status: {d.response_status || 'N/A'}</span>
-             <span className="text-muted-foreground">Retentativas: {d.retry_count}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EmailTemplatesTab() {
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<any>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+
+  const fetch = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('crm_email_templates').select('*').order('name');
+    if (data) setTemplates(data);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetch(); }, []);
+
+  const save = async () => {
+    if (!editing) return;
+    const { error } = await supabase.from('crm_email_templates').update({
+      subject: editing.subject,
+      body_html: editing.body_html,
+      updated_at: new Date().toISOString()
+    }).eq('id', editing.id);
+
+    if (error) {
+      toast({ title: 'Erro ao salvar template', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Template salvo com sucesso' });
+      setEditing(null);
+      fetch();
+    }
+  };
+
+  const renderPreview = (body: string) => {
+    const vars: any = {
+      contact_name: 'João Silva',
+      agent_name: 'Agente Humano',
+      action_type: 'Mudança de Etapa',
+      previous_status: 'Novo Lead',
+      current_status: 'Qualificação',
+      correlation_id: 'CORR-123-456'
+    };
+    let html = body;
+    Object.keys(vars).forEach(k => {
+      const re = new RegExp(`{{${k}}}`, 'g');
+      html = html.replace(re, vars[k]);
+    });
+    return html;
+  };
+
+  if (loading) return <div className="text-center py-20 text-muted-foreground">Carregando templates...</div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {templates.map(t => (
+          <div key={t.id} className="glass-card p-4 space-y-3">
+            <div>
+              <h3 className="text-sm font-bold text-foreground">{t.name}</h3>
+              <p className="text-xs text-muted-foreground">{t.description}</p>
+            </div>
+            <Button variant="outline" size="sm" className="w-full" onClick={() => setEditing({ ...t })}>
+              <Pencil className="w-3 h-3 mr-2" /> Editar Template
+            </Button>
           </div>
-          {d.correlation_id && <p className="font-mono text-[9px] text-primary">ID: {d.correlation_id}</p>}
-          <details>
-             <summary className="cursor-pointer hover:text-primary mt-1">Ver Payload</summary>
-             <pre className="bg-background/50 p-2 rounded mt-1 overflow-x-auto">{JSON.stringify(d.payload, null, 2)}</pre>
-          </details>
-        </div>
-      ))}
+        ))}
+      </div>
+
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Template: {editing?.name}</DialogTitle>
+            <SheetDescription>Use variáveis como {"{{contact_name}}" }, {"{{agent_name}}" }, {"{{correlation_id}}" }</SheetDescription>
+          </DialogHeader>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>Assunto do E-mail</Label>
+                <Input value={editing?.subject || ''} onChange={e => setEditing({ ...editing, subject: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Corpo do E-mail (HTML)</Label>
+                <Textarea 
+                  className="min-h-[300px] font-mono text-xs" 
+                  value={editing?.body_html || ''} 
+                  onChange={e => setEditing({ ...editing, body_html: e.target.value })} 
+                />
+              </div>
+            </div>
+            <div className="space-y-4 border-l pl-6">
+              <Label className="flex items-center gap-2"><Eye className="w-4 h-4" /> Prévia do Conteúdo</Label>
+              <div className="bg-white rounded-xl border border-border p-6 min-h-[400px] text-black">
+                <div className="mb-4 pb-2 border-b">
+                  <span className="text-xs font-bold text-gray-500">Assunto:</span>
+                  <p className="text-sm">{editing ? renderPreview(editing.subject) : ''}</p>
+                </div>
+                <div 
+                  className="prose prose-sm max-w-none"
+                  dangerouslySetInnerHTML={{ __html: editing ? renderPreview(editing.body_html) : '' }} 
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button>
+            <Button onClick={save}>Salvar Alterações</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1436,13 +1592,14 @@ export default function CadastrosPage() {
   return (
     <AppLayout title="Cadastros & CRM" subtitle="Gestão centralizada de contatos, leads, clientes e auditoria">
       <Tabs defaultValue="contacts" className="w-full">
-        <TabsList className={`grid grid-cols-3 ${showWhiteLabel ? 'md:grid-cols-8' : 'md:grid-cols-7'} mb-6`}>
+        <TabsList className={`grid grid-cols-3 ${showWhiteLabel ? 'md:grid-cols-9' : 'md:grid-cols-8'} mb-6`}>
           <TabsTrigger value="contacts"><UserPlus className="w-4 h-4 mr-2" />CRM</TabsTrigger>
           <TabsTrigger value="leads"><Users className="w-4 h-4 mr-2" />Leads</TabsTrigger>
           <TabsTrigger value="customers"><Briefcase className="w-4 h-4 mr-2" />Clientes</TabsTrigger>
           <TabsTrigger value="products"><Package className="w-4 h-4 mr-2" />Produtos</TabsTrigger>
           <TabsTrigger value="tasks"><CheckSquare className="w-4 h-4 mr-2" />Tarefas</TabsTrigger>
           <TabsTrigger value="users"><UserCog className="w-4 h-4 mr-2" />Usuários</TabsTrigger>
+          <TabsTrigger value="templates"><Mail className="w-4 h-4 mr-2" />Templates</TabsTrigger>
           {showWhiteLabel && <TabsTrigger value="whitelabel"><Sparkles className="w-4 h-4 mr-2" />White Label</TabsTrigger>}
           <TabsTrigger value="audit"><History className="w-4 h-4 mr-2" />Auditoria</TabsTrigger>
         </TabsList>
@@ -1452,6 +1609,7 @@ export default function CadastrosPage() {
         <TabsContent value="products"><CrudTab entity="products" /></TabsContent>
         <TabsContent value="tasks"><CrudTab entity="tasks" /></TabsContent>
         <TabsContent value="users"><UsersTab /></TabsContent>
+        <TabsContent value="templates"><EmailTemplatesTab /></TabsContent>
         {showWhiteLabel && <TabsContent value="whitelabel"><WhiteLabelTab /></TabsContent>}
         <TabsContent value="audit"><AuditTab /></TabsContent>
       </Tabs>
