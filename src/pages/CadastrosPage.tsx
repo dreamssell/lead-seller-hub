@@ -1724,6 +1724,29 @@ function WebhookDeliveryCard({ d, onRetry }: { d: any, onRetry: () => void }) {
                   </p>
                </div>
             </div>
+            <div className="bg-secondary/5 p-3 rounded-xl border border-border/50">
+               <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Headers Relevantes</p>
+               <div className="space-y-1">
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-muted-foreground">X-Signature:</span>
+                    <span className="font-mono">{String(d.payload?._signature || 'N/A').slice(0, 16)}...</span>
+                  </div>
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-muted-foreground">X-Timestamp:</span>
+                    <span className="font-mono">{d.payload?._timestamp || 'N/A'}</span>
+                  </div>
+               </div>
+               <Button variant="ghost" size="sm" className="h-6 text-[9px] w-full mt-2" onClick={() => {
+                 const headers = {
+                   'X-Correlation-ID': d.correlation_id,
+                   'X-Signature': d.payload?._signature,
+                   'X-Timestamp': d.payload?._timestamp,
+                   'Content-Type': 'application/json'
+                 };
+                 navigator.clipboard.writeText(JSON.stringify(headers, null, 2));
+                 toast({ title: 'Headers copiados!' });
+               }}>Copiar Todos Headers</Button>
+            </div>
 
             <div className="space-y-2">
                <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
