@@ -2105,7 +2105,13 @@ export default function CadastrosPage() {
           <TabsTrigger value="users"><UserCog className="w-4 h-4 mr-2" />Usuários</TabsTrigger>
           <TabsTrigger value="templates"><Mail className="w-4 h-4 mr-2" />Templates</TabsTrigger>
           {showWhiteLabel && <TabsTrigger value="whitelabel"><Sparkles className="w-4 h-4 mr-2" />White Label</TabsTrigger>}
-          <TabsTrigger value="audit"><History className="w-4 h-4 mr-2" />Auditoria</TabsTrigger>
+          <TabsTrigger value="audit" className="relative">
+            <History className="w-4 h-4 mr-2" /> Auditoria
+            <div className="absolute -top-1 -right-1 flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+            </div>
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="contacts"><CrudTab entity="contacts" /></TabsContent>
         <TabsContent value="leads"><CrudTab entity="leads" /></TabsContent>
