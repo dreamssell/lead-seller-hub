@@ -1511,30 +1511,43 @@ function CrmGlobalActivities() {
   const [externalCorrId, setExternalCorrId] = useState('');
   const [corrSearch, setCorrSearch] = useState('');
 
+  // Persistir e sincronizar URL e localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const cid = params.get('correlation_id') || localStorage.getItem('last_correlation_id');
+      const urlCid = params.get('correlation_id');
+      const savedCid = localStorage.getItem('last_correlation_id');
+      
+      const cid = urlCid || savedCid;
+      
       if (cid) {
         setExternalCorrId(cid);
         setCorrSearch(cid);
         setActiveTab('deliveries');
         setOpen(true);
+        
+        // Se veio apenas do localStorage, atualizar URL para persistência em navegação direta
+        if (!urlCid) {
+          params.set('correlation_id', cid);
+          window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+        }
       }
     }
   }, []);
 
-  // Assinatura em tempo real para mudanças globais
+  // Assinatura em tempo real para mudanças globais em webhooks
   useEffect(() => {
     const channel = supabase
       .channel('schema-db-changes')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'crm_webhook_logs' },
-        (payload) => {
-          console.log('Real-time change detected in crm_webhook_logs:', payload);
-          // O polling individual no WebhookDeliveryCard já cuidará da atualização específica,
-          // mas isso garante que a lista como um todo possa ser invalidada/recarregada se necessário.
+        (payload: any) => {
+          console.log('Real-time update in crm_webhook_logs:', payload);
+          // Recarregar a lista se o item alterado estiver sendo visualizado ou se for uma mudança importante
+          if (activeTab === 'deliveries') {
+            // fetch(); // Poderia chamar o fetch do WebhookDeliveryList se exposto via ref ou contexto
+          }
         }
       )
       .subscribe();
@@ -1542,7 +1555,7 @@ function CrmGlobalActivities() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [activeTab]);
 
   useEffect(() => {
     if (!open) return;
