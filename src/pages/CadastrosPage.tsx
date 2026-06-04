@@ -349,40 +349,111 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+        <div className="flex items-center gap-3 flex-1">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          </div>
+          {entity === 'contacts' && (
+            <div className="flex items-center border border-border rounded-xl p-1 bg-secondary/20">
+              <Button 
+                variant={viewMode === 'list' ? 'secondary' : 'ghost'} 
+                size="sm" 
+                className="h-8 gap-1.5" 
+                onClick={() => setViewMode('list')}
+              >
+                <List className="w-4 h-4" /> Lista
+              </Button>
+              <Button 
+                variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} 
+                size="sm" 
+                className="h-8 gap-1.5" 
+                onClick={() => setViewMode('kanban')}
+              >
+                <LayoutGrid className="w-4 h-4" /> Kanban
+              </Button>
+            </div>
+          )}
         </div>
-        <Button onClick={openNew}>
-          <Plus className="w-4 h-4 mr-2" /> Novo
-        </Button>
+        <div className="flex items-center gap-2">
+          {entity === 'contacts' && <CrmGlobalActivities />}
+          <Button onClick={openNew}>
+            <Plus className="w-4 h-4 mr-2" /> Novo
+          </Button>
+        </div>
       </div>
 
-      <div className="glass-card overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {schema.columns.map(c => <TableHead key={c.key}>{c.label}</TableHead>)}
-              <TableHead className="w-24 text-right">Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow><TableCell colSpan={schema.columns.length + 1} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
-            ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={schema.columns.length + 1} className="text-center text-muted-foreground py-8">Nenhum registro encontrado.</TableCell></TableRow>
-            ) : filtered.map(row => (
-              <TableRow key={row.id}>
-                {schema.columns.map(c => <TableCell key={c.key}>{formatCell(row[c.key], c.key)}</TableCell>)}
-                <TableCell className="text-right">
-                  <Button variant="ghost" size="icon" onClick={() => openEdit(row)}><Pencil className="w-4 h-4" /></Button>
-                  <Button variant="ghost" size="icon" onClick={() => setDeleteId(row.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
-                </TableCell>
+      {entity === 'contacts' && viewMode === 'kanban' ? (
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {columns_kanban.map((col) => (
+            <div key={col.id} className="min-w-[300px] flex-shrink-0">
+              <div className="flex items-center gap-2 mb-3 px-2">
+                <div className={`w-2.5 h-2.5 rounded-full ${col.color}`} />
+                <h3 className="text-sm font-semibold text-foreground">{col.title}</h3>
+                <Badge variant="secondary" className="ml-auto">{filtered.filter(r => r.status === col.id).length}</Badge>
+              </div>
+              <div className="space-y-3 p-2 bg-secondary/10 rounded-2xl border border-border/50 min-h-[500px]">
+                {filtered.filter(r => r.status === col.id).map(contact => (
+                  <motion.div 
+                    layoutId={contact.id}
+                    key={contact.id} 
+                    className="glass-card p-4 space-y-3 group cursor-pointer hover:border-primary/50 transition-colors"
+                    onClick={() => openEdit(contact)}
+                  >
+                    <div className="flex justify-between items-start">
+                      <p className="text-sm font-bold text-foreground">{contact.name}</p>
+                      <Badge variant="outline" className="text-[9px] uppercase">{contact.source || 'Lead'}</Badge>
+                    </div>
+                    {contact.company && <p className="text-xs text-muted-foreground flex items-center gap-1"><Building className="w-3 h-3" /> {contact.company}</p>}
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="flex -space-x-2">
+                         {contact.assigned_agent_id ? (
+                           <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center border-2 border-background" title="Atribuído">
+                             <User className="w-3 h-3 text-primary" />
+                           </div>
+                         ) : (
+                           <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center border-2 border-background" title="Sem responsável">
+                             <User className="w-3 h-3 text-muted-foreground" />
+                           </div>
+                         )}
+                      </div>
+                      <p className="text-xs font-bold text-primary">
+                        {contact.estimated_value ? `R$ ${Number(contact.estimated_value).toLocaleString('pt-BR')}` : '—'}
+                      </p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="glass-card overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {schema.columns.map(c => <TableHead key={c.key}>{c.label}</TableHead>)}
+                <TableHead className="w-24 text-right">Ações</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow><TableCell colSpan={schema.columns.length + 1} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
+              ) : filtered.length === 0 ? (
+                <TableRow><TableCell colSpan={schema.columns.length + 1} className="text-center text-muted-foreground py-8">Nenhum registro encontrado.</TableCell></TableRow>
+              ) : filtered.map(row => (
+                <TableRow key={row.id}>
+                  {schema.columns.map(c => <TableCell key={c.key}>{formatCell(row[c.key], c.key)}</TableCell>)}
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" onClick={() => openEdit(row)}><Pencil className="w-4 h-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => setDeleteId(row.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
