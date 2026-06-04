@@ -125,8 +125,45 @@ const DOC_SECTIONS = [
 ];
 
 export default function DocumentationPage() {
+  const { canAccessPage } = useAuth();
+  const [isSyncing, setIsSyncing] = useState(true);
+
+  // Validação explícita de role/permissão ao montar o componente
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsSyncing(false);
+    }, 600); // Pequeno delay para garantir que o AuthContext sincronizou
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (isSyncing) {
+    return (
+      <AppLayout title="Documentação Técnica" subtitle="Carregando manuais...">
+        <div className="max-w-7xl mx-auto flex flex-col items-center justify-center min-h-[400px] gap-4">
+          <motion.div 
+            animate={{ rotate: 360 }} 
+            transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+            className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full shadow-lg"
+          />
+          <p className="text-sm font-medium text-muted-foreground animate-pulse">Validando credenciais de acesso...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Se o guard do ProtectedRoute falhar ou quisermos uma camada extra de proteção
+  if (!canAccessPage('documentation')) {
+    throw new Error('403: Permission denied for documentation');
+  }
+
   return (
-    <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => window.location.reload()}>
+    <ErrorBoundary 
+      FallbackComponent={ErrorFallback} 
+      onReset={() => {
+        // Lógica de retry granular agora tratada no ErrorFallback
+        console.log('[DocumentationBoundary] Resetting state');
+      }}
+    >
       <DocumentationContent />
     </ErrorBoundary>
   );
