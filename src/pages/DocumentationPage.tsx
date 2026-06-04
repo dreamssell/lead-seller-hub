@@ -191,7 +191,15 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
                 <span>Correlation ID:</span>
                 <div className="flex items-center gap-2">
                   <span className="truncate max-w-[80px]">{correlationId.split('-')[0]}</span>
-                  <button onClick={() => { navigator.clipboard.writeText(correlationId); toast({ title: "ID Copiado" }); }} className="p-1 hover:bg-background/80 rounded transition-colors"><Copy className="w-2.5 h-2.5" /></button>
+                  <button 
+                    onClick={() => { 
+                      navigator.clipboard.writeText(correlationId); 
+                      toast({ title: "ID Copiado", description: "O ID foi copiado e pode ser usado para busca global." }); 
+                    }} 
+                    className="p-1 hover:bg-background/80 rounded transition-colors"
+                  >
+                    <Copy className="w-2.5 h-2.5" />
+                  </button>
                 </div>
             </div>
           </div>
