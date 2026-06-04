@@ -94,11 +94,18 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 pb-10 text-center px-8">
-          {!is403 && (
-            <div className="p-4 bg-secondary/30 rounded-xl text-[10px] font-mono text-left overflow-auto max-h-32 border border-border/20 text-muted-foreground leading-tight">
-              {error.message}
+          <div className="flex flex-col gap-2 p-4 bg-secondary/30 rounded-xl border border-border/20">
+            {!is403 && (
+              <div className="text-[10px] font-mono text-left overflow-auto max-h-24 text-muted-foreground leading-tight mb-2">
+                {error.message}
+              </div>
+            )}
+            <div className="flex flex-wrap justify-between items-center gap-2 text-[9px] font-mono text-muted-foreground/60 uppercase tracking-tighter">
+              <span>Status: {is403 ? '403 Forbidden' : 'Network Fail'}</span>
+              <span>Retries: {retryCount}/{MAX_RETRIES}</span>
+              <span className="truncate max-w-[100px]">ID: {correlationId.split('-')[0]}</span>
             </div>
-          )}
+          </div>
           <div className="flex flex-col gap-3">
             {is403 ? (
               <Button onClick={handleReauth} className="w-full rounded-2xl gap-2 h-12 font-bold shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-[0.98]">
