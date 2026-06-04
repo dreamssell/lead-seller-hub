@@ -253,7 +253,6 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
     </div>
   );
 }
-}
 
 const DOC_SECTIONS = [
   {
