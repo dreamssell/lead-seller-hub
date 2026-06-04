@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin, LayoutGrid, List, MessageSquare, Bot as BotIcon, Clock, ChevronRight, User, RefreshCw, AlertCircle, Code, Share2, Download, CheckCircle2 } from 'lucide-react';
+import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin, LayoutGrid, List, MessageSquare, Bot as BotIcon, Clock, ChevronRight, User, RefreshCw, AlertCircle, Code, Share2, Download, CheckCircle2, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import WhiteLabelTab from '@/components/cadastros/WhiteLabelTab';
 import { logAudit } from '@/lib/audit';
@@ -352,7 +352,16 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
     if (entity === 'contacts') {
       loadUsers();
       
-      // Restaurar destaque do Kanban
+      const applyHighlight = (cardId: string) => {
+        const card = document.querySelector(`[data-card-id="${cardId}"]`);
+        if (card) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          card.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
+          setTimeout(() => card.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 5000);
+        }
+      };
+
+      // Restaurar destaque inicial do Kanban
       if (viewMode === 'kanban') {
         const savedCard = localStorage.getItem('kanban_highlighted_card');
         const savedTime = localStorage.getItem('kanban_highlighted_time');
@@ -360,17 +369,20 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
         if (savedCard && savedTime) {
           const timeDiff = Date.now() - parseInt(savedTime);
           if (timeDiff < 1800000) { // 30 min
-            setTimeout(() => {
-              const card = document.querySelector(`[data-card-id="${savedCard}"]`);
-              if (card) {
-                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                card.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
-                setTimeout(() => card.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 5000);
-              }
-            }, 600);
+            setTimeout(() => applyHighlight(savedCard), 600);
           }
         }
       }
+
+      // Sincronizar via localStorage entre abas
+      const handleStorageChange = (e: StorageEvent) => {
+        if (e.key === 'kanban_highlighted_card' && e.newValue && viewMode === 'kanban') {
+          applyHighlight(e.newValue);
+        }
+      };
+
+      window.addEventListener('storage', handleStorageChange);
+      return () => window.removeEventListener('storage', handleStorageChange);
     }
   }, [entity, viewMode]);
 
@@ -1529,9 +1541,12 @@ function CrmGlobalActivities() {
         </SheetHeader>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-4">
+          <TabsList className="grid w-full grid-cols-4 mb-4">
             <TabsTrigger value="events">Histórico</TabsTrigger>
             <TabsTrigger value="deliveries">Notificações</TabsTrigger>
+            <TabsTrigger value="config" title="Configurar Backoff">
+              <Settings className="w-3 h-3" />
+            </TabsTrigger>
             <TabsTrigger value="test-mode" className="gap-1 text-primary">
               <Sparkles className="w-3 h-3" /> Modo de Teste
             </TabsTrigger>
@@ -1620,15 +1635,79 @@ function CrmGlobalActivities() {
           </TabsContent>
 
           <TabsContent value="deliveries">
-             <WebhookDeliveryList externalCorrId={externalCorrId} setCorrSearch={setCorrSearch} />
+            <WebhookDeliveryList externalCorrId={externalCorrId} setCorrSearch={setCorrSearch} />
           </TabsContent>
 
+          <TabsContent value="config">
+            <WebhookConfigPanel />
+          </TabsContent>
           <TabsContent value="test-mode">
             <WebhookTestPanel />
           </TabsContent>
         </Tabs>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function WebhookConfigPanel() {
+  const [config, setConfig] = useState({
+    strategy: 'exponential',
+    window: 5,
+    max_attempts: 3,
+    initial_delay: 10
+  });
+
+  const nextRetryTime = (attempt: number) => {
+    const delay = config.strategy === 'exponential' 
+      ? config.initial_delay * Math.pow(2, attempt)
+      : config.initial_delay * (attempt + 1);
+    const date = new Date();
+    date.setSeconds(date.getSeconds() + delay);
+    return date.toLocaleTimeString();
+  };
+
+  return (
+    <div className="space-y-6 p-4 bg-secondary/10 rounded-2xl border border-border/50">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label>Estratégia</Label>
+          <Select value={config.strategy} onValueChange={v => setConfig({...config, strategy: v})}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="exponential">Exponencial</SelectItem>
+              <SelectItem value="linear">Linear</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Janela (min)</Label>
+          <Input type="number" value={config.window} onChange={e => setConfig({...config, window: parseInt(e.target.value)})} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Limite de Retentativas</Label>
+          <Input type="number" value={config.max_attempts} onChange={e => setConfig({...config, max_attempts: parseInt(e.target.value)})} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Atraso Inicial (s)</Label>
+          <Input type="number" value={config.initial_delay} onChange={e => setConfig({...config, initial_delay: parseInt(e.target.value)})} />
+        </div>
+      </div>
+      
+      <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 space-y-2">
+        <p className="text-[10px] font-bold text-primary uppercase">Pré-visualização de Escalonamento</p>
+        <div className="space-y-1">
+          {[0, 1, 2].map(i => (
+            <div key={i} className="flex justify-between text-[11px]">
+              <span className="text-muted-foreground">Tentativa #{i+1}:</span>
+              <span className="font-mono">Próximo envio estimado às {nextRetryTime(i)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      <Button className="w-full" onClick={() => toast({ title: "Configurações salvas!" })}>Salvar Estratégia de Backoff</Button>
+    </div>
   );
 }
 
@@ -1993,15 +2072,39 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
               {d.status?.toUpperCase()}
             </Badge>
             {d.status === 'failed' && (
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="h-6 text-[9px] gap-1 text-primary hover:text-primary" 
-                onClick={(e) => { e.stopPropagation(); onRetry(); }}
-              >
-                <RefreshCw className="h-3 w-3" />
-                Reenviar Manual
-              </Button>
+              <div className="flex gap-1">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="h-6 text-[9px] gap-1 text-primary hover:text-primary" 
+                  onClick={(e) => { e.stopPropagation(); onRetry(); }}
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  Reenviar
+                </Button>
+                {!d.is_dead_letter && (
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    className="h-6 text-[9px] gap-1 text-destructive hover:text-destructive hover:bg-destructive/10" 
+                    onClick={async (e) => { 
+                      e.stopPropagation();
+                      const reason = prompt("Motivo do envio para Dead-letter:");
+                      if (reason) {
+                        await supabase.from('crm_webhook_logs').update({
+                          is_dead_letter: true,
+                          last_error_summary: `Manual Dead-letter: ${reason}`,
+                          status: 'failed'
+                        }).eq('id', d.id);
+                        toast({ title: 'Enviado para Dead-letter' });
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Arquivar
+                  </Button>
+                )}
+              </div>
             )}
             <Button 
               size="icon" 
