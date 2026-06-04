@@ -1563,6 +1563,7 @@ function CrmGlobalActivities() {
                           const url = new URL(window.location.href);
                           url.searchParams.set('correlation_id', cid);
                           window.history.replaceState({}, '', url);
+                          localStorage.setItem('last_correlation_id', cid);
                         }}
                         title="Abrir Auditoria e filtrar por este ID"
                       >
