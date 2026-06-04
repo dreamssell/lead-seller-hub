@@ -23,15 +23,40 @@ interface CallHistory {
 export default function MCPConsole({ correlationId }: { correlationId?: string }) {
   const [method, setMethod] = useState('POST');
   const [endpoint, setEndpoint] = useState('/mcp/context');
-  const [headers, setHeaders] = useState(() => {
-    const defaultHeaders = {
-      "Authorization": "Bearer YOUR_TOKEN",
-      "Content-Type": "application/json"
-    };
+  
   const effectiveCorrelationId = useMemo(() => {
     if (correlationId) return correlationId;
     return sessionStorage.getItem('doc_correlation_id') || 'no-correlation-id';
   }, [correlationId]);
+
+  const [headers, setHeaders] = useState(() => {
+    const defaultHeaders = {
+      "Authorization": "Bearer YOUR_TOKEN",
+      "Content-Type": "application/json",
+      "X-Correlation-ID": effectiveCorrelationId
+    };
+    return JSON.stringify(defaultHeaders, null, 2);
+  });
+
+  // Atualizar headers quando o ID de correlação mudar
+  useEffect(() => {
+    try {
+      const currentHeaders = JSON.parse(headers);
+      if (currentHeaders["X-Correlation-ID"] !== effectiveCorrelationId) {
+        setHeaders(JSON.stringify({
+          ...currentHeaders,
+          "X-Correlation-ID": effectiveCorrelationId
+        }, null, 2));
+      }
+    } catch (e) {
+      // Se JSON for inválido, não tentamos atualizar automaticamente
+    }
+  }, [effectiveCorrelationId]);
+
+  const [body, setBody] = useState('{\n  "query": "Qual o faturamento de hoje?",\n  "metadata": {\n    "agent_id": "demo-123"\n  }\n}');
+  const [response, setResponse] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [history, setHistory] = useState<CallHistory[]>([]);
 
   // Carregar histórico do localStorage
   useEffect(() => {
@@ -76,7 +101,8 @@ export default function MCPConsole({ correlationId }: { correlationId?: string }
         data: {
           answer: "O faturamento registrado hoje é de R$ 12.500,00.",
           source: "MCP Server Local",
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          correlation_id_used: effectiveCorrelationId
         }
       };
       
