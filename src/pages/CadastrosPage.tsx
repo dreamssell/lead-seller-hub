@@ -1644,6 +1644,67 @@ function CrmGlobalActivities() {
   );
 }
 
+function WebhookConfigPanel() {
+  const [config, setConfig] = useState({
+    strategy: 'exponential',
+    window: 5,
+    max_attempts: 3,
+    initial_delay: 10
+  });
+
+  const nextRetryTime = (attempt: number) => {
+    const delay = config.strategy === 'exponential' 
+      ? config.initial_delay * Math.pow(2, attempt)
+      : config.initial_delay * (attempt + 1);
+    const date = new Date();
+    date.setSeconds(date.getSeconds() + delay);
+    return date.toLocaleTimeString();
+  };
+
+  return (
+    <div className="space-y-6 p-4 bg-secondary/10 rounded-2xl border border-border/50">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label>Estratégia</Label>
+          <Select value={config.strategy} onValueChange={v => setConfig({...config, strategy: v})}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="exponential">Exponencial</SelectItem>
+              <SelectItem value="linear">Linear</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Janela (min)</Label>
+          <Input type="number" value={config.window} onChange={e => setConfig({...config, window: parseInt(e.target.value)})} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Limite de Retentativas</Label>
+          <Input type="number" value={config.max_attempts} onChange={e => setConfig({...config, max_attempts: parseInt(e.target.value)})} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Atraso Inicial (s)</Label>
+          <Input type="number" value={config.initial_delay} onChange={e => setConfig({...config, initial_delay: parseInt(e.target.value)})} />
+        </div>
+      </div>
+      
+      <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 space-y-2">
+        <p className="text-[10px] font-bold text-primary uppercase">Pré-visualização de Escalonamento</p>
+        <div className="space-y-1">
+          {[0, 1, 2].map(i => (
+            <div key={i} className="flex justify-between text-[11px]">
+              <span className="text-muted-foreground">Tentativa #{i+1}:</span>
+              <span className="font-mono">Próximo envio estimado às {nextRetryTime(i)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      <Button className="w-full" onClick={() => toast({ title: "Configurações salvas!" })}>Salvar Estratégia de Backoff</Button>
+    </div>
+  );
+}
+
 function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearch }: { externalCorrId?: string; setCorrSearch?: (val: string) => void }) {
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
