@@ -359,12 +359,10 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
           card.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
           setTimeout(() => card.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 5000);
         } else if (rows.length > 0) {
-          // Limpeza segura se o card não existir após o carregamento dos dados
           console.log(`Card ${cardId} not found in DOM, cleaning highlight state.`);
           localStorage.removeItem('kanban_highlighted_card');
           localStorage.removeItem('kanban_highlighted_time');
           
-          // Limpar parâmetro da URL de forma segura
           const params = new URLSearchParams(window.location.search);
           if (params.has('highlight_card')) {
             params.delete('highlight_card');
@@ -374,7 +372,6 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
         }
       };
 
-      // Restaurar destaque inicial do Kanban e verificar expiração
       if (viewMode === 'kanban') {
         const params = new URLSearchParams(window.location.search);
         const urlCardId = params.get('highlight_card');
@@ -392,12 +389,12 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
               window.history.replaceState({}, '', newUrl);
             }
           } else {
+            // Re-destaque persistente após carregamento ou navegação
             setTimeout(() => applyHighlight(savedCard), 800);
           }
         }
       }
 
-      // Sincronizar via localStorage entre abas
       const handleStorageChange = (e: StorageEvent) => {
         if (e.key === 'kanban_highlighted_card' && e.newValue && viewMode === 'kanban') {
           applyHighlight(e.newValue);
@@ -407,7 +404,7 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
       window.addEventListener('storage', handleStorageChange);
       return () => window.removeEventListener('storage', handleStorageChange);
     }
-  }, [entity, viewMode]);
+  }, [entity, viewMode, rows.length]); //rows.length garante limpeza apenas após carregar dados
 
   if (entity === 'contacts' && !schema.fields.some(f => f.name === 'assigned_agent_id')) {
     schema.fields.push({ 
@@ -2080,6 +2077,7 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
   useEffect(() => {
     let intervalId: any;
     let channel: any;
+    let isSubscribed = false;
 
     // A assinatura só deve ser criada se o modal estiver aberto E for o card correspondente ao X-Correlation-ID
     if (showDetail && d.correlation_id === currentCorrId && currentCorrId && pollingActive) {
@@ -2096,24 +2094,28 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
       
       syncStatus();
 
-      // Estratégia de Fallback: WebSocket (Channel) -> Polling
-      channel = supabase
-        .channel(`webhook-sync-${d.id}-${Date.now()}`) // Nome único para evitar conflitos
-        .on(
-          'postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'crm_webhook_logs', filter: `id=eq.${d.id}` },
-          (payload: any) => {
-             setD(payload.new);
-             setUpdateMethod('realtime');
-          }
-        )
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            setUpdateMethod('realtime');
-          } else {
-            setUpdateMethod('polling');
-          }
-        });
+      // Guard para evitar assinaturas duplicadas
+      if (!isSubscribed) {
+        const channelName = `webhook-sync-${d.id}-${Date.now()}`;
+        channel = supabase
+          .channel(channelName)
+          .on(
+            'postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'crm_webhook_logs', filter: `id=eq.${d.id}` },
+            (payload: any) => {
+               setD(payload.new);
+               setUpdateMethod('realtime');
+            }
+          )
+          .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+              setUpdateMethod('realtime');
+              isSubscribed = true;
+            } else {
+              setUpdateMethod('polling');
+            }
+          });
+      }
       
       intervalId = setInterval(() => {
         if (updateMethod !== 'realtime') syncStatus();
@@ -2126,6 +2128,7 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
       if (intervalId) clearInterval(intervalId);
       if (channel) {
         supabase.removeChannel(channel);
+        isSubscribed = false;
         console.log(`Unsubscribed from webhook-sync-${d.id}`);
       }
     };
