@@ -889,9 +889,10 @@ export default function CadastrosPage() {
   const { canAccessPage } = useAuth();
   const showWhiteLabel = canAccessPage('white-label');
   return (
-    <AppLayout title="Cadastros" subtitle="Gerencie leads, clientes, produtos, tarefas e usuários">
-      <Tabs defaultValue="leads" className="w-full">
-        <TabsList className={`grid grid-cols-3 ${showWhiteLabel ? 'md:grid-cols-7' : 'md:grid-cols-6'} mb-6`}>
+    <AppLayout title="Cadastros & CRM" subtitle="Gestão centralizada de contatos, leads, clientes e auditoria">
+      <Tabs defaultValue="contacts" className="w-full">
+        <TabsList className={`grid grid-cols-3 ${showWhiteLabel ? 'md:grid-cols-8' : 'md:grid-cols-7'} mb-6`}>
+          <TabsTrigger value="contacts"><UserPlus className="w-4 h-4 mr-2" />CRM</TabsTrigger>
           <TabsTrigger value="leads"><Users className="w-4 h-4 mr-2" />Leads</TabsTrigger>
           <TabsTrigger value="customers"><Briefcase className="w-4 h-4 mr-2" />Clientes</TabsTrigger>
           <TabsTrigger value="products"><Package className="w-4 h-4 mr-2" />Produtos</TabsTrigger>
@@ -900,6 +901,7 @@ export default function CadastrosPage() {
           {showWhiteLabel && <TabsTrigger value="whitelabel"><Sparkles className="w-4 h-4 mr-2" />White Label</TabsTrigger>}
           <TabsTrigger value="audit"><History className="w-4 h-4 mr-2" />Auditoria</TabsTrigger>
         </TabsList>
+        <TabsContent value="contacts"><CrudTab entity="contacts" /></TabsContent>
         <TabsContent value="leads"><CrudTab entity="leads" /></TabsContent>
         <TabsContent value="customers"><CrudTab entity="customers" /></TabsContent>
         <TabsContent value="products"><CrudTab entity="products" /></TabsContent>
