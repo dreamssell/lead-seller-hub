@@ -20,6 +20,9 @@ import { useAuth } from '@/contexts/AuthContext';
 
 function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
   const { signOut } = useAuth();
+  const [retryCount, setRetryCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const MAX_RETRIES = 5;
   const is403 = error.message.includes('403') || error.message.includes('permission');
   
   // Registrar erro para depuração
@@ -29,9 +32,10 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
       message: error.message,
       stack: error.stack,
       timestamp: new Date().toISOString(),
-      type: is403 ? '403_FORBIDDEN' : 'NETWORK_OR_STATE_FAILURE'
+      type: is403 ? '403_FORBIDDEN' : 'NETWORK_OR_STATE_FAILURE',
+      retryCount
     });
-  }, [error, is403]);
+  }, [error, is403, retryCount]);
 
   const handleReauth = async () => {
     toast({
@@ -43,8 +47,28 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
   };
 
   const handleRetry = () => {
-    console.log('[DocumentationRetry] Attempting to recover content render');
-    resetErrorBoundary();
+    if (retryCount >= MAX_RETRIES) {
+      toast({
+        title: "Limite de tentativas atingido",
+        description: "Por favor, recarregue a página manualmente ou verifique sua conexão.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsRetrying(true);
+    const nextRetry = retryCount + 1;
+    setRetryCount(nextRetry);
+    
+    // Backoff exponencial: 1s, 2s, 4s, 8s, 16s
+    const delay = Math.pow(2, retryCount) * 1000;
+    
+    console.log(`[DocumentationRetry] Attempt ${nextRetry}/${MAX_RETRIES} in ${delay}ms`);
+    
+    setTimeout(() => {
+      setIsRetrying(false);
+      resetErrorBoundary();
+    }, delay);
   };
 
   return (
@@ -80,8 +104,17 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
                 <RefreshCw className="w-4 h-4" /> Entrar novamente (SSO)
               </Button>
             ) : (
-              <Button onClick={handleRetry} className="w-full rounded-2xl gap-2 h-12 font-bold shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-[0.98]">
-                <RefreshCw className="w-4 h-4" /> Tentar novamente
+              <Button 
+                onClick={handleRetry} 
+                disabled={isRetrying || retryCount >= MAX_RETRIES}
+                className="w-full rounded-2xl gap-2 h-12 font-bold shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                {isRetrying ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+                {isRetrying ? `Tentando... (${retryCount}/${MAX_RETRIES})` : 'Tentar novamente'}
               </Button>
             )}
             
