@@ -2025,10 +2025,39 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId, selectedIds, setSelect
           </DialogHeader>
           
           <div className="space-y-6 py-4">
-            <div className="grid grid-cols-2 gap-4">
-               <div className="bg-secondary/10 p-3 rounded-xl border border-border/50">
+            <div className="flex justify-between items-center bg-secondary/10 p-3 rounded-xl border border-border/50 mb-4">
+               <div>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Status Final</p>
                   <Badge variant={d.status === 'sent' ? 'default' : 'destructive'}>{d.status?.toUpperCase()}</Badge>
+               </div>
+               <Button size="sm" variant="outline" className="h-7 text-[10px] gap-2" onClick={() => {
+                 const report = {
+                   correlation_id: d.correlation_id,
+                   timestamp: d.created_at,
+                   status: d.status,
+                   event: d.event_type,
+                   url: d.crm_webhooks?.url,
+                   payload: d.payload,
+                   security: {
+                     hmac: !d.error_message?.includes('HMAC'),
+                     window: !d.error_message?.includes('window')
+                   },
+                   retry_history: d.retry_history
+                 };
+                 const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+                 const url = URL.createObjectURL(blob);
+                 const a = document.createElement('a');
+                 a.href = url;
+                 a.download = `report-${d.correlation_id}-${new Date().toISOString().split('T')[0]}.json`;
+                 a.click();
+               }}>
+                 <Download className="w-3 h-3" /> Baixar Relatório JSON
+               </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+               <div className="bg-secondary/10 p-3 rounded-xl border border-border/50">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Criado em</p>
+                  <p className="text-xs font-semibold">{new Date(d.created_at).toLocaleString()}</p>
                </div>
                <div className="bg-secondary/10 p-3 rounded-xl border border-border/50">
                   <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">X-Correlation-ID</p>
