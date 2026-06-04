@@ -1688,7 +1688,7 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
 
   useEffect(() => {
     fetch();
-  }, [corrSearch]);
+  }, [corrSearch, statusFilter, typeFilter, timeFilter]);
 
   const retryDelivery = async (d: any, isBatch = false) => {
     if (!isBatch) toast({ title: 'Iniciando reenvio manual...' });
