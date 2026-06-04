@@ -1918,13 +1918,18 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
   );
 }
 
-function WebhookDeliveryCard({ d, onRetry, currentCorrId, selectedIds, setSelectedIds }: { 
+function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedIds, setSelectedIds }: { 
   d: any, 
   onRetry: () => void, 
   currentCorrId?: string,
   selectedIds: string[],
   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>
 }) {
+  const [d, setD] = useState(initialData);
+
+  useEffect(() => {
+    setD(initialData);
+  }, [initialData]);
   const [showDetail, setShowDetail] = useState(false);
   const [showPayload, setShowPayload] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
