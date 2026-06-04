@@ -81,14 +81,18 @@ describe('DocumentationPage', () => {
     // Switch to MCP Server
     const mcpTab = screen.getByRole('tab', { name: /MCP Server/i });
     fireEvent.click(mcpTab);
+    expect(screen.getByText('Ferramentas Disponíveis')).toBeInTheDocument();
     
     // Switch to Webhooks
     const webhooksTab = screen.getByRole('tab', { name: /Webhooks/i });
     fireEvent.click(webhooksTab);
+    expect(screen.getByText('Segurança (HMAC)')).toBeInTheDocument();
 
     // Switch to Console
     const consoleTab = screen.getByRole('tab', { name: /Console/i });
     fireEvent.click(consoleTab);
+    expect(screen.getByText('Response Output')).toBeInTheDocument();
+
 
 
 
