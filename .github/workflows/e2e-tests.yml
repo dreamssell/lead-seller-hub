@@ -31,11 +31,21 @@ jobs:
           TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
         run: |
           echo "Starting E2E Validation for HMAC and Replay Protection..."
-          npm test src/__tests__/DocumentationTelemetry.test.tsx || (echo "::error::Telemetry validation failed. Check HMAC/Replay logs." && exit 1)
+          # Usando vitest com reporter junit e html para artefatos
+          npx vitest run src/__tests__/DocumentationTelemetry.test.tsx --reporter=default --reporter=junit --reporter=html --outputFile.junit=test-results.xml || {
+            echo "::error::Telemetry validation failed."
+            echo "DEBUG LOGS:"
+            echo "X-Correlation-ID tracing enabled for failures."
+            exit 1
+          }
           
-      - name: Archive Test Logs
-        if: failure()
+      - name: Upload Test Artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-test-logs
-          path: logs/test-results/
+          name: e2e-test-artifacts
+          path: |
+            test-results.xml
+            html/
+            screenshots/
+          retention-days: 7
