@@ -1950,6 +1950,7 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId }: { d: any, onRetry: (
                 const url = new URL(window.location.href);
                 url.searchParams.set('correlation_id', d.correlation_id);
                 navigator.clipboard.writeText(url.toString());
+                localStorage.setItem('last_correlation_id', d.correlation_id);
                 toast({ title: 'Link de Auditoria Copiado!' });
               }}>
                 <Share2 className="w-3 h-3" /> Link Direto
