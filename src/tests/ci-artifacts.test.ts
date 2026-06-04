@@ -42,7 +42,9 @@ describe('CI Artifact Generation (Webhook Validation Failures)', () => {
         artifacts: {
           logs: `${baseUrl}/logs/${f.correlation_id}.log`,
           screenshot: `${baseUrl}/screenshots/${f.correlation_id}.png`,
-          payload: `${baseUrl}/payloads/${f.correlation_id}.json`
+          payload: `${baseUrl}/payloads/${f.correlation_id}.json`,
+          junit_report: `${baseUrl}/reports/junit.xml#${f.correlation_id}`,
+          html_report: `${baseUrl}/reports/junit.html?correlation_id=${f.correlation_id}`
         }
       }))
     };
