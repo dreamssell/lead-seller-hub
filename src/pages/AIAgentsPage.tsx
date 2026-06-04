@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface AIAgent {
   id: string;
@@ -30,6 +31,13 @@ interface AIAgent {
   channels: string[];
   knowledge_base: string | null;
   fallback_message: string | null;
+  is_autonomous?: boolean;
+  autonomous_config?: {
+    trigger_events: string[];
+    allowed_actions: string[];
+    max_actions_per_run: number;
+    monitoring_level: string;
+  };
 }
 
 const MODELS = [
