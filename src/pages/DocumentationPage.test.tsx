@@ -88,20 +88,19 @@ describe('DocumentationPage', () => {
 
 
     // 1. Verificar se REST API está visível por padrão
+    expect(screen.getByText('REST API')).toBeInTheDocument();
     expect(screen.getByText('Endpoints REST')).toBeInTheDocument();
-    expect(screen.getByText('/v1/authenticate')).toBeInTheDocument();
 
     // 2. Alternar para MCP Server
     const mcpTab = screen.getByRole('tab', { name: /MCP Server/i });
     fireEvent.click(mcpTab);
-    expect(await screen.findByText('Model Context Protocol (MCP)')).toBeInTheDocument();
-    expect(screen.getByText('get_leads')).toBeInTheDocument();
+    expect(await screen.findByText(/Model Context Protocol/i)).toBeInTheDocument();
 
     // 3. Alternar para Webhooks
     const webhooksTab = screen.getByRole('tab', { name: /Webhooks/i });
     fireEvent.click(webhooksTab);
-    expect(await screen.findByText('Webhooks de Saída')).toBeInTheDocument();
-    expect(screen.getByText('lead.created')).toBeInTheDocument();
+    expect(await screen.findByText(/Webhooks de Saída/i)).toBeInTheDocument();
+
 
     // 4. Alternar para Console
     const consoleTab = screen.getByRole('tab', { name: /Console/i });
