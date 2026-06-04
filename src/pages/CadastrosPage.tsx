@@ -551,8 +551,13 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
                   <motion.div 
                     layoutId={contact.id}
                     key={contact.id} 
+                    data-card-id={contact.id}
                     className="glass-card p-4 space-y-3 group cursor-pointer hover:border-primary/50 transition-colors"
-                    onClick={() => openEdit(contact)}
+                    onClick={() => {
+                      localStorage.setItem('kanban_highlighted_card', contact.id);
+                      localStorage.setItem('kanban_highlighted_time', Date.now().toString());
+                      openEdit(contact);
+                    }}
                   >
                     <div className="flex justify-between items-start">
                       <p className="text-sm font-bold text-foreground">{contact.name}</p>
