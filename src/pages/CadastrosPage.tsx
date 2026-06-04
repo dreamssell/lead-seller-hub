@@ -1607,6 +1607,7 @@ function CrmGlobalActivities() {
 
 function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearch }: { externalCorrId?: string; setCorrSearch?: (val: string) => void }) {
   const [deliveries, setDeliveries] = useState<any[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [corrSearch, setCorrSearch] = useState(() => {
