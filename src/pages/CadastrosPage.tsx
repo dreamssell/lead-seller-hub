@@ -1254,19 +1254,7 @@ function ContactActivityTimeline({ contactId }: { contactId: string }) {
                 ID: {ev.payload.correlation_id}
               </p>
             )}
-            {ev.title === 'Desfazer em Cascata' && ev.payload?.snapshot_before && (
-              <details className="mt-2 border-t border-border/50 pt-2">
-                <summary className="text-[10px] cursor-pointer hover:text-primary text-muted-foreground">Ver campos restaurados</summary>
-                <div className="grid grid-cols-1 gap-1 mt-1">
-                  {Object.keys(ev.payload.snapshot_before).filter(k => !['id', 'created_at', 'updated_at', 'status', 'last_interaction_at'].includes(k)).map(k => (
-                    <div key={k} className="text-[9px] flex justify-between bg-secondary/20 p-1 rounded">
-                      <span className="font-mono text-muted-foreground">{k}:</span>
-                      <span className="font-bold text-emerald-600">{String(ev.payload.snapshot_before[k] || '—')}</span>
-                    </div>
-                  ))}
-                </div>
-              </details>
-            )}
+            {ev.title === 'Desfazer em Cascata' && <ContactTimelineDetails ev={ev} />}
           </div>
         </div>
       ))}
