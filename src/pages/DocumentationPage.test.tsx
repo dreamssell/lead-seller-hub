@@ -109,7 +109,9 @@ describe('DocumentationPage', () => {
     const consoleTab = tabs.find(t => t.textContent?.includes('Console'));
     if (!consoleTab) throw new Error('Console Tab not found');
     fireEvent.click(consoleTab);
-    expect(await screen.findByPlaceholderText(/Digite um comando/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Console de Teste MCP/i)).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/\/api\/v1\/resource/i)).toBeInTheDocument();
+
 
 
   });
