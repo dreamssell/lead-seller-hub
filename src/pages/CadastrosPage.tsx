@@ -1524,6 +1524,26 @@ function CrmGlobalActivities() {
     }
   }, []);
 
+  // Assinatura em tempo real para mudanças globais
+  useEffect(() => {
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'crm_webhook_logs' },
+        (payload) => {
+          console.log('Real-time change detected in crm_webhook_logs:', payload);
+          // O polling individual no WebhookDeliveryCard já cuidará da atualização específica,
+          // mas isso garante que a lista como um todo possa ser invalidada/recarregada se necessário.
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     const fetch = async () => {
