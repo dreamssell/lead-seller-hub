@@ -1699,11 +1699,6 @@ function WebhookDeliveryCard({ d }: { d: any }) {
       </Dialog>
     </>
   );
-}
-      </div>
-    </div>
-  );
-}
 
 function EmailTemplatesTab() {
   const [templates, setTemplates] = useState<any[]>([]);
