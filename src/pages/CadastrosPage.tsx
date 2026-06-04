@@ -1699,6 +1699,7 @@ function WebhookDeliveryCard({ d }: { d: any }) {
       </Dialog>
     </>
   );
+}
 
 function EmailTemplatesTab() {
   const [templates, setTemplates] = useState<any[]>([]);
