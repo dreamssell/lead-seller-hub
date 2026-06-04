@@ -1543,9 +1543,13 @@ function WebhookDeliveryList() {
     setLoading(false);
   };
 
-  useEffect(() => {
+  const retryDelivery = async (d: any) => {
+    toast({ title: 'Iniciando reenvio manual...' });
+    await triggerWebhooks(d.event_type, d.payload, d.id);
     fetch();
-  }, [corrSearch]);
+  };
+
+
 
   const exportData = (format: 'json' | 'csv') => {
     const data = deliveries.map(d => ({
