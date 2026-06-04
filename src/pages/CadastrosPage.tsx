@@ -1682,11 +1682,16 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
       strategy_used: d.retry_strategy || { backoff: "none", max_attempts: 1 }
     });
 
-    await supabase.from('crm_webhook_logs').update({
+    const { error: updateError } = await supabase.from('crm_webhook_logs').update({
       retry_count: (d.retry_count || 0) + 1,
       retry_history: retryHistory as any,
+      status: 'pending',
       updated_at: new Date().toISOString()
     } as any).eq('id', d.id);
+
+    if (updateError) {
+      console.error('Error updating retry history:', updateError);
+    }
 
     await globalTriggerWebhooks(d.event_type, d.payload, d.id);
     if (!isBatch) fetch();
