@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -6,7 +6,7 @@ import {
   MessageSquare, ChevronRight, Hash, Server, Play, 
   Copy, Check, Info, AlertTriangle, Cpu, Activity,
   Webhook, Key, FileJson, CheckCircle2, Brackets, Download,
-  RefreshCw
+  RefreshCw, Lock
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,32 +16,84 @@ import { toast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import MCPConsole from '@/components/settings/MCPConsole';
 import { ErrorBoundary } from 'react-error-boundary';
+import { useAuth } from '@/contexts/AuthContext';
 
 function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
+  const { signOut } = useAuth();
+  const is403 = error.message.includes('403') || error.message.includes('permission');
+  
+  // Registrar erro para depuração
+  useEffect(() => {
+    const correlationId = crypto.randomUUID();
+    console.error(`[DocumentationError] ID: ${correlationId}`, {
+      message: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString(),
+      type: is403 ? '403_FORBIDDEN' : 'NETWORK_OR_STATE_FAILURE'
+    });
+  }, [error, is403]);
+
+  const handleReauth = async () => {
+    toast({
+      title: "Reautenticando...",
+      description: "Redirecionando para o portal de login."
+    });
+    // Limpar sessão e disparar fluxo SSO
+    await signOut();
+  };
+
+  const handleRetry = () => {
+    console.log('[DocumentationRetry] Attempting to recover content render');
+    resetErrorBoundary();
+  };
+
   return (
-    <div className="min-h-[400px] flex items-center justify-center p-6 bg-background">
-      <Card className="max-w-md w-full border-destructive/20 shadow-xl rounded-2xl overflow-hidden">
-        <div className="h-2 bg-destructive" />
-        <CardHeader className="text-center pt-8">
-          <div className="mx-auto w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mb-4">
-            <AlertTriangle className="w-8 h-8 text-destructive" />
+    <div className="min-h-[600px] flex items-center justify-center p-6 bg-background/50">
+      <Card className="max-w-md w-full border-border/40 shadow-2xl rounded-3xl overflow-hidden backdrop-blur-sm bg-card/80">
+        <div className={`h-2 ${is403 ? 'bg-amber-500' : 'bg-destructive'}`} />
+        <CardHeader className="text-center pt-10 pb-6">
+          <div className={`mx-auto w-20 h-20 ${is403 ? 'bg-amber-500/10' : 'bg-destructive/10'} rounded-2xl flex items-center justify-center mb-6 shadow-inner`}>
+            {is403 ? (
+              <Lock className="w-10 h-10 text-amber-500" />
+            ) : (
+              <AlertTriangle className="w-10 h-10 text-destructive" />
+            )}
           </div>
-          <CardTitle className="text-xl font-bold">Algo deu errado</CardTitle>
-          <CardDescription className="text-sm px-4">
-            Não foi possível carregar a documentação. Isso pode ser um problema de conexão ou permissão.
+          <CardTitle className="text-2xl font-bold tracking-tight">
+            {is403 ? 'Acesso Restrito' : 'Algo deu errado'}
+          </CardTitle>
+          <CardDescription className="text-sm px-6 mt-2 leading-relaxed">
+            {is403 
+              ? 'Sua conta não possui permissão para visualizar a documentação técnica avançada ou sua sessão expirou.' 
+              : 'Não foi possível carregar a documentação. Isso pode ser um problema temporário de rede ou estado.'}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6 pb-8 text-center">
-          <div className="p-3 bg-secondary/50 rounded-lg text-xs font-mono text-left overflow-auto max-h-32">
-            {error.message}
-          </div>
-          <div className="flex flex-col gap-2">
-            <Button onClick={resetErrorBoundary} className="w-full rounded-xl gap-2 h-11">
-              <RefreshCw className="w-4 h-4" /> Tentar novamente
-            </Button>
-            <Button variant="ghost" onClick={() => window.location.href = '/'} className="w-full rounded-xl h-11">
-              Voltar ao Início
-            </Button>
+        <CardContent className="space-y-6 pb-10 text-center px-8">
+          {!is403 && (
+            <div className="p-4 bg-secondary/30 rounded-xl text-[10px] font-mono text-left overflow-auto max-h-32 border border-border/20 text-muted-foreground leading-tight">
+              {error.message}
+            </div>
+          )}
+          <div className="flex flex-col gap-3">
+            {is403 ? (
+              <Button onClick={handleReauth} className="w-full rounded-2xl gap-2 h-12 font-bold shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-[0.98]">
+                <RefreshCw className="w-4 h-4" /> Entrar novamente (SSO)
+              </Button>
+            ) : (
+              <Button onClick={handleRetry} className="w-full rounded-2xl gap-2 h-12 font-bold shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-[0.98]">
+                <RefreshCw className="w-4 h-4" /> Tentar novamente
+              </Button>
+            )}
+            
+            {is403 ? (
+              <Button variant="outline" onClick={() => window.open('mailto:suporte@leadseller.com.br', '_blank')} className="w-full rounded-2xl h-12 font-bold border-border/60 hover:bg-secondary">
+                Solicitar Acesso
+              </Button>
+            ) : (
+              <Button variant="ghost" onClick={() => window.location.href = '/'} className="w-full rounded-2xl h-12 font-medium text-muted-foreground">
+                Voltar ao Início
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -73,8 +125,45 @@ const DOC_SECTIONS = [
 ];
 
 export default function DocumentationPage() {
+  const { canAccessPage } = useAuth();
+  const [isSyncing, setIsSyncing] = useState(true);
+
+  // Validação explícita de role/permissão ao montar o componente
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsSyncing(false);
+    }, 600); // Pequeno delay para garantir que o AuthContext sincronizou
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (isSyncing) {
+    return (
+      <AppLayout title="Documentação Técnica" subtitle="Carregando manuais...">
+        <div className="max-w-7xl mx-auto flex flex-col items-center justify-center min-h-[400px] gap-4">
+          <motion.div 
+            animate={{ rotate: 360 }} 
+            transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+            className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full shadow-lg"
+          />
+          <p className="text-sm font-medium text-muted-foreground animate-pulse">Validando credenciais de acesso...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Se o guard do ProtectedRoute falhar ou quisermos uma camada extra de proteção
+  if (!canAccessPage('documentation')) {
+    throw new Error('403: Permission denied for documentation');
+  }
+
   return (
-    <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => window.location.reload()}>
+    <ErrorBoundary 
+      FallbackComponent={ErrorFallback} 
+      onReset={() => {
+        // Lógica de retry granular agora tratada no ErrorFallback
+        console.log('[DocumentationBoundary] Resetting state');
+      }}
+    >
       <DocumentationContent />
     </ErrorBoundary>
   );
