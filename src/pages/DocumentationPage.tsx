@@ -23,19 +23,40 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
   const [retryCount, setRetryCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
   const [correlationId] = useState(() => crypto.randomUUID());
+  const [nextRetryTime, setNextRetryTime] = useState<number | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [stats, setStats] = useState({ network: 0, auth: 0 });
   const MAX_RETRIES = 5;
   const is403 = error.message.includes('403') || error.message.includes('permission');
   
-  // Registrar erro inicial para depuração
+  // Registrar erro e atualizar estatísticas
   useEffect(() => {
+    setStats(prev => ({
+      network: prev.network + (is403 ? 0 : 1),
+      auth: prev.auth + (is403 ? 1 : 0)
+    }));
+
     console.error(`[DocumentationError] ID: ${correlationId}`, {
       message: error.message,
-      stack: error.stack,
-      timestamp: new Date().toISOString(),
       type: is403 ? '403_FORBIDDEN' : 'NETWORK_OR_STATE_FAILURE',
+      totalAuthErrors: stats.auth + (is403 ? 1 : 0),
+      totalNetworkErrors: stats.network + (is403 ? 0 : 1),
       retryCount
     });
   }, [error, is403, correlationId]);
+
+  // Timer para contagem regressiva
+  useEffect(() => {
+    if (!nextRetryTime) return;
+    
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((nextRetryTime - Date.now()) / 1000));
+      setTimeRemaining(remaining);
+      if (remaining === 0) clearInterval(interval);
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [nextRetryTime]);
 
   const handleReauth = async () => {
     console.log(`[DocumentationReauth] ID: ${correlationId} - Triggering SSO flow`);
@@ -59,15 +80,21 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
     setIsRetrying(true);
     const nextRetry = retryCount + 1;
     const delay = Math.pow(2, retryCount) * 1000;
+    const estimatedTime = Date.now() + delay;
+    
+    setNextRetryTime(estimatedTime);
+    setTimeRemaining(Math.ceil(delay / 1000));
     
     console.log(`[DocumentationRetry] ID: ${correlationId} - Attempt ${nextRetry}/${MAX_RETRIES} in ${delay}ms`, {
-      errorType: is403 ? '403' : 'Network/State',
-      correlationId
+      correlationId,
+      nextRetryAt: new Date(estimatedTime).toLocaleTimeString()
     });
     
     setTimeout(() => {
       setRetryCount(nextRetry);
       setIsRetrying(false);
+      setNextRetryTime(null);
+      setTimeRemaining(null);
       resetErrorBoundary();
     }, delay);
   };
