@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { supabase } from './src/integrations/supabase/client';
+import { supabase } from './integrations/supabase/client';
 
 test('Webhook HMAC signature validation', async () => {
   const secret = 'test-secret';
