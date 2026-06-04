@@ -351,6 +351,7 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
       
       // Log do CRM se houver mudança de responsável ou status
       if (entity === 'contacts' && data) {
+        const correlationId = (window as any).CORRELATION_ID || sessionStorage.getItem('X-Correlation-ID');
         if (oldRow?.assigned_agent_id !== data.assigned_agent_id) {
           const newAgent = users.find(u => u.user_id === data.assigned_agent_id)?.display_name || 'Alguém';
           await supabase.from('crm_events').insert([{
@@ -359,7 +360,8 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
             title: 'Atribuição Alterada',
             description: `Responsável alterado para ${newAgent}`,
             actor_id: user.id,
-            actor_type: 'human'
+            actor_type: 'human',
+            payload: { old_agent: oldRow?.assigned_agent_id, new_agent: data.assigned_agent_id, correlation_id: correlationId } as any
           }]);
         }
         if (oldRow?.status !== data.status) {
@@ -369,7 +371,13 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
             title: 'Status Alterado',
             description: `Status movido de ${oldRow?.status} para ${data.status}`,
             actor_id: user.id,
-            actor_type: 'human'
+            actor_type: 'human',
+            payload: { 
+              old_status: oldRow?.status, 
+              new_status: data.status, 
+              snapshot_before: oldRow,
+              correlation_id: correlationId 
+            } as any
           }]);
         }
       }
@@ -580,7 +588,14 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
                       if (events && events.length > 0) {
                         const payload = events[0].payload as any;
                         if (payload?.old_status && !payload.is_undo) {
-                          await updateContactStatus(editing.id, payload.old_status, 'Ação de desfazer pelo usuário', true);
+                          // Restaura não só o status, mas todo o snapshot_before se existir (Desfazer em Cascata)
+                          await updateContactStatus(
+                            editing.id, 
+                            payload.old_status, 
+                            'Desfazer em cascata (reversão completa)', 
+                            true, 
+                            payload.snapshot_before
+                          );
                           setOpen(false);
                         } else {
                           toast({ title: "Última ação já foi desfeita ou não é reversível", variant: "default" });
