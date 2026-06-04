@@ -105,9 +105,12 @@ describe('DocumentationPage', () => {
 
 
     // 4. Alternar para Console
-    const consoleTab = screen.getByRole('tab', { name: /Console/i });
+    // 4. Alternar para Console
+    const consoleTab = tabs.find(t => t.textContent?.includes('Console'));
+    if (!consoleTab) throw new Error('Console Tab not found');
     fireEvent.click(consoleTab);
     expect(await screen.findByPlaceholderText(/Digite um comando/i)).toBeInTheDocument();
+
 
   });
 });
