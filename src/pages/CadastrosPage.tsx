@@ -266,6 +266,8 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
   const save = async () => {
     if (!user) return;
     const payload: any = { ...form };
+    const oldRow = editing ? rows.find(r => r.id === editing.id) : null;
+    
     schema.fields.forEach(field => {
       if (field.type === 'number') payload[field.name] = payload[field.name] === '' ? null : Number(payload[field.name]);
       if (field.type === 'datetime-local' && payload[field.name]) payload[field.name] = new Date(payload[field.name]).toISOString();
@@ -275,12 +277,50 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
     if (editing) {
       const { data, error } = await (supabase as any).from(schema.table).update(payload).eq('id', editing.id).select().single();
       if (error) return toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
+      
+      // Log do CRM se houver mudança de responsável ou status
+      if (entity === 'contacts' && data) {
+        if (oldRow?.assigned_agent_id !== data.assigned_agent_id) {
+          const newAgent = users.find(u => u.user_id === data.assigned_agent_id)?.display_name || 'Alguém';
+          await supabase.from('crm_events').insert([{
+            contact_id: data.id,
+            type: 'assignment',
+            title: 'Atribuição Alterada',
+            description: `Responsável alterado para ${newAgent}`,
+            actor_id: user.id,
+            actor_type: 'human'
+          }]);
+        }
+        if (oldRow?.status !== data.status) {
+          await supabase.from('crm_events').insert([{
+            contact_id: data.id,
+            type: 'status_change',
+            title: 'Status Alterado',
+            description: `Status movido de ${oldRow?.status} para ${data.status}`,
+            actor_id: user.id,
+            actor_type: 'human'
+          }]);
+        }
+      }
+
       await logAudit({ table: schema.table, recordId: editing.id, action: 'update', label: data?.[schema.titleKey], before: editing, after: data });
       toast({ title: 'Atualizado com sucesso' });
     } else {
       payload.created_by = user.id;
       const { data, error } = await (supabase as any).from(schema.table).insert(payload).select().single();
       if (error) return toast({ title: 'Erro ao criar', description: error.message, variant: 'destructive' });
+      
+      if (entity === 'contacts' && data) {
+        await supabase.from('crm_events').insert([{
+          contact_id: data.id,
+          type: 'creation',
+          title: 'Contato Criado',
+          description: `Contato adicionado manualmente ao CRM`,
+          actor_id: user.id,
+          actor_type: 'human'
+        }]);
+      }
+
       await logAudit({ table: schema.table, recordId: data?.id, action: 'create', label: data?.[schema.titleKey], after: data });
       toast({ title: 'Criado com sucesso' });
     }
@@ -345,31 +385,47 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar registro' : 'Novo registro'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            {schema.fields.map(f => (
-              <div key={f.name} className="space-y-1.5">
-                <Label>{f.label}{f.required && ' *'}</Label>
-                {f.type === 'textarea' ? (
-                  <Textarea value={form[f.name] ?? ''} onChange={e => setForm({ ...form, [f.name]: e.target.value })} />
-                ) : f.type === 'select' ? (
-                  <Select value={form[f.name] ?? ''} onValueChange={v => setForm({ ...form, [f.name]: v })}>
-                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                    <SelectContent>
-                      {f.options!.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                ) : f.type === 'switch' ? (
-                  <Switch checked={!!form[f.name]} onCheckedChange={v => setForm({ ...form, [f.name]: v })} />
-                ) : (
-                  <Input type={f.type || 'text'} value={form[f.name] ?? ''} onChange={e => setForm({ ...form, [f.name]: e.target.value })} />
-                )}
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-4 py-2">
+              {schema.fields.map(f => (
+                <div key={f.name} className="space-y-1.5">
+                  <Label>{f.label}{f.required && ' *'}</Label>
+                  {f.type === 'textarea' ? (
+                    <Textarea value={form[f.name] ?? ''} onChange={e => setForm({ ...form, [f.name]: e.target.value })} className="min-h-[100px]" />
+                  ) : f.type === 'select' ? (
+                    <Select value={form[f.name] ?? ''} onValueChange={v => setForm({ ...form, [f.name]: v })}>
+                      <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectContent>
+                        {f.options!.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : f.type === 'switch' ? (
+                    <div className="flex items-center gap-2">
+                      <Switch checked={!!form[f.name]} onCheckedChange={v => setForm({ ...form, [f.name]: v })} />
+                      <span className="text-sm text-muted-foreground">{form[f.name] ? 'Sim' : 'Não'}</span>
+                    </div>
+                  ) : (
+                    <Input type={f.type || 'text'} value={form[f.name] ?? ''} onChange={e => setForm({ ...form, [f.name]: e.target.value })} />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {entity === 'contacts' && editing && (
+              <div className="border-l border-border pl-8 space-y-4">
+                <h4 className="text-sm font-bold flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-primary" /> Histórico de Atividades
+                </h4>
+                <ContactActivityTimeline contactId={editing.id} />
               </div>
-            ))}
+            )}
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
             <Button onClick={save}>{editing ? 'Salvar' : 'Criar'}</Button>
