@@ -75,23 +75,25 @@ describe('DocumentationPage', () => {
       </MemoryRouter>
     );
 
-    // REST API is default
+    // 1. Initial State (REST API)
     expect(screen.getByText('REST API')).toBeInTheDocument();
     
-    // Switch to MCP Server
-    const mcpTab = screen.getByRole('tab', { name: /MCP Server/i });
-    fireEvent.click(mcpTab);
-    // Verify it changed state/value even if content visibility is handled by Radix/CSS
-    expect(mcpTab).toHaveAttribute('data-state', 'active');
-    
-    // Switch to Webhooks
-    const webhooksTab = screen.getByRole('tab', { name: /Webhooks/i });
-    fireEvent.click(webhooksTab);
-    expect(webhooksTab).toHaveAttribute('data-state', 'active');
+    // 2. Change to MCP
+    fireEvent.click(screen.getByText('MCP Server'));
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /MCP Server/i })).toHaveAttribute('data-state', 'active');
+    });
 
-    // Switch to Console
-    const consoleTab = screen.getByRole('tab', { name: /Console/i });
-    fireEvent.click(consoleTab);
-    expect(consoleTab).toHaveAttribute('data-state', 'active');
+    // 3. Change to Webhooks
+    fireEvent.click(screen.getByText('Webhooks'));
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /Webhooks/i })).toHaveAttribute('data-state', 'active');
+    });
+
+    // 4. Change to Console
+    fireEvent.click(screen.getByText('Console'));
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /Console/i })).toHaveAttribute('data-state', 'active');
+    });
   });
 });
