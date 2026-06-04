@@ -1504,21 +1504,27 @@ function CrmGlobalActivities() {
 function WebhookDeliveryList() {
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [corrSearch, setCorrSearch] = useState('');
 
   const fetch = async () => {
     setLoading(true);
-    const { data } = await supabase
+    let query = supabase
       .from('crm_webhook_logs')
       .select('*, crm_webhooks(url)')
-      .order('created_at', { ascending: false })
-      .limit(100);
+      .order('created_at', { ascending: false });
+    
+    if (corrSearch) {
+      query = query.ilike('correlation_id', `%${corrSearch}%`);
+    }
+
+    const { data } = await query.limit(100);
     if (data) setDeliveries(data);
     setLoading(false);
   };
 
   useEffect(() => {
     fetch();
-  }, []);
+  }, [corrSearch]);
 
   const exportData = (format: 'json' | 'csv') => {
     const data = deliveries.map(d => ({
