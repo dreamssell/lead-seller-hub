@@ -77,17 +77,22 @@ describe('DocumentationPage', () => {
 
     // REST API is default
     expect(screen.getByText('REST API')).toBeInTheDocument();
+    expect(screen.getByText('Endpoints REST')).toBeInTheDocument();
     
     // Switch to MCP Server
     const mcpTab = screen.getByRole('tab', { name: /MCP Server/i });
     fireEvent.click(mcpTab);
+    expect(screen.getByText(/Model Context Protocol/i)).toBeInTheDocument();
     
     // Switch to Webhooks
     const webhooksTab = screen.getByRole('tab', { name: /Webhooks/i });
     fireEvent.click(webhooksTab);
+    expect(screen.getByText(/Webhooks de Saída/i)).toBeInTheDocument();
 
     // Switch to Console
     const consoleTab = screen.getByRole('tab', { name: /Console/i });
     fireEvent.click(consoleTab);
+    expect(screen.getByText(/Console de Teste MCP/i)).toBeInTheDocument();
+
   });
 });
