@@ -1908,16 +1908,16 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId, selectedIds, setSelect
       setShowDetail(true);
       // Sincronizar com o banco de dados se houver alteração
       const syncStatus = async () => {
-        const { data } = await supabase.from('crm_webhook_logs').select('*').eq('id', d.id).single();
-        if (data && data.status !== d.status) {
-           // Em um cenário real, atualizaríamos o estado pai ou re-buscariamos
-           // Por simplicidade aqui, vamos apenas logar e sugerir refresh se for crítico
-           console.log('Status out of sync, fetching fresh data...');
+        const { data, error } = await supabase.from('crm_webhook_logs').select('*, crm_webhooks(url)').eq('id', d.id).single();
+        if (!error && data && (data.status !== d.status || data.retry_count !== d.retry_count)) {
+           // Em um cenário real com gerenciamento de estado global, atualizaríamos o estado pai
+           // Por enquanto, logamos e poderíamos forçar um re-fetch se necessário
+           console.log('Status out of sync for correlation_id:', d.correlation_id);
         }
       };
       syncStatus();
     }
-  }, [currentCorrId, d.correlation_id, d.status]);
+  }, [currentCorrId, d.correlation_id, d.status, d.retry_count]);
   
   return (
     <>
