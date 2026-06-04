@@ -631,6 +631,16 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
                       if (events && events.length > 0) {
                         const payload = events[0].payload as any;
                         if (payload?.old_status && !payload.is_undo) {
+                          // Pré-visualização do snapshot se existir
+                          if (payload.snapshot_before) {
+                            const confirmRestore = window.confirm(
+                              `Restaurar para etapa: ${payload.old_status}\n` +
+                              `Campos afetados: ${Object.keys(payload.snapshot_before).filter(k => !['id', 'created_at', 'updated_at', 'status'].includes(k)).join(', ')}\n\n` +
+                              `Deseja prosseguir com o Desfazer em Cascata?`
+                            );
+                            if (!confirmRestore) return;
+                          }
+
                           await updateContactStatus(
                             editing.id, 
                             payload.old_status, 
@@ -647,7 +657,7 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
                       }
                     }}
                   >
-                    Desfazer último movimento
+                    <RefreshCw className="w-3 h-3" /> Desfazer Cascata
                   </Button>
                 </div>
                 <ContactActivityTimeline contactId={editing.id} />
