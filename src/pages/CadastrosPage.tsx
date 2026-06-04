@@ -1641,69 +1641,6 @@ function CrmGlobalActivities() {
           <TabsContent value="config">
             <WebhookConfigPanel />
           </TabsContent>
-            <div className="space-y-4 mt-4">
-              {logs.map(log => (
-                <div key={log.id} className="p-3 bg-secondary/20 rounded-2xl border border-border/40 space-y-2 hover:border-primary/30 transition-colors">
-                  <div className="flex justify-between items-start">
-                    <Badge variant={log.actor_type === 'ai' ? 'default' : log.title === 'Movimento Desfeito' ? 'outline' : 'secondary'} className="text-[9px]">
-                      {log.actor_type === 'ai' ? 'AUTÔNOMO' : log.title === 'Movimento Desfeito' ? 'REVERSÃO' : 'HUMANO'}
-                    </Badge>
-                    <span className="text-[10px] text-muted-foreground">{new Date(log.created_at).toLocaleString()}</span>
-                  </div>
-                  <p className="text-xs font-bold text-foreground">{log.contacts?.name || 'Contato desconhecido'}</p>
-                  <p className="text-xs text-muted-foreground">{log.description}</p>
-                  {(log.payload as any)?.correlation_id && (
-                    <div className="flex flex-wrap gap-2">
-                      <p 
-                        className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded cursor-pointer hover:bg-background/80 flex items-center gap-1 group/item border border-border/30 hover:border-primary/50 transition-colors"
-                        onClick={() => {
-                          const cid = (log.payload as any).correlation_id;
-                          setExternalCorrId(cid);
-                          setCorrSearch(cid);
-                          setActiveTab('deliveries');
-                          
-                          toast({ title: "Filtrando por Correlation ID", description: `ID: ${cid}` });
-                          
-                          const url = new URL(window.location.href);
-                          url.searchParams.set('correlation_id', cid);
-                          window.history.replaceState({}, '', url);
-                          localStorage.setItem('last_correlation_id', cid);
-                        }}
-                        title="Abrir Auditoria e filtrar por este ID"
-                      >
-                        <Search className="w-2 h-2" />
-                        ID: {(log.payload as any).correlation_id}
-                      </p>
-                      
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-5 px-1.5 text-[8px] gap-1 hover:text-primary"
-                        onClick={() => {
-                          const cid = (log.payload as any).correlation_id;
-                          const url = new URL(window.location.href);
-                          url.searchParams.set('correlation_id', cid);
-                          navigator.clipboard.writeText(url.toString());
-                          toast({ title: "Link de Auditoria Copiado!", description: "Compartilhe este link para auditoria direta." });
-                        }}
-                      >
-                        <Share2 className="w-2 h-2" /> Compartilhar
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="deliveries">
-             <WebhookDeliveryList externalCorrId={externalCorrId} setCorrSearch={setCorrSearch} />
-          </TabsContent>
-
-          <TabsContent value="config">
-            <WebhookConfigPanel />
-          </TabsContent>
-
           <TabsContent value="test-mode">
             <WebhookTestPanel />
           </TabsContent>
