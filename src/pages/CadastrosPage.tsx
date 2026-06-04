@@ -1463,6 +1463,19 @@ function CrmGlobalActivities() {
   const [corrSearch, setCorrSearch] = useState('');
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const cid = params.get('correlation_id');
+      if (cid) {
+        setExternalCorrId(cid);
+        setCorrSearch(cid);
+        setActiveTab('deliveries');
+        setOpen(true);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (!open) return;
     const fetch = async () => {
       const { data } = await supabase
