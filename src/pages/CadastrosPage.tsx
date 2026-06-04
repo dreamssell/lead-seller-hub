@@ -1460,6 +1460,7 @@ function CrmGlobalActivities() {
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('events');
   const [externalCorrId, setExternalCorrId] = useState('');
+  const [corrSearch, setCorrSearch] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -1537,7 +1538,7 @@ function CrmGlobalActivities() {
                       onClick={() => {
                         const cid = (log.payload as any).correlation_id;
                         setExternalCorrId(cid);
-                        setCorrSearch(cid); // Garante que preencha a busca no outro componente se necessário
+                        setCorrSearch(cid);
                         setActiveTab('deliveries');
                         
                         // Adicionar feedback visual e atualizar URL
