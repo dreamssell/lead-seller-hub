@@ -15,12 +15,12 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles } from 'lucide-react';
+import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin } from 'lucide-react';
 import WhiteLabelTab from '@/components/cadastros/WhiteLabelTab';
 import { logAudit } from '@/lib/audit';
 import { BLOCKABLE_PAGES } from '@/lib/navigation';
 
-type Entity = 'leads' | 'customers' | 'products' | 'tasks' | 'users';
+type Entity = 'leads' | 'customers' | 'products' | 'tasks' | 'users' | 'contacts';
 
 interface FieldDef {
   name: string;
@@ -133,13 +133,40 @@ const SCHEMAS: Record<Exclude<Entity, 'users'>, { table: string; fields: FieldDe
       ]},
     ],
   },
+  contacts: {
+    table: 'contacts',
+    titleKey: 'name',
+    columns: [
+      { key: 'name', label: 'Nome' },
+      { key: 'status', label: 'Status' },
+      { key: 'phone', label: 'Telefone' },
+      { key: 'company', label: 'Empresa' },
+      { key: 'last_interaction_at', label: 'Último Contato' },
+    ],
+    fields: [
+      { name: 'name', label: 'Nome Completo', required: true },
+      { name: 'email', label: 'Email', type: 'email' },
+      { name: 'phone', label: 'Telefone', type: 'tel' },
+      { name: 'company', label: 'Empresa' },
+      { name: 'job_title', label: 'Cargo' },
+      { name: 'status', label: 'Status CRM', type: 'select', options: [
+        { value: 'lead', label: 'Lead' },
+        { value: 'prospect', label: 'Prospect' },
+        { value: 'customer', label: 'Cliente' },
+        { value: 'churned', label: 'Inativo' },
+      ]},
+      { name: 'source', label: 'Fonte', type: 'text' },
+      { name: 'estimated_value', label: 'Valor Estimado', type: 'number' },
+      { name: 'notes', label: 'Notas CRM', type: 'textarea' },
+    ],
+  },
 };
 
 function formatCell(value: any, key: string) {
   if (value === null || value === undefined || value === '') return <span className="text-muted-foreground">—</span>;
   if (typeof value === 'boolean') return <Badge variant={value ? 'default' : 'secondary'}>{value ? 'Sim' : 'Não'}</Badge>;
   if (key === 'price' || key === 'estimated_value') return `R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-  if (key === 'due_date' || key === 'created_at') return new Date(value).toLocaleString('pt-BR');
+  if (key === 'last_interaction_at' || key === 'due_date' || key === 'created_at') return value ? new Date(value).toLocaleString('pt-BR') : <span className="text-muted-foreground">—</span>;
   if (['status', 'priority', 'source'].includes(key)) return <Badge variant="outline">{String(value)}</Badge>;
   return String(value);
 }
