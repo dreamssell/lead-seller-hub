@@ -1634,6 +1634,23 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
       .select('*, crm_webhooks(url)')
       .order('created_at', { ascending: false });
     
+    if (statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
+
+    if (typeFilter !== 'all') {
+      if (typeFilter === 'hmac_invalid') query = query.ilike('error_message', '%HMAC%');
+      else if (typeFilter === 'timestamp_invalid') query = query.ilike('error_message', '%window%');
+      else if (typeFilter === 'valid') query = query.not('error_message', 'ilike', '%HMAC%').not('error_message', 'ilike', '%window%');
+    }
+
+    if (timeFilter !== 'all') {
+      const now = new Date();
+      if (timeFilter === '1h') query = query.gte('created_at', new Date(now.getTime() - 3600000).toISOString());
+      else if (timeFilter === '24h') query = query.gte('created_at', new Date(now.getTime() - 86400000).toISOString());
+      else if (timeFilter === '7d') query = query.gte('created_at', new Date(now.getTime() - 604800000).toISOString());
+    }
+
     if (corrSearch) {
       // Tentar busca exata primeiro
       const { data: exactData } = await supabase
