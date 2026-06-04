@@ -1768,11 +1768,37 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {selectedIds.length > 0 && (
+            <Button 
+              size="sm" 
+              className="h-7 text-[10px] gap-2" 
+              onClick={handleBatchRetry}
+              disabled={isRetryingBatch}
+            >
+              <RefreshCw className={`w-3 h-3 ${isRetryingBatch ? 'animate-spin' : ''}`} />
+              Reenviar Selecionados ({selectedIds.length})
+            </Button>
+          )}
           <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => exportData('json')}>Exportar JSON</Button>
           <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => exportData('csv')}>Exportar CSV</Button>
           <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={fetch}><RefreshCw className="w-3 h-3 mr-1" /> Atualizar</Button>
         </div>
       </div>
+
+      {isRetryingBatch && (
+        <div className="bg-primary/5 p-3 rounded-xl border border-primary/20 animate-in fade-in slide-in-from-top-2">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-[10px] font-bold text-primary">PROCESSANDO LOTE...</span>
+            <span className="text-[10px] font-mono">{batchProgress}%</span>
+          </div>
+          <div className="h-1.5 w-full bg-primary/10 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-primary transition-all duration-300" 
+              style={{ width: `${batchProgress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3">
         {notFound && (
