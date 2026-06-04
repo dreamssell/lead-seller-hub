@@ -511,6 +511,7 @@ export type Database = {
           id: string
           is_dead_letter: boolean | null
           last_error_details: string | null
+          last_error_summary: string | null
           next_retry_at: string | null
           payload: Json
           response_body: string | null
@@ -527,6 +528,7 @@ export type Database = {
           id?: string
           is_dead_letter?: boolean | null
           last_error_details?: string | null
+          last_error_summary?: string | null
           next_retry_at?: string | null
           payload: Json
           response_body?: string | null
@@ -543,6 +545,7 @@ export type Database = {
           id?: string
           is_dead_letter?: boolean | null
           last_error_details?: string | null
+          last_error_summary?: string | null
           next_retry_at?: string | null
           payload?: Json
           response_body?: string | null
