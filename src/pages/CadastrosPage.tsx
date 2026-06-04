@@ -349,8 +349,30 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
 
   useEffect(() => { 
     load(); 
-    if (entity === 'contacts') loadUsers();
-  }, [entity]);
+    if (entity === 'contacts') {
+      loadUsers();
+      
+      // Restaurar destaque do Kanban
+      if (viewMode === 'kanban') {
+        const savedCard = localStorage.getItem('kanban_highlighted_card');
+        const savedTime = localStorage.getItem('kanban_highlighted_time');
+        
+        if (savedCard && savedTime) {
+          const timeDiff = Date.now() - parseInt(savedTime);
+          if (timeDiff < 1800000) { // 30 min
+            setTimeout(() => {
+              const card = document.querySelector(`[data-card-id="${savedCard}"]`);
+              if (card) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                card.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
+                setTimeout(() => card.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 5000);
+              }
+            }, 600);
+          }
+        }
+      }
+    }
+  }, [entity, viewMode]);
 
   if (entity === 'contacts' && !schema.fields.some(f => f.name === 'assigned_agent_id')) {
     schema.fields.push({ 
@@ -529,8 +551,13 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
                   <motion.div 
                     layoutId={contact.id}
                     key={contact.id} 
+                    data-card-id={contact.id}
                     className="glass-card p-4 space-y-3 group cursor-pointer hover:border-primary/50 transition-colors"
-                    onClick={() => openEdit(contact)}
+                    onClick={() => {
+                      localStorage.setItem('kanban_highlighted_card', contact.id);
+                      localStorage.setItem('kanban_highlighted_time', Date.now().toString());
+                      openEdit(contact);
+                    }}
                   >
                     <div className="flex justify-between items-start">
                       <p className="text-sm font-bold text-foreground">{contact.name}</p>
@@ -1908,16 +1935,16 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId, selectedIds, setSelect
       setShowDetail(true);
       // Sincronizar com o banco de dados se houver alteração
       const syncStatus = async () => {
-        const { data } = await supabase.from('crm_webhook_logs').select('*').eq('id', d.id).single();
-        if (data && data.status !== d.status) {
-           // Em um cenário real, atualizaríamos o estado pai ou re-buscariamos
-           // Por simplicidade aqui, vamos apenas logar e sugerir refresh se for crítico
-           console.log('Status out of sync, fetching fresh data...');
+        const { data, error } = await supabase.from('crm_webhook_logs').select('*, crm_webhooks(url)').eq('id', d.id).single();
+        if (!error && data && (data.status !== d.status || data.retry_count !== d.retry_count)) {
+           // Em um cenário real com gerenciamento de estado global, atualizaríamos o estado pai
+           // Por enquanto, logamos e poderíamos forçar um re-fetch se necessário
+           console.log('Status out of sync for correlation_id:', d.correlation_id);
         }
       };
       syncStatus();
     }
-  }, [currentCorrId, d.correlation_id, d.status]);
+  }, [currentCorrId, d.correlation_id, d.status, d.retry_count]);
   
   return (
     <>
