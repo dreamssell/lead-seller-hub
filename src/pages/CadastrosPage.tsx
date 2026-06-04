@@ -1623,9 +1623,6 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
     if (data) setDeliveries(data);
     setLoading(false);
   };
-    if (data) setDeliveries(data);
-    setLoading(false);
-  };
 
   useEffect(() => {
     fetch();
