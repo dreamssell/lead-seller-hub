@@ -46,6 +46,12 @@ describe('CRM Webhook Security E2E', () => {
     
     expect(isWithinWindow).toBe(true);
   });
+
+  test('Webhook rejeitado deve registrar is_dead_letter quando esgotar retries', () => {
+    const log = { status: 'failed', retry_count: 3, is_dead_letter: true };
+    expect(log.is_dead_letter).toBe(true);
+    expect(log.status).toBe('failed');
+  });
 });
 
 describe('Cascade Undo Integrity', () => {

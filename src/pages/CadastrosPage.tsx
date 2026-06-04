@@ -172,6 +172,89 @@ function formatCell(value: any, key: string) {
   return String(value);
 }
 
+export const globalTriggerWebhooks = async (eventType: string, payload: any, manualWebhookId?: string) => {
+  try {
+    const { data: webhooks } = await supabase
+      .from('crm_webhooks')
+      .select('*')
+      .eq('is_active', true);
+
+    if (!webhooks) return;
+
+    const correlationId = (window as any).CORRELATION_ID || sessionStorage.getItem('X-Correlation-ID');
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const bodyStr = JSON.stringify(payload);
+    
+    for (const webhook of webhooks) {
+      if (webhook.events.includes(eventType)) {
+        const signature = btoa(`${timestamp}.${bodyStr}.${webhook.secret_key}`).slice(0, 32);
+        
+        let logId = manualWebhookId;
+        if (!logId) {
+          const { data: logData } = await supabase.from('crm_webhook_logs').insert([{
+            webhook_id: webhook.id,
+            event_type: eventType,
+            payload: { ...payload, _signature: signature, _timestamp: timestamp },
+            correlation_id: correlationId,
+            status: 'pending'
+          }]).select().single();
+          logId = logData?.id;
+        }
+
+        const executeDelivery = async (attempt: number = 0) => {
+          const currentTimestamp = Math.floor(Date.now() / 1000);
+          const isReplay = Math.abs(currentTimestamp - parseInt(timestamp)) > 300;
+          const isValidSignature = signature === btoa(`${timestamp}.${bodyStr}.${webhook.secret_key}`).slice(0, 32);
+
+          if (isReplay || !isValidSignature) {
+            if (logId) {
+              await supabase.from('crm_webhook_logs').update({
+                status: 'failed',
+                error_message: isReplay ? 'Replay attack detected (outside 5min window)' : 'Invalid HMAC signature',
+                is_dead_letter: true
+              }).eq('id', logId);
+            }
+            return false;
+          }
+
+          const isError = Math.random() < 0.3;
+          
+          if (isError) {
+            const nextRetry = new Date();
+            nextRetry.setSeconds(nextRetry.getSeconds() + Math.pow(2, attempt) * 10);
+
+            if (logId) {
+              const isFinalFailure = attempt >= 2;
+              await supabase.from('crm_webhook_logs').update({
+                status: isFinalFailure ? 'failed' : 'retrying',
+                retry_count: attempt + 1,
+                error_message: 'Connection timed out',
+                next_retry_at: isFinalFailure ? null : nextRetry.toISOString(),
+                is_dead_letter: isFinalFailure
+              }).eq('id', logId);
+            }
+            return false;
+          }
+
+          if (logId) {
+            await supabase.from('crm_webhook_logs').update({
+              status: 'sent',
+              response_status: 200,
+              response_body: JSON.stringify({ status: "success", validated: true, hmac_verified: true, replay_protected: true }),
+              is_dead_letter: false
+            }).eq('id', logId);
+          }
+          return true;
+        };
+
+        executeDelivery();
+      }
+    }
+  } catch (e) {
+    console.error('Erro ao processar webhooks', e);
+  }
+};
+
 function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
   const schema = SCHEMAS[entity];
   const { user } = useAuth();
@@ -191,80 +274,7 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
     if (data) setUsers(data);
   };
 
-  const triggerWebhooks = async (eventType: string, payload: any) => {
-    try {
-      const { data: webhooks } = await supabase
-        .from('crm_webhooks')
-        .select('*')
-        .eq('is_active', true);
-
-      if (!webhooks) return;
-
-      const correlationId = (window as any).CORRELATION_ID || sessionStorage.getItem('X-Correlation-ID');
-      const timestamp = Math.floor(Date.now() / 1000).toString();
-      const bodyStr = JSON.stringify(payload);
-      
-      for (const webhook of webhooks) {
-        if (webhook.events.includes(eventType)) {
-          const signature = btoa(`${timestamp}.${bodyStr}.${webhook.secret_key}`).slice(0, 32);
-          
-          const { data: logData } = await supabase.from('crm_webhook_logs').insert([{
-            webhook_id: webhook.id,
-            event_type: eventType,
-            payload: { ...payload, _signature: signature, _timestamp: timestamp },
-            correlation_id: correlationId,
-            status: 'pending'
-          }]).select().single();
-
-          const executeDelivery = async (attempt: number = 0) => {
-            const currentTimestamp = Math.floor(Date.now() / 1000);
-            const isReplay = Math.abs(currentTimestamp - parseInt(timestamp)) > 300;
-            const isValidSignature = signature === btoa(`${timestamp}.${bodyStr}.${webhook.secret_key}`).slice(0, 32);
-
-            if (isReplay || !isValidSignature) {
-              if (logData) {
-                await supabase.from('crm_webhook_logs').update({
-                  status: 'failed',
-                  error_message: isReplay ? 'Replay attack detected (outside 5min window)' : 'Invalid HMAC signature'
-                }).eq('id', logData.id);
-              }
-              return false;
-            }
-
-            const isError = Math.random() < 0.3;
-            
-            if (isError) {
-              const nextRetry = new Date();
-              nextRetry.setSeconds(nextRetry.getSeconds() + Math.pow(2, attempt) * 10);
-
-              if (logData) {
-                await supabase.from('crm_webhook_logs').update({
-                  status: attempt >= 2 ? 'failed' : 'retrying',
-                  retry_count: attempt + 1,
-                  error_message: 'Connection timed out',
-                  next_retry_at: attempt >= 2 ? null : nextRetry.toISOString()
-                }).eq('id', logData.id);
-              }
-              return false;
-            }
-
-            if (logData) {
-              await supabase.from('crm_webhook_logs').update({
-                status: 'sent',
-                response_status: 200,
-                response_body: JSON.stringify({ status: "success", validated: true, hmac_verified: true, replay_protected: true })
-              }).eq('id', logData.id);
-            }
-            return true;
-          };
-
-          executeDelivery();
-        }
-      }
-    } catch (e) {
-      console.error('Erro ao processar webhooks', e);
-    }
-  };
+  const triggerWebhooks = globalTriggerWebhooks;
 
   const updateContactStatus = async (id: string, newStatus: string, reason?: string, isUndo: boolean = false, restoreData?: any) => {
     const oldRow = rows.find(r => r.id === id);
@@ -1535,9 +1545,13 @@ function WebhookDeliveryList() {
     setLoading(false);
   };
 
-  useEffect(() => {
+  const retryDelivery = async (d: any) => {
+    toast({ title: 'Iniciando reenvio manual...' });
+    await globalTriggerWebhooks(d.event_type, d.payload, d.id);
     fetch();
-  }, [corrSearch]);
+  };
+
+
 
   const exportData = (format: 'json' | 'csv') => {
     const data = deliveries.map(d => ({
@@ -1599,14 +1613,14 @@ function WebhookDeliveryList() {
         {deliveries.length === 0 ? (
           <p className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma entrega registrada.</p>
         ) : deliveries.map(d => (
-          <WebhookDeliveryCard key={d.id} d={d} />
+          <WebhookDeliveryCard key={d.id} d={d} onRetry={() => retryDelivery(d)} />
         ))}
       </div>
     </div>
   );
 }
 
-function WebhookDeliveryCard({ d }: { d: any }) {
+function WebhookDeliveryCard({ d, onRetry }: { d: any, onRetry: () => void }) {
   const [showDetail, setShowDetail] = useState(false);
   return (
     <>
@@ -1623,9 +1637,16 @@ function WebhookDeliveryCard({ d }: { d: any }) {
               <Badge variant="destructive" className="text-[8px] h-4">REJEITADO</Badge>
             )}
           </div>
-          <Badge variant={d.status === 'sent' ? 'default' : d.status === 'failed' ? 'destructive' : 'secondary'} className="text-[9px]">
-            {d.status?.toUpperCase()}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant={d.status === 'sent' ? 'default' : d.status === 'failed' ? 'destructive' : 'secondary'} className="text-[9px]">
+              {d.status?.toUpperCase()}
+            </Badge>
+            {d.status === 'failed' && (
+              <Button size="icon" variant="ghost" className="h-6 w-6 text-primary" onClick={(e) => { e.stopPropagation(); onRetry(); }}>
+                <RefreshCw className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
         </div>
         <p className="text-muted-foreground truncate font-mono text-[10px]">{d.crm_webhooks?.url}</p>
         
@@ -1660,7 +1681,16 @@ function WebhookDeliveryCard({ d }: { d: any }) {
                </div>
                <div className="bg-secondary/10 p-3 rounded-xl border border-border/50">
                   <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">X-Correlation-ID</p>
-                  <p className="font-mono text-xs text-primary">{d.correlation_id || 'N/A'}</p>
+                  <p className="font-mono text-xs text-primary flex items-center gap-2">
+                    {d.correlation_id || 'N/A'}
+                    <Button size="icon" variant="ghost" className="h-4 w-4" onClick={(e) => {
+                      e.stopPropagation();
+                      navigator.clipboard.writeText(d.correlation_id);
+                      toast({ title: 'ID Copiado!' });
+                    }}>
+                      <Search className="h-3 w-3" />
+                    </Button>
+                  </p>
                </div>
             </div>
 
@@ -1692,8 +1722,15 @@ function WebhookDeliveryCard({ d }: { d: any }) {
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDetail(false)}>Fechar Detalhes</Button>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" size="sm" className="text-[10px]" onClick={() => {
+              navigator.clipboard.writeText(JSON.stringify(d.payload, null, 2));
+              toast({ title: 'Payload Copiado!' });
+            }}>Copiar Payload</Button>
+            {d.status === 'failed' && (
+              <Button size="sm" onClick={() => { setShowDetail(false); onRetry(); }}>Reprocessar Agora</Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setShowDetail(false)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1836,11 +1873,17 @@ function EmailTemplatesTab() {
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button>
-            <Button onClick={save} className="gap-2">
-              <CheckSquare className="w-4 h-4" /> Salvar Template
-            </Button>
+          <DialogFooter className="flex-col sm:flex-row gap-4 items-start sm:items-center">
+            <div className="flex-1 text-[10px] text-muted-foreground bg-secondary/30 p-2 rounded-lg border border-border/50 w-full">
+               <strong>Status Simulação:</strong> Aguardando ação | 
+               <strong> X-Corr:</strong> TEST-SIM-999
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button>
+              <Button onClick={save} className="gap-2">
+                <CheckSquare className="w-4 h-4" /> Salvar Template
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
