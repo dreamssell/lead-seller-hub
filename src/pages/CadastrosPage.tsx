@@ -1275,11 +1275,18 @@ function ContactActivityTimeline({ contactId }: { contactId: string }) {
                 <time className="text-[10px] text-muted-foreground font-mono">{new Date(ev.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</time>
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">{ev.description}</p>
-              {ev.payload?.correlation_id && (
-                <p className="text-[9px] font-mono text-primary bg-primary/5 px-1.5 py-0.5 rounded w-fit mt-1">
-                  ID: {ev.payload.correlation_id}
-                </p>
-              )}
+              <div className="flex items-center gap-2 mt-1">
+                {ev.payload?.correlation_id && (
+                  <p 
+                    className="text-[9px] font-mono text-primary bg-primary/5 px-1.5 py-0.5 rounded w-fit cursor-pointer hover:bg-primary/10"
+                    onClick={() => setFilterCorrId(ev.payload.correlation_id)}
+                    title="Filtrar linha do tempo por este ID"
+                  >
+                    ID: {ev.payload.correlation_id}
+                  </p>
+                )}
+                {ev.title === 'Desfazer em Cascata' && <Badge variant="outline" className="text-[8px] h-4">RESTORE</Badge>}
+              </div>
               {ev.title === 'Desfazer em Cascata' && <ContactTimelineDetails ev={ev} />}
             </div>
           </div>
