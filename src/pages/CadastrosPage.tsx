@@ -1982,18 +1982,30 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId, selectedIds, setSelect
               <div className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 ${d.error_message?.includes('HMAC') ? 'bg-destructive/5 border-destructive/20' : 'bg-emerald-500/5 border-emerald-500/20'}`}>
                 <p className="text-[9px] font-bold text-muted-foreground uppercase">Assinatura HMAC</p>
                 {d.error_message?.includes('HMAC') ? (
-                  <Badge variant="destructive" className="h-5 text-[8px]">INVÁLIDA</Badge>
+                  <div className="flex flex-col items-center gap-1">
+                    <Badge variant="destructive" className="h-5 text-[8px]">INVÁLIDA</Badge>
+                    <span className="text-[7px] text-destructive font-bold uppercase">Erro de Integridade</span>
+                  </div>
                 ) : (
-                  <Badge variant="default" className="h-5 text-[8px] bg-emerald-500">VERIFICADA</Badge>
+                  <div className="flex flex-col items-center gap-1">
+                    <Badge variant="default" className="h-5 text-[8px] bg-emerald-500">VERIFICADA</Badge>
+                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                  </div>
                 )}
                 <span className="text-[8px] text-muted-foreground font-mono">Replay Protection Ativa</span>
               </div>
               <div className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 ${d.error_message?.includes('window') ? 'bg-destructive/5 border-destructive/20' : 'bg-emerald-500/5 border-emerald-500/20'}`}>
                 <p className="text-[9px] font-bold text-muted-foreground uppercase">Janela (Timestamp)</p>
                 {d.error_message?.includes('window') ? (
-                  <Badge variant="destructive" className="h-5 text-[8px]">EXPIRADO</Badge>
+                  <div className="flex flex-col items-center gap-1">
+                    <Badge variant="destructive" className="h-5 text-[8px]">EXPIRADO</Badge>
+                    <span className="text-[7px] text-destructive font-bold uppercase">Fora de 5min</span>
+                  </div>
                 ) : (
-                  <Badge variant="default" className="h-5 text-[8px] bg-emerald-500">DENTRO DA JANELA</Badge>
+                  <div className="flex flex-col items-center gap-1">
+                    <Badge variant="default" className="h-5 text-[8px] bg-emerald-500">DENTRO DA JANELA</Badge>
+                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                  </div>
                 )}
                 <span className="text-[8px] text-muted-foreground font-mono">5min Window Check</span>
               </div>
