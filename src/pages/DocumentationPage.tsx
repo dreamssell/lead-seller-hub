@@ -246,13 +246,14 @@ function DocumentationContent({ correlationId, onRegenerateId }: { correlationId
                         <Button 
                           variant="outline" 
                           size="sm" 
-                          className="h-8 text-[10px] gap-1.5 rounded-lg"
+                          className="h-8 text-[10px] gap-1.5 rounded-lg border-border/60 hover:bg-secondary"
                           onClick={() => {
                             const data = telemetryHistory.map(l => ({
                               time: new Date(l.created_at).toISOString(),
                               type: l.type,
                               message: l.message,
-                              retry: l.retry_count
+                              retry: l.retry_count,
+                              correlation_id: correlationId
                             }));
                             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                             const url = URL.createObjectURL(blob);
@@ -265,6 +266,14 @@ function DocumentationContent({ correlationId, onRegenerateId }: { correlationId
                           }}
                         >
                             <FileDown className="w-3.5 h-3.5" /> Exportar JSON
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-8 text-[10px] gap-1.5 rounded-lg border-border/60 hover:bg-secondary"
+                          onClick={onRegenerateId}
+                        >
+                            <RotateCw className="w-3.5 h-3.5" /> Novo ID
                         </Button>
                         <Button 
                           variant="ghost" 
