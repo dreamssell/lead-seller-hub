@@ -147,10 +147,18 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
           <CardDescription className="text-sm px-6 mt-2 leading-relaxed">
             {is403 
               ? 'Sua conta não possui permissão para visualizar a documentação técnica avançada ou sua sessão expirou.' 
-              : 'Não foi possível carregar a documentação. Isso pode ser um problema temporário de rede ou estado.'}
+              : retryCount >= 3 
+                ? 'Detectamos múltiplas falhas consecutivas. Por favor, reporte o Correlation ID abaixo ao suporte técnico.'
+                : 'Não foi possível carregar a documentação. Isso pode ser um problema temporário de rede ou estado.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 pb-10 text-center px-8">
+          {retryCount >= 3 && (
+            <div className="flex items-center gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-700 text-xs font-bold animate-pulse">
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <span>Limite de resiliência atingido. Ação manual recomendada.</span>
+            </div>
+          )}
           <div className="flex flex-col gap-3 p-5 bg-secondary/30 rounded-2xl border border-border/20 shadow-inner">
             {!is403 && (
               <div className="text-[10px] font-mono text-left overflow-auto max-h-24 text-muted-foreground leading-tight mb-3 opacity-80">
@@ -297,12 +305,27 @@ export default function DocumentationPage() {
         console.log('[DocumentationBoundary] Resetting state');
       }}
     >
-      <DocumentationContent />
+      <DocumentationContent correlationId={correlationId} />
     </ErrorBoundary>
   );
 }
 
-function DocumentationContent() {
+function DocumentationContent({ correlationId }: { correlationId: string }) {
+  const [telemetryHistory, setTelemetryHistory] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  const fetchHistory = async () => {
+    const { data } = await supabase
+      .from('telemetry_logs')
+      .select('*')
+      .eq('correlation_id', correlationId)
+      .order('created_at', { ascending: false });
+    if (data) setTelemetryHistory(data);
+  };
+
+  useEffect(() => {
+    if (showHistory) fetchHistory();
+  }, [showHistory]);
   const [activeSection, setActiveSection] = useState("MCP Server");
   const [copied, setCopied] = useState<string | null>(null);
 
