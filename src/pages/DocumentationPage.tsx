@@ -23,19 +23,40 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
   const [retryCount, setRetryCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
   const [correlationId] = useState(() => crypto.randomUUID());
+  const [nextRetryTime, setNextRetryTime] = useState<number | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [stats, setStats] = useState({ network: 0, auth: 0 });
   const MAX_RETRIES = 5;
   const is403 = error.message.includes('403') || error.message.includes('permission');
   
-  // Registrar erro inicial para depuração
+  // Registrar erro e atualizar estatísticas
   useEffect(() => {
+    setStats(prev => ({
+      network: prev.network + (is403 ? 0 : 1),
+      auth: prev.auth + (is403 ? 1 : 0)
+    }));
+
     console.error(`[DocumentationError] ID: ${correlationId}`, {
       message: error.message,
-      stack: error.stack,
-      timestamp: new Date().toISOString(),
       type: is403 ? '403_FORBIDDEN' : 'NETWORK_OR_STATE_FAILURE',
+      totalAuthErrors: stats.auth + (is403 ? 1 : 0),
+      totalNetworkErrors: stats.network + (is403 ? 0 : 1),
       retryCount
     });
   }, [error, is403, correlationId]);
+
+  // Timer para contagem regressiva
+  useEffect(() => {
+    if (!nextRetryTime) return;
+    
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((nextRetryTime - Date.now()) / 1000));
+      setTimeRemaining(remaining);
+      if (remaining === 0) clearInterval(interval);
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [nextRetryTime]);
 
   const handleReauth = async () => {
     console.log(`[DocumentationReauth] ID: ${correlationId} - Triggering SSO flow`);
@@ -59,15 +80,21 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
     setIsRetrying(true);
     const nextRetry = retryCount + 1;
     const delay = Math.pow(2, retryCount) * 1000;
+    const estimatedTime = Date.now() + delay;
+    
+    setNextRetryTime(estimatedTime);
+    setTimeRemaining(Math.ceil(delay / 1000));
     
     console.log(`[DocumentationRetry] ID: ${correlationId} - Attempt ${nextRetry}/${MAX_RETRIES} in ${delay}ms`, {
-      errorType: is403 ? '403' : 'Network/State',
-      correlationId
+      correlationId,
+      nextRetryAt: new Date(estimatedTime).toLocaleTimeString()
     });
     
     setTimeout(() => {
       setRetryCount(nextRetry);
       setIsRetrying(false);
+      setNextRetryTime(null);
+      setTimeRemaining(null);
       resetErrorBoundary();
     }, delay);
   };
@@ -94,16 +121,39 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 pb-10 text-center px-8">
-          <div className="flex flex-col gap-2 p-4 bg-secondary/30 rounded-xl border border-border/20">
+          <div className="flex flex-col gap-3 p-5 bg-secondary/30 rounded-2xl border border-border/20 shadow-inner">
             {!is403 && (
-              <div className="text-[10px] font-mono text-left overflow-auto max-h-24 text-muted-foreground leading-tight mb-2">
+              <div className="text-[10px] font-mono text-left overflow-auto max-h-24 text-muted-foreground leading-tight mb-3 opacity-80">
                 {error.message}
               </div>
             )}
-            <div className="flex flex-wrap justify-between items-center gap-2 text-[9px] font-mono text-muted-foreground/60 uppercase tracking-tighter">
-              <span>Status: {is403 ? '403 Forbidden' : 'Network Fail'}</span>
-              <span>Retries: {retryCount}/{MAX_RETRIES}</span>
-              <span className="truncate max-w-[100px]">ID: {correlationId.split('-')[0]}</span>
+            
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <div className="p-2 bg-background/50 rounded-lg border border-border/10">
+                <p className="text-[8px] uppercase text-muted-foreground mb-0.5">Falhas de Rede</p>
+                <p className="text-xs font-bold font-mono">{stats.network}</p>
+              </div>
+              <div className="p-2 bg-background/50 rounded-lg border border-border/10">
+                <p className="text-[8px] uppercase text-muted-foreground mb-0.5">Erros de Auth</p>
+                <p className="text-xs font-bold font-mono">{stats.auth}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5 text-[9px] font-mono text-muted-foreground/70 uppercase tracking-tighter text-left border-t border-border/10 pt-3">
+              <div className="flex justify-between">
+                <span>Tentativas:</span>
+                <span className="text-foreground">{retryCount}/{MAX_RETRIES}</span>
+              </div>
+              {isRetrying && timeRemaining !== null && (
+                <div className="flex justify-between text-amber-500">
+                  <span>Próximo em:</span>
+                  <span>{timeRemaining}s ({new Date(nextRetryTime || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })})</span>
+                </div>
+              )}
+              <div className="flex justify-between opacity-50">
+                <span>Correlation ID:</span>
+                <span className="truncate max-w-[80px]">{correlationId.split('-')[0]}</span>
+              </div>
             </div>
           </div>
           <div className="flex flex-col gap-3">
