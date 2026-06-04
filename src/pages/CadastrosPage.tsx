@@ -1274,6 +1274,31 @@ function ContactActivityTimeline({ contactId }: { contactId: string }) {
   );
 }
 
+function ContactTimelineDetails({ ev }: { ev: any }) {
+  return (
+    <div className="space-y-3 mt-3 border-t border-border/50 pt-3">
+      <div className="flex justify-between items-center text-[10px]">
+        <span className="text-muted-foreground font-bold uppercase">Campos Restaurados (Diff)</span>
+        <Badge variant="outline" className="text-primary font-mono h-4">X-CORR: {ev.payload?.correlation_id || 'N/A'}</Badge>
+      </div>
+      <div className="grid grid-cols-1 gap-1.5">
+        {ev.payload?.snapshot_before && Object.keys(ev.payload.snapshot_before).filter(k => !['id', 'created_at', 'updated_at', 'status', 'last_interaction_at'].includes(k)).map(k => (
+          <div key={k} className="text-[10px] bg-secondary/30 p-2 rounded-lg border border-border/20 flex flex-col gap-0.5">
+            <span className="font-mono text-[9px] text-muted-foreground uppercase">{k}</span>
+            <div className="flex items-center gap-2">
+               <span className="font-bold text-emerald-600 truncate">{String(ev.payload.snapshot_before[k] || '—')}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="bg-primary/5 p-2 rounded-lg text-[9px] text-muted-foreground flex items-center gap-2">
+         <User className="w-3 h-3" />
+         <span>Solicitado por: <strong>{ev.payload?.agent_name || 'Agente'}</strong></span>
+      </div>
+    </div>
+  );
+}
+
 function UndoCascadeButton({ contactId, currentRecord, onUndo, updateContactStatus }: { 
   contactId: string; 
   currentRecord: any; 
