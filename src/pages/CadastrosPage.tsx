@@ -1613,14 +1613,14 @@ function WebhookDeliveryList() {
         {deliveries.length === 0 ? (
           <p className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma entrega registrada.</p>
         ) : deliveries.map(d => (
-          <WebhookDeliveryCard key={d.id} d={d} />
+          <WebhookDeliveryCard key={d.id} d={d} onRetry={() => retryDelivery(d)} />
         ))}
       </div>
     </div>
   );
 }
 
-function WebhookDeliveryCard({ d }: { d: any }) {
+function WebhookDeliveryCard({ d, onRetry }: { d: any, onRetry: () => void }) {
   const [showDetail, setShowDetail] = useState(false);
   return (
     <>
@@ -1637,9 +1637,16 @@ function WebhookDeliveryCard({ d }: { d: any }) {
               <Badge variant="destructive" className="text-[8px] h-4">REJEITADO</Badge>
             )}
           </div>
-          <Badge variant={d.status === 'sent' ? 'default' : d.status === 'failed' ? 'destructive' : 'secondary'} className="text-[9px]">
-            {d.status?.toUpperCase()}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant={d.status === 'sent' ? 'default' : d.status === 'failed' ? 'destructive' : 'secondary'} className="text-[9px]">
+              {d.status?.toUpperCase()}
+            </Badge>
+            {d.status === 'failed' && (
+              <Button size="icon" variant="ghost" className="h-6 w-6 text-primary" onClick={(e) => { e.stopPropagation(); onRetry(); }}>
+                <RefreshCw className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
         </div>
         <p className="text-muted-foreground truncate font-mono text-[10px]">{d.crm_webhooks?.url}</p>
         
@@ -1674,7 +1681,16 @@ function WebhookDeliveryCard({ d }: { d: any }) {
                </div>
                <div className="bg-secondary/10 p-3 rounded-xl border border-border/50">
                   <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">X-Correlation-ID</p>
-                  <p className="font-mono text-xs text-primary">{d.correlation_id || 'N/A'}</p>
+                  <p className="font-mono text-xs text-primary flex items-center gap-2">
+                    {d.correlation_id || 'N/A'}
+                    <Button size="icon" variant="ghost" className="h-4 w-4" onClick={(e) => {
+                      e.stopPropagation();
+                      navigator.clipboard.writeText(d.correlation_id);
+                      toast({ title: 'ID Copiado!' });
+                    }}>
+                      <Search className="h-3 w-3" />
+                    </Button>
+                  </p>
                </div>
             </div>
 
@@ -1706,8 +1722,15 @@ function WebhookDeliveryCard({ d }: { d: any }) {
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDetail(false)}>Fechar Detalhes</Button>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" size="sm" className="text-[10px]" onClick={() => {
+              navigator.clipboard.writeText(JSON.stringify(d.payload, null, 2));
+              toast({ title: 'Payload Copiado!' });
+            }}>Copiar Payload</Button>
+            {d.status === 'failed' && (
+              <Button size="sm" onClick={() => { setShowDetail(false); onRetry(); }}>Reprocessar Agora</Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setShowDetail(false)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1850,11 +1873,17 @@ function EmailTemplatesTab() {
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button>
-            <Button onClick={save} className="gap-2">
-              <CheckSquare className="w-4 h-4" /> Salvar Template
-            </Button>
+          <DialogFooter className="flex-col sm:flex-row gap-4 items-start sm:items-center">
+            <div className="flex-1 text-[10px] text-muted-foreground bg-secondary/30 p-2 rounded-lg border border-border/50 w-full">
+               <strong>Status Simulação:</strong> Aguardando ação | 
+               <strong> X-Corr:</strong> TEST-SIM-999
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button>
+              <Button onClick={save} className="gap-2">
+                <CheckSquare className="w-4 h-4" /> Salvar Template
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
