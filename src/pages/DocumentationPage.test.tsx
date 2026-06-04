@@ -81,14 +81,18 @@ describe('DocumentationPage', () => {
     // Switch to MCP Server
     const mcpTab = screen.getByRole('tab', { name: /MCP Server/i });
     fireEvent.click(mcpTab);
+    expect(screen.getByRole('heading', { name: /Model Context Protocol/i, level: 2 })).toBeInTheDocument();
     
     // Switch to Webhooks
     const webhooksTab = screen.getByRole('tab', { name: /Webhooks/i });
     fireEvent.click(webhooksTab);
+    expect(screen.getByRole('heading', { name: /Webhooks de Saída/i, level: 2 })).toBeInTheDocument();
 
     // Switch to Console
     const consoleTab = screen.getByRole('tab', { name: /Console/i });
     fireEvent.click(consoleTab);
+    expect(screen.getByText(/Console de Teste MCP/i)).toBeInTheDocument();
+
 
 
 
