@@ -358,11 +358,19 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
           card.scrollIntoView({ behavior: 'smooth', block: 'center' });
           card.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
           setTimeout(() => card.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 5000);
-        } else {
-          // Limpeza segura se o card não existir
-          console.log(`Card ${cardId} not found, cleaning highlight state.`);
+        } else if (rows.length > 0) {
+          // Limpeza segura se o card não existir após o carregamento dos dados
+          console.log(`Card ${cardId} not found in DOM, cleaning highlight state.`);
           localStorage.removeItem('kanban_highlighted_card');
           localStorage.removeItem('kanban_highlighted_time');
+          
+          // Limpar parâmetro da URL de forma segura
+          const params = new URLSearchParams(window.location.search);
+          if (params.has('highlight_card')) {
+            params.delete('highlight_card');
+            const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+          }
         }
       };
 
@@ -378,8 +386,13 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
           if (isExpired) {
             localStorage.removeItem('kanban_highlighted_card');
             localStorage.removeItem('kanban_highlighted_time');
+            if (urlCardId) {
+              params.delete('highlight_card');
+              const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+              window.history.replaceState({}, '', newUrl);
+            }
           } else {
-            setTimeout(() => applyHighlight(savedCard), 600);
+            setTimeout(() => applyHighlight(savedCard), 800);
           }
         }
       }
@@ -2062,9 +2075,11 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
     let intervalId: any;
     let channel: any;
 
-    if (d.correlation_id === currentCorrId && currentCorrId && cardRef.current && pollingActive) {
-      cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setShowDetail(true);
+    // A assinatura só deve ser criada se o modal estiver aberto E for o card correspondente ao X-Correlation-ID
+    if (showDetail && d.correlation_id === currentCorrId && currentCorrId && pollingActive) {
+      if (cardRef.current) {
+        cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       
       const syncStatus = async () => {
         const { data, error } = await supabase.from('crm_webhook_logs').select('*, crm_webhooks(url)').eq('id', d.id).single();
@@ -2077,7 +2092,7 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
 
       // Estratégia de Fallback: WebSocket (Channel) -> Polling
       channel = supabase
-        .channel(`webhook-sync-${d.id}`)
+        .channel(`webhook-sync-${d.id}-${Date.now()}`) // Nome único para evitar conflitos
         .on(
           'postgres_changes',
           { event: 'UPDATE', schema: 'public', table: 'crm_webhook_logs', filter: `id=eq.${d.id}` },
@@ -2103,9 +2118,12 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
 
     return () => {
       if (intervalId) clearInterval(intervalId);
-      if (channel) supabase.removeChannel(channel);
+      if (channel) {
+        supabase.removeChannel(channel);
+        console.log(`Unsubscribed from webhook-sync-${d.id}`);
+      }
     };
-  }, [currentCorrId, d.correlation_id, d.id, pollingActive, updateMethod]);
+  }, [currentCorrId, d.correlation_id, d.id, pollingActive, updateMethod, showDetail]);
   
   return (
     <>
