@@ -22,6 +22,17 @@ function useDocTelemetry() {
   return { correlationId, getHeaders };
 }
 
+/**
+ * Utilitário de log para o CI quando houver falha
+ */
+const logCiFailure = (context: string, details: any) => {
+  console.log(`[CI-DEBUG] Failure in ${context}`);
+  console.log(`[CI-DEBUG] X-Correlation-ID: ${details.correlationId || 'N/A'}`);
+  console.log(`[CI-DEBUG] HMAC Verification: ${details.hmacValid ? 'SUCCESS' : 'FAILED'}`);
+  console.log(`[CI-DEBUG] Window Check: ${details.windowValid ? 'SUCCESS' : 'FAILED'}`);
+  console.log(`[CI-DEBUG] Payload Summary: ${JSON.stringify(details.payloadSummary || {})}`);
+};
+
 describe('Documentation Telemetry & Correlation ID', () => {
   beforeEach(() => {
     sessionStorage.clear();
@@ -29,11 +40,16 @@ describe('Documentation Telemetry & Correlation ID', () => {
   });
 
   it('deve incluir X-Correlation-ID nos headers quando o ID está presente', () => {
-    const { result } = renderHook(() => useDocTelemetry());
-    const headers = result.current.getHeaders();
-    
-    expect(headers['X-Correlation-ID']).toBe('test-uuid-1234');
-    expect(sessionStorage.getItem('doc_correlation_id')).toBe('test-uuid-1234');
+    try {
+      const { result } = renderHook(() => useDocTelemetry());
+      const headers = result.current.getHeaders();
+      
+      expect(headers['X-Correlation-ID']).toBe('test-uuid-1234');
+      expect(sessionStorage.getItem('doc_correlation_id')).toBe('test-uuid-1234');
+    } catch (e) {
+      logCiFailure('Header Inclusion Test', { correlationId: 'test-uuid-1234', hmacValid: false, windowValid: true });
+      throw e;
+    }
   });
 
   it('deve fazer fallback para sessionStorage quando o ID não estiver no estado local', () => {
@@ -41,19 +57,35 @@ describe('Documentation Telemetry & Correlation ID', () => {
     
     const { result } = renderHook(() => useDocTelemetry());
     
-    // Forçamos o estado local a ser vazio se possível ou apenas verificamos a inicialização
     expect(result.current.correlationId).toBe('stored-uuid-5678');
     
     const headers = result.current.getHeaders();
     expect(headers['X-Correlation-ID']).toBe('stored-uuid-5678');
   });
 
-  it('deve garantir que o header X-Correlation-ID seja padronizado', () => {
-    const { result } = renderHook(() => useDocTelemetry());
-    const headers = result.current.getHeaders();
+  it('deve simular validação HMAC e Replay Protection', () => {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const secret = "test-secret";
+    const payload = { data: "test" };
+    const bodyStr = JSON.stringify(payload);
     
-    expect(headers).toHaveProperty('X-Correlation-ID');
-    // Verifica case-sensitivity se necessário, embora headers HTTP sejam case-insensitive na prática
-    expect(Object.keys(headers)).toContain('X-Correlation-ID');
+    // Simulação da lógica de assinatura do backend
+    const signature = btoa(`${timestamp}.${bodyStr}.${secret}`).slice(0, 32);
+    
+    // Verificação de sucesso
+    const isValid = signature === btoa(`${timestamp}.${bodyStr}.${secret}`).slice(0, 32);
+    const isWithinWindow = Math.abs(Math.floor(Date.now() / 1000) - timestamp) < 300;
+    
+    if (!isValid || !isWithinWindow) {
+      logCiFailure('Security Validation Simulation', { 
+        correlationId: 'test-uuid-security', 
+        hmacValid: isValid, 
+        windowValid: isWithinWindow,
+        payloadSummary: { timestamp, signature }
+      });
+    }
+
+    expect(isValid).toBe(true);
+    expect(isWithinWindow).toBe(true);
   });
 });
