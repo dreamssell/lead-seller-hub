@@ -61,6 +61,7 @@ export type Database = {
       }
       ai_agents: {
         Row: {
+          autonomous_config: Json | null
           avatar_url: string | null
           channels: string[]
           config: Json
@@ -70,6 +71,7 @@ export type Database = {
           fallback_message: string | null
           id: string
           is_active: boolean
+          is_autonomous: boolean | null
           knowledge_base: string | null
           max_tokens: number
           model: string
@@ -81,6 +83,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          autonomous_config?: Json | null
           avatar_url?: string | null
           channels?: string[]
           config?: Json
@@ -90,6 +93,7 @@ export type Database = {
           fallback_message?: string | null
           id?: string
           is_active?: boolean
+          is_autonomous?: boolean | null
           knowledge_base?: string | null
           max_tokens?: number
           model?: string
@@ -101,6 +105,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          autonomous_config?: Json | null
           avatar_url?: string | null
           channels?: string[]
           config?: Json
@@ -110,6 +115,7 @@ export type Database = {
           fallback_message?: string | null
           id?: string
           is_active?: boolean
+          is_autonomous?: boolean | null
           knowledge_base?: string | null
           max_tokens?: number
           model?: string
@@ -348,6 +354,110 @@ export type Database = {
           website?: string | null
         }
         Relationships: []
+      }
+      contacts: {
+        Row: {
+          assigned_agent_id: string | null
+          company: string | null
+          created_at: string | null
+          created_by: string | null
+          email: string | null
+          estimated_value: number | null
+          id: string
+          job_title: string | null
+          last_interaction_at: string | null
+          metadata: Json | null
+          name: string
+          notes: string | null
+          phone: string | null
+          source: string | null
+          status: string | null
+          tags: string[] | null
+          updated_at: string | null
+        }
+        Insert: {
+          assigned_agent_id?: string | null
+          company?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          email?: string | null
+          estimated_value?: number | null
+          id?: string
+          job_title?: string | null
+          last_interaction_at?: string | null
+          metadata?: Json | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          source?: string | null
+          status?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+        }
+        Update: {
+          assigned_agent_id?: string | null
+          company?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          email?: string | null
+          estimated_value?: number | null
+          id?: string
+          job_title?: string | null
+          last_interaction_at?: string | null
+          metadata?: Json | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          source?: string | null
+          status?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      crm_events: {
+        Row: {
+          actor_id: string | null
+          actor_type: string | null
+          contact_id: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          payload: Json | null
+          title: string | null
+          type: string
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_type?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          payload?: Json | null
+          title?: string | null
+          type: string
+        }
+        Update: {
+          actor_id?: string | null
+          actor_type?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          payload?: Json | null
+          title?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       custom_fields: {
         Row: {

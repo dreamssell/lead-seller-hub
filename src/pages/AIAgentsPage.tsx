@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface AIAgent {
   id: string;
@@ -30,6 +31,13 @@ interface AIAgent {
   channels: string[];
   knowledge_base: string | null;
   fallback_message: string | null;
+  is_autonomous?: boolean;
+  autonomous_config?: {
+    trigger_events: string[];
+    allowed_actions: string[];
+    max_actions_per_run: number;
+    monitoring_level: string;
+  };
 }
 
 const MODELS = [
@@ -79,7 +87,7 @@ export default function AIAgentsPage() {
     setLoading(true);
     const { data, error } = await supabase.from('ai_agents').select('*').order('created_at', { ascending: false });
     if (error) toast({ title: 'Erro ao carregar', description: error.message, variant: 'destructive' });
-    setAgents((data ?? []) as AIAgent[]);
+    setAgents((data ?? []) as any[]);
     setLoading(false);
   };
 
@@ -95,7 +103,7 @@ export default function AIAgentsPage() {
       return;
     }
     setSaving(true);
-    const payload = {
+    const payload: any = {
       name: editing.name!,
       description: editing.description ?? '',
       provider: editing.provider!,
@@ -107,6 +115,13 @@ export default function AIAgentsPage() {
       channels: editing.channels ?? [],
       knowledge_base: editing.knowledge_base ?? '',
       fallback_message: editing.fallback_message ?? '',
+      is_autonomous: editing.is_autonomous ?? false,
+      autonomous_config: editing.autonomous_config ?? {
+        trigger_events: ["new_lead", "incoming_chat"],
+        allowed_actions: ["send_whatsapp", "create_task", "update_crm_status"],
+        max_actions_per_run: 5,
+        monitoring_level: "high"
+      }
     };
 
     let error;
@@ -199,7 +214,13 @@ export default function AIAgentsPage() {
             <DialogTitle>{editing?.id ? 'Configurar Agente' : 'Novo Agente de I.A.'}</DialogTitle>
           </DialogHeader>
           {editing && (
-            <div className="space-y-4 py-2">
+            <Tabs defaultValue="general" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="general">Geral</TabsTrigger>
+                <TabsTrigger value="autonomous">IA Autônoma</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="general" className="space-y-4 py-2">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label>Nome do agente *</Label>
@@ -284,7 +305,111 @@ export default function AIAgentsPage() {
                 <Label>Mensagem de fallback (transferência humana)</Label>
                 <Input value={editing.fallback_message ?? ''} onChange={(e) => setEditing({ ...editing, fallback_message: e.target.value })} />
               </div>
-            </div>
+            </TabsContent>
+
+            <TabsContent value="autonomous" className="space-y-6 py-2">
+              <div className="flex items-center justify-between p-4 bg-primary/5 rounded-2xl border border-primary/10">
+                <div className="space-y-0.5">
+                  <Label className="text-base font-bold flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-primary" />
+                    Modo Autônomo
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Permite que o agente tome ações proativas no CRM sem intervenção humana.
+                  </p>
+                </div>
+                <Switch 
+                  checked={editing.is_autonomous ?? false} 
+                  onCheckedChange={(v) => setEditing({ ...editing, is_autonomous: v })} 
+                />
+              </div>
+
+              {editing.is_autonomous && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-4"
+                >
+                  <div className="space-y-3">
+                    <Label className="text-[11px] uppercase font-bold text-muted-foreground">Gatilhos de Ativação</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {['new_lead', 'incoming_chat', 'stale_lead', 'outbound_followup'].map(event => (
+                        <Badge 
+                          key={event}
+                          variant={editing.autonomous_config?.trigger_events?.includes(event) ? 'default' : 'outline'}
+                          className="cursor-pointer"
+                          onClick={() => {
+                            const current = editing.autonomous_config?.trigger_events ?? [];
+                            const next = current.includes(event) ? current.filter(e => e !== event) : [...current, event];
+                            setEditing({
+                              ...editing,
+                              autonomous_config: { ...editing.autonomous_config!, trigger_events: next }
+                            });
+                          }}
+                        >
+                          {event}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label className="text-[11px] uppercase font-bold text-muted-foreground">Ações Permitidas (Tools)</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {['send_whatsapp', 'create_task', 'update_crm_status', 'transfer_human'].map(action => (
+                        <Badge 
+                          key={action}
+                          variant={editing.autonomous_config?.allowed_actions?.includes(action) ? 'secondary' : 'outline'}
+                          className="cursor-pointer"
+                          onClick={() => {
+                            const current = editing.autonomous_config?.allowed_actions ?? [];
+                            const next = current.includes(action) ? current.filter(a => a !== action) : [...current, action];
+                            setEditing({
+                              ...editing,
+                              autonomous_config: { ...editing.autonomous_config!, allowed_actions: next }
+                            });
+                          }}
+                        >
+                          {action}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Ações Máx. por Rodada</Label>
+                      <Input 
+                        type="number" 
+                        value={editing.autonomous_config?.max_actions_per_run ?? 5}
+                        onChange={(e) => setEditing({
+                          ...editing,
+                          autonomous_config: { ...editing.autonomous_config!, max_actions_per_run: parseInt(e.target.value) }
+                        })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Nível de Monitoramento</Label>
+                      <Select 
+                        value={editing.autonomous_config?.monitoring_level ?? 'high'}
+                        onValueChange={(v) => setEditing({
+                          ...editing,
+                          autonomous_config: { ...editing.autonomous_config!, monitoring_level: v }
+                        })}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Baixo (Totalmente Autônomo)</SelectItem>
+                          <SelectItem value="medium">Médio (Relatórios Diários)</SelectItem>
+                          <SelectItem value="high">Alto (Humano revisa tudo)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </TabsContent>
+          </Tabs>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button>
