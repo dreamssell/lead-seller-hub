@@ -1715,6 +1715,8 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
 
 function WebhookDeliveryCard({ d, onRetry, currentCorrId }: { d: any, onRetry: () => void, currentCorrId?: string }) {
   const [showDetail, setShowDetail] = useState(false);
+  const [showPayload, setShowPayload] = useState(false);
+  
   return (
     <>
       <div 
@@ -1727,7 +1729,9 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId }: { d: any, onRetry: (
           <div className="flex items-center gap-2">
             <span className="font-bold text-foreground">{d.event_type}</span>
             {d.status === 'failed' && (
-              <Badge variant="destructive" className="text-[8px] h-4">REJEITADO</Badge>
+              <Badge variant="destructive" className="text-[8px] h-4">
+                {d.is_dead_letter ? 'DEAD-LETTER' : 'REJEITADO'}
+              </Badge>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -1735,18 +1739,36 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId }: { d: any, onRetry: (
               {d.status?.toUpperCase()}
             </Badge>
             {d.status === 'failed' && (
-              <Button size="icon" variant="ghost" className="h-6 w-6 text-primary" onClick={(e) => { e.stopPropagation(); onRetry(); }}>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="h-6 text-[9px] gap-1 text-primary hover:text-primary" 
+                onClick={(e) => { e.stopPropagation(); onRetry(); }}
+              >
                 <RefreshCw className="h-3 w-3" />
+                Reenviar Manual
               </Button>
             )}
+            <Button 
+              size="icon" 
+              variant="ghost" 
+              className="h-6 w-6" 
+              onClick={(e) => { e.stopPropagation(); setShowPayload(true); }}
+              title="Ver Payload"
+            >
+              <Code className="h-3 w-3" />
+            </Button>
           </div>
         </div>
         <p className="text-muted-foreground truncate font-mono text-[10px]">{d.crm_webhooks?.url}</p>
         
-        {d.error_message && (
+        {(d.error_message || d.last_error_summary) && (
           <div className="bg-destructive/10 text-destructive p-2 rounded-lg text-[10px] flex items-start gap-2">
             <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
-            <span><strong>Motivo:</strong> {d.error_message}</span>
+            <div className="flex-1">
+              {d.error_message && <div><strong>Motivo:</strong> {d.error_message}</div>}
+              {d.last_error_summary && <div className="mt-1 opacity-80"><strong>Erro Final:</strong> {d.last_error_summary}</div>}
+            </div>
           </div>
         )}
 
@@ -1855,6 +1877,52 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId }: { d: any, onRetry: (
               <Button size="sm" onClick={() => { setShowDetail(false); onRetry(); }}>Reprocessar Agora</Button>
             )}
             <Button variant="outline" size="sm" onClick={() => setShowDetail(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showPayload} onOpenChange={setShowPayload}>
+        <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Code className="w-5 h-5 text-primary" /> Payload da Notificação
+            </DialogTitle>
+            <SheetDescription>Dados brutos enviados para o webhook.</SheetDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4 text-[10px]">
+              <div className="bg-secondary/10 p-2 rounded-lg border border-border/50">
+                <p className="font-bold text-muted-foreground uppercase mb-1">X-Correlation-ID</p>
+                <p className="font-mono text-primary">{d.correlation_id || 'N/A'}</p>
+              </div>
+              <div className="bg-secondary/10 p-2 rounded-lg border border-border/50">
+                <p className="font-bold text-muted-foreground uppercase mb-1">Status Atual</p>
+                <Badge variant={d.status === 'sent' ? 'default' : 'destructive'} className="h-4 text-[8px]">
+                  {d.status?.toUpperCase()}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="relative group">
+              <pre className="bg-black/95 text-green-400 p-4 rounded-xl text-[10px] font-mono overflow-x-auto max-h-[400px]">
+                {JSON.stringify(d.payload, null, 2)}
+              </pre>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="absolute top-2 right-2 h-7 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity bg-background/20"
+                onClick={() => {
+                  navigator.clipboard.writeText(JSON.stringify(d.payload, null, 2));
+                  toast({ title: 'Payload Copiado!' });
+                }}
+              >
+                Copiar
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setShowPayload(false)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
