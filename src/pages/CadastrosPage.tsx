@@ -1566,10 +1566,12 @@ function WebhookDeliveryList() {
     
     if (corrSearch) {
       query = query.ilike('correlation_id', `%${corrSearch}%`);
-      const url = new URL(window.location.href);
-      url.searchParams.set('correlation_id', corrSearch);
-      window.history.replaceState({}, '', url);
-    } else {
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.set('correlation_id', corrSearch);
+        window.history.replaceState({}, '', url);
+      }
+    } else if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       url.searchParams.delete('correlation_id');
       window.history.replaceState({}, '', url);
