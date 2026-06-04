@@ -286,16 +286,16 @@ function DocumentationContent({ correlationId, onRegenerateId }: { correlationId
                 <TabsTrigger value="test">Console</TabsTrigger>
               </TabsList>
               
-              <TabsContent value="rest">
-                {/* Conteúdo da API REST aqui */}
+              <TabsContent value="rest" className="animate-in fade-in duration-500">
+                <RestApiDocs />
               </TabsContent>
               
-              <TabsContent value="mcp">
-                {/* Conteúdo do MCP aqui */}
+              <TabsContent value="mcp" className="animate-in fade-in duration-500">
+                <McpDocs />
               </TabsContent>
 
-              <TabsContent value="webhooks">
-                {/* Conteúdo de Webhooks aqui */}
+              <TabsContent value="webhooks" className="animate-in fade-in duration-500">
+                <WebhookDocs />
               </TabsContent>
 
               <TabsContent value="test" className="pt-4">
