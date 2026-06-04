@@ -267,13 +267,14 @@ const DOC_SECTIONS = [
 
 export default function DocumentationPage() {
   const { canAccessPage } = useAuth();
+  const { correlationId } = useDocTelemetry();
   const [isSyncing, setIsSyncing] = useState(true);
 
   // Validação explícita de role/permissão ao montar o componente
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsSyncing(false);
-    }, 600); // Pequeno delay para garantir que o AuthContext sincronizou
+    }, 600); 
     return () => clearTimeout(timer);
   }, []);
 
@@ -292,7 +293,7 @@ export default function DocumentationPage() {
     );
   }
 
-  // Se o guard do ProtectedRoute falhar ou quisermos uma camada extra de proteção
+  // Camada extra de proteção via role/guard
   if (!canAccessPage('documentation')) {
     throw new Error('403: Permission denied for documentation');
   }
@@ -300,10 +301,7 @@ export default function DocumentationPage() {
   return (
     <ErrorBoundary 
       FallbackComponent={ErrorFallback} 
-      onReset={() => {
-        // Lógica de retry granular agora tratada no ErrorFallback
-        console.log('[DocumentationBoundary] Resetting state');
-      }}
+      onReset={() => console.log('[DocumentationBoundary] Resetting state')}
     >
       <DocumentationContent correlationId={correlationId} />
     </ErrorBoundary>
