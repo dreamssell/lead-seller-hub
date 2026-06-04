@@ -1669,9 +1669,50 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
     fetch();
   }, [corrSearch]);
 
-  const retryDelivery = async (d: any) => {
-    toast({ title: 'Iniciando reenvio manual...' });
+  const retryDelivery = async (d: any, isBatch = false) => {
+    if (!isBatch) toast({ title: 'Iniciando reenvio manual...' });
+    
+    // Simular registro de retry_history
+    const retryHistory = [...(d.retry_history || [])];
+    retryHistory.push({
+      timestamp: new Date().toISOString(),
+      attempt: (d.retry_count || 0) + 1,
+      reason: 'Manual retrigger',
+      strategy_used: d.retry_strategy || { backoff: "none", max_attempts: 1 }
+    });
+
+    await supabase.from('crm_webhook_logs').update({
+      retry_count: (d.retry_count || 0) + 1,
+      retry_history: retryHistory,
+      updated_at: new Date().toISOString()
+    }).eq('id', d.id);
+
     await globalTriggerWebhooks(d.event_type, d.payload, d.id);
+    if (!isBatch) fetch();
+  };
+
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isRetryingBatch, setIsRetryingBatch] = useState(false);
+  const [batchProgress, setBatchProgress] = useState(0);
+
+  const handleBatchRetry = async () => {
+    if (selectedIds.length === 0) return;
+    setIsRetryingBatch(true);
+    setBatchProgress(0);
+    
+    const total = selectedIds.length;
+    for (let i = 0; i < total; i++) {
+      const id = selectedIds[i];
+      const delivery = deliveries.find(d => d.id === id);
+      if (delivery) {
+        await retryDelivery(delivery, true);
+      }
+      setBatchProgress(Math.round(((i + 1) / total) * 100));
+    }
+    
+    toast({ title: 'Reprocessamento em lote concluído!' });
+    setSelectedIds([]);
+    setIsRetryingBatch(false);
     fetch();
   };
 
