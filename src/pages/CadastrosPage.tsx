@@ -2061,8 +2061,14 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>
 }) {
   const [d, setD] = useState(initialData);
-  const [pollingActive, setPollingActive] = useState(true);
+  const [pollingActive, setPollingActive] = useState(() => {
+    return localStorage.getItem(`polling_active_${initialData.id}`) !== 'false';
+  });
   const [updateMethod, setUpdateMethod] = useState<'realtime' | 'polling' | 'none'>('none');
+
+  useEffect(() => {
+    localStorage.setItem(`polling_active_${d.id}`, String(pollingActive));
+  }, [pollingActive, d.id]);
 
   useEffect(() => {
     setD(initialData);
