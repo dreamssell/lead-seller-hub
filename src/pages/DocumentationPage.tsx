@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -6,9 +6,17 @@ import {
   MessageSquare, ChevronRight, Hash, Server, Play, 
   Copy, Check, Info, AlertTriangle, Cpu, Activity,
   Webhook, Key, FileJson, CheckCircle2, Brackets, Download,
-  RefreshCw, Lock, AlertCircle, History, FileDown, Eye
+  RefreshCw, Lock, AlertCircle, History, FileDown, Eye, RotateCw
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogHeader, 
+  DialogTitle,
+  DialogTrigger 
+} from '@/components/ui/dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
