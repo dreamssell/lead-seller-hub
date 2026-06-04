@@ -423,9 +423,11 @@ export type Database = {
           created_at: string | null
           description: string | null
           id: string
+          parent_event_id: string | null
           payload: Json | null
           title: string | null
           type: string
+          undo_reason: string | null
         }
         Insert: {
           actor_id?: string | null
@@ -434,9 +436,11 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          parent_event_id?: string | null
           payload?: Json | null
           title?: string | null
           type: string
+          undo_reason?: string | null
         }
         Update: {
           actor_id?: string | null
@@ -445,9 +449,11 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          parent_event_id?: string | null
           payload?: Json | null
           title?: string | null
           type?: string
+          undo_reason?: string | null
         }
         Relationships: [
           {
@@ -457,7 +463,88 @@ export type Database = {
             referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "crm_events_parent_event_id_fkey"
+            columns: ["parent_event_id"]
+            isOneToOne: false
+            referencedRelation: "crm_events"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      crm_webhook_logs: {
+        Row: {
+          correlation_id: string | null
+          created_at: string
+          error_message: string | null
+          event_type: string
+          id: string
+          payload: Json
+          response_body: string | null
+          response_status: number | null
+          webhook_id: string
+        }
+        Insert: {
+          correlation_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          event_type: string
+          id?: string
+          payload: Json
+          response_body?: string | null
+          response_status?: number | null
+          webhook_id: string
+        }
+        Update: {
+          correlation_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          response_body?: string | null
+          response_status?: number | null
+          webhook_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_webhook_logs_webhook_id_fkey"
+            columns: ["webhook_id"]
+            isOneToOne: false
+            referencedRelation: "crm_webhooks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_webhooks: {
+        Row: {
+          created_at: string
+          events: string[]
+          id: string
+          is_active: boolean
+          secret_key: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          events?: string[]
+          id?: string
+          is_active?: boolean
+          secret_key?: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          events?: string[]
+          id?: string
+          is_active?: boolean
+          secret_key?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
       }
       custom_fields: {
         Row: {
