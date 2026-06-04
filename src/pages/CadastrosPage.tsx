@@ -1971,6 +1971,27 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId, selectedIds, setSelect
                   </p>
                </div>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 ${d.error_message?.includes('HMAC') ? 'bg-destructive/5 border-destructive/20' : 'bg-emerald-500/5 border-emerald-500/20'}`}>
+                <p className="text-[9px] font-bold text-muted-foreground uppercase">Assinatura HMAC</p>
+                {d.error_message?.includes('HMAC') ? (
+                  <Badge variant="destructive" className="h-5 text-[8px]">INVÁLIDA</Badge>
+                ) : (
+                  <Badge variant="default" className="h-5 text-[8px] bg-emerald-500">VERIFICADA</Badge>
+                )}
+                <span className="text-[8px] text-muted-foreground font-mono">Replay Protection Ativa</span>
+              </div>
+              <div className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 ${d.error_message?.includes('window') ? 'bg-destructive/5 border-destructive/20' : 'bg-emerald-500/5 border-emerald-500/20'}`}>
+                <p className="text-[9px] font-bold text-muted-foreground uppercase">Janela (Timestamp)</p>
+                {d.error_message?.includes('window') ? (
+                  <Badge variant="destructive" className="h-5 text-[8px]">EXPIRADO</Badge>
+                ) : (
+                  <Badge variant="default" className="h-5 text-[8px] bg-emerald-500">DENTRO DA JANELA</Badge>
+                )}
+                <span className="text-[8px] text-muted-foreground font-mono">5min Window Check</span>
+              </div>
+            </div>
+
             <div className="bg-secondary/5 p-3 rounded-xl border border-border/50">
                <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Headers Relevantes</p>
                <div className="space-y-1">
