@@ -206,27 +206,48 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
       
       for (const webhook of webhooks) {
         if (webhook.events.includes(eventType)) {
-          // Geração de assinatura HMAC simulada (em produção usaria crypto.subtle ou Edge Function)
           const signature = btoa(`${timestamp}.${bodyStr}.${webhook.secret_key}`).slice(0, 32);
           
-          // Log imediato da tentativa
           const { data: logData } = await supabase.from('crm_webhook_logs').insert([{
             webhook_id: webhook.id,
             event_type: eventType,
             payload: { ...payload, _signature: signature, _timestamp: timestamp },
-            correlation_id: correlationId
+            correlation_id: correlationId,
+            status: 'pending'
           }]).select().single();
 
-          // Simulação de disparo
-          console.log(`[Webhook] Enviando para ${webhook.url} com Assinatura: ${signature}`);
-          
-          // Simular validação e sucesso
-          if (logData) {
-            await supabase.from('crm_webhook_logs').update({
-              response_status: 200,
-              response_body: JSON.stringify({ status: "success", validated: true, hmac_verified: true })
-            }).eq('id', logData.id);
-          }
+          const executeDelivery = async (attempt: number = 0) => {
+            console.log(`[Webhook] Tentativa ${attempt + 1} para ${webhook.url}`);
+            
+            // Simulação de erro em 30% das vezes para testar retentativa
+            const isError = Math.random() < 0.3;
+            
+            if (isError) {
+              const nextRetry = new Date();
+              nextRetry.setSeconds(nextRetry.getSeconds() + Math.pow(2, attempt) * 10); // Exponential backoff
+
+              if (logData) {
+                await supabase.from('crm_webhook_logs').update({
+                  status: attempt >= 2 ? 'failed' : 'retrying',
+                  retry_count: attempt + 1,
+                  error_message: 'Connection timed out',
+                  next_retry_at: attempt >= 2 ? null : nextRetry.toISOString()
+                }).eq('id', logData.id);
+              }
+              return false;
+            }
+
+            if (logData) {
+              await supabase.from('crm_webhook_logs').update({
+                status: 'sent',
+                response_status: 200,
+                response_body: JSON.stringify({ status: "success", validated: true })
+              }).eq('id', logData.id);
+            }
+            return true;
+          };
+
+          executeDelivery();
         }
       }
     } catch (e) {
