@@ -358,11 +358,19 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
           card.scrollIntoView({ behavior: 'smooth', block: 'center' });
           card.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
           setTimeout(() => card.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 5000);
-        } else {
-          // Limpeza segura se o card não existir
-          console.log(`Card ${cardId} not found, cleaning highlight state.`);
+        } else if (rows.length > 0) {
+          // Limpeza segura se o card não existir após o carregamento dos dados
+          console.log(`Card ${cardId} not found in DOM, cleaning highlight state.`);
           localStorage.removeItem('kanban_highlighted_card');
           localStorage.removeItem('kanban_highlighted_time');
+          
+          // Limpar parâmetro da URL de forma segura
+          const params = new URLSearchParams(window.location.search);
+          if (params.has('highlight_card')) {
+            params.delete('highlight_card');
+            const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+          }
         }
       };
 
@@ -378,8 +386,13 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
           if (isExpired) {
             localStorage.removeItem('kanban_highlighted_card');
             localStorage.removeItem('kanban_highlighted_time');
+            if (urlCardId) {
+              params.delete('highlight_card');
+              const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+              window.history.replaceState({}, '', newUrl);
+            }
           } else {
-            setTimeout(() => applyHighlight(savedCard), 600);
+            setTimeout(() => applyHighlight(savedCard), 800);
           }
         }
       }
