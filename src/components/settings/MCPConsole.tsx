@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Terminal, Send, Play, Loader2, Globe, Shield, RefreshCw, History, Clock, Trash2, Check, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,16 +23,36 @@ interface CallHistory {
 export default function MCPConsole({ correlationId }: { correlationId?: string }) {
   const [method, setMethod] = useState('POST');
   const [endpoint, setEndpoint] = useState('/mcp/context');
+  
+  const effectiveCorrelationId = useMemo(() => {
+    if (correlationId) return correlationId;
+    return sessionStorage.getItem('doc_correlation_id') || 'no-correlation-id';
+  }, [correlationId]);
+
   const [headers, setHeaders] = useState(() => {
     const defaultHeaders = {
       "Authorization": "Bearer YOUR_TOKEN",
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      "X-Correlation-ID": effectiveCorrelationId
     };
-    if (correlationId) {
-      (defaultHeaders as any)["X-Correlation-ID"] = correlationId;
-    }
     return JSON.stringify(defaultHeaders, null, 2);
   });
+
+  // Atualizar headers quando o ID de correlação mudar
+  useEffect(() => {
+    try {
+      const currentHeaders = JSON.parse(headers);
+      if (currentHeaders["X-Correlation-ID"] !== effectiveCorrelationId) {
+        setHeaders(JSON.stringify({
+          ...currentHeaders,
+          "X-Correlation-ID": effectiveCorrelationId
+        }, null, 2));
+      }
+    } catch (e) {
+      // Se JSON for inválido, não tentamos atualizar automaticamente
+    }
+  }, [effectiveCorrelationId]);
+
   const [body, setBody] = useState('{\n  "query": "Qual o faturamento de hoje?",\n  "metadata": {\n    "agent_id": "demo-123"\n  }\n}');
   const [response, setResponse] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -81,7 +101,8 @@ export default function MCPConsole({ correlationId }: { correlationId?: string }
         data: {
           answer: "O faturamento registrado hoje é de R$ 12.500,00.",
           source: "MCP Server Local",
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          correlation_id_used: effectiveCorrelationId
         }
       };
       

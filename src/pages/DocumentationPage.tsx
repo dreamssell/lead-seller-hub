@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -6,9 +6,17 @@ import {
   MessageSquare, ChevronRight, Hash, Server, Play, 
   Copy, Check, Info, AlertTriangle, Cpu, Activity,
   Webhook, Key, FileJson, CheckCircle2, Brackets, Download,
-  RefreshCw, Lock, AlertCircle, History, FileDown, Eye
+  RefreshCw, Lock, AlertCircle, History, FileDown, Eye, RotateCw
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogHeader, 
+  DialogTitle,
+  DialogTrigger 
+} from '@/components/ui/dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -42,11 +50,19 @@ const redactSensitiveInfo = (obj: any): any => {
  * Hook centralizado para gerenciar telemetria e ID de correlação.
  */
 function useDocTelemetry() {
-  const correlationId = useMemo(() => {
+  const [correlationId, setCorrelationId] = useState(() => {
     const stored = sessionStorage.getItem('doc_correlation_id');
     if (stored) return stored;
     const newId = crypto.randomUUID();
     sessionStorage.setItem('doc_correlation_id', newId);
+    return newId;
+  });
+
+  const regenerateId = useCallback(() => {
+    const newId = crypto.randomUUID();
+    sessionStorage.setItem('doc_correlation_id', newId);
+    setCorrelationId(newId);
+    toast({ title: "ID Regenerado", description: "Novo ID de correlação gerado para a sessão." });
     return newId;
   }, []);
 
@@ -73,7 +89,7 @@ function useDocTelemetry() {
     }
   };
 
-  return { correlationId, sendLog };
+  return { correlationId, sendLog, regenerateId };
 }
 
 function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
@@ -190,16 +206,16 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
 
 export default function DocumentationPage() {
   const { canAccessPage } = useAuth();
-  const { correlationId } = useDocTelemetry();
+  const { correlationId, regenerateId } = useDocTelemetry();
   if (!canAccessPage('documentation')) throw new Error('403: Permission denied');
   return (
     <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => console.log('Reset')}>
-      <DocumentationContent correlationId={correlationId} />
+      <DocumentationContent correlationId={correlationId} onRegenerateId={regenerateId} />
     </ErrorBoundary>
   );
 }
 
-function DocumentationContent({ correlationId }: { correlationId: string }) {
+function DocumentationContent({ correlationId, onRegenerateId }: { correlationId: string, onRegenerateId: () => void }) {
   const [telemetryHistory, setTelemetryHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [activeSection, setActiveSection] = useState("MCP Server");
@@ -230,13 +246,14 @@ function DocumentationContent({ correlationId }: { correlationId: string }) {
                         <Button 
                           variant="outline" 
                           size="sm" 
-                          className="h-8 text-[10px] gap-1.5 rounded-lg"
+                          className="h-8 text-[10px] gap-1.5 rounded-lg border-border/60 hover:bg-secondary"
                           onClick={() => {
                             const data = telemetryHistory.map(l => ({
                               time: new Date(l.created_at).toISOString(),
                               type: l.type,
                               message: l.message,
-                              retry: l.retry_count
+                              retry: l.retry_count,
+                              correlation_id: correlationId
                             }));
                             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                             const url = URL.createObjectURL(blob);
@@ -249,6 +266,14 @@ function DocumentationContent({ correlationId }: { correlationId: string }) {
                           }}
                         >
                             <FileDown className="w-3.5 h-3.5" /> Exportar JSON
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-8 text-[10px] gap-1.5 rounded-lg border-border/60 hover:bg-secondary"
+                          onClick={onRegenerateId}
+                        >
+                            <RotateCw className="w-3.5 h-3.5" /> Novo ID
                         </Button>
                         <Button 
                           variant="ghost" 
@@ -300,23 +325,65 @@ function DocumentationContent({ correlationId }: { correlationId: string }) {
                                         <p className="text-xs font-medium text-foreground line-clamp-1 flex-1">{log.message}</p>
                                         <div className="flex items-center gap-2">
                                             <span className="text-[10px] font-bold text-muted-foreground bg-background px-1.5 rounded">Retry #{log.retry_count}</span>
-                                            <Button 
-                                              variant="ghost" 
-                                              size="icon" 
-                                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                              onClick={() => {
-                                                const details = JSON.stringify({
-                                                  ...log,
-                                                  correlation_id_fallback: correlationId
-                                                }, null, 2);
-                                                toast({
-                                                  title: "Detalhes do Evento",
-                                                  description: <pre className="text-[9px] mt-2 bg-slate-950 p-2 rounded text-white overflow-auto max-h-40">{details}</pre>
-                                                });
-                                              }}
-                                            >
-                                                <Eye className="w-3 h-3" />
-                                            </Button>
+                                            <Dialog>
+                                              <DialogTrigger asChild>
+                                                <Button 
+                                                  variant="ghost" 
+                                                  size="icon" 
+                                                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                >
+                                                  <Eye className="w-3 h-3" />
+                                                </Button>
+                                              </DialogTrigger>
+                                              <DialogContent className="max-w-md rounded-2xl">
+                                                <DialogHeader>
+                                                  <DialogTitle className="text-base flex items-center gap-2">
+                                                    <Info className="w-4 h-4 text-primary" />
+                                                    Detalhes do Evento
+                                                  </DialogTitle>
+                                                  <DialogDescription className="text-xs">
+                                                    Metadados técnicos do log registrados às {new Date(log.created_at).toLocaleString()}
+                                                  </DialogDescription>
+                                                </DialogHeader>
+                                                <div className="space-y-4 pt-4">
+                                                  <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-1">
+                                                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Tipo</p>
+                                                      <Badge variant={log.type.includes('FORBIDDEN') ? 'destructive' : 'outline'} className="text-[10px]">
+                                                        {log.type}
+                                                      </Badge>
+                                                    </div>
+                                                    <div className="space-y-1 text-right">
+                                                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Tentativa</p>
+                                                      <p className="text-sm font-mono font-bold">#{log.retry_count}</p>
+                                                    </div>
+                                                  </div>
+                                                  <div className="space-y-1">
+                                                    <p className="text-[10px] text-muted-foreground uppercase font-bold">Mensagem</p>
+                                                    <p className="text-xs bg-secondary/50 p-2 rounded-lg border border-border/10 italic">"{log.message}"</p>
+                                                  </div>
+                                                  <div className="space-y-1">
+                                                    <p className="text-[10px] text-muted-foreground uppercase font-bold">Raw Payload (Sanitized)</p>
+                                                    <pre className="text-[9px] bg-slate-950 p-3 rounded-xl text-slate-300 overflow-auto max-h-48 custom-scrollbar border border-white/5">
+                                                      {JSON.stringify(redactSensitiveInfo({
+                                                        ...log,
+                                                        correlation_id_fallback: correlationId
+                                                      }), null, 2)}
+                                                    </pre>
+                                                  </div>
+                                                  <Button 
+                                                    variant="secondary" 
+                                                    className="w-full rounded-xl gap-2 h-10 text-xs"
+                                                    onClick={() => {
+                                                      navigator.clipboard.writeText(JSON.stringify(log, null, 2));
+                                                      toast({ title: "Copiado", description: "Payload completo copiado." });
+                                                    }}
+                                                  >
+                                                    <Copy className="w-3.5 h-3.5" /> Copiar JSON Completo
+                                                  </Button>
+                                                </div>
+                                              </DialogContent>
+                                            </Dialog>
                                         </div>
                                     </div>
                                 </div>
