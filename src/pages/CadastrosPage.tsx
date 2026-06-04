@@ -213,12 +213,12 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
       description: `Status movido de ${oldRow.status} para ${newStatus}${reason ? ` (${reason})` : ''}`,
       actor_id: user?.id,
       actor_type: 'human',
-      metadata: { 
+      payload: { 
         old_status: oldRow.status, 
         new_status: newStatus,
         reason,
         correlation_id: (window as any).CORRELATION_ID || sessionStorage.getItem('X-Correlation-ID')
-      }
+      } as any
     }]);
 
     toast({ title: 'Status atualizado' });
@@ -519,11 +519,16 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
                         .order('created_at', { ascending: false })
                         .limit(1);
                       
-                      if (events && events.length > 0 && events[0].metadata?.old_status) {
-                        await updateContactStatus(editing.id, events[0].metadata.old_status, 'Desfazer movimento');
-                        setOpen(false);
+                      if (events && events.length > 0) {
+                        const payload = events[0].payload as any;
+                        if (payload?.old_status) {
+                          await updateContactStatus(editing.id, payload.old_status, 'Desfazer movimento');
+                          setOpen(false);
+                        } else {
+                          toast({ title: "Nada para desfazer", variant: "default" });
+                        }
                       } else {
-                        toast({ title: "Nada para desfazer", variant: "outline" });
+                        toast({ title: "Nada para desfazer", variant: "default" });
                       }
                     }}
                   >
@@ -775,6 +780,19 @@ function UsersTab() {
               <div className="space-y-1.5">
                 <Label>Cargo</Label>
                 <Input value={form.role_label} onChange={e => setForm({ ...form, role_label: e.target.value })} />
+              </div>
+              <div className="space-y-1.5 col-span-2">
+                <Label>Permissões Kanban (Movimentação)</Label>
+                <div className="flex items-center gap-4 border p-2 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Switch checked={form.can_move_kanban ?? true} onCheckedChange={v => setForm({ ...form, can_move_kanban: v })} />
+                    <span className="text-xs">Mover cards</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch checked={form.can_manage_ai ?? false} onCheckedChange={v => setForm({ ...form, can_manage_ai: v })} />
+                    <span className="text-xs">Configurar I.A.</span>
+                  </div>
+                </div>
               </div>
               <div className="flex items-end justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -1145,6 +1163,7 @@ function ContactActivityTimeline({ contactId }: { contactId: string }) {
 }
 
 function CrmGlobalActivities() {
+  const [search, setInternalSearch] = useState('');
   const [logs, setLogs] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
 
@@ -1215,9 +1234,9 @@ function CrmGlobalActivities() {
                 </div>
                 <p className="text-xs font-bold text-foreground">{log.contacts?.name || 'Contato desconhecido'}</p>
                 <p className="text-xs text-muted-foreground">{log.description}</p>
-                {log.metadata?.correlation_id && (
+                {(log.payload as any)?.correlation_id && (
                   <p className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded w-fit">
-                    ID: {log.metadata.correlation_id}
+                    ID: {(log.payload as any).correlation_id}
                   </p>
                 )}
               </div>

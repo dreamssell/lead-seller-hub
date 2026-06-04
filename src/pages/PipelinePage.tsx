@@ -1,6 +1,6 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { GripVertical, Plus, MoreVertical } from 'lucide-react';
+import { GripVertical, Plus, MoreVertical, User } from 'lucide-react';
 
 const columns = [
   {
