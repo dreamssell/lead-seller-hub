@@ -3,8 +3,11 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import DocumentationPage from './DocumentationPage';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import '@testing-library/jest-dom';
+
 
 
 // Mock do supabase client
