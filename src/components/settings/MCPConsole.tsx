@@ -28,15 +28,10 @@ export default function MCPConsole({ correlationId }: { correlationId?: string }
       "Authorization": "Bearer YOUR_TOKEN",
       "Content-Type": "application/json"
     };
-    if (correlationId) {
-      (defaultHeaders as any)["X-Correlation-ID"] = correlationId;
-    }
-    return JSON.stringify(defaultHeaders, null, 2);
-  });
-  const [body, setBody] = useState('{\n  "query": "Qual o faturamento de hoje?",\n  "metadata": {\n    "agent_id": "demo-123"\n  }\n}');
-  const [response, setResponse] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState<CallHistory[]>([]);
+  const effectiveCorrelationId = useMemo(() => {
+    if (correlationId) return correlationId;
+    return sessionStorage.getItem('doc_correlation_id') || 'no-correlation-id';
+  }, [correlationId]);
 
   // Carregar histórico do localStorage
   useEffect(() => {
