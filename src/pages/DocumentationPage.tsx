@@ -50,11 +50,19 @@ const redactSensitiveInfo = (obj: any): any => {
  * Hook centralizado para gerenciar telemetria e ID de correlação.
  */
 function useDocTelemetry() {
-  const correlationId = useMemo(() => {
+  const [correlationId, setCorrelationId] = useState(() => {
     const stored = sessionStorage.getItem('doc_correlation_id');
     if (stored) return stored;
     const newId = crypto.randomUUID();
     sessionStorage.setItem('doc_correlation_id', newId);
+    return newId;
+  });
+
+  const regenerateId = useCallback(() => {
+    const newId = crypto.randomUUID();
+    sessionStorage.setItem('doc_correlation_id', newId);
+    setCorrelationId(newId);
+    toast({ title: "ID Regenerado", description: "Novo ID de correlação gerado para a sessão." });
     return newId;
   }, []);
 
