@@ -1,6 +1,6 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { GripVertical, Plus, MoreVertical } from 'lucide-react';
+import { GripVertical, Plus, MoreVertical, User } from 'lucide-react';
 
 const columns = [
   {
@@ -55,15 +55,29 @@ export default function PipelinePage() {
 
             <div className="space-y-2">
               {col.cards.map((card) => (
-                <div key={card.id} className="glass-card p-4 cursor-grab active:cursor-grabbing">
+                <div 
+                  key={card.id} 
+                  className="glass-card p-4 cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors group"
+                  onClick={() => {
+                    // Simular abertura de detalhe no CRM
+                    window.location.href = `/cadastros?entity=contacts&id=${card.id}`;
+                  }}
+                >
                   <div className="flex items-start justify-between mb-2">
                     <p className="text-sm font-medium text-foreground">{card.name}</p>
-                    <button className="p-1 rounded hover:bg-secondary">
+                    <button className="p-1 rounded hover:bg-secondary opacity-0 group-hover:opacity-100 transition-opacity">
                       <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
                     </button>
                   </div>
                   <p className="text-xs text-muted-foreground">{card.company}</p>
-                  <p className="text-sm font-semibold text-primary mt-2">{card.value}</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-sm font-semibold text-primary">{card.value}</p>
+                    <div className="flex -space-x-1.5">
+                      <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center border border-background shadow-sm">
+                        <User className="w-2.5 h-2.5 text-primary" />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ))}
 
