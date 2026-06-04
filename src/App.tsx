@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { GlobalStateProvider } from "@/contexts/GlobalStateContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { VoipProvider } from "@/contexts/VoipContext";
 import Dashboard from "./pages/Dashboard";
@@ -38,7 +39,8 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
-      <TooltipProvider>
+      <GlobalStateProvider>
+        <TooltipProvider>
         <Toaster />
         <Sonner />
         <BrowserRouter>
@@ -78,7 +80,8 @@ const App = () => (
             </VoipProvider>
           </AuthProvider>
         </BrowserRouter>
-      </TooltipProvider>
+        </TooltipProvider>
+      </GlobalStateProvider>
     </ThemeProvider>
   </QueryClientProvider>
 );
