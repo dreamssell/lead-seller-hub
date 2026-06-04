@@ -1226,6 +1226,7 @@ function AuditLogDetail({ detail, authors }: { detail: any; authors: Record<stri
 function ContactActivityTimeline({ contactId }: { contactId: string }) {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filterCorrId, setFilterCorrId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -1239,16 +1240,31 @@ function ContactActivityTimeline({ contactId }: { contactId: string }) {
     })();
   }, [contactId]);
 
+  const filteredEvents = filterCorrId 
+    ? events.filter(ev => ev.payload?.correlation_id === filterCorrId)
+    : events;
+
   if (loading) return <div className="text-center py-10 text-xs text-muted-foreground">Carregando histórico...</div>;
   if (events.length === 0) return <div className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma atividade registrada.</div>;
 
   return (
-    <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-primary/20 before:via-border before:to-transparent">
-      {events.map((ev, i) => (
-        <div key={ev.id} className="relative flex items-start gap-4 pl-10">
-          <div className={`absolute left-0 w-10 h-10 rounded-2xl flex items-center justify-center border border-border bg-background shadow-sm ${
-            ev.actor_type === 'ai' ? 'text-primary' : 'text-muted-foreground'
-          }`}>
+    <div className="space-y-4">
+      {filterCorrId && (
+        <div className="bg-primary/5 p-2 rounded-lg border border-primary/20 flex items-center justify-between">
+          <span className="text-[10px] font-bold text-primary">Filtrado por ID: {filterCorrId}</span>
+          <Button variant="ghost" size="sm" className="h-5 text-[9px]" onClick={() => setFilterCorrId(null)}>Limpar</Button>
+        </div>
+      )}
+      <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-primary/20 before:via-border before:to-transparent">
+        {filteredEvents.map((ev, i) => (
+          <div key={ev.id} className="relative flex items-start gap-4 pl-10">
+            <div 
+              className={`absolute left-0 w-10 h-10 rounded-2xl flex items-center justify-center border border-border bg-background shadow-sm cursor-pointer hover:border-primary transition-colors ${
+                ev.actor_type === 'ai' ? 'text-primary' : 'text-muted-foreground'
+              }`}
+              onClick={() => ev.payload?.correlation_id && setFilterCorrId(ev.payload.correlation_id)}
+              title="Filtrar por este X-Correlation-ID"
+            >
             {ev.type === 'chat' && <MessageSquare className="w-4 h-4" />}
             {ev.type === 'status_change' && <LayoutGrid className="w-4 h-4" />}
             {ev.actor_type === 'ai' ? <BotIcon className="w-4 h-4" /> : (ev.type !== 'chat' && ev.type !== 'status_change' && <User className="w-4 h-4" />)}
@@ -1715,7 +1731,15 @@ function WebhookDeliveryCard({ d, onRetry }: { d: any, onRetry: () => void }) {
             </div>
 
             <div className="space-y-2">
-               <p className="text-[10px] font-bold text-muted-foreground uppercase">Payload Completo</p>
+               <div className="flex justify-between items-center">
+                 <p className="text-[10px] font-bold text-muted-foreground uppercase">Payload Completo</p>
+                 <Button variant="ghost" size="sm" className="h-6 text-[9px] gap-1" onClick={() => {
+                   navigator.clipboard.writeText(JSON.stringify(d.payload, null, 2));
+                   toast({ title: 'Payload formatado copiado!' });
+                 }}>
+                   <Search className="w-3 h-3" /> Copiar Formatado
+                 </Button>
+               </div>
                <pre className="bg-muted p-4 rounded-xl font-mono text-[10px] overflow-x-auto whitespace-pre-wrap max-h-60 border border-border/50">
                  {JSON.stringify(d.payload, null, 2)}
                </pre>
