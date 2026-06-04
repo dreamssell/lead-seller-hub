@@ -1198,7 +1198,7 @@ function CrmGlobalActivities() {
               <Input 
                 placeholder="Filtrar responsável..." 
                 className="h-8 text-xs" 
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => setInternalSearch(e.target.value)}
               />
               <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => {
                 const data = logs.map(l => ({
