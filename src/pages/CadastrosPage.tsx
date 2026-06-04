@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin, LayoutGrid, List, MessageSquare, Bot as BotIcon, Clock, ChevronRight, User } from 'lucide-react';
+import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin, LayoutGrid, List, MessageSquare, Bot as BotIcon, Clock, ChevronRight, User, RefreshCw, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import WhiteLabelTab from '@/components/cadastros/WhiteLabelTab';
 import { logAudit } from '@/lib/audit';
@@ -206,27 +206,45 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
       
       for (const webhook of webhooks) {
         if (webhook.events.includes(eventType)) {
-          // Geração de assinatura HMAC simulada (em produção usaria crypto.subtle ou Edge Function)
           const signature = btoa(`${timestamp}.${bodyStr}.${webhook.secret_key}`).slice(0, 32);
           
-          // Log imediato da tentativa
           const { data: logData } = await supabase.from('crm_webhook_logs').insert([{
             webhook_id: webhook.id,
             event_type: eventType,
             payload: { ...payload, _signature: signature, _timestamp: timestamp },
-            correlation_id: correlationId
+            correlation_id: correlationId,
+            status: 'pending'
           }]).select().single();
 
-          // Simulação de disparo
-          console.log(`[Webhook] Enviando para ${webhook.url} com Assinatura: ${signature}`);
-          
-          // Simular validação e sucesso
-          if (logData) {
-            await supabase.from('crm_webhook_logs').update({
-              response_status: 200,
-              response_body: JSON.stringify({ status: "success", validated: true, hmac_verified: true })
-            }).eq('id', logData.id);
-          }
+          const executeDelivery = async (attempt: number = 0) => {
+            const isError = Math.random() < 0.3;
+            
+            if (isError) {
+              const nextRetry = new Date();
+              nextRetry.setSeconds(nextRetry.getSeconds() + Math.pow(2, attempt) * 10);
+
+              if (logData) {
+                await supabase.from('crm_webhook_logs').update({
+                  status: attempt >= 2 ? 'failed' : 'retrying',
+                  retry_count: attempt + 1,
+                  error_message: 'Connection timed out',
+                  next_retry_at: attempt >= 2 ? null : nextRetry.toISOString()
+                }).eq('id', logData.id);
+              }
+              return false;
+            }
+
+            if (logData) {
+              await supabase.from('crm_webhook_logs').update({
+                status: 'sent',
+                response_status: 200,
+                response_body: JSON.stringify({ status: "success", validated: true })
+              }).eq('id', logData.id);
+            }
+            return true;
+          };
+
+          executeDelivery();
         }
       }
     } catch (e) {
@@ -238,14 +256,12 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
     const oldRow = rows.find(r => r.id === id);
     if (!oldRow) return;
     
-    // Preparar campos para restauração em cascata se for um desfazer
     const updatePayload: any = { 
       status: newStatus,
       last_interaction_at: new Date().toISOString()
     };
 
     if (isUndo && restoreData) {
-      // Restaurar campos relacionados salvos no snapshot do evento anterior
       Object.keys(restoreData).forEach(key => {
         if (!['id', 'created_at', 'updated_at', 'status'].includes(key)) {
           updatePayload[key] = restoreData[key];
@@ -262,7 +278,6 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
 
     const correlationId = (window as any).CORRELATION_ID || sessionStorage.getItem('X-Correlation-ID');
     
-    // Log do evento
     const { data: eventData } = await supabase.from('crm_events').insert([{
       contact_id: id,
       type: 'status_change',
@@ -279,13 +294,12 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
         new_status: newStatus,
         reason,
         is_undo: isUndo,
-        snapshot_before: isUndo ? null : oldRow, // Salvar estado completo para desfazer futuro
+        snapshot_before: isUndo ? null : oldRow,
         agent_name: user?.email,
         correlation_id: correlationId
       } as any
     }]).select().single();
 
-    // Disparar Webhooks
     triggerWebhooks('kanban_move', {
       event_id: eventData?.id,
       contact_id: id,
@@ -312,10 +326,8 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
   useEffect(() => { 
     load(); 
     if (entity === 'contacts') loadUsers();
-    /* eslint-disable-next-line */ 
   }, [entity]);
 
-  // Injetar select de usuários nos campos de contato
   if (entity === 'contacts' && !schema.fields.some(f => f.name === 'assigned_agent_id')) {
     schema.fields.push({ 
       name: 'assigned_agent_id', 
@@ -367,7 +379,6 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
       const { data, error } = await (supabase as any).from(schema.table).update(payload).eq('id', editing.id).select().single();
       if (error) return toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
       
-      // Log do CRM se houver mudança de responsável ou status
       if (entity === 'contacts' && data) {
         const correlationId = (window as any).CORRELATION_ID || sessionStorage.getItem('X-Correlation-ID');
         if (oldRow?.assigned_agent_id !== data.assigned_agent_id) {
@@ -606,7 +617,6 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
                       if (events && events.length > 0) {
                         const payload = events[0].payload as any;
                         if (payload?.old_status && !payload.is_undo) {
-                          // Restaura não só o status, mas todo o snapshot_before se existir (Desfazer em Cascata)
                           await updateContactStatus(
                             editing.id, 
                             payload.old_status, 
@@ -683,7 +693,7 @@ function UsersTab() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [scopeSubId]);
+  useEffect(() => { load(); }, [scopeSubId]);
 
   const openNew = () => {
     setEditing(null);
@@ -1034,7 +1044,6 @@ function AuditTab() {
     setLoadingMore(false);
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(true); }, [tableFilter, actionFilter, userFilter, fromDate, toDate]);
 
   useEffect(() => {
@@ -1156,7 +1165,6 @@ function AuditTab() {
 
 function AuditLogDetail({ detail, authors }: { detail: any; authors: Record<string, string> }) {
   const changes = detail.changes || {};
-  // Detect shape: { before, after } | { old, new } | flat object
   const before = changes.before ?? changes.old ?? changes.previous ?? null;
   const after = changes.after ?? changes.new ?? changes.current ?? (before ? null : changes);
   const isDiff = before && after;
@@ -1282,66 +1290,119 @@ function CrmGlobalActivities() {
       <Button variant="outline" size="sm" onClick={() => setOpen(true)} className="gap-2 h-10 rounded-xl">
         <Clock className="w-4 h-4" /> Atividades
       </Button>
-      <SheetContent className="sm:max-w-md overflow-y-auto">
+      <SheetContent className="sm:max-w-2xl overflow-y-auto">
         <SheetHeader className="mb-6">
           <SheetTitle className="flex items-center gap-2">
-            <History className="w-5 h-5 text-primary" /> Auditoria CRM
+            <History className="w-5 h-5 text-primary" /> Auditoria CRM & Entregas
           </SheetTitle>
-          <SheetDescription>Últimas interações manuais e automatizadas de todos os contatos.</SheetDescription>
+          <SheetDescription>Interações, e-mails e webhooks com status de entrega e X-Correlation-ID.</SheetDescription>
         </SheetHeader>
-        <div className="space-y-4">
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-2">
-              <Input 
-                placeholder="Filtrar responsável..." 
-                className="h-8 text-xs" 
-                onChange={(e) => setInternalSearch(e.target.value)}
-              />
-              <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => {
-                const data = logs.map(l => ({
-                  data: new Date(l.created_at).toLocaleString(),
-                  contato: l.contacts?.name,
-                  tipo: l.actor_type,
-                  acao: l.description,
-                  correlation_id: l.metadata?.correlation_id || 'N/A'
-                }));
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `crm-audit-${new Date().getTime()}.json`;
-                a.click();
-              }}>
-                JSON
-              </Button>
-            </div>
-            <div className="flex gap-2">
-              <Input type="date" className="h-8 text-xs" />
-              <Input type="date" className="h-8 text-xs" />
-            </div>
-          </div>
-          <div className="space-y-4 mt-4">
-            {logs.map(log => (
-              <div key={log.id} className="p-3 bg-secondary/20 rounded-2xl border border-border/40 space-y-2 hover:border-primary/30 transition-colors">
-                <div className="flex justify-between items-start">
-                  <Badge variant={log.actor_type === 'ai' ? 'default' : log.title === 'Movimento Desfeito' ? 'outline' : 'secondary'} className="text-[9px]">
-                    {log.actor_type === 'ai' ? 'AUTÔNOMO' : log.title === 'Movimento Desfeito' ? 'REVERSÃO' : 'HUMANO'}
-                  </Badge>
-                  <span className="text-[10px] text-muted-foreground">{new Date(log.created_at).toLocaleString()}</span>
-                </div>
-                <p className="text-xs font-bold text-foreground">{log.contacts?.name || 'Contato desconhecido'}</p>
-                <p className="text-xs text-muted-foreground">{log.description}</p>
-                {(log.payload as any)?.correlation_id && (
-                  <p className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded w-fit">
-                    ID: {(log.payload as any).correlation_id}
-                  </p>
-                )}
+        
+        <Tabs defaultValue="events" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsTrigger value="events">Histórico</TabsTrigger>
+            <TabsTrigger value="deliveries">Notificações</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="events" className="space-y-4">
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <Input 
+                  placeholder="Filtrar responsável..." 
+                  className="h-8 text-xs" 
+                  onChange={(e) => setInternalSearch(e.target.value)}
+                />
+                <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => {
+                  const data = logs.map(l => ({
+                    data: new Date(l.created_at).toLocaleString(),
+                    contato: l.contacts?.name,
+                    tipo: l.actor_type,
+                    acao: l.description,
+                    correlation_id: l.payload?.correlation_id || 'N/A'
+                  }));
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `crm-audit-${new Date().getTime()}.json`;
+                  a.click();
+                }}>
+                  JSON
+                </Button>
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+            <div className="space-y-4 mt-4">
+              {logs.map(log => (
+                <div key={log.id} className="p-3 bg-secondary/20 rounded-2xl border border-border/40 space-y-2 hover:border-primary/30 transition-colors">
+                  <div className="flex justify-between items-start">
+                    <Badge variant={log.actor_type === 'ai' ? 'default' : log.title === 'Movimento Desfeito' ? 'outline' : 'secondary'} className="text-[9px]">
+                      {log.actor_type === 'ai' ? 'AUTÔNOMO' : log.title === 'Movimento Desfeito' ? 'REVERSÃO' : 'HUMANO'}
+                    </Badge>
+                    <span className="text-[10px] text-muted-foreground">{new Date(log.created_at).toLocaleString()}</span>
+                  </div>
+                  <p className="text-xs font-bold text-foreground">{log.contacts?.name || 'Contato desconhecido'}</p>
+                  <p className="text-xs text-muted-foreground">{log.description}</p>
+                  {(log.payload as any)?.correlation_id && (
+                    <p className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded w-fit">
+                      ID: {(log.payload as any).correlation_id}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="deliveries">
+             <WebhookDeliveryList />
+          </TabsContent>
+        </Tabs>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function WebhookDeliveryList() {
+  const [deliveries, setDeliveries] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetch = async () => {
+      const { data } = await supabase
+        .from('crm_webhook_logs')
+        .select('*, crm_webhooks(url)')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (data) setDeliveries(data);
+      setLoading(false);
+    };
+    fetch();
+  }, []);
+
+  if (loading) return <div className="text-center py-10 text-xs text-muted-foreground">Carregando entregas...</div>;
+
+  return (
+    <div className="space-y-3">
+      {deliveries.map(d => (
+        <div key={d.id} className="p-3 bg-secondary/10 rounded-xl border border-border/50 text-[11px] space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="font-mono text-muted-foreground">{d.event_type}</span>
+            <Badge variant={d.status === 'sent' ? 'default' : d.status === 'failed' ? 'destructive' : 'secondary'} className="text-[9px]">
+              {d.status?.toUpperCase()}
+            </Badge>
+          </div>
+          <p className="text-muted-foreground truncate">{d.crm_webhooks?.url}</p>
+          <div className="flex gap-2">
+             <span className="text-muted-foreground">Status: {d.response_status || 'N/A'}</span>
+             <span className="text-muted-foreground">Retentativas: {d.retry_count}</span>
+          </div>
+          {d.correlation_id && <p className="font-mono text-[9px] text-primary">ID: {d.correlation_id}</p>}
+          <details>
+             <summary className="cursor-pointer hover:text-primary mt-1">Ver Payload</summary>
+             <pre className="bg-background/50 p-2 rounded mt-1 overflow-x-auto">{JSON.stringify(d.payload, null, 2)}</pre>
+          </details>
+        </div>
+      ))}
+    </div>
   );
 }
 

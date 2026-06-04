@@ -415,6 +415,36 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_email_templates: {
+        Row: {
+          body_html: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          body_html: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          body_html?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_events: {
         Row: {
           actor_id: string | null
@@ -479,9 +509,12 @@ export type Database = {
           error_message: string | null
           event_type: string
           id: string
+          next_retry_at: string | null
           payload: Json
           response_body: string | null
           response_status: number | null
+          retry_count: number | null
+          status: string | null
           webhook_id: string
         }
         Insert: {
@@ -490,9 +523,12 @@ export type Database = {
           error_message?: string | null
           event_type: string
           id?: string
+          next_retry_at?: string | null
           payload: Json
           response_body?: string | null
           response_status?: number | null
+          retry_count?: number | null
+          status?: string | null
           webhook_id: string
         }
         Update: {
@@ -501,9 +537,12 @@ export type Database = {
           error_message?: string | null
           event_type?: string
           id?: string
+          next_retry_at?: string | null
           payload?: Json
           response_body?: string | null
           response_status?: number | null
+          retry_count?: number | null
+          status?: string | null
           webhook_id?: string
         }
         Relationships: [
