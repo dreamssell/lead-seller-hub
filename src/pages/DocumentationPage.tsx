@@ -648,6 +648,64 @@ function DocumentationContent({ correlationId }: { correlationId: string }) {
                       <MCPConsole />
                     </TabsContent>
                   </Tabs>
+
+                  {/* Diagnóstico de Sessão */}
+                  <section className="space-y-4 pt-12 border-t border-border/40">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <History className="w-5 h-5 text-muted-foreground" />
+                        <h2 className="text-xl font-bold">Diagnóstico de Sessão</h2>
+                      </div>
+                      <Button 
+                        variant="ghost" size="sm" 
+                        onClick={() => setShowHistory(!showHistory)}
+                        className="text-xs gap-2"
+                      >
+                        {showHistory ? 'Ocultar Histórico' : 'Ver logs da sessão'}
+                      </Button>
+                    </div>
+
+                    <AnimatePresence>
+                      {showHistory && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="space-y-3 overflow-hidden"
+                        >
+                          <div className="p-4 bg-secondary/20 rounded-2xl border border-border/40">
+                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-4 flex items-center gap-2">
+                              <Activity className="w-3 h-3" /> Eventos registrados para: {correlationId.split('-')[0]}
+                            </p>
+                            <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                              {telemetryHistory.length > 0 ? (
+                                telemetryHistory.map((log) => (
+                                  <div key={log.id} className="p-3 bg-background/50 rounded-xl border border-border/10 flex items-start justify-between gap-4">
+                                    <div className="space-y-1">
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant={log.type === '403_FORBIDDEN' ? 'destructive' : 'outline'} className="text-[8px] h-4">
+                                          {log.type}
+                                        </Badge>
+                                        <span className="text-[10px] font-mono text-muted-foreground">
+                                          {new Date(log.created_at).toLocaleTimeString()}
+                                        </span>
+                                      </div>
+                                      <p className="text-xs font-medium leading-tight">{log.message}</p>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                      <span className="text-[10px] font-bold text-muted-foreground">Retry #{log.retry_count}</span>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="text-center py-8 text-xs text-muted-foreground italic">Nenhum evento registrado nesta sessão.</p>
+                              )}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </section>
                 </motion.div>
               ) : (
                 <motion.div
