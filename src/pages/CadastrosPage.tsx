@@ -1684,7 +1684,7 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
 
     await supabase.from('crm_webhook_logs').update({
       retry_count: (d.retry_count || 0) + 1,
-      retry_history: retryHistory,
+      retry_history: retryHistory as any,
       updated_at: new Date().toISOString()
     }).eq('id', d.id);
 
