@@ -126,7 +126,14 @@ export default function AIAgentsPage() {
 
     let error;
     if (editing.id) {
+      const oldAgent = agents.find(a => a.id === editing.id);
       ({ error } = await supabase.from('ai_agents').update(payload).eq('id', editing.id));
+      
+      // Notificação e Log
+      if (!error && oldAgent && oldAgent.is_active !== payload.is_active) {
+         toast({ title: payload.is_active ? 'Agente Habilitado' : 'Agente Desabilitado' });
+         // Aqui poderia disparar o webhook real via Edge Function
+      }
     } else {
       ({ error } = await supabase.from('ai_agents').insert({ ...payload, created_by: user.id }));
     }

@@ -191,8 +191,15 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
     if (data) setUsers(data);
   };
 
-  const updateContactStatus = async (id: string, newStatus: string) => {
-    const { error } = await supabase.from('contacts').update({ status: newStatus }).eq('id', id);
+  const updateContactStatus = async (id: string, newStatus: string, reason?: string) => {
+    const oldRow = rows.find(r => r.id === id);
+    if (!oldRow) return;
+    
+    const { error } = await supabase.from('contacts').update({ 
+      status: newStatus,
+      last_interaction_at: new Date().toISOString()
+    }).eq('id', id);
+
     if (error) {
       toast({ title: 'Erro ao mover contato', description: error.message, variant: 'destructive' });
       return;
@@ -203,9 +210,15 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
       contact_id: id,
       type: 'status_change',
       title: 'Status Alterado',
-      description: `Status movido para ${newStatus}`,
+      description: `Status movido de ${oldRow.status} para ${newStatus}${reason ? ` (${reason})` : ''}`,
       actor_id: user?.id,
-      actor_type: 'human'
+      actor_type: 'human',
+      metadata: { 
+        old_status: oldRow.status, 
+        new_status: newStatus,
+        reason,
+        correlation_id: (window as any).CORRELATION_ID || sessionStorage.getItem('X-Correlation-ID')
+      }
     }]);
 
     toast({ title: 'Status atualizado' });
@@ -489,9 +502,34 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
 
             {entity === 'contacts' && editing && (
               <div className="border-l border-border pl-8 space-y-4">
-                <h4 className="text-sm font-bold flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-primary" /> Histórico de Atividades
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-primary" /> Histórico de Atividades
+                  </h4>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 text-[10px] gap-1"
+                    onClick={async () => {
+                      const { data: events } = await supabase
+                        .from('crm_events')
+                        .select('*')
+                        .eq('contact_id', editing.id)
+                        .eq('type', 'status_change')
+                        .order('created_at', { ascending: false })
+                        .limit(1);
+                      
+                      if (events && events.length > 0 && events[0].metadata?.old_status) {
+                        await updateContactStatus(editing.id, events[0].metadata.old_status, 'Desfazer movimento');
+                        setOpen(false);
+                      } else {
+                        toast({ title: "Nada para desfazer", variant: "outline" });
+                      }
+                    }}
+                  >
+                    Desfazer último movimento
+                  </Button>
+                </div>
                 <ContactActivityTimeline contactId={editing.id} />
               </div>
             )}
@@ -1117,7 +1155,7 @@ function CrmGlobalActivities() {
         .from('crm_events')
         .select('*, contacts(name)')
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(100);
       if (data) setLogs(data);
     };
     fetch();
@@ -1136,18 +1174,55 @@ function CrmGlobalActivities() {
           <SheetDescription>Últimas interações manuais e automatizadas de todos os contatos.</SheetDescription>
         </SheetHeader>
         <div className="space-y-4">
-          {logs.map(log => (
-            <div key={log.id} className="p-3 bg-secondary/20 rounded-2xl border border-border/40 space-y-2">
-              <div className="flex justify-between items-start">
-                <Badge variant={log.actor_type === 'ai' ? 'default' : 'secondary'} className="text-[9px]">
-                  {log.actor_type === 'ai' ? 'AUTÔNOMO' : 'HUMANO'}
-                </Badge>
-                <span className="text-[10px] text-muted-foreground">{new Date(log.created_at).toLocaleString()}</span>
-              </div>
-              <p className="text-xs font-bold text-foreground">{log.contacts?.name || 'Contato desconhecido'}</p>
-              <p className="text-xs text-muted-foreground">{log.description}</p>
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <Input 
+                placeholder="Filtrar responsável..." 
+                className="h-8 text-xs" 
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => {
+                const data = logs.map(l => ({
+                  data: new Date(l.created_at).toLocaleString(),
+                  contato: l.contacts?.name,
+                  tipo: l.actor_type,
+                  acao: l.description,
+                  correlation_id: l.metadata?.correlation_id || 'N/A'
+                }));
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `crm-audit-${new Date().getTime()}.json`;
+                a.click();
+              }}>
+                JSON
+              </Button>
             </div>
-          ))}
+            <div className="flex gap-2">
+              <Input type="date" className="h-8 text-xs" />
+              <Input type="date" className="h-8 text-xs" />
+            </div>
+          </div>
+          <div className="space-y-4 mt-4">
+            {logs.map(log => (
+              <div key={log.id} className="p-3 bg-secondary/20 rounded-2xl border border-border/40 space-y-2">
+                <div className="flex justify-between items-start">
+                  <Badge variant={log.actor_type === 'ai' ? 'default' : 'secondary'} className="text-[9px]">
+                    {log.actor_type === 'ai' ? 'AUTÔNOMO' : 'HUMANO'}
+                  </Badge>
+                  <span className="text-[10px] text-muted-foreground">{new Date(log.created_at).toLocaleString()}</span>
+                </div>
+                <p className="text-xs font-bold text-foreground">{log.contacts?.name || 'Contato desconhecido'}</p>
+                <p className="text-xs text-muted-foreground">{log.description}</p>
+                {log.metadata?.correlation_id && (
+                  <p className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded w-fit">
+                    ID: {log.metadata.correlation_id}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </SheetContent>
     </Sheet>
