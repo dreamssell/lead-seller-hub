@@ -1914,11 +1914,32 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId, selectedIds, setSelect
           </div>
         )}
 
-        <div className="flex gap-3 text-[10px]">
-           <span className="text-muted-foreground">HTTP: <span className="text-foreground font-semibold">{d.response_status || 'N/A'}</span></span>
-           <span className="text-muted-foreground">Retentativas: <span className="text-foreground font-semibold">{d.retry_count}</span></span>
-           <span className="text-muted-foreground">X-Corr: <span className="text-primary font-mono">{d.correlation_id || 'N/A'}</span></span>
+        <div className="flex justify-between items-center text-[10px]">
+           <div className="flex gap-3">
+             <span className="text-muted-foreground">HTTP: <span className="text-foreground font-semibold">{d.response_status || 'N/A'}</span></span>
+             <span className="text-muted-foreground">Retentativas: <span className="text-foreground font-semibold">{d.retry_count}</span></span>
+           </div>
+           
+           <div className="flex items-center gap-2">
+             <div className="flex items-center gap-1 bg-background/50 px-1.5 py-0.5 rounded border border-border/30">
+               <span className="text-[8px] font-bold text-muted-foreground">HMAC:</span>
+               {d.error_message?.includes('HMAC') ? (
+                 <AlertCircle className="w-2.5 h-2.5 text-destructive" />
+               ) : (
+                 <div className="w-2 h-2 rounded-full bg-emerald-500" />
+               )}
+             </div>
+             <div className="flex items-center gap-1 bg-background/50 px-1.5 py-0.5 rounded border border-border/30">
+               <span className="text-[8px] font-bold text-muted-foreground">TIME:</span>
+               {d.error_message?.includes('window') ? (
+                 <AlertCircle className="w-2.5 h-2.5 text-destructive" />
+               ) : (
+                 <div className="w-2 h-2 rounded-full bg-emerald-500" />
+               )}
+             </div>
+           </div>
         </div>
+        <p className="text-primary font-mono text-[9px] mt-1">X-Corr: {d.correlation_id || 'N/A'}</p>
       </div>
 
       <Dialog open={showDetail} onOpenChange={setShowDetail}>
