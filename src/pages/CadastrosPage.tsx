@@ -1544,7 +1544,10 @@ function CrmGlobalActivities() {
 function WebhookDeliveryList() {
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [corrSearch, setCorrSearch] = useState('');
+  const [corrSearch, setCorrSearch] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('correlation_id') || '';
+  });
 
   const fetch = async () => {
     setLoading(true);
@@ -1555,12 +1558,23 @@ function WebhookDeliveryList() {
     
     if (corrSearch) {
       query = query.ilike('correlation_id', `%${corrSearch}%`);
+      const url = new URL(window.location.href);
+      url.searchParams.set('correlation_id', corrSearch);
+      window.history.replaceState({}, '', url);
+    } else {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('correlation_id');
+      window.history.replaceState({}, '', url);
     }
 
     const { data } = await query.limit(100);
     if (data) setDeliveries(data);
     setLoading(false);
   };
+
+  useEffect(() => {
+    fetch();
+  }, [corrSearch]);
 
   const retryDelivery = async (d: any) => {
     toast({ title: 'Iniciando reenvio manual...' });
