@@ -1533,13 +1533,23 @@ function CrmGlobalActivities() {
                   <p className="text-xs text-muted-foreground">{log.description}</p>
                   {(log.payload as any)?.correlation_id && (
                     <p 
-                      className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded w-fit cursor-pointer hover:bg-background/80"
+                      className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded w-fit cursor-pointer hover:bg-background/80 flex items-center gap-1 group/item"
                       onClick={() => {
-                        setExternalCorrId((log.payload as any).correlation_id);
+                        const cid = (log.payload as any).correlation_id;
+                        setExternalCorrId(cid);
+                        setCorrSearch(cid); // Garante que preencha a busca no outro componente se necessário
                         setActiveTab('deliveries');
+                        
+                        // Adicionar feedback visual e atualizar URL
+                        toast({ title: "Filtrando por Correlation ID", description: `ID: ${cid}` });
+                        
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('correlation_id', cid);
+                        window.history.replaceState({}, '', url);
                       }}
-                      title="Clique para pesquisar nas notificações"
+                      title="Clique para pesquisar nas notificações e destacar evento"
                     >
+                      <Search className="w-2 h-2 opacity-0 group-hover/item:opacity-100 transition-opacity" />
                       ID: {(log.payload as any).correlation_id}
                     </p>
                   )}
@@ -1549,7 +1559,7 @@ function CrmGlobalActivities() {
           </TabsContent>
 
           <TabsContent value="deliveries">
-             <WebhookDeliveryList externalCorrId={externalCorrId} />
+             <WebhookDeliveryList externalCorrId={externalCorrId} setCorrSearch={setCorrSearch} />
           </TabsContent>
         </Tabs>
       </SheetContent>
@@ -1557,7 +1567,7 @@ function CrmGlobalActivities() {
   );
 }
 
-function WebhookDeliveryList({ externalCorrId }: { externalCorrId?: string }) {
+function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearch }: { externalCorrId?: string; setCorrSearch?: (val: string) => void }) {
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [corrSearch, setCorrSearch] = useState(() => {
@@ -1584,6 +1594,7 @@ function WebhookDeliveryList({ externalCorrId }: { externalCorrId?: string }) {
         url.searchParams.set('correlation_id', corrSearch);
         window.history.replaceState({}, '', url);
       }
+      if (setParentCorrSearch) setParentCorrSearch(corrSearch);
     } else if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       url.searchParams.delete('correlation_id');
@@ -1682,7 +1693,7 @@ function WebhookDeliveryCard({ d, onRetry }: { d: any, onRetry: () => void }) {
         onClick={() => setShowDetail(true)}
         className={`p-3 rounded-xl border transition-all cursor-pointer hover:shadow-md ${
           d.status === 'failed' ? 'bg-destructive/5 border-destructive/20' : 'bg-secondary/10 border-border/50'
-        } text-[11px] space-y-2`}
+        } ${d.correlation_id === corrSearch ? 'ring-2 ring-primary border-primary animate-pulse' : ''} text-[11px] space-y-2`}
       >
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
