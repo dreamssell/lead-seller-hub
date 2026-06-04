@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -6,7 +6,7 @@ import {
   MessageSquare, ChevronRight, Hash, Server, Play, 
   Copy, Check, Info, AlertTriangle, Cpu, Activity,
   Webhook, Key, FileJson, CheckCircle2, Brackets, Download,
-  RefreshCw, Lock
+  RefreshCw, Lock, AlertCircle, History
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,96 +17,113 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import MCPConsole from '@/components/settings/MCPConsole';
 import { ErrorBoundary } from 'react-error-boundary';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
-function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
-  const { signOut } = useAuth();
-  const [retryCount, setRetryCount] = useState(0);
-  const [isRetrying, setIsRetrying] = useState(false);
-  const [correlationId] = useState(() => {
+/**
+ * Utilitário para mascarar dados sensíveis em objetos de log.
+ */
+const redactSensitiveInfo = (obj: any): any => {
+  if (!obj || typeof obj !== 'object') return obj;
+  const redacted = { ...obj };
+  const sensitiveKeys = ['password', 'token', 'secret', 'key', 'auth', 'authorization', 'bearer', 'cookie'];
+  
+  Object.keys(redacted).forEach(key => {
+    const lowerKey = key.toLowerCase();
+    if (sensitiveKeys.some(sk => lowerKey.includes(sk))) {
+      redacted[key] = '[REDACTED]';
+    } else if (typeof redacted[key] === 'object' && redacted[key] !== null) {
+      redacted[key] = redactSensitiveInfo(redacted[key]);
+    }
+  });
+  return redacted;
+};
+
+/**
+ * Hook centralizado para gerenciar telemetria e ID de correlação.
+ */
+function useDocTelemetry() {
+  const correlationId = useMemo(() => {
     const stored = sessionStorage.getItem('doc_correlation_id');
     if (stored) return stored;
     const newId = crypto.randomUUID();
     sessionStorage.setItem('doc_correlation_id', newId);
     return newId;
-  });
+  }, []);
+
+  const sendLog = async (payload: any) => {
+    try {
+      const sanitized = redactSensitiveInfo({
+        ...payload,
+        correlation_id: correlationId,
+        metadata: {
+          ...payload.metadata,
+          url: window.location.href,
+          userAgent: navigator.userAgent,
+          correlation_header: correlationId
+        }
+      });
+
+      const { error } = await supabase
+        .from('telemetry_logs')
+        .insert([sanitized]);
+      
+      if (error) console.warn('[Telemetry] Fail:', error);
+    } catch (e) {
+      // Falha silenciosa
+    }
+  };
+
+  return { correlationId, sendLog };
+}
+
+function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
+  const { signOut } = useAuth();
+  const { correlationId, sendLog } = useDocTelemetry();
+  const [retryCount, setRetryCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [nextRetryTime, setNextRetryTime] = useState<number | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [stats, setStats] = useState({ network: 0, auth: 0 });
   const MAX_RETRIES = 5;
   const is403 = error.message.includes('403') || error.message.includes('permission');
   
-  // Registrar erro e atualizar estatísticas
+  // Registro automático de telemetria
   useEffect(() => {
+    const isNetwork = !is403;
     setStats(prev => ({
-      network: prev.network + (is403 ? 0 : 1),
+      network: prev.network + (isNetwork ? 1 : 0),
       auth: prev.auth + (is403 ? 1 : 0)
     }));
 
-    const errorPayload = {
-      correlationId,
+    sendLog({
       message: error.message,
       type: is403 ? '403_FORBIDDEN' : 'NETWORK_OR_STATE_FAILURE',
-      totalAuthErrors: stats.auth + (is403 ? 1 : 0),
-      totalNetworkErrors: stats.network + (is403 ? 0 : 1),
-      retryCount,
-      timestamp: new Date().toISOString()
-    };
-
-    console.error(`[DocumentationError] ID: ${correlationId}`, errorPayload);
-
-    // Enviar telemetria para o endpoint de monitoramento (simulado para este ambiente)
-    const sendTelemetria = async () => {
-      try {
-        // Em produção, isso seria uma Edge Function ou um serviço de logs externo
-        const response = await fetch('/api/telemetry/error', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(errorPayload)
-        });
-        
-        if (response.ok) {
-          console.info(`[TelemetrySuccess] ID: ${correlationId} - Log enviado.`);
-        }
-      } catch (e) {
-        // Falha silenciosa no envio da telemetria
+      retry_count: retryCount,
+      metadata: {
+        stack: error.stack,
+        isCritical: retryCount >= 3
       }
-    };
-    
-    sendTelemetria();
+    });
   }, [error, is403, correlationId]);
 
   // Timer para contagem regressiva
   useEffect(() => {
     if (!nextRetryTime) return;
-    
     const interval = setInterval(() => {
       const remaining = Math.max(0, Math.ceil((nextRetryTime - Date.now()) / 1000));
       setTimeRemaining(remaining);
       if (remaining === 0) clearInterval(interval);
     }, 1000);
-    
     return () => clearInterval(interval);
   }, [nextRetryTime]);
 
   const handleReauth = async () => {
-    console.log(`[DocumentationReauth] ID: ${correlationId} - Triggering SSO flow`);
-    toast({
-      title: "Reautenticando...",
-      description: "Redirecionando para o portal de login."
-    });
+    toast({ title: "Reautenticando...", description: "Redirecionando para login SSO." });
     await signOut();
   };
 
   const handleRetry = () => {
-    if (retryCount >= MAX_RETRIES) {
-      toast({
-        title: "Limite atingido",
-        description: "Verifique sua conexão ou contate o suporte.",
-        variant: "destructive"
-      });
-      return;
-    }
-
+    if (retryCount >= MAX_RETRIES) return;
     setIsRetrying(true);
     const nextRetry = retryCount + 1;
     const delay = Math.pow(2, retryCount) * 1000;
@@ -114,11 +131,6 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
     
     setNextRetryTime(estimatedTime);
     setTimeRemaining(Math.ceil(delay / 1000));
-    
-    console.log(`[DocumentationRetry] ID: ${correlationId} - Attempt ${nextRetry}/${MAX_RETRIES} in ${delay}ms`, {
-      correlationId,
-      nextRetryAt: new Date(estimatedTime).toLocaleTimeString()
-    });
     
     setTimeout(() => {
       setRetryCount(nextRetry);
