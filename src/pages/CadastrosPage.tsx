@@ -1226,6 +1226,7 @@ function AuditLogDetail({ detail, authors }: { detail: any; authors: Record<stri
 function ContactActivityTimeline({ contactId }: { contactId: string }) {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filterCorrId, setFilterCorrId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -1239,35 +1240,58 @@ function ContactActivityTimeline({ contactId }: { contactId: string }) {
     })();
   }, [contactId]);
 
+  const filteredEvents = filterCorrId 
+    ? events.filter(ev => ev.payload?.correlation_id === filterCorrId)
+    : events;
+
   if (loading) return <div className="text-center py-10 text-xs text-muted-foreground">Carregando histórico...</div>;
   if (events.length === 0) return <div className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma atividade registrada.</div>;
 
   return (
-    <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-primary/20 before:via-border before:to-transparent">
-      {events.map((ev, i) => (
-        <div key={ev.id} className="relative flex items-start gap-4 pl-10">
-          <div className={`absolute left-0 w-10 h-10 rounded-2xl flex items-center justify-center border border-border bg-background shadow-sm ${
-            ev.actor_type === 'ai' ? 'text-primary' : 'text-muted-foreground'
-          }`}>
-            {ev.type === 'chat' && <MessageSquare className="w-4 h-4" />}
-            {ev.type === 'status_change' && <LayoutGrid className="w-4 h-4" />}
-            {ev.actor_type === 'ai' ? <BotIcon className="w-4 h-4" /> : (ev.type !== 'chat' && ev.type !== 'status_change' && <User className="w-4 h-4" />)}
-          </div>
-          <div className="flex-1 space-y-1">
-            <div className="flex justify-between items-center">
-              <p className="text-xs font-bold text-foreground">{ev.title || 'Atividade'}</p>
-              <time className="text-[10px] text-muted-foreground font-mono">{new Date(ev.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</time>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">{ev.description}</p>
-            {ev.payload?.correlation_id && (
-              <p className="text-[9px] font-mono text-primary bg-primary/5 px-1.5 py-0.5 rounded w-fit mt-1">
-                ID: {ev.payload.correlation_id}
-              </p>
-            )}
-            {ev.title === 'Desfazer em Cascata' && <ContactTimelineDetails ev={ev} />}
-          </div>
+    <div className="space-y-4">
+      {filterCorrId && (
+        <div className="bg-primary/5 p-2 rounded-lg border border-primary/20 flex items-center justify-between">
+          <span className="text-[10px] font-bold text-primary">Filtrado por ID: {filterCorrId}</span>
+          <Button variant="ghost" size="sm" className="h-5 text-[9px]" onClick={() => setFilterCorrId(null)}>Limpar</Button>
         </div>
-      ))}
+      )}
+      <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-primary/20 before:via-border before:to-transparent">
+        {filteredEvents.map((ev, i) => (
+          <div key={ev.id} className="relative flex items-start gap-4 pl-10">
+            <div 
+              className={`absolute left-0 w-10 h-10 rounded-2xl flex items-center justify-center border border-border bg-background shadow-sm cursor-pointer hover:border-primary transition-colors ${
+                ev.actor_type === 'ai' ? 'text-primary' : 'text-muted-foreground'
+              }`}
+              onClick={() => ev.payload?.correlation_id && setFilterCorrId(ev.payload.correlation_id)}
+              title="Filtrar por este X-Correlation-ID"
+            >
+              {ev.type === 'chat' && <MessageSquare className="w-4 h-4" />}
+              {ev.type === 'status_change' && <LayoutGrid className="w-4 h-4" />}
+              {ev.actor_type === 'ai' ? <BotIcon className="w-4 h-4" /> : (ev.type !== 'chat' && ev.type !== 'status_change' && <User className="w-4 h-4" />)}
+            </div>
+            <div className="flex-1 space-y-1">
+              <div className="flex justify-between items-center">
+                <p className="text-xs font-bold text-foreground">{ev.title || 'Atividade'}</p>
+                <time className="text-[10px] text-muted-foreground font-mono">{new Date(ev.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</time>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">{ev.description}</p>
+              <div className="flex items-center gap-2 mt-1">
+                {ev.payload?.correlation_id && (
+                  <p 
+                    className="text-[9px] font-mono text-primary bg-primary/5 px-1.5 py-0.5 rounded w-fit cursor-pointer hover:bg-primary/10"
+                    onClick={() => setFilterCorrId(ev.payload.correlation_id)}
+                    title="Filtrar linha do tempo por este ID"
+                  >
+                    ID: {ev.payload.correlation_id}
+                  </p>
+                )}
+                {ev.title === 'Desfazer em Cascata' && <Badge variant="outline" className="text-[8px] h-4">RESTORE</Badge>}
+              </div>
+              {ev.title === 'Desfazer em Cascata' && <ContactTimelineDetails ev={ev} />}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1434,6 +1458,8 @@ function CrmGlobalActivities() {
   const [search, setInternalSearch] = useState('');
   const [logs, setLogs] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('events');
+  const [externalCorrId, setExternalCorrId] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -1461,7 +1487,7 @@ function CrmGlobalActivities() {
           <SheetDescription>Interações, e-mails e webhooks com status de entrega e X-Correlation-ID.</SheetDescription>
         </SheetHeader>
         
-        <Tabs defaultValue="events" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-4">
             <TabsTrigger value="events">Histórico</TabsTrigger>
             <TabsTrigger value="deliveries">Notificações</TabsTrigger>
@@ -1506,7 +1532,14 @@ function CrmGlobalActivities() {
                   <p className="text-xs font-bold text-foreground">{log.contacts?.name || 'Contato desconhecido'}</p>
                   <p className="text-xs text-muted-foreground">{log.description}</p>
                   {(log.payload as any)?.correlation_id && (
-                    <p className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded w-fit">
+                    <p 
+                      className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded w-fit cursor-pointer hover:bg-background/80"
+                      onClick={() => {
+                        setExternalCorrId((log.payload as any).correlation_id);
+                        setActiveTab('deliveries');
+                      }}
+                      title="Clique para pesquisar nas notificações"
+                    >
                       ID: {(log.payload as any).correlation_id}
                     </p>
                   )}
@@ -1516,7 +1549,7 @@ function CrmGlobalActivities() {
           </TabsContent>
 
           <TabsContent value="deliveries">
-             <WebhookDeliveryList />
+             <WebhookDeliveryList externalCorrId={externalCorrId} />
           </TabsContent>
         </Tabs>
       </SheetContent>
@@ -1524,10 +1557,18 @@ function CrmGlobalActivities() {
   );
 }
 
-function WebhookDeliveryList() {
+function WebhookDeliveryList({ externalCorrId }: { externalCorrId?: string }) {
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [corrSearch, setCorrSearch] = useState('');
+  const [corrSearch, setCorrSearch] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    const params = new URLSearchParams(window.location.search);
+    return params.get('correlation_id') || '';
+  });
+
+  useEffect(() => {
+    if (externalCorrId) setCorrSearch(externalCorrId);
+  }, [externalCorrId]);
 
   const fetch = async () => {
     setLoading(true);
@@ -1538,12 +1579,25 @@ function WebhookDeliveryList() {
     
     if (corrSearch) {
       query = query.ilike('correlation_id', `%${corrSearch}%`);
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.set('correlation_id', corrSearch);
+        window.history.replaceState({}, '', url);
+      }
+    } else if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('correlation_id');
+      window.history.replaceState({}, '', url);
     }
 
     const { data } = await query.limit(100);
     if (data) setDeliveries(data);
     setLoading(false);
   };
+
+  useEffect(() => {
+    fetch();
+  }, [corrSearch]);
 
   const retryDelivery = async (d: any) => {
     toast({ title: 'Iniciando reenvio manual...' });
@@ -1693,6 +1747,29 @@ function WebhookDeliveryCard({ d, onRetry }: { d: any, onRetry: () => void }) {
                   </p>
                </div>
             </div>
+            <div className="bg-secondary/5 p-3 rounded-xl border border-border/50">
+               <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Headers Relevantes</p>
+               <div className="space-y-1">
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-muted-foreground">X-Signature:</span>
+                    <span className="font-mono">{String(d.payload?._signature || 'N/A').slice(0, 16)}...</span>
+                  </div>
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-muted-foreground">X-Timestamp:</span>
+                    <span className="font-mono">{d.payload?._timestamp || 'N/A'}</span>
+                  </div>
+               </div>
+               <Button variant="ghost" size="sm" className="h-6 text-[9px] w-full mt-2" onClick={() => {
+                 const headers = {
+                   'X-Correlation-ID': d.correlation_id,
+                   'X-Signature': d.payload?._signature,
+                   'X-Timestamp': d.payload?._timestamp,
+                   'Content-Type': 'application/json'
+                 };
+                 navigator.clipboard.writeText(JSON.stringify(headers, null, 2));
+                 toast({ title: 'Headers copiados!' });
+               }}>Copiar Todos Headers</Button>
+            </div>
 
             <div className="space-y-2">
                <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
@@ -1715,7 +1792,15 @@ function WebhookDeliveryCard({ d, onRetry }: { d: any, onRetry: () => void }) {
             </div>
 
             <div className="space-y-2">
-               <p className="text-[10px] font-bold text-muted-foreground uppercase">Payload Completo</p>
+               <div className="flex justify-between items-center">
+                 <p className="text-[10px] font-bold text-muted-foreground uppercase">Payload Completo</p>
+                 <Button variant="ghost" size="sm" className="h-6 text-[9px] gap-1" onClick={() => {
+                   navigator.clipboard.writeText(JSON.stringify(d.payload, null, 2));
+                   toast({ title: 'Payload formatado copiado!' });
+                 }}>
+                   <Search className="w-3 h-3" /> Copiar Formatado
+                 </Button>
+               </div>
                <pre className="bg-muted p-4 rounded-xl font-mono text-[10px] overflow-x-auto whitespace-pre-wrap max-h-60 border border-border/50">
                  {JSON.stringify(d.payload, null, 2)}
                </pre>
