@@ -441,34 +441,35 @@ function DocumentationContent({ correlationId, onRegenerateId }: { correlationId
                                                     </div>
                                                     <div className="space-y-1">
                                                       <p className="text-[10px] text-muted-foreground uppercase font-bold">Mensagem</p>
-                                                    <p className="text-xs bg-secondary/50 p-2 rounded-lg border border-border/10 italic">"{log.message}"</p>
+                                                      <p className="text-xs bg-secondary/50 p-2 rounded-lg border border-border/10 italic">"{log.message}"</p>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Raw Payload (Sanitized)</p>
+                                                      <pre className="text-[9px] bg-slate-950 p-3 rounded-xl text-slate-300 overflow-auto max-h-48 custom-scrollbar border border-white/5">
+                                                        {JSON.stringify(redactSensitiveInfo({
+                                                          ...log,
+                                                          correlation_id_fallback: correlationId
+                                                        }), null, 2)}
+                                                      </pre>
+                                                    </div>
+                                                    <Button 
+                                                      variant="secondary" 
+                                                      className="w-full rounded-xl gap-2 h-10 text-xs"
+                                                      onClick={() => {
+                                                        navigator.clipboard.writeText(JSON.stringify(log, null, 2));
+                                                        toast({ title: "Copiado", description: "Payload completo copiado." });
+                                                      }}
+                                                    >
+                                                      <Copy className="w-3.5 h-3.5" /> Copiar JSON Completo
+                                                    </Button>
                                                   </div>
-                                                  <div className="space-y-1">
-                                                    <p className="text-[10px] text-muted-foreground uppercase font-bold">Raw Payload (Sanitized)</p>
-                                                    <pre className="text-[9px] bg-slate-950 p-3 rounded-xl text-slate-300 overflow-auto max-h-48 custom-scrollbar border border-white/5">
-                                                      {JSON.stringify(redactSensitiveInfo({
-                                                        ...log,
-                                                        correlation_id_fallback: correlationId
-                                                      }), null, 2)}
-                                                    </pre>
-                                                  </div>
-                                                  <Button 
-                                                    variant="secondary" 
-                                                    className="w-full rounded-xl gap-2 h-10 text-xs"
-                                                    onClick={() => {
-                                                      navigator.clipboard.writeText(JSON.stringify(log, null, 2));
-                                                      toast({ title: "Copiado", description: "Payload completo copiado." });
-                                                    }}
-                                                  >
-                                                    <Copy className="w-3.5 h-3.5" /> Copiar JSON Completo
-                                                  </Button>
-                                                </div>
-                                              </DialogContent>
-                                            </Dialog>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))
+                                                </DialogContent>
+                                              </Dialog>
+                                          </div>
+                                      </div>
+                                  </div>
+                              ))}
+                            </div>
                         )}
                     </motion.div>
                 )}
