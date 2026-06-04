@@ -2119,6 +2119,25 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId, selectedIds, setSelect
               </Button>
             </div>
           </div>
+          <div className="px-6 py-4 border-t bg-secondary/5">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Histórico de Retentativas</p>
+            <div className="space-y-2 max-h-32 overflow-y-auto">
+              {(!d.retry_history || d.retry_history.length === 0) ? (
+                <p className="text-[10px] text-muted-foreground italic">Nenhuma retentativa registrada.</p>
+              ) : d.retry_history.map((h: any, i: number) => (
+                <div key={i} className="flex justify-between items-center bg-background/50 p-2 rounded border border-border/30 text-[9px]">
+                  <div className="flex flex-col">
+                    <span className="font-bold">Tentativa #{h.attempt}</span>
+                    <span className="text-muted-foreground">{new Date(h.timestamp).toLocaleString()}</span>
+                  </div>
+                  <div className="flex flex-col text-right">
+                    <span className="text-primary">{h.strategy_used?.backoff || 'manual'}</span>
+                    <span className="text-destructive truncate max-w-[100px]">{h.reason}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setShowPayload(false)}>Fechar</Button>
           </DialogFooter>
