@@ -76,6 +76,44 @@ function useDocTelemetry() {
   return { correlationId, sendLog };
 }
 
+/**
+ * Hook centralizado para gerenciar telemetria e Correlation ID persistente.
+ */
+function useDocTelemetry() {
+  const correlationId = useMemo(() => {
+    const stored = sessionStorage.getItem('doc_correlation_id');
+    if (stored) return stored;
+    const newId = crypto.randomUUID();
+    sessionStorage.setItem('doc_correlation_id', newId);
+    return newId;
+  }, []);
+
+  const sendLog = async (payload: any) => {
+    try {
+      const sanitized = redactSensitiveInfo({
+        ...payload,
+        correlation_id: correlationId,
+        metadata: {
+          ...payload.metadata,
+          url: window.location.href,
+          userAgent: navigator.userAgent,
+          correlation_header: correlationId
+        }
+      });
+
+      const { error } = await supabase
+        .from('telemetry_logs')
+        .insert([sanitized]);
+      
+      if (error) console.warn('[Telemetry] Fail:', error);
+    } catch (e) {
+      // Falha silenciosa
+    }
+  };
+
+  return { correlationId, sendLog };
+}
+
 function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
   const { signOut } = useAuth();
   const { correlationId, sendLog } = useDocTelemetry();
