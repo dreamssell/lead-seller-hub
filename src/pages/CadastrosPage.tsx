@@ -1891,15 +1891,49 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId }: { d: any, onRetry: (
             </div>
           </div>
 
-          <DialogFooter className="gap-2">
-            <Button variant="ghost" size="sm" className="text-[10px]" onClick={() => {
-              navigator.clipboard.writeText(JSON.stringify(d.payload, null, 2));
-              toast({ title: 'Payload Copiado!' });
-            }}>Copiar Payload</Button>
-            {d.status === 'failed' && (
-              <Button size="sm" onClick={() => { setShowDetail(false); onRetry(); }}>Reprocessar Agora</Button>
-            )}
-            <Button variant="outline" size="sm" onClick={() => setShowDetail(false)}>Fechar</Button>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="text-[10px] gap-1" onClick={() => {
+                const auditData = {
+                  correlation_id: d.correlation_id,
+                  event: d.event_type,
+                  url: d.crm_webhooks?.url,
+                  status: d.status,
+                  retries: d.retry_count,
+                  security: {
+                    hmac_verified: !d.error_message?.includes('HMAC'),
+                    timestamp_verified: !d.error_message?.includes('window'),
+                    timestamp: d.payload?._timestamp,
+                    signature: d.payload?._signature
+                  },
+                  payload: d.payload,
+                  timestamp: new Date().toISOString()
+                };
+                const blob = new Blob([JSON.stringify(auditData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `audit-report-${d.correlation_id}.json`;
+                a.click();
+                toast({ title: 'Relatório de Auditoria Gerado!' });
+              }}>
+                <Download className="w-3 h-3" /> Relatório Auditoria
+              </Button>
+              <Button variant="outline" size="sm" className="text-[10px] gap-1" onClick={() => {
+                const url = new URL(window.location.href);
+                url.searchParams.set('correlation_id', d.correlation_id);
+                navigator.clipboard.writeText(url.toString());
+                toast({ title: 'Link de Auditoria Copiado!' });
+              }}>
+                <Share2 className="w-3 h-3" /> Link Direto
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              {d.status === 'failed' && (
+                <Button size="sm" onClick={() => { setShowDetail(false); onRetry(); }}>Reprocessar Agora</Button>
+              )}
+              <Button variant="secondary" size="sm" onClick={() => setShowDetail(false)}>Fechar</Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
