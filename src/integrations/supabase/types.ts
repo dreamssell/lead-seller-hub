@@ -1071,6 +1071,36 @@ export type Database = {
         }
         Relationships: []
       }
+      telemetry_logs: {
+        Row: {
+          correlation_id: string
+          created_at: string | null
+          id: string
+          message: string | null
+          metadata: Json | null
+          retry_count: number | null
+          type: string | null
+        }
+        Insert: {
+          correlation_id: string
+          created_at?: string | null
+          id?: string
+          message?: string | null
+          metadata?: Json | null
+          retry_count?: number | null
+          type?: string | null
+        }
+        Update: {
+          correlation_id?: string
+          created_at?: string | null
+          id?: string
+          message?: string | null
+          metadata?: Json | null
+          retry_count?: number | null
+          type?: string | null
+        }
+        Relationships: []
+      }
       uaz_alerts_history: {
         Row: {
           alert_type: string

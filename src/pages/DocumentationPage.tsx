@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -6,7 +6,7 @@ import {
   MessageSquare, ChevronRight, Hash, Server, Play, 
   Copy, Check, Info, AlertTriangle, Cpu, Activity,
   Webhook, Key, FileJson, CheckCircle2, Brackets, Download,
-  RefreshCw, Lock
+  RefreshCw, Lock, AlertCircle, History
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,96 +17,114 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import MCPConsole from '@/components/settings/MCPConsole';
 import { ErrorBoundary } from 'react-error-boundary';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
-function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
-  const { signOut } = useAuth();
-  const [retryCount, setRetryCount] = useState(0);
-  const [isRetrying, setIsRetrying] = useState(false);
-  const [correlationId] = useState(() => {
+/**
+ * Utilitário para mascarar dados sensíveis em objetos de log.
+ */
+const redactSensitiveInfo = (obj: any): any => {
+  if (!obj || typeof obj !== 'object') return obj;
+  const redacted = { ...obj };
+  const sensitiveKeys = ['password', 'token', 'secret', 'key', 'auth', 'authorization', 'bearer', 'cookie'];
+  
+  Object.keys(redacted).forEach(key => {
+    const lowerKey = key.toLowerCase();
+    if (sensitiveKeys.some(sk => lowerKey.includes(sk))) {
+      redacted[key] = '[REDACTED]';
+    } else if (typeof redacted[key] === 'object' && redacted[key] !== null) {
+      redacted[key] = redactSensitiveInfo(redacted[key]);
+    }
+  });
+  return redacted;
+};
+
+/**
+ * Hook centralizado para gerenciar telemetria e Correlation ID persistente.
+ */
+function useDocTelemetry() {
+  const correlationId = useMemo(() => {
     const stored = sessionStorage.getItem('doc_correlation_id');
     if (stored) return stored;
     const newId = crypto.randomUUID();
     sessionStorage.setItem('doc_correlation_id', newId);
     return newId;
-  });
+  }, []);
+
+  const sendLog = async (payload: any) => {
+    try {
+      const sanitized = redactSensitiveInfo({
+        ...payload,
+        correlation_id: correlationId,
+        metadata: {
+          ...payload.metadata,
+          url: window.location.href,
+          userAgent: navigator.userAgent,
+          correlation_header: correlationId
+        }
+      });
+
+      const { error } = await supabase
+        .from('telemetry_logs')
+        .insert([sanitized]);
+      
+      if (error) console.warn('[Telemetry] Fail:', error);
+    } catch (e) {
+      // Falha silenciosa
+    }
+  };
+
+  return { correlationId, sendLog };
+}
+
+
+function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
+  const { signOut } = useAuth();
+  const { correlationId, sendLog } = useDocTelemetry();
+  const [retryCount, setRetryCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [nextRetryTime, setNextRetryTime] = useState<number | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [stats, setStats] = useState({ network: 0, auth: 0 });
   const MAX_RETRIES = 5;
   const is403 = error.message.includes('403') || error.message.includes('permission');
   
-  // Registrar erro e atualizar estatísticas
+  // Registro automático de telemetria
   useEffect(() => {
+    const isNetwork = !is403;
     setStats(prev => ({
-      network: prev.network + (is403 ? 0 : 1),
+      network: prev.network + (isNetwork ? 1 : 0),
       auth: prev.auth + (is403 ? 1 : 0)
     }));
 
-    const errorPayload = {
-      correlationId,
+    sendLog({
       message: error.message,
       type: is403 ? '403_FORBIDDEN' : 'NETWORK_OR_STATE_FAILURE',
-      totalAuthErrors: stats.auth + (is403 ? 1 : 0),
-      totalNetworkErrors: stats.network + (is403 ? 0 : 1),
-      retryCount,
-      timestamp: new Date().toISOString()
-    };
-
-    console.error(`[DocumentationError] ID: ${correlationId}`, errorPayload);
-
-    // Enviar telemetria para o endpoint de monitoramento (simulado para este ambiente)
-    const sendTelemetria = async () => {
-      try {
-        // Em produção, isso seria uma Edge Function ou um serviço de logs externo
-        const response = await fetch('/api/telemetry/error', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(errorPayload)
-        });
-        
-        if (response.ok) {
-          console.info(`[TelemetrySuccess] ID: ${correlationId} - Log enviado.`);
-        }
-      } catch (e) {
-        // Falha silenciosa no envio da telemetria
+      retry_count: retryCount,
+      metadata: {
+        stack: error.stack,
+        isCritical: retryCount >= 3
       }
-    };
-    
-    sendTelemetria();
+    });
   }, [error, is403, correlationId]);
 
   // Timer para contagem regressiva
   useEffect(() => {
     if (!nextRetryTime) return;
-    
     const interval = setInterval(() => {
       const remaining = Math.max(0, Math.ceil((nextRetryTime - Date.now()) / 1000));
       setTimeRemaining(remaining);
       if (remaining === 0) clearInterval(interval);
     }, 1000);
-    
     return () => clearInterval(interval);
   }, [nextRetryTime]);
 
   const handleReauth = async () => {
-    console.log(`[DocumentationReauth] ID: ${correlationId} - Triggering SSO flow`);
-    toast({
-      title: "Reautenticando...",
-      description: "Redirecionando para o portal de login."
-    });
+    toast({ title: "Reautenticando...", description: "Redirecionando para login SSO." });
     await signOut();
   };
 
   const handleRetry = () => {
-    if (retryCount >= MAX_RETRIES) {
-      toast({
-        title: "Limite atingido",
-        description: "Verifique sua conexão ou contate o suporte.",
-        variant: "destructive"
-      });
-      return;
-    }
-
+    if (retryCount >= MAX_RETRIES) return;
     setIsRetrying(true);
     const nextRetry = retryCount + 1;
     const delay = Math.pow(2, retryCount) * 1000;
@@ -114,11 +132,6 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
     
     setNextRetryTime(estimatedTime);
     setTimeRemaining(Math.ceil(delay / 1000));
-    
-    console.log(`[DocumentationRetry] ID: ${correlationId} - Attempt ${nextRetry}/${MAX_RETRIES} in ${delay}ms`, {
-      correlationId,
-      nextRetryAt: new Date(estimatedTime).toLocaleTimeString()
-    });
     
     setTimeout(() => {
       setRetryCount(nextRetry);
@@ -147,10 +160,18 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
           <CardDescription className="text-sm px-6 mt-2 leading-relaxed">
             {is403 
               ? 'Sua conta não possui permissão para visualizar a documentação técnica avançada ou sua sessão expirou.' 
-              : 'Não foi possível carregar a documentação. Isso pode ser um problema temporário de rede ou estado.'}
+              : retryCount >= 3 
+                ? 'Detectamos múltiplas falhas consecutivas. Por favor, reporte o Correlation ID abaixo ao suporte técnico.'
+                : 'Não foi possível carregar a documentação. Isso pode ser um problema temporário de rede ou estado.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 pb-10 text-center px-8">
+          {retryCount >= 3 && (
+            <div className="flex items-center gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-700 text-xs font-bold animate-pulse">
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <span>Limite de resiliência atingido. Ação manual recomendada.</span>
+            </div>
+          )}
           <div className="flex flex-col gap-3 p-5 bg-secondary/30 rounded-2xl border border-border/20 shadow-inner">
             {!is403 && (
               <div className="text-[10px] font-mono text-left overflow-auto max-h-24 text-muted-foreground leading-tight mb-3 opacity-80">
@@ -259,13 +280,14 @@ const DOC_SECTIONS = [
 
 export default function DocumentationPage() {
   const { canAccessPage } = useAuth();
+  const { correlationId } = useDocTelemetry();
   const [isSyncing, setIsSyncing] = useState(true);
 
   // Validação explícita de role/permissão ao montar o componente
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsSyncing(false);
-    }, 600); // Pequeno delay para garantir que o AuthContext sincronizou
+    }, 600); 
     return () => clearTimeout(timer);
   }, []);
 
@@ -284,7 +306,7 @@ export default function DocumentationPage() {
     );
   }
 
-  // Se o guard do ProtectedRoute falhar ou quisermos uma camada extra de proteção
+  // Camada extra de proteção via role/guard
   if (!canAccessPage('documentation')) {
     throw new Error('403: Permission denied for documentation');
   }
@@ -292,18 +314,31 @@ export default function DocumentationPage() {
   return (
     <ErrorBoundary 
       FallbackComponent={ErrorFallback} 
-      onReset={() => {
-        // Lógica de retry granular agora tratada no ErrorFallback
-        console.log('[DocumentationBoundary] Resetting state');
-      }}
+      onReset={() => console.log('[DocumentationBoundary] Resetting state')}
     >
-      <DocumentationContent />
+      <DocumentationContent correlationId={correlationId} />
     </ErrorBoundary>
   );
 }
 
-function DocumentationContent() {
+function DocumentationContent({ correlationId }: { correlationId: string }) {
+  const [telemetryHistory, setTelemetryHistory] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  const fetchHistory = async () => {
+    const { data } = await supabase
+      .from('telemetry_logs')
+      .select('*')
+      .eq('correlation_id', correlationId)
+      .order('created_at', { ascending: false });
+    if (data) setTelemetryHistory(data);
+  };
+
+  useEffect(() => {
+    if (showHistory) fetchHistory();
+  }, [showHistory]);
   const [activeSection, setActiveSection] = useState("MCP Server");
+  
   const [copied, setCopied] = useState<string | null>(null);
 
   const copyToClipboard = (text: string, id: string) => {
@@ -615,6 +650,64 @@ function DocumentationContent() {
                       <MCPConsole />
                     </TabsContent>
                   </Tabs>
+
+                  {/* Diagnóstico de Sessão */}
+                  <section className="space-y-4 pt-12 border-t border-border/40">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <History className="w-5 h-5 text-muted-foreground" />
+                        <h2 className="text-xl font-bold">Diagnóstico de Sessão</h2>
+                      </div>
+                      <Button 
+                        variant="ghost" size="sm" 
+                        onClick={() => setShowHistory(!showHistory)}
+                        className="text-xs gap-2"
+                      >
+                        {showHistory ? 'Ocultar Histórico' : 'Ver logs da sessão'}
+                      </Button>
+                    </div>
+
+                    <AnimatePresence>
+                      {showHistory && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="space-y-3 overflow-hidden"
+                        >
+                          <div className="p-4 bg-secondary/20 rounded-2xl border border-border/40">
+                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-4 flex items-center gap-2">
+                              <Activity className="w-3 h-3" /> Eventos registrados para: {correlationId.split('-')[0]}
+                            </p>
+                            <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                              {telemetryHistory.length > 0 ? (
+                                telemetryHistory.map((log: any) => (
+                                  <div key={log.id} className="p-3 bg-background/50 rounded-xl border border-border/10 flex items-start justify-between gap-4">
+                                    <div className="space-y-1">
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant={log.type === '403_FORBIDDEN' ? 'destructive' : 'outline'} className="text-[8px] h-4">
+                                          {log.type}
+                                        </Badge>
+                                        <span className="text-[10px] font-mono text-muted-foreground">
+                                          {new Date(log.created_at).toLocaleTimeString()}
+                                        </span>
+                                      </div>
+                                      <p className="text-xs font-medium leading-tight">{log.message}</p>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                      <span className="text-[10px] font-bold text-muted-foreground">Retry #{log.retry_count}</span>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="text-center py-8 text-xs text-muted-foreground italic">Nenhum evento registrado nesta sessão.</p>
+                              )}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </section>
                 </motion.div>
               ) : (
                 <motion.div
