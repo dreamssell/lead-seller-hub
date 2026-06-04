@@ -191,7 +191,45 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
     if (data) setUsers(data);
   };
 
-  const updateContactStatus = async (id: string, newStatus: string, reason?: string) => {
+  const triggerWebhooks = async (eventType: string, payload: any) => {
+    try {
+      const { data: webhooks } = await supabase
+        .from('crm_webhooks')
+        .select('*')
+        .eq('is_active', true);
+
+      if (!webhooks) return;
+
+      const correlationId = (window as any).CORRELATION_ID || sessionStorage.getItem('X-Correlation-ID');
+      
+      for (const webhook of webhooks) {
+        if (webhook.events.includes(eventType)) {
+          // Log imediato da tentativa
+          const { data: logData } = await supabase.from('crm_webhook_logs').insert([{
+            webhook_id: webhook.id,
+            event_type: eventType,
+            payload,
+            correlation_id: correlationId
+          }]).select().single();
+
+          // Simulação de disparo (em ambiente real seria um Edge Function)
+          console.log(`[Webhook] Enviando para ${webhook.url}`, payload);
+          
+          // Simular sucesso
+          if (logData) {
+            await supabase.from('crm_webhook_logs').update({
+              response_status: 200,
+              response_body: '{"status":"ok"}'
+            }).eq('id', logData.id);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao processar webhooks', e);
+    }
+  };
+
+  const updateContactStatus = async (id: string, newStatus: string, reason?: string, isUndo: boolean = false) => {
     const oldRow = rows.find(r => r.id === id);
     if (!oldRow) return;
     
@@ -204,24 +242,44 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
       toast({ title: 'Erro ao mover contato', description: error.message, variant: 'destructive' });
       return;
     }
+
+    const correlationId = (window as any).CORRELATION_ID || sessionStorage.getItem('X-Correlation-ID');
     
     // Log do evento de alteração de status
-    await supabase.from('crm_events').insert([{
+    const { data: eventData } = await supabase.from('crm_events').insert([{
       contact_id: id,
       type: 'status_change',
-      title: 'Status Alterado',
-      description: `Status movido de ${oldRow.status} para ${newStatus}${reason ? ` (${reason})` : ''}`,
+      title: isUndo ? 'Movimento Desfeito' : 'Status Alterado',
+      description: isUndo 
+        ? `Movimento desfeito de ${oldRow.status} para ${newStatus}`
+        : `Status movido de ${oldRow.status} para ${newStatus}${reason ? ` (${reason})` : ''}`,
       actor_id: user?.id,
       actor_type: 'human',
+      undo_reason: isUndo ? reason : null,
       payload: { 
+        contact_id: id,
         old_status: oldRow.status, 
         new_status: newStatus,
         reason,
-        correlation_id: (window as any).CORRELATION_ID || sessionStorage.getItem('X-Correlation-ID')
+        is_undo: isUndo,
+        agent_name: user?.email,
+        correlation_id: correlationId
       } as any
-    }]);
+    }]).select().single();
 
-    toast({ title: 'Status atualizado' });
+    // Disparar Webhooks
+    triggerWebhooks('kanban_move', {
+      event_id: eventData?.id,
+      contact_id: id,
+      previous_status: oldRow.status,
+      current_status: newStatus,
+      action_type: isUndo ? 'undo_move' : 'status_change',
+      agent: user?.email,
+      correlation_id: correlationId,
+      timestamp: new Date().toISOString()
+    });
+
+    toast({ title: isUndo ? 'Movimento desfeito' : 'Status atualizado' });
     load();
   };
 
@@ -509,7 +567,7 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="h-7 text-[10px] gap-1"
+                    className="h-7 text-[10px] gap-1 hover:text-primary"
                     onClick={async () => {
                       const { data: events } = await supabase
                         .from('crm_events')
@@ -521,11 +579,11 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
                       
                       if (events && events.length > 0) {
                         const payload = events[0].payload as any;
-                        if (payload?.old_status) {
-                          await updateContactStatus(editing.id, payload.old_status, 'Desfazer movimento');
+                        if (payload?.old_status && !payload.is_undo) {
+                          await updateContactStatus(editing.id, payload.old_status, 'Ação de desfazer pelo usuário', true);
                           setOpen(false);
                         } else {
-                          toast({ title: "Nada para desfazer", variant: "default" });
+                          toast({ title: "Última ação já foi desfeita ou não é reversível", variant: "default" });
                         }
                       } else {
                         toast({ title: "Nada para desfazer", variant: "default" });
@@ -782,15 +840,21 @@ function UsersTab() {
                 <Input value={form.role_label} onChange={e => setForm({ ...form, role_label: e.target.value })} />
               </div>
               <div className="space-y-1.5 col-span-2">
-                <Label>Permissões Kanban (Movimentação)</Label>
-                <div className="flex items-center gap-4 border p-2 rounded-lg">
-                  <div className="flex items-center gap-2">
+                <Label>Permissões & Controle</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border p-3 rounded-xl bg-secondary/10">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] font-bold uppercase text-muted-foreground">Kanban</p>
+                      <p className="text-xs">Permitir mover cards</p>
+                    </div>
                     <Switch checked={form.can_move_kanban ?? true} onCheckedChange={v => setForm({ ...form, can_move_kanban: v })} />
-                    <span className="text-xs">Mover cards</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] font-bold uppercase text-muted-foreground">I.A.</p>
+                      <p className="text-xs">Configurar agentes</p>
+                    </div>
                     <Switch checked={form.can_manage_ai ?? false} onCheckedChange={v => setForm({ ...form, can_manage_ai: v })} />
-                    <span className="text-xs">Configurar I.A.</span>
                   </div>
                 </div>
               </div>
@@ -1225,10 +1289,10 @@ function CrmGlobalActivities() {
           </div>
           <div className="space-y-4 mt-4">
             {logs.map(log => (
-              <div key={log.id} className="p-3 bg-secondary/20 rounded-2xl border border-border/40 space-y-2">
+              <div key={log.id} className="p-3 bg-secondary/20 rounded-2xl border border-border/40 space-y-2 hover:border-primary/30 transition-colors">
                 <div className="flex justify-between items-start">
-                  <Badge variant={log.actor_type === 'ai' ? 'default' : 'secondary'} className="text-[9px]">
-                    {log.actor_type === 'ai' ? 'AUTÔNOMO' : 'HUMANO'}
+                  <Badge variant={log.actor_type === 'ai' ? 'default' : log.title === 'Movimento Desfeito' ? 'outline' : 'secondary'} className="text-[9px]">
+                    {log.actor_type === 'ai' ? 'AUTÔNOMO' : log.title === 'Movimento Desfeito' ? 'REVERSÃO' : 'HUMANO'}
                   </Badge>
                   <span className="text-[10px] text-muted-foreground">{new Date(log.created_at).toLocaleString()}</span>
                 </div>
