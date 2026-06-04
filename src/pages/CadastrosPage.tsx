@@ -1465,7 +1465,7 @@ function CrmGlobalActivities() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const cid = params.get('correlation_id');
+      const cid = params.get('correlation_id') || localStorage.getItem('last_correlation_id');
       if (cid) {
         setExternalCorrId(cid);
         setCorrSearch(cid);
