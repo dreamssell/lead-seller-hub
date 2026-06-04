@@ -107,6 +107,7 @@ describe('DocumentationPage', () => {
     // 4. Alternar para Console
     const consoleTab = screen.getByRole('tab', { name: /Console/i });
     fireEvent.click(consoleTab);
-    expect(screen.getByPlaceholderText(/Digite um comando/i)).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/Digite um comando/i)).toBeInTheDocument();
+
   });
 });
