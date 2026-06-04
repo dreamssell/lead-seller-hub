@@ -1562,6 +1562,10 @@ function CrmGlobalActivities() {
           <TabsContent value="deliveries">
              <WebhookDeliveryList externalCorrId={externalCorrId} setCorrSearch={setCorrSearch} />
           </TabsContent>
+
+          <TabsContent value="test-mode">
+            <WebhookTestPanel />
+          </TabsContent>
         </Tabs>
       </SheetContent>
     </Sheet>
