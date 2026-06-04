@@ -2240,31 +2240,49 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
             <div className="flex justify-between items-center bg-secondary/10 p-3 rounded-xl border border-border/50 mb-4">
                <div>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Status Final</p>
-                  <Badge variant={d.status === 'sent' ? 'default' : 'destructive'}>{d.status?.toUpperCase()}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={d.status === 'sent' ? 'default' : 'destructive'}>{d.status?.toUpperCase()}</Badge>
+                    {updateMethod !== 'none' && (
+                      <Badge variant="outline" className={`h-5 text-[8px] gap-1 ${updateMethod === 'realtime' ? 'border-emerald-500 text-emerald-600' : 'border-amber-500 text-amber-600'}`}>
+                        <div className={`w-1.5 h-1.5 rounded-full ${updateMethod === 'realtime' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                        {updateMethod === 'realtime' ? 'SYNC' : 'POLLING'}
+                      </Badge>
+                    )}
+                  </div>
                </div>
-               <Button size="sm" variant="outline" className="h-7 text-[10px] gap-2" onClick={() => {
-                 const report = {
-                   correlation_id: d.correlation_id,
-                   timestamp: d.created_at,
-                   status: d.status,
-                   event: d.event_type,
-                   url: d.crm_webhooks?.url,
-                   payload: d.payload,
-                   security: {
-                     hmac: !d.error_message?.includes('HMAC'),
-                     window: !d.error_message?.includes('window')
-                   },
-                   retry_history: d.retry_history
-                 };
-                 const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-                 const url = URL.createObjectURL(blob);
-                 const a = document.createElement('a');
-                 a.href = url;
-                 a.download = `report-${d.correlation_id}-${new Date().toISOString().split('T')[0]}.json`;
-                 a.click();
-               }}>
-                 <Download className="w-3 h-3" /> Baixar Relatório JSON
-               </Button>
+               <div className="flex gap-2">
+                 <Button 
+                   size="sm" 
+                   variant={pollingActive ? "outline" : "secondary"} 
+                   className="h-7 text-[9px] gap-1"
+                   onClick={() => setPollingActive(!pollingActive)}
+                 >
+                   {pollingActive ? <><Pause className="w-3 h-3" /> Pausar</> : <><Play className="w-3 h-3" /> Retomar</>}
+                 </Button>
+                 <Button size="sm" variant="outline" className="h-7 text-[10px] gap-2" onClick={() => {
+                   const report = {
+                     correlation_id: d.correlation_id,
+                     timestamp: d.created_at,
+                     status: d.status,
+                     event: d.event_type,
+                     url: d.crm_webhooks?.url,
+                     payload: d.payload,
+                     security: {
+                       hmac: !d.error_message?.includes('HMAC'),
+                       window: !d.error_message?.includes('window')
+                     },
+                     retry_history: d.retry_history
+                   };
+                   const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+                   const url = URL.createObjectURL(blob);
+                   const a = document.createElement('a');
+                   a.href = url;
+                   a.download = `report-${d.correlation_id}-${new Date().toISOString().split('T')[0]}.json`;
+                   a.click();
+                 }}>
+                   <Download className="w-3 h-3" /> Exportar JSON
+                 </Button>
+               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
                <div className="bg-secondary/10 p-3 rounded-xl border border-border/50">
