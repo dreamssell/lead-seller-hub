@@ -1692,7 +1692,6 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
     if (!isBatch) fetch();
   };
 
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isRetryingBatch, setIsRetryingBatch] = useState(false);
   const [batchProgress, setBatchProgress] = useState(0);
 
