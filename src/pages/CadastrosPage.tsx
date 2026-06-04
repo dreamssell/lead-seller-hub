@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin, LayoutGrid, List, MessageSquare, Bot as BotIcon, Clock, ChevronRight, User } from 'lucide-react';
+import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin, LayoutGrid, List, MessageSquare, Bot as BotIcon, Clock, ChevronRight, User, RefreshCw, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import WhiteLabelTab from '@/components/cadastros/WhiteLabelTab';
 import { logAudit } from '@/lib/audit';
@@ -217,14 +217,11 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
           }]).select().single();
 
           const executeDelivery = async (attempt: number = 0) => {
-            console.log(`[Webhook] Tentativa ${attempt + 1} para ${webhook.url}`);
-            
-            // Simulação de erro em 30% das vezes para testar retentativa
             const isError = Math.random() < 0.3;
             
             if (isError) {
               const nextRetry = new Date();
-              nextRetry.setSeconds(nextRetry.getSeconds() + Math.pow(2, attempt) * 10); // Exponential backoff
+              nextRetry.setSeconds(nextRetry.getSeconds() + Math.pow(2, attempt) * 10);
 
               if (logData) {
                 await supabase.from('crm_webhook_logs').update({
@@ -259,14 +256,12 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
     const oldRow = rows.find(r => r.id === id);
     if (!oldRow) return;
     
-    // Preparar campos para restauração em cascata se for um desfazer
     const updatePayload: any = { 
       status: newStatus,
       last_interaction_at: new Date().toISOString()
     };
 
     if (isUndo && restoreData) {
-      // Restaurar campos relacionados salvos no snapshot do evento anterior
       Object.keys(restoreData).forEach(key => {
         if (!['id', 'created_at', 'updated_at', 'status'].includes(key)) {
           updatePayload[key] = restoreData[key];
@@ -283,7 +278,6 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
 
     const correlationId = (window as any).CORRELATION_ID || sessionStorage.getItem('X-Correlation-ID');
     
-    // Log do evento
     const { data: eventData } = await supabase.from('crm_events').insert([{
       contact_id: id,
       type: 'status_change',
@@ -300,13 +294,12 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
         new_status: newStatus,
         reason,
         is_undo: isUndo,
-        snapshot_before: isUndo ? null : oldRow, // Salvar estado completo para desfazer futuro
+        snapshot_before: isUndo ? null : oldRow,
         agent_name: user?.email,
         correlation_id: correlationId
       } as any
     }]).select().single();
 
-    // Disparar Webhooks
     triggerWebhooks('kanban_move', {
       event_id: eventData?.id,
       contact_id: id,
@@ -333,10 +326,8 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
   useEffect(() => { 
     load(); 
     if (entity === 'contacts') loadUsers();
-    /* eslint-disable-next-line */ 
   }, [entity]);
 
-  // Injetar select de usuários nos campos de contato
   if (entity === 'contacts' && !schema.fields.some(f => f.name === 'assigned_agent_id')) {
     schema.fields.push({ 
       name: 'assigned_agent_id', 
@@ -388,7 +379,6 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
       const { data, error } = await (supabase as any).from(schema.table).update(payload).eq('id', editing.id).select().single();
       if (error) return toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
       
-      // Log do CRM se houver mudança de responsável ou status
       if (entity === 'contacts' && data) {
         const correlationId = (window as any).CORRELATION_ID || sessionStorage.getItem('X-Correlation-ID');
         if (oldRow?.assigned_agent_id !== data.assigned_agent_id) {
@@ -627,7 +617,6 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
                       if (events && events.length > 0) {
                         const payload = events[0].payload as any;
                         if (payload?.old_status && !payload.is_undo) {
-                          // Restaura não só o status, mas todo o snapshot_before se existir (Desfazer em Cascata)
                           await updateContactStatus(
                             editing.id, 
                             payload.old_status, 
@@ -704,7 +693,7 @@ function UsersTab() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [scopeSubId]);
+  useEffect(() => { load(); }, [scopeSubId]);
 
   const openNew = () => {
     setEditing(null);
@@ -1055,7 +1044,6 @@ function AuditTab() {
     setLoadingMore(false);
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(true); }, [tableFilter, actionFilter, userFilter, fromDate, toDate]);
 
   useEffect(() => {
@@ -1177,7 +1165,6 @@ function AuditTab() {
 
 function AuditLogDetail({ detail, authors }: { detail: any; authors: Record<string, string> }) {
   const changes = detail.changes || {};
-  // Detect shape: { before, after } | { old, new } | flat object
   const before = changes.before ?? changes.old ?? changes.previous ?? null;
   const after = changes.after ?? changes.new ?? changes.current ?? (before ? null : changes);
   const isDiff = before && after;
