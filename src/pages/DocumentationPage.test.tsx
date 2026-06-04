@@ -94,7 +94,7 @@ describe('DocumentationPage', () => {
     // 2. Alternar para MCP Server
     const mcpTab = screen.getByRole('tab', { name: /MCP Server/i });
     fireEvent.click(mcpTab);
-    expect(screen.getByText('Model Context Protocol (MCP)')).toBeInTheDocument();
+    expect(await screen.findByText('Model Context Protocol (MCP)')).toBeInTheDocument();
     expect(screen.getByText('get_leads')).toBeInTheDocument();
 
     // 3. Alternar para Webhooks
