@@ -281,22 +281,28 @@ function DocumentationContent({ correlationId, onRegenerateId }: { correlationId
                           size="sm" 
                           className="h-8 text-[10px] gap-1.5 rounded-lg border-border/60 hover:bg-secondary"
                           onClick={() => {
-                            const data = telemetryHistory.map(l => ({
-                              time: new Date(l.created_at).toISOString(),
-                              type: l.type,
-                              message: l.message,
-                              retry: l.retry_count,
-                              correlation_id: correlationId,
-                              metadata: l.metadata
-                            }));
+                            const data = telemetryHistory.map(l => {
+                              const sanitized = redactSensitiveInfo({
+                                ...l,
+                                correlation_id: correlationId
+                              });
+                              return {
+                                timestamp: new Date(l.created_at).toISOString(),
+                                type: l.type,
+                                message: sanitized.message,
+                                retry_count: l.retry_count,
+                                correlation_id: sanitized.correlation_id,
+                                metadata: sanitized.metadata
+                              };
+                            });
                             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                             const url = URL.createObjectURL(blob);
                             const a = document.createElement('a');
                             a.href = url;
-                            a.download = `telemetry-${correlationId.split('-')[0]}.json`;
+                            a.download = `telemetry-audit-${correlationId.split('-')[0]}.json`;
                             a.click();
                             URL.revokeObjectURL(url);
-                            toast({ title: "Histórico exportado" });
+                            toast({ title: "Histórico para auditoria exportado" });
                           }}
                         >
                             <FileDown className="w-3.5 h-3.5" /> Exportar JSON
