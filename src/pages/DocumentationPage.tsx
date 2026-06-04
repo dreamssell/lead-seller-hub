@@ -36,13 +36,37 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
       auth: prev.auth + (is403 ? 1 : 0)
     }));
 
-    console.error(`[DocumentationError] ID: ${correlationId}`, {
+    const errorPayload = {
+      correlationId,
       message: error.message,
       type: is403 ? '403_FORBIDDEN' : 'NETWORK_OR_STATE_FAILURE',
       totalAuthErrors: stats.auth + (is403 ? 1 : 0),
       totalNetworkErrors: stats.network + (is403 ? 0 : 1),
-      retryCount
-    });
+      retryCount,
+      timestamp: new Date().toISOString()
+    };
+
+    console.error(`[DocumentationError] ID: ${correlationId}`, errorPayload);
+
+    // Enviar telemetria para o endpoint de monitoramento
+    const sendTelemetria = async () => {
+      try {
+        // Usando a instância do supabase para chamar um RPC ou edge function se necessário, 
+        // ou um fetch direto se houver um endpoint específico.
+        // Aqui simulamos o envio para telemetria
+        await fetch('/api/telemetry/error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(errorPayload)
+        }).catch(() => {
+          // Falha silenciosa no envio da telemetria para não causar loops de erro
+        });
+      } catch (e) {
+        // Ignorar erros de envio de telemetria
+      }
+    };
+    
+    sendTelemetria();
   }, [error, is403, correlationId]);
 
   // Timer para contagem regressiva
@@ -150,9 +174,21 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
                   <span>{timeRemaining}s ({new Date(nextRetryTime || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })})</span>
                 </div>
               )}
-              <div className="flex justify-between opacity-50">
+              <div className="flex justify-between items-center group/id">
                 <span>Correlation ID:</span>
-                <span className="truncate max-w-[80px]">{correlationId.split('-')[0]}</span>
+                <div className="flex items-center gap-2">
+                  <span className="truncate max-w-[80px]">{correlationId.split('-')[0]}</span>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(correlationId);
+                      toast({ title: "ID Copiado", description: "O ID de correlação foi copiado para a área de transferência." });
+                    }}
+                    className="p-1 hover:bg-background/80 rounded transition-colors"
+                    title="Copiar ID completo"
+                  >
+                    <Copy className="w-2.5 h-2.5" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
