@@ -1679,14 +1679,14 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
         {deliveries.length === 0 ? (
           <p className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma entrega registrada.</p>
         ) : deliveries.map(d => (
-          <WebhookDeliveryCard key={d.id} d={d} onRetry={() => retryDelivery(d)} />
+          <WebhookDeliveryCard key={d.id} d={d} onRetry={() => retryDelivery(d)} currentCorrId={corrSearch} />
         ))}
       </div>
     </div>
   );
 }
 
-function WebhookDeliveryCard({ d, onRetry }: { d: any, onRetry: () => void }) {
+function WebhookDeliveryCard({ d, onRetry, currentCorrId }: { d: any, onRetry: () => void, currentCorrId?: string }) {
   const [showDetail, setShowDetail] = useState(false);
   return (
     <>
@@ -1694,7 +1694,7 @@ function WebhookDeliveryCard({ d, onRetry }: { d: any, onRetry: () => void }) {
         onClick={() => setShowDetail(true)}
         className={`p-3 rounded-xl border transition-all cursor-pointer hover:shadow-md ${
           d.status === 'failed' ? 'bg-destructive/5 border-destructive/20' : 'bg-secondary/10 border-border/50'
-        } ${d.correlation_id === corrSearch ? 'ring-2 ring-primary border-primary animate-pulse' : ''} text-[11px] space-y-2`}
+        } ${d.correlation_id === currentCorrId ? 'ring-2 ring-primary border-primary animate-pulse' : ''} text-[11px] space-y-2`}
       >
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
