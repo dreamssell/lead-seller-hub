@@ -1,6 +1,6 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { Bot, Plus, Settings, ToggleLeft, ToggleRight, Trash2, Play, Loader2, Save, Sparkles, MessageSquare, X, Send } from 'lucide-react';
+import { Bot, Plus, Settings, ToggleLeft, ToggleRight, Trash2, Play, Loader2, Save, Sparkles, MessageSquare, X, Send, Clock, Bot as BotIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -406,6 +406,8 @@ export default function AIAgentsPage() {
                       </Select>
                     </div>
                   </div>
+                  
+                  <AutonomousPreview agent={editing} />
                 </motion.div>
               )}
             </TabsContent>
@@ -424,6 +426,51 @@ export default function AIAgentsPage() {
       {/* Test Chat */}
       <TestChatDialog agent={testing} onClose={() => setTesting(null)} />
     </AppLayout>
+  );
+}
+
+function AutonomousPreview({ agent }: { agent: Partial<AIAgent> }) {
+  if (!agent.is_autonomous) return null;
+
+  return (
+    <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10 space-y-4">
+      <h4 className="text-xs font-bold flex items-center gap-2 uppercase tracking-wider text-primary">
+        <Sparkles className="w-3.5 h-3.5" /> Pré-visualização da Autonomia
+      </h4>
+      <div className="space-y-3">
+        <div className="flex items-start gap-3">
+          <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+            <Clock className="w-3 h-3 text-primary" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-bold">Quando ocorrer:</p>
+            <div className="flex flex-wrap gap-1.5">
+              {agent.autonomous_config?.trigger_events?.length ? agent.autonomous_config.trigger_events.map(e => (
+                <span key={e} className="text-[10px] bg-background border border-border px-1.5 py-0.5 rounded uppercase font-mono">{e}</span>
+              )) : <span className="text-[10px] text-muted-foreground italic">Nenhum gatilho</span>}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-start gap-3">
+          <div className="w-6 h-6 rounded-full bg-success/20 flex items-center justify-center shrink-0">
+            <BotIcon className="w-3 h-3 text-success" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-[11px] font-bold">O agente poderá:</p>
+            <div className="flex flex-wrap gap-1.5">
+              {agent.autonomous_config?.allowed_actions?.length ? agent.autonomous_config.allowed_actions.map(a => (
+                <span key={a} className="text-[10px] bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-1.5 py-0.5 rounded uppercase font-mono">{a}</span>
+              )) : <span className="text-[10px] text-muted-foreground italic">Nenhuma ação</span>}
+            </div>
+          </div>
+        </div>
+        <div className="p-2.5 bg-background/50 rounded-xl border border-border/40">
+           <p className="text-[10px] text-muted-foreground leading-relaxed italic">
+             "Baseado no gatilho acima, o agente analisará o contexto do CRM e executará até {agent.autonomous_config?.max_actions_per_run || 5} ações consecutivas, respeitando o limite de segurança definido."
+           </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
