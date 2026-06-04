@@ -1256,13 +1256,140 @@ function ContactActivityTimeline({ contactId }: { contactId: string }) {
   );
 }
 
-function CrmGlobalActivities() {
 function UndoCascadeButton({ contactId, currentRecord, onUndo, updateContactStatus }: { 
   contactId: string; 
   currentRecord: any; 
   onUndo: () => void;
   updateContactStatus: any;
 }) {
+  const [open, setOpen] = useState(false);
+  const [event, setEvent] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  const loadLastEvent = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('crm_events')
+      .select('*')
+      .eq('contact_id', contactId)
+      .eq('type', 'status_change')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    
+    if (data && data[0]) {
+      const payload = data[0].payload as any;
+      if (payload?.old_status && !payload.is_undo) {
+        setEvent(data[0]);
+      } else {
+        setEvent(null);
+      }
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (open) loadLastEvent();
+  }, [open]);
+
+  const handleUndo = async () => {
+    if (!event) return;
+    const payload = event.payload as any;
+    await updateContactStatus(
+      contactId, 
+      payload.old_status, 
+      'Desfazer em cascata (reversão completa confirmada)', 
+      true, 
+      payload.snapshot_before
+    );
+    setOpen(false);
+    onUndo();
+  };
+
+  const snapshot = event?.payload?.snapshot_before;
+  const changedFields = snapshot ? Object.keys(snapshot).filter(k => 
+    !['id', 'created_at', 'updated_at', 'status', 'last_interaction_at'].includes(k) &&
+    JSON.stringify(snapshot[k]) !== JSON.stringify(currentRecord[k])
+  ) : [];
+
+  return (
+    <>
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        className="h-7 text-[10px] gap-1 hover:text-primary"
+        onClick={() => setOpen(true)}
+      >
+        <RefreshCw className="w-3 h-3" /> Desfazer Cascata
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-primary" /> Confirmar Reversão
+            </DialogTitle>
+            <SheetDescription>Visualize as mudanças antes de restaurar o snapshot.</SheetDescription>
+          </DialogHeader>
+
+          {loading ? (
+            <div className="py-10 text-center text-xs text-muted-foreground">Analisando histórico...</div>
+          ) : !event ? (
+            <div className="py-10 text-center text-xs text-muted-foreground italic">Nenhuma ação reversível encontrada para este contato.</div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <div className="bg-secondary/10 p-3 rounded-xl border border-border/50 space-y-3">
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-muted-foreground">Etapa Atual</span>
+                  <Badge variant="outline">{currentRecord.status}</Badge>
+                </div>
+                <div className="flex justify-center">
+                   <ChevronRight className="w-4 h-4 text-muted-foreground rotate-90" />
+                </div>
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-muted-foreground font-bold">Restaurar para</span>
+                  <Badge variant="default">{event.payload.old_status}</Badge>
+                </div>
+              </div>
+
+              {changedFields.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase text-muted-foreground">Campos Afetados (Snapshot Diff)</p>
+                  <div className="max-h-40 overflow-y-auto space-y-1.5 pr-2">
+                    {changedFields.map(f => (
+                      <div key={f} className="text-[11px] bg-secondary/5 border border-border/30 p-2 rounded-lg flex flex-col gap-1">
+                        <span className="font-mono text-[9px] text-primary">{f}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-destructive line-through truncate max-w-[100px]">{String(currentRecord[f] || '—')}</span>
+                          <ChevronRight className="w-3 h-3 text-muted-foreground" />
+                          <span className="text-emerald-600 font-bold truncate max-w-[150px]">{String(snapshot[f] || '—')}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-primary/5 p-3 rounded-xl border border-primary/20 space-y-1">
+                <p className="text-[10px] font-bold text-primary flex items-center gap-1">
+                  <User className="w-3 h-3" /> AUTOR DA MUDANÇA ORIGINAL
+                </p>
+                <p className="text-xs">{event.payload.agent_name || 'Desconhecido'}</p>
+                <p className="text-[9px] font-mono text-muted-foreground mt-1">X-Corr: {event.payload.correlation_id || 'N/A'}</p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button size="sm" disabled={!event} onClick={handleUndo}>Confirmar Reversão Completa</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function CrmGlobalActivities() {
   const [open, setOpen] = useState(false);
   const [event, setEvent] = useState<any>(null);
   const [loading, setLoading] = useState(false);
