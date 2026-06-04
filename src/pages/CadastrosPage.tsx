@@ -1634,31 +1634,13 @@ function CrmGlobalActivities() {
             </div>
           </TabsContent>
 
-          <TabsContent value="events">
-            <div className="flex justify-between items-center mb-4">
-               <h3 className="text-sm font-bold flex items-center gap-2">
-                 <History className="w-4 h-4 text-primary" /> Histórico de Ações
-               </h3>
-               <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => {
-                  const data = logs.map(l => ({
-                    data: new Date(l.created_at).toLocaleString(),
-                    contato: l.contacts?.name,
-                    tipo: l.actor_type,
-                    acao: l.description,
-                    correlation_id: l.payload?.correlation_id || 'N/A'
-                  }));
-                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `crm-audit-${new Date().getTime()}.json`;
-                  a.click();
-                }}>
-                  JSON
-                </Button>
-               </div>
-            </div>
+          <TabsContent value="deliveries">
+            <WebhookDeliveryList externalCorrId={externalCorrId} setCorrSearch={setCorrSearch} />
+          </TabsContent>
+
+          <TabsContent value="config">
+            <WebhookConfigPanel />
+          </TabsContent>
             <div className="space-y-4 mt-4">
               {logs.map(log => (
                 <div key={log.id} className="p-3 bg-secondary/20 rounded-2xl border border-border/40 space-y-2 hover:border-primary/30 transition-colors">
