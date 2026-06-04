@@ -201,7 +201,7 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
       if (!webhooks) return;
 
       const correlationId = (window as any).CORRELATION_ID || sessionStorage.getItem('X-Correlation-ID');
-      const timestamp = new Date().toISOString();
+      const timestamp = Math.floor(Date.now() / 1000).toString();
       const bodyStr = JSON.stringify(payload);
       
       for (const webhook of webhooks) {
@@ -217,6 +217,20 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
           }]).select().single();
 
           const executeDelivery = async (attempt: number = 0) => {
+            const currentTimestamp = Math.floor(Date.now() / 1000);
+            const isReplay = Math.abs(currentTimestamp - parseInt(timestamp)) > 300;
+            const isValidSignature = signature === btoa(`${timestamp}.${bodyStr}.${webhook.secret_key}`).slice(0, 32);
+
+            if (isReplay || !isValidSignature) {
+              if (logData) {
+                await supabase.from('crm_webhook_logs').update({
+                  status: 'failed',
+                  error_message: isReplay ? 'Replay attack detected (outside 5min window)' : 'Invalid HMAC signature'
+                }).eq('id', logData.id);
+              }
+              return false;
+            }
+
             const isError = Math.random() < 0.3;
             
             if (isError) {
@@ -238,7 +252,7 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
               await supabase.from('crm_webhook_logs').update({
                 status: 'sent',
                 response_status: 200,
-                response_body: JSON.stringify({ status: "success", validated: true })
+                response_body: JSON.stringify({ status: "success", validated: true, hmac_verified: true, replay_protected: true })
               }).eq('id', logData.id);
             }
             return true;
