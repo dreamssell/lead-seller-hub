@@ -1552,6 +1552,7 @@ function WebhookDeliveryList() {
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [corrSearch, setCorrSearch] = useState(() => {
+    if (typeof window === 'undefined') return '';
     const params = new URLSearchParams(window.location.search);
     return params.get('correlation_id') || '';
   });
