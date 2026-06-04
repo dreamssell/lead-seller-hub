@@ -59,13 +59,26 @@ describe('DocumentationPage', () => {
   });
 
   it('should render all documentation tabs and contents correctly', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    });
+
     render(
       <MemoryRouter>
-        <ThemeProvider>
-          <DocumentationPage />
-        </ThemeProvider>
+        <QueryClientProvider client={queryClient}>
+          <ThemeProvider>
+            <TooltipProvider>
+              <DocumentationPage />
+            </TooltipProvider>
+          </ThemeProvider>
+        </QueryClientProvider>
       </MemoryRouter>
     );
+
 
 
     // 1. Verificar se REST API está visível por padrão
