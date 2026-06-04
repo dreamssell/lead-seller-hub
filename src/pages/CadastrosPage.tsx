@@ -1571,6 +1571,7 @@ function CrmGlobalActivities() {
 function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearch }: { externalCorrId?: string; setCorrSearch?: (val: string) => void }) {
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [corrSearch, setCorrSearch] = useState(() => {
     if (typeof window === 'undefined') return '';
     const params = new URLSearchParams(window.location.search);
@@ -1583,13 +1584,29 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
 
   const fetch = async () => {
     setLoading(true);
+    setNotFound(false);
+    
     let query = supabase
       .from('crm_webhook_logs')
       .select('*, crm_webhooks(url)')
       .order('created_at', { ascending: false });
     
     if (corrSearch) {
-      query = query.ilike('correlation_id', `%${corrSearch}%`);
+      // Tentar busca exata primeiro
+      const { data: exactData } = await supabase
+        .from('crm_webhook_logs')
+        .select('*, crm_webhooks(url)')
+        .eq('correlation_id', corrSearch)
+        .limit(1);
+
+      if (!exactData || exactData.length === 0) {
+        setNotFound(true);
+        // Se não encontrar exato, volta para a busca ampla
+        query = query.ilike('correlation_id', `%${corrSearch}%`);
+      } else {
+        query = query.eq('correlation_id', corrSearch);
+      }
+
       if (typeof window !== 'undefined') {
         const url = new URL(window.location.href);
         url.searchParams.set('correlation_id', corrSearch);
@@ -1603,6 +1620,9 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
     }
 
     const { data } = await query.limit(100);
+    if (data) setDeliveries(data);
+    setLoading(false);
+  };
     if (data) setDeliveries(data);
     setLoading(false);
   };
@@ -1676,6 +1696,16 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
       </div>
 
       <div className="space-y-3">
+        {notFound && (
+          <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+            <AlertCircle className="w-4 h-4 text-amber-600" />
+            <div className="flex-1">
+              <p className="text-[11px] font-bold text-amber-800">Correlation ID não encontrado</p>
+              <p className="text-[10px] text-amber-700">Exibindo eventos aproximados ou mais recentes.</p>
+            </div>
+            <Button variant="ghost" size="sm" className="h-6 text-[9px]" onClick={() => setCorrSearch('')}>Limpar</Button>
+          </div>
+        )}
         {deliveries.length === 0 ? (
           <p className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma entrega registrada.</p>
         ) : deliveries.map(d => (
