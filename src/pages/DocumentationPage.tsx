@@ -22,12 +22,12 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
   const { signOut } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [correlationId] = useState(() => crypto.randomUUID());
   const MAX_RETRIES = 5;
   const is403 = error.message.includes('403') || error.message.includes('permission');
   
-  // Registrar erro para depuração
+  // Registrar erro inicial para depuração
   useEffect(() => {
-    const correlationId = crypto.randomUUID();
     console.error(`[DocumentationError] ID: ${correlationId}`, {
       message: error.message,
       stack: error.stack,
@@ -35,22 +35,22 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
       type: is403 ? '403_FORBIDDEN' : 'NETWORK_OR_STATE_FAILURE',
       retryCount
     });
-  }, [error, is403, retryCount]);
+  }, [error, is403, correlationId]);
 
   const handleReauth = async () => {
+    console.log(`[DocumentationReauth] ID: ${correlationId} - Triggering SSO flow`);
     toast({
       title: "Reautenticando...",
       description: "Redirecionando para o portal de login."
     });
-    // Limpar sessão e disparar fluxo SSO
     await signOut();
   };
 
   const handleRetry = () => {
     if (retryCount >= MAX_RETRIES) {
       toast({
-        title: "Limite de tentativas atingido",
-        description: "Por favor, recarregue a página manualmente ou verifique sua conexão.",
+        title: "Limite atingido",
+        description: "Verifique sua conexão ou contate o suporte.",
         variant: "destructive"
       });
       return;
@@ -58,14 +58,15 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
 
     setIsRetrying(true);
     const nextRetry = retryCount + 1;
-    setRetryCount(nextRetry);
-    
-    // Backoff exponencial: 1s, 2s, 4s, 8s, 16s
     const delay = Math.pow(2, retryCount) * 1000;
     
-    console.log(`[DocumentationRetry] Attempt ${nextRetry}/${MAX_RETRIES} in ${delay}ms`);
+    console.log(`[DocumentationRetry] ID: ${correlationId} - Attempt ${nextRetry}/${MAX_RETRIES} in ${delay}ms`, {
+      errorType: is403 ? '403' : 'Network/State',
+      correlationId
+    });
     
     setTimeout(() => {
+      setRetryCount(nextRetry);
       setIsRetrying(false);
       resetErrorBoundary();
     }, delay);
@@ -93,11 +94,18 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 pb-10 text-center px-8">
-          {!is403 && (
-            <div className="p-4 bg-secondary/30 rounded-xl text-[10px] font-mono text-left overflow-auto max-h-32 border border-border/20 text-muted-foreground leading-tight">
-              {error.message}
+          <div className="flex flex-col gap-2 p-4 bg-secondary/30 rounded-xl border border-border/20">
+            {!is403 && (
+              <div className="text-[10px] font-mono text-left overflow-auto max-h-24 text-muted-foreground leading-tight mb-2">
+                {error.message}
+              </div>
+            )}
+            <div className="flex flex-wrap justify-between items-center gap-2 text-[9px] font-mono text-muted-foreground/60 uppercase tracking-tighter">
+              <span>Status: {is403 ? '403 Forbidden' : 'Network Fail'}</span>
+              <span>Retries: {retryCount}/{MAX_RETRIES}</span>
+              <span className="truncate max-w-[100px]">ID: {correlationId.split('-')[0]}</span>
             </div>
-          )}
+          </div>
           <div className="flex flex-col gap-3">
             {is403 ? (
               <Button onClick={handleReauth} className="w-full rounded-2xl gap-2 h-12 font-bold shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-[0.98]">
