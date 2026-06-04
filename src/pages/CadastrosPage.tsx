@@ -358,17 +358,27 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
           card.scrollIntoView({ behavior: 'smooth', block: 'center' });
           card.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
           setTimeout(() => card.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 5000);
+        } else {
+          // Limpeza segura se o card não existir
+          console.log(`Card ${cardId} not found, cleaning highlight state.`);
+          localStorage.removeItem('kanban_highlighted_card');
+          localStorage.removeItem('kanban_highlighted_time');
         }
       };
 
-      // Restaurar destaque inicial do Kanban
+      // Restaurar destaque inicial do Kanban e verificar expiração
       if (viewMode === 'kanban') {
-        const savedCard = localStorage.getItem('kanban_highlighted_card');
+        const params = new URLSearchParams(window.location.search);
+        const urlCardId = params.get('highlight_card');
+        const savedCard = urlCardId || localStorage.getItem('kanban_highlighted_card');
         const savedTime = localStorage.getItem('kanban_highlighted_time');
         
-        if (savedCard && savedTime) {
-          const timeDiff = Date.now() - parseInt(savedTime);
-          if (timeDiff < 1800000) { // 30 min
+        if (savedCard) {
+          const isExpired = savedTime && (Date.now() - parseInt(savedTime) > 1800000);
+          if (isExpired) {
+            localStorage.removeItem('kanban_highlighted_card');
+            localStorage.removeItem('kanban_highlighted_time');
+          } else {
             setTimeout(() => applyHighlight(savedCard), 600);
           }
         }
