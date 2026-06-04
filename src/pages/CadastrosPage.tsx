@@ -1686,7 +1686,7 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
       retry_count: (d.retry_count || 0) + 1,
       retry_history: retryHistory as any,
       updated_at: new Date().toISOString()
-    }).eq('id', d.id);
+    } as any).eq('id', d.id);
 
     await globalTriggerWebhooks(d.event_type, d.payload, d.id);
     if (!isBatch) fetch();
