@@ -2067,18 +2067,33 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
         const { data, error } = await supabase.from('crm_webhook_logs').select('*, crm_webhooks(url)').eq('id', d.id).single();
         if (!error && data && (data.status !== d.status || data.retry_count !== (d.retry_count || 0) || JSON.stringify(data.retry_history) !== JSON.stringify(d.retry_history))) {
            setD(data);
-           console.log('Full sync for correlation_id:', d.correlation_id);
+           console.log('Real-time sync for correlation_id:', d.correlation_id);
         }
       };
       
       syncStatus();
-      intervalId = setInterval(syncStatus, 3000); // Polling cada 3s enquanto aberto/destacado
-    }
 
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [currentCorrId, d.correlation_id]);
+      // Assinatura específica para o card em destaque
+      const channel = supabase
+        .channel(`webhook-sync-${d.id}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'crm_webhook_logs', filter: `id=eq.${d.id}` },
+          (payload) => {
+             console.log('Specific card update detected via realtime:', payload);
+             setD(payload.new);
+          }
+        )
+        .subscribe();
+      
+      intervalId = setInterval(syncStatus, 5000); // Polling de segurança (mais lento se tiver realtime)
+
+      return () => {
+        if (intervalId) clearInterval(intervalId);
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [currentCorrId, d.correlation_id, d.id]);
   
   return (
     <>
