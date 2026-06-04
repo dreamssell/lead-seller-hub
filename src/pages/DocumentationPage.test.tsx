@@ -100,7 +100,7 @@ describe('DocumentationPage', () => {
     // 3. Alternar para Webhooks
     const webhooksTab = screen.getByRole('tab', { name: /Webhooks/i });
     fireEvent.click(webhooksTab);
-    expect(screen.getByText('Webhooks de Saída')).toBeInTheDocument();
+    expect(await screen.findByText('Webhooks de Saída')).toBeInTheDocument();
     expect(screen.getByText('lead.created')).toBeInTheDocument();
 
     // 4. Alternar para Console
