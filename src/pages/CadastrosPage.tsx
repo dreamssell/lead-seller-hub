@@ -1599,43 +1599,107 @@ function WebhookDeliveryList() {
         {deliveries.length === 0 ? (
           <p className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma entrega registrada.</p>
         ) : deliveries.map(d => (
-          <div key={d.id} className={`p-3 rounded-xl border transition-all ${
-            d.status === 'failed' ? 'bg-destructive/5 border-destructive/20' : 'bg-secondary/10 border-border/50'
-          } text-[11px] space-y-2`}>
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-foreground">{d.event_type}</span>
-                {d.status === 'failed' && (
-                  <Badge variant="destructive" className="text-[8px] h-4">REJEITADO</Badge>
-                )}
-              </div>
-              <Badge variant={d.status === 'sent' ? 'default' : d.status === 'failed' ? 'destructive' : 'secondary'} className="text-[9px]">
-                {d.status?.toUpperCase()}
-              </Badge>
-            </div>
-            <p className="text-muted-foreground truncate font-mono text-[10px]">{d.crm_webhooks?.url}</p>
-            
-            {d.error_message && (
-              <div className="bg-destructive/10 text-destructive p-2 rounded-lg text-[10px] flex items-start gap-2">
-                <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
-                <span><strong>Motivo:</strong> {d.error_message}</span>
-              </div>
-            )}
-
-            <div className="flex gap-3 text-[10px]">
-               <span className="text-muted-foreground">HTTP: <span className="text-foreground font-semibold">{d.response_status || 'N/A'}</span></span>
-               <span className="text-muted-foreground">Retentativas: <span className="text-foreground font-semibold">{d.retry_count}</span></span>
-               <span className="text-muted-foreground">X-Corr: <span className="text-primary font-mono">{d.correlation_id || 'N/A'}</span></span>
-            </div>
-            
-            <details className="border-t border-border/20 pt-2">
-               <summary className="cursor-pointer hover:text-primary text-[10px] text-muted-foreground flex items-center gap-1">
-                 <Search className="w-3 h-3" /> Ver Payload Auditável
-               </summary>
-               <pre className="bg-background/50 p-2 rounded mt-2 overflow-x-auto font-mono text-[9px] max-h-40">{JSON.stringify(d.payload, null, 2)}</pre>
-            </details>
-          </div>
+          <WebhookDeliveryCard key={d.id} d={d} />
         ))}
+      </div>
+    </div>
+  );
+}
+
+function WebhookDeliveryCard({ d }: { d: any }) {
+  const [showDetail, setShowDetail] = useState(false);
+  return (
+    <>
+      <div 
+        onClick={() => setShowDetail(true)}
+        className={`p-3 rounded-xl border transition-all cursor-pointer hover:shadow-md ${
+          d.status === 'failed' ? 'bg-destructive/5 border-destructive/20' : 'bg-secondary/10 border-border/50'
+        } text-[11px] space-y-2`}
+      >
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-foreground">{d.event_type}</span>
+            {d.status === 'failed' && (
+              <Badge variant="destructive" className="text-[8px] h-4">REJEITADO</Badge>
+            )}
+          </div>
+          <Badge variant={d.status === 'sent' ? 'default' : d.status === 'failed' ? 'destructive' : 'secondary'} className="text-[9px]">
+            {d.status?.toUpperCase()}
+          </Badge>
+        </div>
+        <p className="text-muted-foreground truncate font-mono text-[10px]">{d.crm_webhooks?.url}</p>
+        
+        {d.error_message && (
+          <div className="bg-destructive/10 text-destructive p-2 rounded-lg text-[10px] flex items-start gap-2">
+            <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
+            <span><strong>Motivo:</strong> {d.error_message}</span>
+          </div>
+        )}
+
+        <div className="flex gap-3 text-[10px]">
+           <span className="text-muted-foreground">HTTP: <span className="text-foreground font-semibold">{d.response_status || 'N/A'}</span></span>
+           <span className="text-muted-foreground">Retentativas: <span className="text-foreground font-semibold">{d.retry_count}</span></span>
+           <span className="text-muted-foreground">X-Corr: <span className="text-primary font-mono">{d.correlation_id || 'N/A'}</span></span>
+        </div>
+      </div>
+
+      <Dialog open={showDetail} onOpenChange={setShowDetail}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="w-5 h-5 text-primary" /> Detalhes da Entrega Auditável
+            </DialogTitle>
+            <SheetDescription>Análise técnica do disparo e validações de segurança.</SheetDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            <div className="grid grid-cols-2 gap-4">
+               <div className="bg-secondary/10 p-3 rounded-xl border border-border/50">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Status Final</p>
+                  <Badge variant={d.status === 'sent' ? 'default' : 'destructive'}>{d.status?.toUpperCase()}</Badge>
+               </div>
+               <div className="bg-secondary/10 p-3 rounded-xl border border-border/50">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">X-Correlation-ID</p>
+                  <p className="font-mono text-xs text-primary">{d.correlation_id || 'N/A'}</p>
+               </div>
+            </div>
+
+            <div className="space-y-2">
+               <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                 <AlertCircle className="w-3 h-3" /> Verificações de Segurança (E2E)
+               </p>
+               <div className="grid grid-cols-1 gap-2">
+                  <div className={`p-2 rounded-lg border flex justify-between items-center ${d.error_message?.includes('HMAC') ? 'bg-destructive/5 border-destructive/30' : 'bg-emerald-500/5 border-emerald-500/20'}`}>
+                     <span className="text-[11px]">Assinatura HMAC (Corpo + Timestamp)</span>
+                     <Badge variant={d.error_message?.includes('HMAC') ? 'destructive' : 'default'} className="text-[8px] h-4">
+                        {d.error_message?.includes('HMAC') ? 'INVÁLIDA' : 'VERIFICADA'}
+                     </Badge>
+                  </div>
+                  <div className={`p-2 rounded-lg border flex justify-between items-center ${d.error_message?.includes('window') ? 'bg-destructive/5 border-destructive/30' : 'bg-emerald-500/5 border-emerald-500/20'}`}>
+                     <span className="text-[11px]">Janela de Tempo (Replay Protection)</span>
+                     <Badge variant={d.error_message?.includes('window') ? 'destructive' : 'default'} className="text-[8px] h-4">
+                        {d.error_message?.includes('window') ? 'FORA DA JANELA' : 'DENTRO DA JANELA'}
+                     </Badge>
+                  </div>
+               </div>
+            </div>
+
+            <div className="space-y-2">
+               <p className="text-[10px] font-bold text-muted-foreground uppercase">Payload Completo</p>
+               <pre className="bg-muted p-4 rounded-xl font-mono text-[10px] overflow-x-auto whitespace-pre-wrap max-h-60 border border-border/50">
+                 {JSON.stringify(d.payload, null, 2)}
+               </pre>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDetail(false)}>Fechar Detalhes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
       </div>
     </div>
   );
