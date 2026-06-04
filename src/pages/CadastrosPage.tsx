@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,8 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin } from 'lucide-react';
+import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin, LayoutGrid, List, MessageSquare, Bot as BotIcon, Clock, ChevronRight, User } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import WhiteLabelTab from '@/components/cadastros/WhiteLabelTab';
 import { logAudit } from '@/lib/audit';
 import { BLOCKABLE_PAGES } from '@/lib/navigation';
@@ -182,6 +183,35 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
   const [form, setForm] = useState<any>({});
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
+  const [users, setUsers] = useState<any[]>([]);
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+
+  const loadUsers = async () => {
+    const { data } = await supabase.from('profiles').select('user_id, display_name');
+    if (data) setUsers(data);
+  };
+
+  const updateContactStatus = async (id: string, newStatus: string) => {
+    const { error } = await supabase.from('contacts').update({ status: newStatus }).eq('id', id);
+    if (error) {
+      toast({ title: 'Erro ao mover contato', description: error.message, variant: 'destructive' });
+      return;
+    }
+    
+    // Log do evento de alteração de status
+    await supabase.from('crm_events').insert([{
+      contact_id: id,
+      type: 'status_change',
+      title: 'Status Alterado',
+      description: `Status movido para ${newStatus}`,
+      actor_id: user?.id,
+      actor_type: 'human'
+    }]);
+
+    toast({ title: 'Status atualizado' });
+    load();
+  };
+
   const load = async () => {
     setLoading(true);
     const { data, error } = await (supabase as any).from(schema.table).select('*').order('created_at', { ascending: false });
@@ -190,7 +220,28 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
     setLoading(false);
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [entity]);
+  useEffect(() => { 
+    load(); 
+    if (entity === 'contacts') loadUsers();
+    /* eslint-disable-next-line */ 
+  }, [entity]);
+
+  // Injetar select de usuários nos campos de contato
+  if (entity === 'contacts' && !schema.fields.some(f => f.name === 'assigned_agent_id')) {
+    schema.fields.push({ 
+      name: 'assigned_agent_id', 
+      label: 'Responsável', 
+      type: 'select', 
+      options: users.map(u => ({ value: u.user_id, label: u.display_name || 'Sem nome' }))
+    });
+  }
+
+  const columns_kanban = [
+    { id: 'lead', title: 'Novo Lead', color: 'bg-muted-foreground' },
+    { id: 'prospect', title: 'Qualificação', color: 'bg-primary' },
+    { id: 'customer', title: 'Cliente', color: 'bg-success' },
+    { id: 'churned', title: 'Inativo', color: 'bg-destructive' },
+  ];
 
   const openNew = () => {
     const initial: any = {};
@@ -882,6 +933,97 @@ function AuditLogDetail({ detail, authors }: { detail: any; authors: Record<stri
         </div>
       )}
     </div>
+  );
+}
+
+function ContactActivityTimeline({ contactId }: { contactId: string }) {
+  const [events, setEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('crm_events')
+        .select('*')
+        .eq('contact_id', contactId)
+        .order('created_at', { ascending: false });
+      if (data) setEvents(data);
+      setLoading(false);
+    })();
+  }, [contactId]);
+
+  if (loading) return <div className="text-center py-10 text-xs text-muted-foreground">Carregando histórico...</div>;
+  if (events.length === 0) return <div className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma atividade registrada.</div>;
+
+  return (
+    <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-primary/20 before:via-border before:to-transparent">
+      {events.map((ev, i) => (
+        <div key={ev.id} className="relative flex items-start gap-4 pl-10">
+          <div className={`absolute left-0 w-10 h-10 rounded-2xl flex items-center justify-center border border-border bg-background shadow-sm ${
+            ev.actor_type === 'ai' ? 'text-primary' : 'text-muted-foreground'
+          }`}>
+            {ev.type === 'chat' && <MessageSquare className="w-4 h-4" />}
+            {ev.type === 'status_change' && <LayoutGrid className="w-4 h-4" />}
+            {ev.actor_type === 'ai' ? <BotIcon className="w-4 h-4" /> : (ev.type !== 'chat' && ev.type !== 'status_change' && <User className="w-4 h-4" />)}
+          </div>
+          <div className="flex-1 space-y-1">
+            <div className="flex justify-between items-center">
+              <p className="text-xs font-bold text-foreground">{ev.title || 'Atividade'}</p>
+              <time className="text-[10px] text-muted-foreground font-mono">{new Date(ev.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</time>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">{ev.description}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CrmGlobalActivities() {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const fetch = async () => {
+      const { data } = await supabase
+        .from('crm_events')
+        .select('*, contacts(name)')
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (data) setLogs(data);
+    };
+    fetch();
+  }, [open]);
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)} className="gap-2 h-10 rounded-xl">
+        <Clock className="w-4 h-4" /> Atividades
+      </Button>
+      <SheetContent className="sm:max-w-md overflow-y-auto">
+        <SheetHeader className="mb-6">
+          <SheetTitle className="flex items-center gap-2">
+            <History className="w-5 h-5 text-primary" /> Auditoria CRM
+          </SheetTitle>
+          <SheetDescription>Últimas interações manuais e automatizadas de todos os contatos.</SheetDescription>
+        </SheetHeader>
+        <div className="space-y-4">
+          {logs.map(log => (
+            <div key={log.id} className="p-3 bg-secondary/20 rounded-2xl border border-border/40 space-y-2">
+              <div className="flex justify-between items-start">
+                <Badge variant={log.actor_type === 'ai' ? 'default' : 'secondary'} className="text-[9px]">
+                  {log.actor_type === 'ai' ? 'AUTÔNOMO' : 'HUMANO'}
+                </Badge>
+                <span className="text-[10px] text-muted-foreground">{new Date(log.created_at).toLocaleString()}</span>
+              </div>
+              <p className="text-xs font-bold text-foreground">{log.contacts?.name || 'Contato desconhecido'}</p>
+              <p className="text-xs text-muted-foreground">{log.description}</p>
+            </div>
+          ))}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
