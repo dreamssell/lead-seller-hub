@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useGlobalState } from '@/contexts/GlobalStateContext';
 import { toast } from '@/hooks/use-toast';
 import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin, LayoutGrid, List, MessageSquare, Bot as BotIcon, Clock, ChevronRight, User, RefreshCw, AlertCircle, Code, Share2, Download, CheckCircle2, Settings, Pause, Play } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -258,6 +259,7 @@ export const globalTriggerWebhooks = async (eventType: string, payload: any, man
 function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
   const schema = SCHEMAS[entity];
   const { user } = useAuth();
+  const { highlightedCardId, setHighlightedCard } = useGlobalState();
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -352,22 +354,25 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
     if (entity === 'contacts') {
       loadUsers();
       
-      const applyHighlight = (cardId: string) => {
+      const applyHighlightUI = (cardId: string) => {
         const card = document.querySelector(`[data-card-id="${cardId}"]`);
         if (card) {
           card.scrollIntoView({ behavior: 'smooth', block: 'center' });
           card.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
           setTimeout(() => card.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 5000);
         } else if (rows.length > 0) {
-          console.log(`Card ${cardId} not found in DOM, cleaning highlight state.`);
-          localStorage.removeItem('kanban_highlighted_card');
-          localStorage.removeItem('kanban_highlighted_time');
-          
-          const params = new URLSearchParams(window.location.search);
-          if (params.has('highlight_card')) {
-            params.delete('highlight_card');
-            const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
-            window.history.replaceState({}, '', newUrl);
+          // Se as linhas foram carregadas e o card não existe, removemos o destaque
+          const exists = rows.some(r => String(r.id) === cardId);
+          if (!exists) {
+            console.log(`Card ${cardId} not found in data, cleaning highlight state.`);
+            setHighlightedCard(null);
+            
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('highlight_card')) {
+              params.delete('highlight_card');
+              const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+              window.history.replaceState({}, '', newUrl);
+            }
           }
         }
       };
@@ -375,36 +380,18 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
       if (viewMode === 'kanban') {
         const params = new URLSearchParams(window.location.search);
         const urlCardId = params.get('highlight_card');
-        const savedCard = urlCardId || localStorage.getItem('kanban_highlighted_card');
-        const savedTime = localStorage.getItem('kanban_highlighted_time');
         
-        if (savedCard) {
-          const isExpired = savedTime && (Date.now() - parseInt(savedTime) > 1800000);
-          if (isExpired) {
-            localStorage.removeItem('kanban_highlighted_card');
-            localStorage.removeItem('kanban_highlighted_time');
-            if (urlCardId) {
-              params.delete('highlight_card');
-              const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
-              window.history.replaceState({}, '', newUrl);
-            }
-          } else {
-            // Re-destaque persistente após carregamento ou navegação
-            setTimeout(() => applyHighlight(savedCard), 800);
-          }
+        if (urlCardId && urlCardId !== highlightedCardId) {
+          setHighlightedCard(urlCardId);
+        }
+        
+        if (highlightedCardId) {
+           // Re-destaque persistente após carregamento ou navegação
+           setTimeout(() => applyHighlightUI(highlightedCardId), 800);
         }
       }
-
-      const handleStorageChange = (e: StorageEvent) => {
-        if (e.key === 'kanban_highlighted_card' && e.newValue && viewMode === 'kanban') {
-          applyHighlight(e.newValue);
-        }
-      };
-
-      window.addEventListener('storage', handleStorageChange);
-      return () => window.removeEventListener('storage', handleStorageChange);
     }
-  }, [entity, viewMode, rows.length]); //rows.length garante limpeza apenas após carregar dados
+  }, [entity, viewMode, rows, highlightedCardId, setHighlightedCard]); // rows como dependência para validar existência
 
   if (entity === 'contacts' && !schema.fields.some(f => f.name === 'assigned_agent_id')) {
     schema.fields.push({ 
