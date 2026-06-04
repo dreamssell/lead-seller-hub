@@ -6,7 +6,8 @@ import {
   MessageSquare, ChevronRight, Hash, Server, Play, 
   Copy, Check, Info, AlertTriangle, Cpu, Activity,
   Webhook, Key, FileJson, CheckCircle2, Brackets, Download,
-  RefreshCw, Lock, AlertCircle, History, FileDown, Eye, RotateCw
+  RefreshCw, Lock, AlertCircle, History, FileDown, Eye, RotateCw,
+  Filter, X
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { 
@@ -22,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import MCPConsole from '@/components/settings/MCPConsole';
 import { ErrorBoundary } from 'react-error-boundary';
 import { useAuth } from '@/contexts/AuthContext';
@@ -220,16 +222,47 @@ function DocumentationContent({ correlationId, onRegenerateId }: { correlationId
   const [showHistory, setShowHistory] = useState(false);
   const [activeSection, setActiveSection] = useState("MCP Server");
   
+  // Estados de Filtro
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [searchEndpoint, setSearchEndpoint] = useState("");
+  const [filterTimeRange, setFilterTimeRange] = useState<string>("all");
+
   const fetchHistory = async () => {
-    const { data } = await supabase
+    let query = supabase
       .from('telemetry_logs')
       .select('*')
-      .eq('correlation_id', correlationId)
-      .order('created_at', { ascending: false });
-    if (data) setTelemetryHistory(data);
+      .eq('correlation_id', correlationId);
+
+    if (filterStatus !== "all") {
+      query = query.eq('type', filterStatus);
+    }
+
+    if (filterTimeRange !== "all") {
+      const now = new Date();
+      let startTime = new Date();
+      if (filterTimeRange === "1h") startTime.setHours(now.getHours() - 1);
+      else if (filterTimeRange === "24h") startTime.setHours(now.getHours() - 24);
+      else if (filterTimeRange === "7d") startTime.setDate(now.getDate() - 7);
+      query = query.gte('created_at', startTime.toISOString());
+    }
+
+    const { data } = await query.order('created_at', { ascending: false });
+    
+    if (data) {
+      // Filtro local para busca rápida por endpoint (assumindo que endpoint está na mensagem ou metadados)
+      const filtered = searchEndpoint 
+        ? data.filter(log => 
+            log.message?.toLowerCase().includes(searchEndpoint.toLowerCase()) || 
+            JSON.stringify(log.metadata)?.toLowerCase().includes(searchEndpoint.toLowerCase())
+          )
+        : data;
+      setTelemetryHistory(filtered);
+    }
   };
 
-  useEffect(() => { if (showHistory) fetchHistory(); }, [showHistory]);
+  useEffect(() => { 
+    if (showHistory) fetchHistory(); 
+  }, [showHistory, filterStatus, filterTimeRange, searchEndpoint]);
 
   return (
     <AppLayout title="Documentação Técnica" subtitle="API REST, MCP e Webhooks.">
@@ -253,7 +286,8 @@ function DocumentationContent({ correlationId, onRegenerateId }: { correlationId
                               type: l.type,
                               message: l.message,
                               retry: l.retry_count,
-                              correlation_id: correlationId
+                              correlation_id: correlationId,
+                              metadata: l.metadata
                             }));
                             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                             const url = URL.createObjectURL(blob);
@@ -306,60 +340,107 @@ function DocumentationContent({ correlationId, onRegenerateId }: { correlationId
                     <motion.div 
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="space-y-2 pt-2"
+                      className="space-y-4 pt-2"
                     >
+                        {/* Filtros */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                          <div className="relative">
+                            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                            <Input 
+                              placeholder="Buscar endpoint..." 
+                              value={searchEndpoint}
+                              onChange={(e) => setSearchEndpoint(e.target.value)}
+                              className="pl-9 h-9 text-xs rounded-xl bg-secondary/20 border-border/40"
+                            />
+                          </div>
+                          <Select value={filterStatus} onValueChange={setFilterStatus}>
+                            <SelectTrigger className="h-9 text-xs rounded-xl bg-secondary/20 border-border/40">
+                              <SelectValue placeholder="Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">Todos Status</SelectItem>
+                              <SelectItem value="403_FORBIDDEN">403 Forbidden</SelectItem>
+                              <SelectItem value="NETWORK_OR_STATE_FAILURE">Falha de Rede</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Select value={filterTimeRange} onValueChange={setFilterTimeRange}>
+                            <SelectTrigger className="h-9 text-xs rounded-xl bg-secondary/20 border-border/40">
+                              <SelectValue placeholder="Período" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">Sempre</SelectItem>
+                              <SelectItem value="1h">Última Hora</SelectItem>
+                              <SelectItem value="24h">Últimas 24h</SelectItem>
+                              <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => {
+                              setFilterStatus("all");
+                              setSearchEndpoint("");
+                              setFilterTimeRange("all");
+                            }}
+                            className="h-9 text-[10px] gap-1.5 rounded-xl text-muted-foreground"
+                          >
+                            <X className="w-3.5 h-3.5" /> Limpar Filtros
+                          </Button>
+                        </div>
+
                         {telemetryHistory.length === 0 ? (
                             <p className="text-center py-6 text-xs text-muted-foreground italic">Nenhum evento registrado nesta sessão.</p>
                         ) : (
-                            telemetryHistory.map(log => (
-                                <div key={log.id} className="group p-3 bg-secondary/20 hover:bg-secondary/40 rounded-xl border border-border/10 transition-all">
-                                    <div className="flex items-center justify-between mb-1.5">
-                                        <Badge variant={log.type.includes('FORBIDDEN') ? 'destructive' : 'outline'} className="text-[9px] h-4">
-                                            {log.type}
-                                        </Badge>
-                                        <span className="text-[10px] text-muted-foreground font-mono">
-                                            {new Date(log.created_at).toLocaleTimeString()}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-start gap-4">
-                                        <p className="text-xs font-medium text-foreground line-clamp-1 flex-1">{log.message}</p>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[10px] font-bold text-muted-foreground bg-background px-1.5 rounded">Retry #{log.retry_count}</span>
-                                            <Dialog>
-                                              <DialogTrigger asChild>
-                                                <Button 
-                                                  variant="ghost" 
-                                                  size="icon" 
-                                                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                >
-                                                  <Eye className="w-3 h-3" />
-                                                </Button>
-                                              </DialogTrigger>
-                                              <DialogContent className="max-w-md rounded-2xl">
-                                                <DialogHeader>
-                                                  <DialogTitle className="text-base flex items-center gap-2">
-                                                    <Info className="w-4 h-4 text-primary" />
-                                                    Detalhes do Evento
-                                                  </DialogTitle>
-                                                  <DialogDescription className="text-xs">
-                                                    Metadados técnicos do log registrados às {new Date(log.created_at).toLocaleString()}
-                                                  </DialogDescription>
-                                                </DialogHeader>
-                                                <div className="space-y-4 pt-4">
-                                                  <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              {telemetryHistory.map(log => (
+                                  <div key={log.id} className="group p-3 bg-secondary/20 hover:bg-secondary/40 rounded-xl border border-border/10 transition-all">
+                                      <div className="flex items-center justify-between mb-1.5">
+                                          <Badge variant={log.type.includes('FORBIDDEN') ? 'destructive' : 'outline'} className="text-[9px] h-4">
+                                              {log.type}
+                                          </Badge>
+                                          <span className="text-[10px] text-muted-foreground font-mono">
+                                              {new Date(log.created_at).toLocaleTimeString()}
+                                          </span>
+                                      </div>
+                                      <div className="flex items-start gap-4">
+                                          <p className="text-xs font-medium text-foreground line-clamp-1 flex-1">{log.message}</p>
+                                          <div className="flex items-center gap-2">
+                                              <span className="text-[10px] font-bold text-muted-foreground bg-background px-1.5 rounded">Retry #{log.retry_count}</span>
+                                              <Dialog>
+                                                <DialogTrigger asChild>
+                                                  <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                  >
+                                                    <Eye className="w-3 h-3" />
+                                                  </Button>
+                                                </DialogTrigger>
+                                                <DialogContent className="max-w-md rounded-2xl">
+                                                  <DialogHeader>
+                                                    <DialogTitle className="text-base flex items-center gap-2">
+                                                      <Info className="w-4 h-4 text-primary" />
+                                                      Detalhes do Evento
+                                                    </DialogTitle>
+                                                    <DialogDescription className="text-xs">
+                                                      Metadados técnicos do log registrados às {new Date(log.created_at).toLocaleString()}
+                                                    </DialogDescription>
+                                                  </DialogHeader>
+                                                  <div className="space-y-4 pt-4">
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                      <div className="space-y-1">
+                                                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Tipo</p>
+                                                        <Badge variant={log.type.includes('FORBIDDEN') ? 'destructive' : 'outline'} className="text-[10px]">
+                                                          {log.type}
+                                                        </Badge>
+                                                      </div>
+                                                      <div className="space-y-1 text-right">
+                                                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Tentativa</p>
+                                                        <p className="text-sm font-mono font-bold">#{log.retry_count}</p>
+                                                      </div>
+                                                    </div>
                                                     <div className="space-y-1">
-                                                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Tipo</p>
-                                                      <Badge variant={log.type.includes('FORBIDDEN') ? 'destructive' : 'outline'} className="text-[10px]">
-                                                        {log.type}
-                                                      </Badge>
-                                                    </div>
-                                                    <div className="space-y-1 text-right">
-                                                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Tentativa</p>
-                                                      <p className="text-sm font-mono font-bold">#{log.retry_count}</p>
-                                                    </div>
-                                                  </div>
-                                                  <div className="space-y-1">
-                                                    <p className="text-[10px] text-muted-foreground uppercase font-bold">Mensagem</p>
+                                                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Mensagem</p>
                                                     <p className="text-xs bg-secondary/50 p-2 rounded-lg border border-border/10 italic">"{log.message}"</p>
                                                   </div>
                                                   <div className="space-y-1">
