@@ -1768,6 +1768,7 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId }: { d: any, onRetry: (
   return (
     <>
       <div 
+        ref={cardRef}
         onClick={() => setShowDetail(true)}
         className={`p-3 rounded-xl border transition-all cursor-pointer hover:shadow-md ${
           d.status === 'failed' ? 'bg-destructive/5 border-destructive/20' : 'bg-secondary/10 border-border/50'
