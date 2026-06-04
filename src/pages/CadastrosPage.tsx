@@ -1943,9 +1943,9 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
       
       const syncStatus = async () => {
         const { data, error } = await supabase.from('crm_webhook_logs').select('*, crm_webhooks(url)').eq('id', d.id).single();
-        if (!error && data && (data.status !== d.status || data.retry_count !== (d.retry_count || 0))) {
+        if (!error && data && (data.status !== d.status || data.retry_count !== (d.retry_count || 0) || JSON.stringify(data.retry_history) !== JSON.stringify(d.retry_history))) {
            setD(data);
-           console.log('Status synchronized for correlation_id:', d.correlation_id);
+           console.log('Full sync for correlation_id:', d.correlation_id);
         }
       };
       
