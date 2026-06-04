@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin, LayoutGrid, List, MessageSquare, Bot as BotIcon, Clock, ChevronRight, User, RefreshCw, AlertCircle, Code } from 'lucide-react';
+import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin, LayoutGrid, List, MessageSquare, Bot as BotIcon, Clock, ChevronRight, User, RefreshCw, AlertCircle, Code, Share2, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import WhiteLabelTab from '@/components/cadastros/WhiteLabelTab';
 import { logAudit } from '@/lib/audit';
@@ -1463,6 +1463,19 @@ function CrmGlobalActivities() {
   const [corrSearch, setCorrSearch] = useState('');
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const cid = params.get('correlation_id');
+      if (cid) {
+        setExternalCorrId(cid);
+        setCorrSearch(cid);
+        setActiveTab('deliveries');
+        setOpen(true);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (!open) return;
     const fetch = async () => {
       const { data } = await supabase
@@ -1536,26 +1549,42 @@ function CrmGlobalActivities() {
                   <p className="text-xs font-bold text-foreground">{log.contacts?.name || 'Contato desconhecido'}</p>
                   <p className="text-xs text-muted-foreground">{log.description}</p>
                   {(log.payload as any)?.correlation_id && (
-                    <p 
-                      className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded w-fit cursor-pointer hover:bg-background/80 flex items-center gap-1 group/item"
-                      onClick={() => {
-                        const cid = (log.payload as any).correlation_id;
-                        setExternalCorrId(cid);
-                        setCorrSearch(cid);
-                        setActiveTab('deliveries');
-                        
-                        // Adicionar feedback visual e atualizar URL
-                        toast({ title: "Filtrando por Correlation ID", description: `ID: ${cid}` });
-                        
-                        const url = new URL(window.location.href);
-                        url.searchParams.set('correlation_id', cid);
-                        window.history.replaceState({}, '', url);
-                      }}
-                      title="Clique para pesquisar nas notificações e destacar evento"
-                    >
-                      <Search className="w-2 h-2 opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                      ID: {(log.payload as any).correlation_id}
-                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <p 
+                        className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded cursor-pointer hover:bg-background/80 flex items-center gap-1 group/item border border-border/30 hover:border-primary/50 transition-colors"
+                        onClick={() => {
+                          const cid = (log.payload as any).correlation_id;
+                          setExternalCorrId(cid);
+                          setCorrSearch(cid);
+                          setActiveTab('deliveries');
+                          
+                          toast({ title: "Filtrando por Correlation ID", description: `ID: ${cid}` });
+                          
+                          const url = new URL(window.location.href);
+                          url.searchParams.set('correlation_id', cid);
+                          window.history.replaceState({}, '', url);
+                        }}
+                        title="Abrir Auditoria e filtrar por este ID"
+                      >
+                        <Search className="w-2 h-2" />
+                        ID: {(log.payload as any).correlation_id}
+                      </p>
+                      
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-5 px-1.5 text-[8px] gap-1 hover:text-primary"
+                        onClick={() => {
+                          const cid = (log.payload as any).correlation_id;
+                          const url = new URL(window.location.href);
+                          url.searchParams.set('correlation_id', cid);
+                          navigator.clipboard.writeText(url.toString());
+                          toast({ title: "Link de Auditoria Copiado!", description: "Compartilhe este link para auditoria direta." });
+                        }}
+                      >
+                        <Share2 className="w-2 h-2" /> Compartilhar
+                      </Button>
+                    </div>
                   )}
                 </div>
               ))}
@@ -1875,15 +1904,49 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId }: { d: any, onRetry: (
             </div>
           </div>
 
-          <DialogFooter className="gap-2">
-            <Button variant="ghost" size="sm" className="text-[10px]" onClick={() => {
-              navigator.clipboard.writeText(JSON.stringify(d.payload, null, 2));
-              toast({ title: 'Payload Copiado!' });
-            }}>Copiar Payload</Button>
-            {d.status === 'failed' && (
-              <Button size="sm" onClick={() => { setShowDetail(false); onRetry(); }}>Reprocessar Agora</Button>
-            )}
-            <Button variant="outline" size="sm" onClick={() => setShowDetail(false)}>Fechar</Button>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="text-[10px] gap-1" onClick={() => {
+                const auditData = {
+                  correlation_id: d.correlation_id,
+                  event: d.event_type,
+                  url: d.crm_webhooks?.url,
+                  status: d.status,
+                  retries: d.retry_count,
+                  security: {
+                    hmac_verified: !d.error_message?.includes('HMAC'),
+                    timestamp_verified: !d.error_message?.includes('window'),
+                    timestamp: d.payload?._timestamp,
+                    signature: d.payload?._signature
+                  },
+                  payload: d.payload,
+                  timestamp: new Date().toISOString()
+                };
+                const blob = new Blob([JSON.stringify(auditData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `audit-report-${d.correlation_id}.json`;
+                a.click();
+                toast({ title: 'Relatório de Auditoria Gerado!' });
+              }}>
+                <Download className="w-3 h-3" /> Relatório Auditoria
+              </Button>
+              <Button variant="outline" size="sm" className="text-[10px] gap-1" onClick={() => {
+                const url = new URL(window.location.href);
+                url.searchParams.set('correlation_id', d.correlation_id);
+                navigator.clipboard.writeText(url.toString());
+                toast({ title: 'Link de Auditoria Copiado!' });
+              }}>
+                <Share2 className="w-3 h-3" /> Link Direto
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              {d.status === 'failed' && (
+                <Button size="sm" onClick={() => { setShowDetail(false); onRetry(); }}>Reprocessar Agora</Button>
+              )}
+              <Button variant="secondary" size="sm" onClick={() => setShowDetail(false)}>Fechar</Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
