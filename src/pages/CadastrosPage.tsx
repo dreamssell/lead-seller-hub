@@ -352,7 +352,16 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
     if (entity === 'contacts') {
       loadUsers();
       
-      // Restaurar destaque do Kanban
+      const applyHighlight = (cardId: string) => {
+        const card = document.querySelector(`[data-card-id="${cardId}"]`);
+        if (card) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          card.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
+          setTimeout(() => card.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 5000);
+        }
+      };
+
+      // Restaurar destaque inicial do Kanban
       if (viewMode === 'kanban') {
         const savedCard = localStorage.getItem('kanban_highlighted_card');
         const savedTime = localStorage.getItem('kanban_highlighted_time');
@@ -360,17 +369,20 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
         if (savedCard && savedTime) {
           const timeDiff = Date.now() - parseInt(savedTime);
           if (timeDiff < 1800000) { // 30 min
-            setTimeout(() => {
-              const card = document.querySelector(`[data-card-id="${savedCard}"]`);
-              if (card) {
-                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                card.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
-                setTimeout(() => card.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 5000);
-              }
-            }, 600);
+            setTimeout(() => applyHighlight(savedCard), 600);
           }
         }
       }
+
+      // Sincronizar via localStorage entre abas
+      const handleStorageChange = (e: StorageEvent) => {
+        if (e.key === 'kanban_highlighted_card' && e.newValue && viewMode === 'kanban') {
+          applyHighlight(e.newValue);
+        }
+      };
+
+      window.addEventListener('storage', handleStorageChange);
+      return () => window.removeEventListener('storage', handleStorageChange);
     }
   }, [entity, viewMode]);
 
