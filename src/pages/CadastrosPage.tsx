@@ -1649,12 +1649,14 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
         const url = new URL(window.location.href);
         url.searchParams.set('correlation_id', corrSearch);
         window.history.replaceState({}, '', url);
+        localStorage.setItem('last_correlation_id', corrSearch);
       }
       if (setParentCorrSearch) setParentCorrSearch(corrSearch);
     } else if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       url.searchParams.delete('correlation_id');
       window.history.replaceState({}, '', url);
+      localStorage.removeItem('last_correlation_id');
     }
 
     const { data } = await query.limit(100);
