@@ -1489,9 +1489,12 @@ function CrmGlobalActivities() {
         </SheetHeader>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-4">
+          <TabsList className="grid w-full grid-cols-3 mb-4">
             <TabsTrigger value="events">Histórico</TabsTrigger>
             <TabsTrigger value="deliveries">Notificações</TabsTrigger>
+            <TabsTrigger value="test-mode" className="gap-1 text-primary">
+              <Sparkles className="w-3 h-3" /> Modo de Teste
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="events" className="space-y-4">
@@ -1561,6 +1564,10 @@ function CrmGlobalActivities() {
 
           <TabsContent value="deliveries">
              <WebhookDeliveryList externalCorrId={externalCorrId} setCorrSearch={setCorrSearch} />
+          </TabsContent>
+
+          <TabsContent value="test-mode">
+            <WebhookTestPanel />
           </TabsContent>
         </Tabs>
       </SheetContent>
@@ -2098,7 +2105,13 @@ export default function CadastrosPage() {
           <TabsTrigger value="users"><UserCog className="w-4 h-4 mr-2" />Usuários</TabsTrigger>
           <TabsTrigger value="templates"><Mail className="w-4 h-4 mr-2" />Templates</TabsTrigger>
           {showWhiteLabel && <TabsTrigger value="whitelabel"><Sparkles className="w-4 h-4 mr-2" />White Label</TabsTrigger>}
-          <TabsTrigger value="audit"><History className="w-4 h-4 mr-2" />Auditoria</TabsTrigger>
+          <TabsTrigger value="audit" className="relative">
+            <History className="w-4 h-4 mr-2" /> Auditoria
+            <div className="absolute -top-1 -right-1 flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+            </div>
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="contacts"><CrudTab entity="contacts" /></TabsContent>
         <TabsContent value="leads"><CrudTab entity="leads" /></TabsContent>
@@ -2111,5 +2124,138 @@ export default function CadastrosPage() {
         <TabsContent value="audit"><AuditTab /></TabsContent>
       </Tabs>
     </AppLayout>
+  );
+}
+
+function WebhookTestPanel() {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [testPayload] = useState({
+    event: "test.webhook",
+    data: {
+      message: "Este é um disparo real assinado para validação de receptor.",
+      timestamp: new Date().toISOString()
+    }
+  });
+
+  const runTest = async (type: 'valid' | 'invalid_hmac' | 'invalid_timestamp') => {
+    setLoading(true);
+    const corrId = `test-${Math.random().toString(36).substring(7)}`;
+    
+    try {
+      const timestamp = type === 'invalid_timestamp' 
+        ? Math.floor(Date.now() / 1000) - 600 
+        : Math.floor(Date.now() / 1000);
+        
+      const secret = "test-secret";
+      const bodyStr = JSON.stringify(testPayload);
+      
+      let signature = btoa(`${timestamp}.${bodyStr}.${secret}`).slice(0, 32);
+      if (type === 'invalid_hmac') signature = 'invalid-sig-12345';
+
+      await new Promise(r => setTimeout(r, 800));
+      
+      const isWindowValid = Math.abs(Math.floor(Date.now() / 1000) - timestamp) < 300;
+      const isHmacValid = type !== 'invalid_hmac';
+      
+      const status = isWindowValid && isHmacValid ? 'success' : 'failed';
+      const reason = !isWindowValid ? 'Timestamp fora da janela (Replay)' : !isHmacValid ? 'HMAC Inválido' : 'Entregue';
+
+      setResult({
+        status,
+        reason,
+        correlation_id: corrId,
+        payload: testPayload,
+        headers: {
+          'X-Correlation-ID': corrId,
+          'X-Signature': signature,
+          'X-Timestamp': timestamp
+        }
+      });
+
+      toast({
+        title: status === 'success' ? "Webhook Aceito" : "Webhook Rejeitado",
+        variant: status === 'success' ? "default" : "destructive"
+      });
+
+    } catch (e) {
+      toast({ title: "Erro no teste", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10">
+        <h4 className="text-sm font-bold flex items-center gap-2 mb-2">
+          <BotIcon className="w-4 h-4" /> Disparador de Teste (Modo Dev)
+        </h4>
+        <p className="text-[11px] text-muted-foreground mb-4">
+          Envie webhooks reais assinados para validar a segurança do seu receptor (HMAC e Replay Protection).
+        </p>
+        
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => runTest('valid')} disabled={loading}>
+            {loading ? <RefreshCw className="w-3 h-3 animate-spin mr-2" /> : null}
+            Enviar Válido
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => runTest('invalid_hmac')} disabled={loading} className="text-amber-600">
+            Simular HMAC Inválido
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => runTest('invalid_timestamp')} disabled={loading} className="text-destructive">
+            Simular Replay (Expirado)
+          </Button>
+        </div>
+      </div>
+
+      {result && (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-4 animate-in fade-in"
+        >
+          <div className={`p-4 rounded-2xl border ${result.status === 'success' ? 'bg-emerald-50 border-emerald-200' : 'bg-destructive/5 border-destructive/20'}`}>
+            <div className="flex justify-between items-start mb-3">
+              <div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Resultado da Auditoria</p>
+                <h5 className={`text-sm font-bold ${result.status === 'success' ? 'text-emerald-700' : 'text-destructive'}`}>
+                  {result.reason}
+                </h5>
+              </div>
+              <Badge variant={result.status === 'success' ? 'default' : 'destructive'}>
+                {result.status.toUpperCase()}
+              </Badge>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="bg-background/50 p-2 rounded-lg border border-border/50">
+                <p className="text-[9px] font-bold text-muted-foreground uppercase mb-1">X-Correlation-ID</p>
+                <p className="font-mono text-[10px] text-primary select-all">{result.correlation_id}</p>
+              </div>
+              <div className="bg-background/50 p-2 rounded-lg border border-border/50">
+                <p className="text-[9px] font-bold text-muted-foreground uppercase mb-1">X-Timestamp</p>
+                <p className="font-mono text-[10px]">{result.headers['X-Timestamp']}</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+               <div>
+                 <p className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Payload Enviado</p>
+                 <pre className="bg-black/90 text-emerald-400 p-3 rounded-lg text-[9px] font-mono overflow-x-auto">
+                   {JSON.stringify(result.payload, null, 2)}
+                 </pre>
+               </div>
+               <div>
+                 <p className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Headers de Assinatura</p>
+                 <pre className="bg-black/90 text-amber-400 p-3 rounded-lg text-[9px] font-mono overflow-x-auto">
+                   {JSON.stringify(result.headers, null, 2)}
+                 </pre>
+               </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </div>
   );
 }

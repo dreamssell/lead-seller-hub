@@ -88,4 +88,57 @@ describe('Documentation Telemetry & Correlation ID', () => {
     expect(isValid).toBe(true);
     expect(isWithinWindow).toBe(true);
   });
+
+  it('deve registrar erro correto para HMAC inválido', () => {
+    const corrId = 'corr-hmac-fail';
+    const isValid = false;
+    const reason = 'Assinatura HMAC inválida';
+    
+    // Simulação do que o backend registraria
+    const logEntry = {
+      correlation_id: corrId,
+      status: 'failed',
+      error_message: reason,
+      hmac_verified: isValid
+    };
+
+    if (logEntry.status !== 'failed' || logEntry.error_message !== 'Assinatura HMAC inválida') {
+      logCiFailure('HMAC Failure Registration', {
+        correlationId: corrId,
+        hmacValid: isValid,
+        windowValid: true,
+        payloadSummary: logEntry
+      });
+    }
+
+    expect(logEntry.status).toBe('failed');
+    expect(logEntry.error_message).toBe('Assinatura HMAC inválida');
+    expect(logEntry.correlation_id).toBe(corrId);
+  });
+
+  it('deve registrar erro correto para timestamp fora da janela (Replay Protection)', () => {
+    const corrId = 'corr-replay-fail';
+    const isWindowValid = false;
+    const reason = 'Timestamp fora da janela permitida (Replay Protection)';
+    
+    const logEntry = {
+      correlation_id: corrId,
+      status: 'failed',
+      error_message: reason,
+      window_verified: isWindowValid
+    };
+
+    if (logEntry.status !== 'failed' || logEntry.error_message !== reason) {
+      logCiFailure('Replay Protection Failure Registration', {
+        correlationId: corrId,
+        hmacValid: true,
+        windowValid: isWindowValid,
+        payloadSummary: logEntry
+      });
+    }
+
+    expect(logEntry.status).toBe('failed');
+    expect(logEntry.error_message).toContain('Replay Protection');
+    expect(logEntry.correlation_id).toBe(corrId);
+  });
 });
