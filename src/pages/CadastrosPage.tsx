@@ -2255,20 +2255,38 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId, selectedIds, setSelect
             </div>
           </div>
           <div className="px-6 py-4 border-t bg-secondary/5">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Histórico de Retentativas</p>
-            <div className="space-y-2 max-h-32 overflow-y-auto">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Histórico de Retentativas e Entregas</p>
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
               {(!d.retry_history || d.retry_history.length === 0) ? (
                 <p className="text-[10px] text-muted-foreground italic">Nenhuma retentativa registrada.</p>
               ) : d.retry_history.map((h: any, i: number) => (
-                <div key={i} className="flex justify-between items-center bg-background/50 p-2 rounded border border-border/30 text-[9px]">
-                  <div className="flex flex-col">
-                    <span className="font-bold">Tentativa #{h.attempt}</span>
-                    <span className="text-muted-foreground">{new Date(h.timestamp).toLocaleString()}</span>
+                <div key={i} className={`p-2 rounded border text-[9px] flex flex-col gap-1 ${h.status === 'failed' ? 'bg-destructive/5 border-destructive/20' : 'bg-background/50 border-border/30'}`}>
+                  <div className="flex justify-between items-center">
+                    <div className="flex flex-col">
+                      <span className="font-bold flex items-center gap-1">
+                        Tentativa #{h.attempt} 
+                        {h.status === 'failed' && <Badge variant="destructive" className="h-3 text-[7px]">FALHOU</Badge>}
+                        {h.status === 'sent' && <Badge className="h-3 text-[7px] bg-emerald-500">SUCESSO</Badge>}
+                      </span>
+                      <span className="text-muted-foreground flex items-center gap-1"><Clock className="w-2.5 h-2.5" /> {new Date(h.timestamp).toLocaleString()}</span>
+                    </div>
+                    <div className="flex flex-col text-right">
+                      <span className="text-primary font-mono">Size: {JSON.stringify(d.payload).length} bytes</span>
+                      <span className="text-muted-foreground italic">{h.strategy_used?.backoff || 'manual'}</span>
+                    </div>
                   </div>
-                  <div className="flex flex-col text-right">
-                    <span className="text-primary">{h.strategy_used?.backoff || 'manual'}</span>
-                    <span className="text-destructive truncate max-w-[100px]">{h.reason}</span>
-                  </div>
+                  {h.response && (
+                    <div className="mt-1 p-1.5 bg-black/5 rounded text-[8px] font-mono text-muted-foreground overflow-x-auto">
+                      <strong>Response:</strong> {typeof h.response === 'string' ? h.response : JSON.stringify(h.response).slice(0, 150)}...
+                    </div>
+                  )}
+                  {h.status === 'failed' && (
+                    <div className="flex justify-end mt-1">
+                       <span className="text-[8px] text-destructive flex items-center gap-1">
+                         <AlertCircle className="w-2.5 h-2.5" /> Dead-letter Ref: {d.id}
+                       </span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
