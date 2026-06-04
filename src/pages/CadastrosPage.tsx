@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -615,50 +615,15 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
                   <h4 className="text-sm font-bold flex items-center gap-2">
                     <Clock className="w-4 h-4 text-primary" /> Histórico de Atividades
                   </h4>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-7 text-[10px] gap-1 hover:text-primary"
-                    onClick={async () => {
-                      const { data: events } = await supabase
-                        .from('crm_events')
-                        .select('*')
-                        .eq('contact_id', editing.id)
-                        .eq('type', 'status_change')
-                        .order('created_at', { ascending: false })
-                        .limit(1);
-                      
-                      if (events && events.length > 0) {
-                        const payload = events[0].payload as any;
-                        if (payload?.old_status && !payload.is_undo) {
-                          // Pré-visualização do snapshot se existir
-                          if (payload.snapshot_before) {
-                            const confirmRestore = window.confirm(
-                              `Restaurar para etapa: ${payload.old_status}\n` +
-                              `Campos afetados: ${Object.keys(payload.snapshot_before).filter(k => !['id', 'created_at', 'updated_at', 'status'].includes(k)).join(', ')}\n\n` +
-                              `Deseja prosseguir com o Desfazer em Cascata?`
-                            );
-                            if (!confirmRestore) return;
-                          }
-
-                          await updateContactStatus(
-                            editing.id, 
-                            payload.old_status, 
-                            'Desfazer em cascata (reversão completa)', 
-                            true, 
-                            payload.snapshot_before
-                          );
-                          setOpen(false);
-                        } else {
-                          toast({ title: "Última ação já foi desfeita ou não é reversível", variant: "default" });
-                        }
-                      } else {
-                        toast({ title: "Nada para desfazer", variant: "default" });
-                      }
+                  <UndoCascadeButton 
+                    contactId={editing.id} 
+                    currentRecord={editing}
+                    onUndo={() => {
+                      setOpen(false);
+                      load();
                     }}
-                  >
-                    <RefreshCw className="w-3 h-3" /> Desfazer Cascata
-                  </Button>
+                    updateContactStatus={updateContactStatus}
+                  />
                 </div>
                 <ContactActivityTimeline contactId={editing.id} />
               </div>
@@ -1439,31 +1404,56 @@ function WebhookDeliveryList() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end gap-2">
-        <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => exportData('json')}>Exportar JSON</Button>
-        <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => exportData('csv')}>Exportar CSV</Button>
-        <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={fetch}><RefreshCw className="w-3 h-3 mr-1" /> Atualizar</Button>
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-secondary/10 p-3 rounded-xl border border-border/50">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-muted-foreground" />
+          <span className="text-xs font-semibold">Webhooks Ativos & Rejeitados</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => exportData('json')}>Exportar JSON</Button>
+          <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => exportData('csv')}>Exportar CSV</Button>
+          <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={fetch}><RefreshCw className="w-3 h-3 mr-1" /> Atualizar</Button>
+        </div>
       </div>
+
       <div className="space-y-3">
         {deliveries.length === 0 ? (
           <p className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma entrega registrada.</p>
         ) : deliveries.map(d => (
-          <div key={d.id} className="p-3 bg-secondary/10 rounded-xl border border-border/50 text-[11px] space-y-2">
+          <div key={d.id} className={`p-3 rounded-xl border transition-all ${
+            d.status === 'failed' ? 'bg-destructive/5 border-destructive/20' : 'bg-secondary/10 border-border/50'
+          } text-[11px] space-y-2`}>
             <div className="flex justify-between items-center">
-              <span className="font-mono text-muted-foreground">{d.event_type}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-foreground">{d.event_type}</span>
+                {d.status === 'failed' && (
+                  <Badge variant="destructive" className="text-[8px] h-4">REJEITADO</Badge>
+                )}
+              </div>
               <Badge variant={d.status === 'sent' ? 'default' : d.status === 'failed' ? 'destructive' : 'secondary'} className="text-[9px]">
                 {d.status?.toUpperCase()}
               </Badge>
             </div>
-            <p className="text-muted-foreground truncate">{d.crm_webhooks?.url}</p>
-            <div className="flex gap-2">
-               <span className="text-muted-foreground">Status: {d.response_status || 'N/A'}</span>
-               <span className="text-muted-foreground">Retentativas: {d.retry_count}</span>
+            <p className="text-muted-foreground truncate font-mono text-[10px]">{d.crm_webhooks?.url}</p>
+            
+            {d.error_message && (
+              <div className="bg-destructive/10 text-destructive p-2 rounded-lg text-[10px] flex items-start gap-2">
+                <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
+                <span><strong>Motivo:</strong> {d.error_message}</span>
+              </div>
+            )}
+
+            <div className="flex gap-3 text-[10px]">
+               <span className="text-muted-foreground">HTTP: <span className="text-foreground font-semibold">{d.response_status || 'N/A'}</span></span>
+               <span className="text-muted-foreground">Retentativas: <span className="text-foreground font-semibold">{d.retry_count}</span></span>
+               <span className="text-muted-foreground">X-Corr: <span className="text-primary font-mono">{d.correlation_id || 'N/A'}</span></span>
             </div>
-            {d.correlation_id && <p className="font-mono text-[9px] text-primary">ID: {d.correlation_id}</p>}
-            <details>
-               <summary className="cursor-pointer hover:text-primary mt-1">Ver Payload</summary>
-               <pre className="bg-background/50 p-2 rounded mt-1 overflow-x-auto">{JSON.stringify(d.payload, null, 2)}</pre>
+            
+            <details className="border-t border-border/20 pt-2">
+               <summary className="cursor-pointer hover:text-primary text-[10px] text-muted-foreground flex items-center gap-1">
+                 <Search className="w-3 h-3" /> Ver Payload Auditável
+               </summary>
+               <pre className="bg-background/50 p-2 rounded mt-2 overflow-x-auto font-mono text-[9px] max-h-40">{JSON.stringify(d.payload, null, 2)}</pre>
             </details>
           </div>
         ))}
