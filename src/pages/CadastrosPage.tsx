@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin, LayoutGrid, List, MessageSquare, Bot as BotIcon, Clock, ChevronRight, User, RefreshCw, AlertCircle, Code } from 'lucide-react';
+import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin, LayoutGrid, List, MessageSquare, Bot as BotIcon, Clock, ChevronRight, User, RefreshCw, AlertCircle, Code, Share2, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import WhiteLabelTab from '@/components/cadastros/WhiteLabelTab';
 import { logAudit } from '@/lib/audit';
@@ -1536,26 +1536,42 @@ function CrmGlobalActivities() {
                   <p className="text-xs font-bold text-foreground">{log.contacts?.name || 'Contato desconhecido'}</p>
                   <p className="text-xs text-muted-foreground">{log.description}</p>
                   {(log.payload as any)?.correlation_id && (
-                    <p 
-                      className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded w-fit cursor-pointer hover:bg-background/80 flex items-center gap-1 group/item"
-                      onClick={() => {
-                        const cid = (log.payload as any).correlation_id;
-                        setExternalCorrId(cid);
-                        setCorrSearch(cid);
-                        setActiveTab('deliveries');
-                        
-                        // Adicionar feedback visual e atualizar URL
-                        toast({ title: "Filtrando por Correlation ID", description: `ID: ${cid}` });
-                        
-                        const url = new URL(window.location.href);
-                        url.searchParams.set('correlation_id', cid);
-                        window.history.replaceState({}, '', url);
-                      }}
-                      title="Clique para pesquisar nas notificações e destacar evento"
-                    >
-                      <Search className="w-2 h-2 opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                      ID: {(log.payload as any).correlation_id}
-                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <p 
+                        className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded cursor-pointer hover:bg-background/80 flex items-center gap-1 group/item border border-border/30 hover:border-primary/50 transition-colors"
+                        onClick={() => {
+                          const cid = (log.payload as any).correlation_id;
+                          setExternalCorrId(cid);
+                          setCorrSearch(cid);
+                          setActiveTab('deliveries');
+                          
+                          toast({ title: "Filtrando por Correlation ID", description: `ID: ${cid}` });
+                          
+                          const url = new URL(window.location.href);
+                          url.searchParams.set('correlation_id', cid);
+                          window.history.replaceState({}, '', url);
+                        }}
+                        title="Abrir Auditoria e filtrar por este ID"
+                      >
+                        <Search className="w-2 h-2" />
+                        ID: {(log.payload as any).correlation_id}
+                      </p>
+                      
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-5 px-1.5 text-[8px] gap-1 hover:text-primary"
+                        onClick={() => {
+                          const cid = (log.payload as any).correlation_id;
+                          const url = new URL(window.location.href);
+                          url.searchParams.set('correlation_id', cid);
+                          navigator.clipboard.writeText(url.toString());
+                          toast({ title: "Link de Auditoria Copiado!", description: "Compartilhe este link para auditoria direta." });
+                        }}
+                      >
+                        <Share2 className="w-2 h-2" /> Compartilhar
+                      </Button>
+                    </div>
                   )}
                 </div>
               ))}
