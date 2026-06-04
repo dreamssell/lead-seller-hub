@@ -2005,15 +2005,39 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
               {d.status?.toUpperCase()}
             </Badge>
             {d.status === 'failed' && (
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="h-6 text-[9px] gap-1 text-primary hover:text-primary" 
-                onClick={(e) => { e.stopPropagation(); onRetry(); }}
-              >
-                <RefreshCw className="h-3 w-3" />
-                Reenviar Manual
-              </Button>
+              <div className="flex gap-1">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="h-6 text-[9px] gap-1 text-primary hover:text-primary" 
+                  onClick={(e) => { e.stopPropagation(); onRetry(); }}
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  Reenviar
+                </Button>
+                {!d.is_dead_letter && (
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    className="h-6 text-[9px] gap-1 text-destructive hover:text-destructive hover:bg-destructive/10" 
+                    onClick={async (e) => { 
+                      e.stopPropagation();
+                      const reason = prompt("Motivo do envio para Dead-letter:");
+                      if (reason) {
+                        await supabase.from('crm_webhook_logs').update({
+                          is_dead_letter: true,
+                          last_error_summary: `Manual Dead-letter: ${reason}`,
+                          status: 'failed'
+                        }).eq('id', d.id);
+                        toast({ title: 'Enviado para Dead-letter' });
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Arquivar
+                  </Button>
+                )}
+              </div>
             )}
             <Button 
               size="icon" 
