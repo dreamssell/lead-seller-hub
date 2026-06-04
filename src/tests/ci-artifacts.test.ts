@@ -21,56 +21,53 @@ describe('CI Artifact Generation (Webhook Validation Failures)', () => {
       status: 'failed',
       error: 'Timestamp outside 5min window',
       payload: { event: 'ai_action', id: 456 }
-    },
-    { 
-      correlation_id: 'corr-3', 
-      created_at: '2024-06-04T10:10:00Z', 
-      type: 'Replay', 
-      status: 'failed',
-      error: 'Replay protection rejected request',
-      payload: { event: 'kanban_move', id: 789 }
     }
   ];
 
-  it('should generate a summary JSON with failure details and artifact links', () => {
+  it('should generate a manifest.json with metadata and artifact links', () => {
     const baseUrl = 'https://lovable.dev/ci/artifacts/build-123';
     
-    const summary = mockFailures.map(f => ({
-      ...f,
-      links: {
-        html_report: `${baseUrl}/reports/junit.html`,
-        junit_xml: `${baseUrl}/reports/junit.xml`,
-        logs: `${baseUrl}/logs/${f.correlation_id}.log`,
-        screenshot: `${baseUrl}/screenshots/${f.correlation_id}.png`
-      }
-    }));
+    const manifest = {
+      build_id: 'build-123',
+      timestamp: new Date().toISOString(),
+      failures_count: mockFailures.length,
+      global_reports: {
+        junit: `${baseUrl}/reports/junit.xml`,
+        html: `${baseUrl}/reports/junit.html`
+      },
+      events: mockFailures.map(f => ({
+        correlation_id: f.correlation_id,
+        type: f.type,
+        error: f.error,
+        artifacts: {
+          logs: `${baseUrl}/logs/${f.correlation_id}.log`,
+          screenshot: `${baseUrl}/screenshots/${f.correlation_id}.png`,
+          payload: `${baseUrl}/payloads/${f.correlation_id}.json`
+        }
+      }))
+    };
 
-    expect(summary).toHaveLength(3);
-    expect(summary[0].links.logs).toContain('corr-1.log');
-    expect(summary[1].type).toBe('Timestamp');
+    expect(manifest.failures_count).toBe(2);
+    expect(manifest.events[0].artifacts.logs).toContain('corr-1.log');
     
-    // Simulação de escrita do arquivo (em CI seria fs.writeFileSync)
-    const jsonOutput = JSON.stringify(summary, null, 2);
-    expect(jsonOutput).toContain('"type": "Replay"');
+    // Simulação de escrita do manifesto
+    const output = JSON.stringify(manifest, null, 2);
+    expect(output).toContain('"build_id": "build-123"');
   });
 
-  it('should generate a summary CSV formatted correctly', () => {
-    const headers = ['X-Correlation-ID', 'Data', 'Tipo', 'Erro', 'Link Log', 'Link Screenshot'];
+  it('should generate a README.md summary for quick human review', () => {
     const baseUrl = 'https://lovable.dev/ci/artifacts/build-123';
+    let readme = `# Relatório de Falhas de CI - Build build-123\n\n`;
+    readme += `## Resumo\n- Total de falhas: ${mockFailures.length}\n- Relatório Completo (HTML): [Ver Aqui](${baseUrl}/reports/junit.html)\n\n`;
+    readme += `## Eventos Falhos\n\n`;
     
-    const rows = mockFailures.map(f => [
-      f.correlation_id,
-      f.created_at,
-      f.type,
-      f.error,
-      `${baseUrl}/logs/${f.correlation_id}.log`,
-      `${baseUrl}/screenshots/${f.correlation_id}.png`
-    ].join(','));
+    mockFailures.forEach(f => {
+      readme += `### ${f.correlation_id} (${f.type})\n`;
+      readme += `- Erro: \`${f.error}\`\n`;
+      readme += `- [Log](${baseUrl}/logs/${f.correlation_id}.log) | [Screenshot](${baseUrl}/screenshots/${f.correlation_id}.png)\n\n`;
+    });
 
-    const csvContent = [headers.join(','), ...rows].join('\n');
-    
-    expect(csvContent).toContain('X-Correlation-ID,Data,Tipo');
-    expect(csvContent).toContain('corr-1,2024-06-04T10:00:00Z,HMAC');
-    expect(csvContent.split('\n')).toHaveLength(4);
+    expect(readme).toContain('# Relatório de Falhas');
+    expect(readme).toContain('### corr-1 (HMAC)');
   });
 });
