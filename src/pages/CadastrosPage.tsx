@@ -1541,9 +1541,12 @@ function CrmGlobalActivities() {
         </SheetHeader>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-4">
+          <TabsList className="grid w-full grid-cols-4 mb-4">
             <TabsTrigger value="events">Histórico</TabsTrigger>
             <TabsTrigger value="deliveries">Notificações</TabsTrigger>
+            <TabsTrigger value="config" title="Configurar Backoff">
+              <Settings className="w-3 h-3" />
+            </TabsTrigger>
             <TabsTrigger value="test-mode" className="gap-1 text-primary">
               <Sparkles className="w-3 h-3" /> Modo de Teste
             </TabsTrigger>
