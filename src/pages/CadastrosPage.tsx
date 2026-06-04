@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -615,50 +615,15 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
                   <h4 className="text-sm font-bold flex items-center gap-2">
                     <Clock className="w-4 h-4 text-primary" /> Histórico de Atividades
                   </h4>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-7 text-[10px] gap-1 hover:text-primary"
-                    onClick={async () => {
-                      const { data: events } = await supabase
-                        .from('crm_events')
-                        .select('*')
-                        .eq('contact_id', editing.id)
-                        .eq('type', 'status_change')
-                        .order('created_at', { ascending: false })
-                        .limit(1);
-                      
-                      if (events && events.length > 0) {
-                        const payload = events[0].payload as any;
-                        if (payload?.old_status && !payload.is_undo) {
-                          // Pré-visualização do snapshot se existir
-                          if (payload.snapshot_before) {
-                            const confirmRestore = window.confirm(
-                              `Restaurar para etapa: ${payload.old_status}\n` +
-                              `Campos afetados: ${Object.keys(payload.snapshot_before).filter(k => !['id', 'created_at', 'updated_at', 'status'].includes(k)).join(', ')}\n\n` +
-                              `Deseja prosseguir com o Desfazer em Cascata?`
-                            );
-                            if (!confirmRestore) return;
-                          }
-
-                          await updateContactStatus(
-                            editing.id, 
-                            payload.old_status, 
-                            'Desfazer em cascata (reversão completa)', 
-                            true, 
-                            payload.snapshot_before
-                          );
-                          setOpen(false);
-                        } else {
-                          toast({ title: "Última ação já foi desfeita ou não é reversível", variant: "default" });
-                        }
-                      } else {
-                        toast({ title: "Nada para desfazer", variant: "default" });
-                      }
+                  <UndoCascadeButton 
+                    contactId={editing.id} 
+                    currentRecord={editing}
+                    onUndo={() => {
+                      setOpen(false);
+                      load();
                     }}
-                  >
-                    <RefreshCw className="w-3 h-3" /> Desfazer Cascata
-                  </Button>
+                    updateContactStatus={updateContactStatus}
+                  />
                 </div>
                 <ContactActivityTimeline contactId={editing.id} />
               </div>
@@ -1291,6 +1256,139 @@ function ContactActivityTimeline({ contactId }: { contactId: string }) {
   );
 }
 
+function UndoCascadeButton({ contactId, currentRecord, onUndo, updateContactStatus }: { 
+  contactId: string; 
+  currentRecord: any; 
+  onUndo: () => void;
+  updateContactStatus: any;
+}) {
+  const [open, setOpen] = useState(false);
+  const [event, setEvent] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  const loadLastEvent = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('crm_events')
+      .select('*')
+      .eq('contact_id', contactId)
+      .eq('type', 'status_change')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    
+    if (data && data[0]) {
+      const payload = data[0].payload as any;
+      if (payload?.old_status && !payload.is_undo) {
+        setEvent(data[0]);
+      } else {
+        setEvent(null);
+      }
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (open) loadLastEvent();
+  }, [open]);
+
+  const handleUndo = async () => {
+    if (!event) return;
+    const payload = event.payload as any;
+    await updateContactStatus(
+      contactId, 
+      payload.old_status, 
+      'Desfazer em cascata (reversão completa confirmada)', 
+      true, 
+      payload.snapshot_before
+    );
+    setOpen(false);
+    onUndo();
+  };
+
+  const snapshot = event?.payload?.snapshot_before;
+  const changedFields = snapshot ? Object.keys(snapshot).filter(k => 
+    !['id', 'created_at', 'updated_at', 'status', 'last_interaction_at'].includes(k) &&
+    JSON.stringify(snapshot[k]) !== JSON.stringify(currentRecord[k])
+  ) : [];
+
+  return (
+    <>
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        className="h-7 text-[10px] gap-1 hover:text-primary"
+        onClick={() => setOpen(true)}
+      >
+        <RefreshCw className="w-3 h-3" /> Desfazer Cascata
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-primary" /> Confirmar Reversão
+            </DialogTitle>
+            <SheetDescription>Visualize as mudanças antes de restaurar o snapshot.</SheetDescription>
+          </DialogHeader>
+
+          {loading ? (
+            <div className="py-10 text-center text-xs text-muted-foreground">Analisando histórico...</div>
+          ) : !event ? (
+            <div className="py-10 text-center text-xs text-muted-foreground italic">Nenhuma ação reversível encontrada para este contato.</div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <div className="bg-secondary/10 p-3 rounded-xl border border-border/50 space-y-3">
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-muted-foreground">Etapa Atual</span>
+                  <Badge variant="outline">{currentRecord.status}</Badge>
+                </div>
+                <div className="flex justify-center">
+                   <ChevronRight className="w-4 h-4 text-muted-foreground rotate-90" />
+                </div>
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-muted-foreground font-bold">Restaurar para</span>
+                  <Badge variant="default">{event.payload.old_status}</Badge>
+                </div>
+              </div>
+
+              {changedFields.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase text-muted-foreground">Campos Afetados (Snapshot Diff)</p>
+                  <div className="max-h-40 overflow-y-auto space-y-1.5 pr-2">
+                    {changedFields.map(f => (
+                      <div key={f} className="text-[11px] bg-secondary/5 border border-border/30 p-2 rounded-lg flex flex-col gap-1">
+                        <span className="font-mono text-[9px] text-primary">{f}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-destructive line-through truncate max-w-[100px]">{String(currentRecord[f] || '—')}</span>
+                          <ChevronRight className="w-3 h-3 text-muted-foreground" />
+                          <span className="text-emerald-600 font-bold truncate max-w-[150px]">{String(snapshot[f] || '—')}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-primary/5 p-3 rounded-xl border border-primary/20 space-y-1">
+                <p className="text-[10px] font-bold text-primary flex items-center gap-1">
+                  <User className="w-3 h-3" /> AUTOR DA MUDANÇA ORIGINAL
+                </p>
+                <p className="text-xs">{event.payload.agent_name || 'Desconhecido'}</p>
+                <p className="text-[9px] font-mono text-muted-foreground mt-1">X-Corr: {event.payload.correlation_id || 'N/A'}</p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button size="sm" disabled={!event} onClick={handleUndo}>Confirmar Reversão Completa</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function CrmGlobalActivities() {
   const [search, setInternalSearch] = useState('');
   const [logs, setLogs] = useState<any[]>([]);
@@ -1439,31 +1537,56 @@ function WebhookDeliveryList() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end gap-2">
-        <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => exportData('json')}>Exportar JSON</Button>
-        <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => exportData('csv')}>Exportar CSV</Button>
-        <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={fetch}><RefreshCw className="w-3 h-3 mr-1" /> Atualizar</Button>
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-secondary/10 p-3 rounded-xl border border-border/50">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-muted-foreground" />
+          <span className="text-xs font-semibold">Webhooks Ativos & Rejeitados</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => exportData('json')}>Exportar JSON</Button>
+          <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => exportData('csv')}>Exportar CSV</Button>
+          <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={fetch}><RefreshCw className="w-3 h-3 mr-1" /> Atualizar</Button>
+        </div>
       </div>
+
       <div className="space-y-3">
         {deliveries.length === 0 ? (
           <p className="text-center py-10 text-xs text-muted-foreground italic">Nenhuma entrega registrada.</p>
         ) : deliveries.map(d => (
-          <div key={d.id} className="p-3 bg-secondary/10 rounded-xl border border-border/50 text-[11px] space-y-2">
+          <div key={d.id} className={`p-3 rounded-xl border transition-all ${
+            d.status === 'failed' ? 'bg-destructive/5 border-destructive/20' : 'bg-secondary/10 border-border/50'
+          } text-[11px] space-y-2`}>
             <div className="flex justify-between items-center">
-              <span className="font-mono text-muted-foreground">{d.event_type}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-foreground">{d.event_type}</span>
+                {d.status === 'failed' && (
+                  <Badge variant="destructive" className="text-[8px] h-4">REJEITADO</Badge>
+                )}
+              </div>
               <Badge variant={d.status === 'sent' ? 'default' : d.status === 'failed' ? 'destructive' : 'secondary'} className="text-[9px]">
                 {d.status?.toUpperCase()}
               </Badge>
             </div>
-            <p className="text-muted-foreground truncate">{d.crm_webhooks?.url}</p>
-            <div className="flex gap-2">
-               <span className="text-muted-foreground">Status: {d.response_status || 'N/A'}</span>
-               <span className="text-muted-foreground">Retentativas: {d.retry_count}</span>
+            <p className="text-muted-foreground truncate font-mono text-[10px]">{d.crm_webhooks?.url}</p>
+            
+            {d.error_message && (
+              <div className="bg-destructive/10 text-destructive p-2 rounded-lg text-[10px] flex items-start gap-2">
+                <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
+                <span><strong>Motivo:</strong> {d.error_message}</span>
+              </div>
+            )}
+
+            <div className="flex gap-3 text-[10px]">
+               <span className="text-muted-foreground">HTTP: <span className="text-foreground font-semibold">{d.response_status || 'N/A'}</span></span>
+               <span className="text-muted-foreground">Retentativas: <span className="text-foreground font-semibold">{d.retry_count}</span></span>
+               <span className="text-muted-foreground">X-Corr: <span className="text-primary font-mono">{d.correlation_id || 'N/A'}</span></span>
             </div>
-            {d.correlation_id && <p className="font-mono text-[9px] text-primary">ID: {d.correlation_id}</p>}
-            <details>
-               <summary className="cursor-pointer hover:text-primary mt-1">Ver Payload</summary>
-               <pre className="bg-background/50 p-2 rounded mt-1 overflow-x-auto">{JSON.stringify(d.payload, null, 2)}</pre>
+            
+            <details className="border-t border-border/20 pt-2">
+               <summary className="cursor-pointer hover:text-primary text-[10px] text-muted-foreground flex items-center gap-1">
+                 <Search className="w-3 h-3" /> Ver Payload Auditável
+               </summary>
+               <pre className="bg-background/50 p-2 rounded mt-2 overflow-x-auto font-mono text-[9px] max-h-40">{JSON.stringify(d.payload, null, 2)}</pre>
             </details>
           </div>
         ))}
