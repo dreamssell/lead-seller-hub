@@ -2077,6 +2077,7 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
   useEffect(() => {
     let intervalId: any;
     let channel: any;
+    let isSubscribed = false;
 
     // A assinatura só deve ser criada se o modal estiver aberto E for o card correspondente ao X-Correlation-ID
     if (showDetail && d.correlation_id === currentCorrId && currentCorrId && pollingActive) {
@@ -2093,24 +2094,28 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
       
       syncStatus();
 
-      // Estratégia de Fallback: WebSocket (Channel) -> Polling
-      channel = supabase
-        .channel(`webhook-sync-${d.id}-${Date.now()}`) // Nome único para evitar conflitos
-        .on(
-          'postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'crm_webhook_logs', filter: `id=eq.${d.id}` },
-          (payload: any) => {
-             setD(payload.new);
-             setUpdateMethod('realtime');
-          }
-        )
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            setUpdateMethod('realtime');
-          } else {
-            setUpdateMethod('polling');
-          }
-        });
+      // Guard para evitar assinaturas duplicadas
+      if (!isSubscribed) {
+        const channelName = `webhook-sync-${d.id}-${Date.now()}`;
+        channel = supabase
+          .channel(channelName)
+          .on(
+            'postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'crm_webhook_logs', filter: `id=eq.${d.id}` },
+            (payload: any) => {
+               setD(payload.new);
+               setUpdateMethod('realtime');
+            }
+          )
+          .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+              setUpdateMethod('realtime');
+              isSubscribed = true;
+            } else {
+              setUpdateMethod('polling');
+            }
+          });
+      }
       
       intervalId = setInterval(() => {
         if (updateMethod !== 'realtime') syncStatus();
@@ -2123,6 +2128,7 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
       if (intervalId) clearInterval(intervalId);
       if (channel) {
         supabase.removeChannel(channel);
+        isSubscribed = false;
         console.log(`Unsubscribed from webhook-sync-${d.id}`);
       }
     };
