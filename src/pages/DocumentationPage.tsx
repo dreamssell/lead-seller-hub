@@ -338,7 +338,7 @@ function DocumentationContent({ correlationId }: { correlationId: string }) {
     if (showHistory) fetchHistory();
   }, [showHistory]);
   const [activeSection, setActiveSection] = useState("MCP Server");
-  console.log('DocContent with ID:', correlationId);
+  
   const [copied, setCopied] = useState<string | null>(null);
 
   const copyToClipboard = (text: string, id: string) => {
