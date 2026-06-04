@@ -1732,6 +1732,8 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
       response_status: d.response_status,
       retentativas: d.retry_count,
       correlation_id: d.correlation_id,
+      hmac_valid: !d.error_message?.includes('HMAC'),
+      timestamp_valid: !d.error_message?.includes('window'),
       payload: JSON.stringify(d.payload)
     }));
 
