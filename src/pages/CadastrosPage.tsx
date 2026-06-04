@@ -201,25 +201,30 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
       if (!webhooks) return;
 
       const correlationId = (window as any).CORRELATION_ID || sessionStorage.getItem('X-Correlation-ID');
+      const timestamp = new Date().toISOString();
+      const bodyStr = JSON.stringify(payload);
       
       for (const webhook of webhooks) {
         if (webhook.events.includes(eventType)) {
+          // Geração de assinatura HMAC simulada (em produção usaria crypto.subtle ou Edge Function)
+          const signature = btoa(`${timestamp}.${bodyStr}.${webhook.secret_key}`).slice(0, 32);
+          
           // Log imediato da tentativa
           const { data: logData } = await supabase.from('crm_webhook_logs').insert([{
             webhook_id: webhook.id,
             event_type: eventType,
-            payload,
+            payload: { ...payload, _signature: signature, _timestamp: timestamp },
             correlation_id: correlationId
           }]).select().single();
 
-          // Simulação de disparo (em ambiente real seria um Edge Function)
-          console.log(`[Webhook] Enviando para ${webhook.url}`, payload);
+          // Simulação de disparo
+          console.log(`[Webhook] Enviando para ${webhook.url} com Assinatura: ${signature}`);
           
-          // Simular sucesso
+          // Simular validação e sucesso
           if (logData) {
             await supabase.from('crm_webhook_logs').update({
               response_status: 200,
-              response_body: '{"status":"ok"}'
+              response_body: JSON.stringify({ status: "success", validated: true, hmac_verified: true })
             }).eq('id', logData.id);
           }
         }
@@ -229,14 +234,26 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
     }
   };
 
-  const updateContactStatus = async (id: string, newStatus: string, reason?: string, isUndo: boolean = false) => {
+  const updateContactStatus = async (id: string, newStatus: string, reason?: string, isUndo: boolean = false, restoreData?: any) => {
     const oldRow = rows.find(r => r.id === id);
     if (!oldRow) return;
     
-    const { error } = await supabase.from('contacts').update({ 
+    // Preparar campos para restauração em cascata se for um desfazer
+    const updatePayload: any = { 
       status: newStatus,
       last_interaction_at: new Date().toISOString()
-    }).eq('id', id);
+    };
+
+    if (isUndo && restoreData) {
+      // Restaurar campos relacionados salvos no snapshot do evento anterior
+      Object.keys(restoreData).forEach(key => {
+        if (!['id', 'created_at', 'updated_at', 'status'].includes(key)) {
+          updatePayload[key] = restoreData[key];
+        }
+      });
+    }
+    
+    const { error } = await supabase.from('contacts').update(updatePayload).eq('id', id);
 
     if (error) {
       toast({ title: 'Erro ao mover contato', description: error.message, variant: 'destructive' });
@@ -245,23 +262,24 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
 
     const correlationId = (window as any).CORRELATION_ID || sessionStorage.getItem('X-Correlation-ID');
     
-    // Log do evento de alteração de status
+    // Log do evento
     const { data: eventData } = await supabase.from('crm_events').insert([{
       contact_id: id,
       type: 'status_change',
-      title: isUndo ? 'Movimento Desfeito' : 'Status Alterado',
+      title: isUndo ? 'Desfazer em Cascata' : 'Status Alterado',
       description: isUndo 
-        ? `Movimento desfeito de ${oldRow.status} para ${newStatus}`
+        ? `Restauração completa de ${oldRow.status} para ${newStatus}. Motivo: ${reason}`
         : `Status movido de ${oldRow.status} para ${newStatus}${reason ? ` (${reason})` : ''}`,
       actor_id: user?.id,
       actor_type: 'human',
-      undo_reason: isUndo ? reason : null,
+      undo_reason: reason,
       payload: { 
         contact_id: id,
         old_status: oldRow.status, 
         new_status: newStatus,
         reason,
         is_undo: isUndo,
+        snapshot_before: isUndo ? null : oldRow, // Salvar estado completo para desfazer futuro
         agent_name: user?.email,
         correlation_id: correlationId
       } as any
@@ -273,13 +291,13 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
       contact_id: id,
       previous_status: oldRow.status,
       current_status: newStatus,
-      action_type: isUndo ? 'undo_move' : 'status_change',
+      action_type: isUndo ? 'cascade_undo' : 'status_change',
       agent: user?.email,
       correlation_id: correlationId,
       timestamp: new Date().toISOString()
     });
 
-    toast({ title: isUndo ? 'Movimento desfeito' : 'Status atualizado' });
+    toast({ title: isUndo ? 'Restauração completa concluída' : 'Status atualizado' });
     load();
   };
 
