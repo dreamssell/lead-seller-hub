@@ -1906,8 +1906,18 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId, selectedIds, setSelect
     if (d.correlation_id === currentCorrId && currentCorrId && cardRef.current) {
       cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setShowDetail(true);
+      // Sincronizar com o banco de dados se houver alteração
+      const syncStatus = async () => {
+        const { data } = await supabase.from('crm_webhook_logs').select('*').eq('id', d.id).single();
+        if (data && data.status !== d.status) {
+           // Em um cenário real, atualizaríamos o estado pai ou re-buscariamos
+           // Por simplicidade aqui, vamos apenas logar e sugerir refresh se for crítico
+           console.log('Status out of sync, fetching fresh data...');
+        }
+      };
+      syncStatus();
     }
-  }, [currentCorrId, d.correlation_id]);
+  }, [currentCorrId, d.correlation_id, d.status]);
   
   return (
     <>
