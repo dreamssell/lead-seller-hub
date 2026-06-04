@@ -1265,25 +1265,26 @@ function ContactActivityTimeline({ contactId }: { contactId: string }) {
               onClick={() => ev.payload?.correlation_id && setFilterCorrId(ev.payload.correlation_id)}
               title="Filtrar por este X-Correlation-ID"
             >
-            {ev.type === 'chat' && <MessageSquare className="w-4 h-4" />}
-            {ev.type === 'status_change' && <LayoutGrid className="w-4 h-4" />}
-            {ev.actor_type === 'ai' ? <BotIcon className="w-4 h-4" /> : (ev.type !== 'chat' && ev.type !== 'status_change' && <User className="w-4 h-4" />)}
-          </div>
-          <div className="flex-1 space-y-1">
-            <div className="flex justify-between items-center">
-              <p className="text-xs font-bold text-foreground">{ev.title || 'Atividade'}</p>
-              <time className="text-[10px] text-muted-foreground font-mono">{new Date(ev.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</time>
+              {ev.type === 'chat' && <MessageSquare className="w-4 h-4" />}
+              {ev.type === 'status_change' && <LayoutGrid className="w-4 h-4" />}
+              {ev.actor_type === 'ai' ? <BotIcon className="w-4 h-4" /> : (ev.type !== 'chat' && ev.type !== 'status_change' && <User className="w-4 h-4" />)}
             </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">{ev.description}</p>
-            {ev.payload?.correlation_id && (
-              <p className="text-[9px] font-mono text-primary bg-primary/5 px-1.5 py-0.5 rounded w-fit mt-1">
-                ID: {ev.payload.correlation_id}
-              </p>
-            )}
-            {ev.title === 'Desfazer em Cascata' && <ContactTimelineDetails ev={ev} />}
+            <div className="flex-1 space-y-1">
+              <div className="flex justify-between items-center">
+                <p className="text-xs font-bold text-foreground">{ev.title || 'Atividade'}</p>
+                <time className="text-[10px] text-muted-foreground font-mono">{new Date(ev.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</time>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">{ev.description}</p>
+              {ev.payload?.correlation_id && (
+                <p className="text-[9px] font-mono text-primary bg-primary/5 px-1.5 py-0.5 rounded w-fit mt-1">
+                  ID: {ev.payload.correlation_id}
+                </p>
+              )}
+              {ev.title === 'Desfazer em Cascata' && <ContactTimelineDetails ev={ev} />}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
