@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, Loader2, Save, Upload, UserCircle, Plug, BarChart3, Bell, Shield, Code2 } from 'lucide-react';
+import { Building2, Loader2, Save, Upload, UserCircle, Plug, BarChart3, Bell, Shield, Code2, AlertTriangle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,7 @@ const QUICK = [
 
 export default function GeneralTab() {
   const [company, setCompany] = useState<CompanySettings>(empty);
+  const [appConfig, setAppConfig] = useState<{ doc_retry_alert_limit: number }>({ doc_retry_alert_limit: 3 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -47,14 +48,19 @@ export default function GeneralTab() {
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from('company_settings').select('*').order('created_at').limit(1).maybeSingle();
-      if (data) setCompany(data as CompanySettings);
+      if (data) {
+        setCompany(data as CompanySettings);
+        if ((data as any).config) {
+          setAppConfig({ ...appConfig, ...(data as any).config });
+        }
+      }
       setLoading(false);
     })();
   }, []);
 
   const save = async () => {
     setSaving(true);
-    const payload = { ...company };
+    const payload = { ...company, config: appConfig };
     let res;
     if (company.id) {
       res = await supabase.from('company_settings').update(payload).eq('id', company.id);
@@ -118,6 +124,37 @@ export default function GeneralTab() {
       </div>
 
       {/* Empresa removida conforme solicitação para evitar duplicidade */}
+
+      {/* Diagnóstico & Resiliência */}
+      <div className="glass-card p-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5 text-amber-500" />
+          <h3 className="text-sm font-semibold text-foreground">Diagnóstico & Resiliência</h3>
+        </div>
+        <p className="text-xs text-muted-foreground">Configure os limites de tolerância para falhas automáticas na documentação técnica.</p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Limite de Retries para Alerta</Label>
+            <Input 
+              type="number" 
+              min={1} 
+              max={10} 
+              value={appConfig.doc_retry_alert_limit} 
+              onChange={(e) => setAppConfig({ ...appConfig, doc_retry_alert_limit: parseInt(e.target.value || '3') })}
+              className="h-10 rounded-xl"
+            />
+            <p className="text-[10px] text-muted-foreground">O alerta de Correlation ID aparecerá após este número de tentativas falhas.</p>
+          </div>
+        </div>
+        
+        <div className="flex justify-end pt-2">
+          <Button onClick={save} disabled={saving || loading} className="rounded-xl h-10 px-6">
+            {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+            Salvar Preferências
+          </Button>
+        </div>
+      </div>
 
       {/* Notificação Lead */}
       <div className="glass-card p-6">
