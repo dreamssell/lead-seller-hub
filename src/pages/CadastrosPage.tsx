@@ -2059,13 +2059,41 @@ function WebhookDeliveryCard({ d: initialData, onRetry, currentCorrId, selectedI
 }) {
   const [d, setD] = useState(initialData);
   const [pollingActive, setPollingActive] = useState(() => {
-    return localStorage.getItem(`polling_active_${initialData.id}`) !== 'false';
+    const params = new URLSearchParams(window.location.search);
+    const urlPolling = params.get('polling');
+    if (urlPolling !== null) return urlPolling === 'true';
+    
+    // Fallback para localStorage com TTL (24h)
+    const saved = localStorage.getItem(`polling_active_${initialData.id}`);
+    if (saved) {
+      try {
+        const { value, expiry } = JSON.parse(saved);
+        if (Date.now() < expiry) return value;
+        localStorage.removeItem(`polling_active_${initialData.id}`);
+      } catch (e) {
+        localStorage.removeItem(`polling_active_${initialData.id}`);
+      }
+    }
+    return true;
   });
   const [updateMethod, setUpdateMethod] = useState<'realtime' | 'polling' | 'none'>('none');
 
   useEffect(() => {
-    localStorage.setItem(`polling_active_${d.id}`, String(pollingActive));
-  }, [pollingActive, d.id]);
+    // Persistir no localStorage com TTL de 24 horas
+    const item = {
+      value: pollingActive,
+      expiry: Date.now() + 86400000
+    };
+    localStorage.setItem(`polling_active_${d.id}`, JSON.stringify(item));
+    
+    // Sincronizar parâmetro de URL sem recarregar a página
+    const params = new URLSearchParams(window.location.search);
+    if (d.correlation_id === currentCorrId) {
+      params.set('polling', String(pollingActive));
+      const newUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [pollingActive, d.id, d.correlation_id, currentCorrId]);
 
   useEffect(() => {
     setD(initialData);
