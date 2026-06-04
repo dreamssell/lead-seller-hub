@@ -1465,7 +1465,7 @@ function CrmGlobalActivities() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const cid = params.get('correlation_id');
+      const cid = params.get('correlation_id') || localStorage.getItem('last_correlation_id');
       if (cid) {
         setExternalCorrId(cid);
         setCorrSearch(cid);
@@ -1563,6 +1563,7 @@ function CrmGlobalActivities() {
                           const url = new URL(window.location.href);
                           url.searchParams.set('correlation_id', cid);
                           window.history.replaceState({}, '', url);
+                          localStorage.setItem('last_correlation_id', cid);
                         }}
                         title="Abrir Auditoria e filtrar por este ID"
                       >
@@ -1611,7 +1612,9 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
   const [corrSearch, setCorrSearch] = useState(() => {
     if (typeof window === 'undefined') return '';
     const params = new URLSearchParams(window.location.search);
-    return params.get('correlation_id') || '';
+    const urlId = params.get('correlation_id');
+    const savedId = localStorage.getItem('last_correlation_id');
+    return urlId || savedId || '';
   });
 
   useEffect(() => {
@@ -1647,12 +1650,14 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
         const url = new URL(window.location.href);
         url.searchParams.set('correlation_id', corrSearch);
         window.history.replaceState({}, '', url);
+        localStorage.setItem('last_correlation_id', corrSearch);
       }
       if (setParentCorrSearch) setParentCorrSearch(corrSearch);
     } else if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       url.searchParams.delete('correlation_id');
       window.history.replaceState({}, '', url);
+      localStorage.removeItem('last_correlation_id');
     }
 
     const { data } = await query.limit(100);
@@ -1752,10 +1757,19 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
 function WebhookDeliveryCard({ d, onRetry, currentCorrId }: { d: any, onRetry: () => void, currentCorrId?: string }) {
   const [showDetail, setShowDetail] = useState(false);
   const [showPayload, setShowPayload] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (d.correlation_id === currentCorrId && currentCorrId && cardRef.current) {
+      cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setShowDetail(true);
+    }
+  }, [currentCorrId, d.correlation_id]);
   
   return (
     <>
       <div 
+        ref={cardRef}
         onClick={() => setShowDetail(true)}
         className={`p-3 rounded-xl border transition-all cursor-pointer hover:shadow-md ${
           d.status === 'failed' ? 'bg-destructive/5 border-destructive/20' : 'bg-secondary/10 border-border/50'
@@ -1936,6 +1950,7 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId }: { d: any, onRetry: (
                 const url = new URL(window.location.href);
                 url.searchParams.set('correlation_id', d.correlation_id);
                 navigator.clipboard.writeText(url.toString());
+                localStorage.setItem('last_correlation_id', d.correlation_id);
                 toast({ title: 'Link de Auditoria Copiado!' });
               }}>
                 <Share2 className="w-3 h-3" /> Link Direto
