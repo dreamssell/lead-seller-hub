@@ -20,10 +20,19 @@ interface CallHistory {
   timestamp: number;
 }
 
-export default function MCPConsole() {
+export default function MCPConsole({ correlationId }: { correlationId?: string }) {
   const [method, setMethod] = useState('POST');
   const [endpoint, setEndpoint] = useState('/mcp/context');
-  const [headers, setHeaders] = useState('{\n  "Authorization": "Bearer YOUR_TOKEN",\n  "Content-Type": "application/json"\n}');
+  const [headers, setHeaders] = useState(() => {
+    const defaultHeaders = {
+      "Authorization": "Bearer YOUR_TOKEN",
+      "Content-Type": "application/json"
+    };
+    if (correlationId) {
+      (defaultHeaders as any)["X-Correlation-ID"] = correlationId;
+    }
+    return JSON.stringify(defaultHeaders, null, 2);
+  });
   const [body, setBody] = useState('{\n  "query": "Qual o faturamento de hoje?",\n  "metadata": {\n    "agent_id": "demo-123"\n  }\n}');
   const [response, setResponse] = useState<any>(null);
   const [loading, setLoading] = useState(false);
