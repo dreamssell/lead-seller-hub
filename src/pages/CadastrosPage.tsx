@@ -1458,6 +1458,8 @@ function CrmGlobalActivities() {
   const [search, setInternalSearch] = useState('');
   const [logs, setLogs] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('events');
+  const [externalCorrId, setExternalCorrId] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -1485,7 +1487,7 @@ function CrmGlobalActivities() {
           <SheetDescription>Interações, e-mails e webhooks com status de entrega e X-Correlation-ID.</SheetDescription>
         </SheetHeader>
         
-        <Tabs defaultValue="events" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-4">
             <TabsTrigger value="events">Histórico</TabsTrigger>
             <TabsTrigger value="deliveries">Notificações</TabsTrigger>
@@ -1532,7 +1534,10 @@ function CrmGlobalActivities() {
                   {(log.payload as any)?.correlation_id && (
                     <p 
                       className="text-[9px] font-mono text-muted-foreground bg-background/50 px-1.5 py-0.5 rounded w-fit cursor-pointer hover:bg-background/80"
-                      onClick={() => setCorrSearch((log.payload as any).correlation_id)}
+                      onClick={() => {
+                        setExternalCorrId((log.payload as any).correlation_id);
+                        setActiveTab('deliveries');
+                      }}
                       title="Clique para pesquisar nas notificações"
                     >
                       ID: {(log.payload as any).correlation_id}
@@ -1544,7 +1549,7 @@ function CrmGlobalActivities() {
           </TabsContent>
 
           <TabsContent value="deliveries">
-             <WebhookDeliveryList />
+             <WebhookDeliveryList externalCorrId={externalCorrId} />
           </TabsContent>
         </Tabs>
       </SheetContent>
@@ -1552,7 +1557,7 @@ function CrmGlobalActivities() {
   );
 }
 
-function WebhookDeliveryList() {
+function WebhookDeliveryList({ externalCorrId }: { externalCorrId?: string }) {
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [corrSearch, setCorrSearch] = useState(() => {
@@ -1560,6 +1565,10 @@ function WebhookDeliveryList() {
     const params = new URLSearchParams(window.location.search);
     return params.get('correlation_id') || '';
   });
+
+  useEffect(() => {
+    if (externalCorrId) setCorrSearch(externalCorrId);
+  }, [externalCorrId]);
 
   const fetch = async () => {
     setLoading(true);
