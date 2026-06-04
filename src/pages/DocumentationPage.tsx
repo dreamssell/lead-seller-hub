@@ -39,7 +39,7 @@ const redactSensitiveInfo = (obj: any): any => {
 };
 
 /**
- * Hook centralizado para gerenciar telemetria e ID de correlação.
+ * Hook centralizado para gerenciar telemetria e Correlation ID persistente.
  */
 function useDocTelemetry() {
   const correlationId = useMemo(() => {
