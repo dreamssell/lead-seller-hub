@@ -121,16 +121,39 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 pb-10 text-center px-8">
-          <div className="flex flex-col gap-2 p-4 bg-secondary/30 rounded-xl border border-border/20">
+          <div className="flex flex-col gap-3 p-5 bg-secondary/30 rounded-2xl border border-border/20 shadow-inner">
             {!is403 && (
-              <div className="text-[10px] font-mono text-left overflow-auto max-h-24 text-muted-foreground leading-tight mb-2">
+              <div className="text-[10px] font-mono text-left overflow-auto max-h-24 text-muted-foreground leading-tight mb-3 opacity-80">
                 {error.message}
               </div>
             )}
-            <div className="flex flex-wrap justify-between items-center gap-2 text-[9px] font-mono text-muted-foreground/60 uppercase tracking-tighter">
-              <span>Status: {is403 ? '403 Forbidden' : 'Network Fail'}</span>
-              <span>Retries: {retryCount}/{MAX_RETRIES}</span>
-              <span className="truncate max-w-[100px]">ID: {correlationId.split('-')[0]}</span>
+            
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <div className="p-2 bg-background/50 rounded-lg border border-border/10">
+                <p className="text-[8px] uppercase text-muted-foreground mb-0.5">Falhas de Rede</p>
+                <p className="text-xs font-bold font-mono">{stats.network}</p>
+              </div>
+              <div className="p-2 bg-background/50 rounded-lg border border-border/10">
+                <p className="text-[8px] uppercase text-muted-foreground mb-0.5">Erros de Auth</p>
+                <p className="text-xs font-bold font-mono">{stats.auth}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5 text-[9px] font-mono text-muted-foreground/70 uppercase tracking-tighter text-left border-t border-border/10 pt-3">
+              <div className="flex justify-between">
+                <span>Tentativas:</span>
+                <span className="text-foreground">{retryCount}/{MAX_RETRIES}</span>
+              </div>
+              {isRetrying && timeRemaining !== null && (
+                <div className="flex justify-between text-amber-500">
+                  <span>Próximo em:</span>
+                  <span>{timeRemaining}s ({new Date(nextRetryTime || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })})</span>
+                </div>
+              )}
+              <div className="flex justify-between opacity-50">
+                <span>Correlation ID:</span>
+                <span className="truncate max-w-[80px]">{correlationId.split('-')[0]}</span>
+              </div>
             </div>
           </div>
           <div className="flex flex-col gap-3">
