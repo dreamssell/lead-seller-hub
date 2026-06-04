@@ -58,9 +58,12 @@ describe('DocumentationPage', () => {
   it('should render all documentation tabs and contents correctly', async () => {
     render(
       <MemoryRouter>
-        <DocumentationPage />
+        <ThemeProvider>
+          <DocumentationPage />
+        </ThemeProvider>
       </MemoryRouter>
     );
+
 
     // 1. Verificar se REST API está visível por padrão
     expect(screen.getByText('Endpoints REST')).toBeInTheDocument();
