@@ -275,7 +275,30 @@ function DocumentationContent({ correlationId, onRegenerateId }: { correlationId
   return (
     <AppLayout title="Documentação Técnica" subtitle="API REST, MCP e Webhooks.">
         <div className="max-w-7xl mx-auto space-y-8">
-            <TabsContent value="test" className="pt-4"><MCPConsole correlationId={correlationId} /></TabsContent>
+            <Tabs defaultValue="rest" className="w-full">
+              <TabsList className="mb-4">
+                <TabsTrigger value="rest">REST API</TabsTrigger>
+                <TabsTrigger value="mcp">MCP Server</TabsTrigger>
+                <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
+                <TabsTrigger value="test">Console</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="rest">
+                {/* Conteúdo da API REST aqui */}
+              </TabsContent>
+              
+              <TabsContent value="mcp">
+                {/* Conteúdo do MCP aqui */}
+              </TabsContent>
+
+              <TabsContent value="webhooks">
+                {/* Conteúdo de Webhooks aqui */}
+              </TabsContent>
+
+              <TabsContent value="test" className="pt-4">
+                <MCPConsole correlationId={correlationId} />
+              </TabsContent>
+            </Tabs>
             
             <div className="p-6 bg-card border border-border/40 rounded-3xl shadow-sm space-y-4">
                 <div className="flex items-center justify-between">
