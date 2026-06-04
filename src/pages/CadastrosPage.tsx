@@ -1610,6 +1610,9 @@ function WebhookDeliveryList({ externalCorrId, setCorrSearch: setParentCorrSearc
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [timeFilter, setTimeFilter] = useState<string>('all');
   const [corrSearch, setCorrSearch] = useState(() => {
     if (typeof window === 'undefined') return '';
     const params = new URLSearchParams(window.location.search);
