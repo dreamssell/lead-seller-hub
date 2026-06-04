@@ -206,16 +206,16 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
 
 export default function DocumentationPage() {
   const { canAccessPage } = useAuth();
-  const { correlationId } = useDocTelemetry();
+  const { correlationId, regenerateId } = useDocTelemetry();
   if (!canAccessPage('documentation')) throw new Error('403: Permission denied');
   return (
     <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => console.log('Reset')}>
-      <DocumentationContent correlationId={correlationId} />
+      <DocumentationContent correlationId={correlationId} onRegenerateId={regenerateId} />
     </ErrorBoundary>
   );
 }
 
-function DocumentationContent({ correlationId }: { correlationId: string }) {
+function DocumentationContent({ correlationId, onRegenerateId }: { correlationId: string, onRegenerateId: () => void }) {
   const [telemetryHistory, setTelemetryHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [activeSection, setActiveSection] = useState("MCP Server");
