@@ -11,30 +11,36 @@ import '@testing-library/jest-dom';
 
 
 // Mock do supabase client
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    auth: {
-      onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
-      getSession: vi.fn(() => Promise.resolve({ data: { session: null } })),
-    },
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          order: vi.fn(() => Promise.resolve({ data: [], error: null })),
-        })),
-        limit: vi.fn(() => ({
-          maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
-        })),
+vi.mock('@/integrations/supabase/client', () => {
+  const mockFrom = vi.fn(() => ({
+    select: vi.fn(() => ({
+      eq: vi.fn(() => ({
+        order: vi.fn(() => Promise.resolve({ data: [], error: null })),
+        maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
       })),
-      insert: vi.fn(() => Promise.resolve({ error: null })),
+      limit: vi.fn(() => ({
+        maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
+      })),
     })),
-    channel: vi.fn(() => ({
-      on: vi.fn().mockReturnThis(),
-      subscribe: vi.fn(),
-    })),
-    removeChannel: vi.fn(),
-  },
-}));
+    insert: vi.fn(() => Promise.resolve({ error: null })),
+  }));
+
+  return {
+    supabase: {
+      auth: {
+        onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
+        getSession: vi.fn(() => Promise.resolve({ data: { session: null } })),
+      },
+      from: mockFrom,
+      channel: vi.fn(() => ({
+        on: vi.fn().mockReturnThis(),
+        subscribe: vi.fn(),
+      })),
+      removeChannel: vi.fn(),
+    },
+  };
+});
+
 
 // Mock do useAuth para evitar problemas de contexto e permissão
 vi.mock('@/contexts/AuthContext', async () => {
