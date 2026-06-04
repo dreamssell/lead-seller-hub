@@ -1850,12 +1850,24 @@ function WebhookDeliveryCard({ d, onRetry, currentCorrId, selectedIds, setSelect
     <>
       <div 
         ref={cardRef}
-        onClick={() => setShowDetail(true)}
-        className={`p-3 rounded-xl border transition-all cursor-pointer hover:shadow-md ${
+        className={`p-3 rounded-xl border transition-all cursor-pointer hover:shadow-md relative group ${
           d.status === 'failed' ? 'bg-destructive/5 border-destructive/20' : 'bg-secondary/10 border-border/50'
         } ${d.correlation_id === currentCorrId ? 'ring-2 ring-primary border-primary animate-pulse' : ''} text-[11px] space-y-2`}
+        onClick={() => setShowDetail(true)}
       >
-        <div className="flex justify-between items-center">
+        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10" onClick={(e) => e.stopPropagation()}>
+          <input 
+            type="checkbox" 
+            className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+            checked={selectedIds.includes(d.id)}
+            onChange={(e) => {
+              if (e.target.checked) setSelectedIds(prev => [...prev, d.id]);
+              else setSelectedIds(prev => prev.filter(id => id !== d.id));
+            }}
+          />
+        </div>
+
+        <div className="flex justify-between items-center pr-6">
           <div className="flex items-center gap-2">
             <span className="font-bold text-foreground">{d.event_type}</span>
             {d.status === 'failed' && (
