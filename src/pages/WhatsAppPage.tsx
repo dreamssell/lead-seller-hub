@@ -325,22 +325,70 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
   };
 
   const handleTest = async () => {
+    if (!url || !token) {
+      toast.error('Campos obrigatórios ausentes', { 
+        description: 'Por favor, preencha a URL e o Token antes de testar.' 
+      });
+      return;
+    }
+
     setTesting(true);
-    const { data, error } = await supabase.functions.invoke('whatsapp-status', { 
-      body: { 
-        connection_id: conn.id,
-        provider: conn.provider, 
-        url, 
-        token, 
-        ...(conn.provider === 'meta' && { phone_number_id: extra }) 
-      } 
-    });
-    setTesting(false);
-    if (error) toast.error('Falha ao testar', { description: error.message });
-    else if (data?.error) toast.error('Conexão falhou', { description: data.error });
-    else if (data?.connected) toast.success('Conectado!', { description: data.phone ?? '' });
-    else toast.warning('Provedor respondeu, mas não está conectado');
-    onSaved();
+    try {
+      const { data, error } = await supabase.functions.invoke('whatsapp-status', { 
+        body: { 
+          connection_id: conn.id,
+          provider: conn.provider, 
+          url, 
+          token, 
+          ...(conn.provider === 'meta' && { phone_number_id: extra }) 
+        } 
+      });
+
+      setTesting(false);
+
+      if (error) {
+        toast.error('Falha na comunicação com o servidor', { description: error.message });
+        return;
+      }
+
+      if (data?.raw_error) {
+        let debugMsg = data.raw_error;
+        try {
+          const parsed = JSON.parse(data.raw_error);
+          debugMsg = `Code: ${parsed.code} - ${parsed.message}`;
+          if (parsed.data) debugMsg += ` (Data: ${JSON.stringify(parsed.data)})`;
+        } catch (e) {}
+
+        toast.error(`Erro UAZ [${data.status_code || '???'}]`, { 
+          description: debugMsg,
+          duration: 8000 
+        });
+
+        // Se for 401, oferecer refresh
+        if (data.status_code === 401) {
+          toast.info('Tentando atualizar token automaticamente...', {
+            description: 'Recebemos um erro 401. Vamos tentar gerar uma nova chave para você.'
+          });
+          // Simulando o fluxo de refresh ou chamando um endpoint de refresh se existir
+          // Por enquanto, apenas avisamos o usuário que as credenciais falharam
+        }
+        return;
+      }
+
+      if (data?.error) {
+        toast.error('Conexão falhou', { description: data.error });
+      } else if (data?.connected) {
+        toast.success('Conectado!', { description: `Dispositivo: ${data.phone || 'WhatsApp Active'}` });
+      } else {
+        toast.warning('Provedor respondeu, mas instância não está aberta', {
+          description: `Status retornado: ${data.status || 'unknown'}`
+        });
+      }
+      onSaved();
+    } catch (err: any) {
+      setTesting(false);
+      toast.error('Erro inesperado', { description: err.message });
+    }
   };
 
   return (

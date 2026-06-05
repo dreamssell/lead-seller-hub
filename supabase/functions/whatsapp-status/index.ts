@@ -7,48 +7,66 @@ const corsHeaders = {
 
 async function checkUaz(url: string, token: string) {
   try {
-    // Note: User report says "Missing token" despite Authorization header.
-    // Some versions or reverse proxies for UAZ require headers in lowercase or specific keys.
     const headers = { 
       "Authorization": `Bearer ${token}`,
       "apikey": token,
-      "token": token
+      "token": token,
+      "Content-Type": "application/json"
     };
 
-    // Constructing URL for UAZ v1 and v2 status endpoints
-    // Some use /instance/status, others /status/instance
     const baseUrl = url.replace(/\/$/, "");
-    console.log(`Checking UAZ status at: ${baseUrl}/instance/status`);
+    console.log(`[UAZ DEBUG] Testing connection to: ${baseUrl}`);
+    console.log(`[UAZ DEBUG] Headers keys sent: ${Object.keys(headers).join(", ")}`);
     
+    // Attempt 1: /instance/status
+    console.log(`[UAZ DEBUG] Trying endpoint: ${baseUrl}/instance/status`);
     let res = await fetch(`${baseUrl}/instance/status`, { headers });
     let text = await res.text();
     
-    // Fallback to /status/instance if /instance/status fails
-    if (res.status === 404 || res.status === 401) {
-       console.log("Trying fallback endpoint /status/instance...");
+    // Attempt 2 Fallback: /status/instance
+    if (!res.ok && (res.status === 404 || res.status === 401)) {
+       console.log(`[UAZ DEBUG] Fallback 1: Trying ${baseUrl}/status/instance (Previous status: ${res.status})`);
        const res2 = await fetch(`${baseUrl}/status/instance`, { headers });
-       const text2 = await res2.text();
-       if (res2.ok) {
+       if (res2.ok || res2.status !== 404) {
          res = res2;
-         text = text2;
+         text = await res2.text();
+       }
+    }
+
+    // Attempt 3 Fallback: /instance/connect (Some versions use this for status/init)
+    if (!res.ok && res.status === 404) {
+       console.log(`[UAZ DEBUG] Fallback 2: Trying ${baseUrl}/instance/connect`);
+       const res3 = await fetch(`${baseUrl}/instance/connect`, { headers });
+       if (res3.ok) {
+         res = res3;
+         text = await res3.text();
        }
     }
     
     if (!res.ok) {
-      console.error(`UAZ Error [${res.status}]: ${text}`);
-      return { connected: false, status: "error", error: `UAZ [${res.status}]: ${text.slice(0, 300)}` };
+      console.error(`[UAZ DEBUG] Final Error [${res.status}]: ${text}`);
+      // Returning full raw response for UI display as requested
+      return { 
+        connected: false, 
+        status: "error", 
+        error: `UAZ [${res.status}]: ${text.slice(0, 500)}`,
+        raw_error: text,
+        status_code: res.status
+      };
     }
     
     const data = JSON.parse(text);
-    // UAZ returns status: "open", "connecting", "close", etc. or state: "CONNECTED"
     const isConnected = data.status === "open" || data.state === "CONNECTED" || data.instanceStatus === "CONNECTED" || data.connectionStatus === "open";
+    
+    console.log(`[UAZ DEBUG] Success! Status: ${data.status || data.state}`);
+
     return { 
       connected: isConnected, 
       status: data.status || data.state || data.instanceStatus || data.connectionStatus,
       raw: data 
     };
   } catch (err) {
-    console.error(`Fetch exception: ${err.message}`);
+    console.error(`[UAZ DEBUG] Fetch exception: ${err.message}`);
     return { connected: false, status: "error", error: err.message };
   }
 }
