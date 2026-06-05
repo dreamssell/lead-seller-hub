@@ -48,6 +48,7 @@ const conversationsByChannel: Record<ChannelKey, Array<{ id: string; name: strin
   whatsapp: [],
   instagram: [],
   facebook: [],
+  telegram: [],
   linkedin: [],
   youtube: [],
   tiktok: [],
