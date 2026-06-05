@@ -325,6 +325,43 @@ export default function ChatPage() {
   }, [selectedConvId, whatsappStatus.connected, activeWhatsAppConn, activeChannel]);
 
   useEffect(() => {
+    // Real-time listener for connection events (Omnichannel Diagnostics)
+    const channel = supabase
+      .channel('connection_events_monitor')
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'connection_events' 
+      }, (payload) => {
+        const newEvent = payload.new;
+        addDebugLog(
+          newEvent.status === 'success' ? 'info' : 'error', 
+          `[Omnichannel] Novo evento: ${newEvent.event_type}`, 
+          newEvent
+        );
+
+        // Toast notifications for specific critical events
+        if (newEvent.event_type === 'lead' && newEvent.status === 'success') {
+          toast({ 
+            title: 'Novo Lead Capturado!', 
+            description: `Um novo lead vindo do Widget acaba de ser registrado.` 
+          });
+        } else if (newEvent.status === 'failure') {
+          toast({ 
+            variant: 'destructive',
+            title: 'Falha detectada', 
+            description: `Erro no canal ${newEvent.event_type}: ${newEvent.error_message}` 
+          });
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
     if (selectedConvId) {
       async function loadMessages() {
         const { data } = await supabase

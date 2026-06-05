@@ -19,7 +19,9 @@ import {
   PROVIDER_CONFIGS, 
   ConnectionStatus 
 } from './types';
-import { UazStats } from './UazStats'; // We'll create this next
+import { UazStats } from './UazStats';
+import { FacebookDiagnostics } from './FacebookDiagnostics';
+import { WidgetSettings } from './WidgetSettings';
 
 interface ConnectionCardProps {
   conn: WhatsAppConnection;
@@ -181,53 +183,67 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
           />
         )}
 
-        {/* Common Configuration Fields */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label className="text-xs font-bold uppercase text-muted-foreground">URL da API</Label>
-            <Input 
-              value={url} 
-              onChange={(e) => setUrl(e.target.value)} 
-              placeholder={config.url} 
-              className="h-9 text-sm"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs font-bold uppercase text-muted-foreground">{config.tokenLabel}</Label>
-            <Input 
-              type="password" 
-              value={token} 
-              onChange={(e) => setToken(e.target.value)} 
-              placeholder="••••••••" 
-              className="h-9 text-sm"
-            />
-          </div>
-          {config.extraLabel && (
-            <div className="space-y-2 col-span-full">
-              <Label className="text-xs font-bold uppercase text-muted-foreground">{config.extraLabel}</Label>
+        {conn.provider === 'facebook' && (
+          <FacebookDiagnostics conn={conn} />
+        )}
+
+        {conn.provider === 'widget' && (
+          <WidgetSettings conn={conn} onSaved={onSaved} />
+        )}
+
+        {/* Common Configuration Fields (Only show if not widget or explicitly toggled) */}
+        {conn.provider !== 'widget' && conn.provider !== 'facebook' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase text-muted-foreground">URL da API</Label>
               <Input 
-                value={extra} 
-                onChange={(e) => setExtra(e.target.value)} 
-                placeholder={config.extraLabel} 
+                value={url} 
+                onChange={(e) => setUrl(e.target.value)} 
+                placeholder={config.url} 
                 className="h-9 text-sm"
               />
             </div>
-          )}
-        </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase text-muted-foreground">{config.tokenLabel}</Label>
+              <Input 
+                type="password" 
+                value={token} 
+                onChange={(e) => setToken(e.target.value)} 
+                placeholder="••••••••" 
+                className="h-9 text-sm"
+              />
+            </div>
+            {config.extraLabel && (
+              <div className="space-y-2 col-span-full">
+                <Label className="text-xs font-bold uppercase text-muted-foreground">{config.extraLabel}</Label>
+                <Input 
+                  value={extra} 
+                  onChange={(e) => setExtra(e.target.value)} 
+                  placeholder={config.extraLabel} 
+                  className="h-9 text-sm"
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         <Separator className="opacity-50" />
         
         {/* Debug Panel Toggle */}
         <div className="flex items-center justify-between">
           <div className="flex gap-2">
-            <Button size="sm" onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} 
-              Salvar
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => handleTest()} disabled={testing}>
-              {testing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} 
-              Testar Conexão
-            </Button>
+            {conn.provider !== 'widget' && (
+              <>
+                <Button size="sm" onClick={handleSave} disabled={saving}>
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} 
+                  Salvar
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => handleTest()} disabled={testing}>
+                  {testing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} 
+                  Testar Conexão
+                </Button>
+              </>
+            )}
           </div>
           
           <Button 
