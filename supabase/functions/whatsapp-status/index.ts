@@ -7,18 +7,32 @@ const corsHeaders = {
 
 async function checkUaz(url: string, token: string) {
   try {
-    // Note: Some UAZ versions expect 'apikey' or 'Authorization' header.
-    // Based on user error "Missing token", the backend didn't see the token.
-    // Trying common variants for UAZ API.
+    // Note: User report says "Missing token" despite Authorization header.
+    // Some versions or reverse proxies for UAZ require headers in lowercase or specific keys.
     const headers = { 
       "Authorization": `Bearer ${token}`,
-      "apikey": token 
+      "apikey": token,
+      "token": token
     };
 
-    console.log(`Checking UAZ status at: ${url}/instance/status`);
+    // Constructing URL for UAZ v1 and v2 status endpoints
+    // Some use /instance/status, others /status/instance
+    const baseUrl = url.replace(/\/$/, "");
+    console.log(`Checking UAZ status at: ${baseUrl}/instance/status`);
     
-    const res = await fetch(`${url}/instance/status`, { headers });
-    const text = await res.text();
+    let res = await fetch(`${baseUrl}/instance/status`, { headers });
+    let text = await res.text();
+    
+    // Fallback to /status/instance if /instance/status fails
+    if (res.status === 404 || res.status === 401) {
+       console.log("Trying fallback endpoint /status/instance...");
+       const res2 = await fetch(`${baseUrl}/status/instance`, { headers });
+       const text2 = await res2.text();
+       if (res2.ok) {
+         res = res2;
+         text = text2;
+       }
+    }
     
     if (!res.ok) {
       console.error(`UAZ Error [${res.status}]: ${text}`);
@@ -27,10 +41,10 @@ async function checkUaz(url: string, token: string) {
     
     const data = JSON.parse(text);
     // UAZ returns status: "open", "connecting", "close", etc. or state: "CONNECTED"
-    const isConnected = data.status === "open" || data.state === "CONNECTED" || data.instanceStatus === "CONNECTED";
+    const isConnected = data.status === "open" || data.state === "CONNECTED" || data.instanceStatus === "CONNECTED" || data.connectionStatus === "open";
     return { 
       connected: isConnected, 
-      status: data.status || data.state || data.instanceStatus,
+      status: data.status || data.state || data.instanceStatus || data.connectionStatus,
       raw: data 
     };
   } catch (err) {
