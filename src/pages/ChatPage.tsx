@@ -4,9 +4,15 @@ import {
   Send, Paperclip, Phone, Video, MoreVertical, Search, Circle,
   Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Settings,
   Database, Activity, ShieldAlert, Wifi, WifiOff, Terminal, ChevronDown, ChevronUp, History as HistoryIcon, Bug, Play, Share2,
-  FileDown, Filter, Calendar,
-  Send as TelegramIcon
+  FileDown, Filter, Calendar, Clock, Loader2, X, AlertTriangle, Check, Checks
 } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { format } from "date-fns";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 
 
 
@@ -34,7 +40,7 @@ const channels: Array<{
   { key: 'whatsapp', name: 'WhatsApp', icon: MessageCircle, color: 'text-emerald-500', bg: 'bg-emerald-500/10', leads: 142, open: 18 },
   { key: 'instagram', name: 'Instagram', icon: Camera, color: 'text-pink-500', bg: 'bg-pink-500/10', leads: 87, open: 12 },
   { key: 'facebook', name: 'Facebook', icon: ThumbsUp, color: 'text-blue-500', bg: 'bg-blue-500/10', leads: 64, open: 9 },
-  { key: 'telegram', name: 'Telegram', icon: TelegramIcon, color: 'text-sky-500', bg: 'bg-sky-500/10', leads: 38, open: 5 },
+  { key: 'telegram', name: 'Telegram', icon: Send, color: 'text-sky-500', bg: 'bg-sky-500/10', leads: 38, open: 5 },
   { key: 'linkedin', name: 'LinkedIn', icon: Briefcase, color: 'text-sky-600', bg: 'bg-sky-500/10', leads: 31, open: 4 },
   { key: 'youtube', name: 'YouTube', icon: Play, color: 'text-red-500', bg: 'bg-red-500/10', leads: 22, open: 3 },
   { key: 'tiktok', name: 'TikTok', icon: Share2, color: 'text-zinc-900', bg: 'bg-zinc-500/10', leads: 45, open: 6 },
@@ -96,6 +102,24 @@ export default function ChatPage() {
     connected: false,
     loading: true,
   });
+
+  // Telegram States
+  const [isScheduling, setIsScheduling] = useState(false);
+  const [scheduledDate, setScheduledDate] = useState<Date | undefined>(new Date());
+  const [scheduledTime, setScheduledTime] = useState("12:00");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [telegramStats, setTelegramStats] = useState({
+    webhookStatus: 'active',
+    lastSync: new Date().toISOString(),
+    failureCount: 0,
+    pollingStatus: 'idle'
+  });
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [hasMoreHistory, setHasMoreHistory] = useState(true);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [scheduledMessages, setScheduledMessages] = useState<any[]>([]);
 
 
   const addDebugLog = (type: 'info' | 'error' | 'request', message: string, data?: any) => {
@@ -324,9 +348,79 @@ export default function ChatPage() {
     }, 2000);
   };
 
-  const handleSendMessage = async () => {
-    if (!messageText || !selectedConvId) return;
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    setFileError(null);
+    if (!file) return;
+
+    // Validation: 10MB limit for mock purposes
+    if (file.size > 10 * 1024 * 1024) {
+      setFileError("Arquivo muito grande. Limite de 10MB para Telegram.");
+      return;
+    }
+
+    // Format validation
+    const allowed = ['image/jpeg', 'image/png', 'application/pdf', 'application/zip', 'text/plain'];
+    if (!allowed.includes(file.type) && !file.name.endsWith('.docx')) {
+      setFileError("Formato não suportado. Use Imagens, PDF, ZIP ou TXT.");
+      return;
+    }
+
+    setSelectedFile(file);
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => setFilePreview(e.target?.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setFilePreview(null);
+    }
+  };
+
+  const handleLoadMoreMessages = async () => {
+    if (isHistoryLoading || !hasMoreHistory || !selectedConvId) return;
+    setIsHistoryLoading(true);
+    addDebugLog('info', `Carregando mais mensagens para Telegram (Página ${historyPage + 1})...`);
     
+    // Mock incremental loading
+    await new Promise(r => setTimeout(r, 1000));
+    
+    const moreMessages = [
+      { id: `old-${Date.now()}-1`, customer_id: selectedConvId, sender_type: 'client', content: 'Mensagem antiga carregada do histórico.', created_at: new Date(Date.now() - 86400000).toISOString(), status: 'read' },
+      { id: `old-${Date.now()}-2`, customer_id: selectedConvId, sender_type: 'agent', content: 'Sim, entendi o ponto anterior.', created_at: new Date(Date.now() - 86400000 - 3600000).toISOString(), status: 'read' },
+    ];
+    
+    setMessages(prev => [...moreMessages, ...prev]);
+    setHistoryPage(prev => prev + 1);
+    setIsHistoryLoading(false);
+    
+    if (historyPage >= 3) setHasMoreHistory(false); // Mock limit
+  };
+
+  const handleSendMessage = async () => {
+    if ((!messageText && !selectedFile) || !selectedConvId) return;
+    
+    if (isScheduling) {
+      const scheduleTime = `${format(scheduledDate || new Date(), 'yyyy-MM-dd')} ${scheduledTime}`;
+      addDebugLog('info', `Agendando mensagem para ${scheduleTime}`);
+      
+      const scheduledMsg = {
+        id: crypto.randomUUID(),
+        content: messageText,
+        scheduledFor: scheduleTime,
+        status: 'pending',
+        channel: activeChannel
+      };
+      
+      setScheduledMessages(prev => [...prev, scheduledMsg]);
+      toast({ title: 'Mensagem agendada', description: `Sua mensagem será enviada em ${scheduleTime}` });
+      
+      setMessageText('');
+      setSelectedFile(null);
+      setFilePreview(null);
+      setIsScheduling(false);
+      return;
+    }
+
     const clientMsgId = crypto.randomUUID();
     
     // 1. Feedback imediato na UI (otimista)
@@ -353,13 +447,29 @@ export default function ChatPage() {
           m.id === clientMsgId ? { ...m, status: 'sent', id: data?.data?.key?.id || m.id } : m
         ));
       } else if (activeChannel === 'telegram') {
-        // Mock Telegram Send
+        // Mock Telegram Send with delivery status simulation
         addDebugLog('request', 'Enviando mensagem via Telegram API...');
         await new Promise(r => setTimeout(r, 500));
-        addDebugLog('info', 'Telegram: Mensagem enviada com sucesso.');
+        
         setMessages(prev => prev.map(m => 
           m.id === clientMsgId ? { ...m, status: 'sent' } : m
         ));
+
+        // Simulate delivery
+        setTimeout(() => {
+          setMessages(prev => prev.map(m => 
+            m.id === clientMsgId ? { ...m, status: 'delivered' } : m
+          ));
+        }, 1500);
+
+        // Simulate read
+        setTimeout(() => {
+          setMessages(prev => prev.map(m => 
+            m.id === clientMsgId ? { ...m, status: 'read' } : m
+          ));
+        }, 3000);
+        
+        addDebugLog('info', 'Telegram: Fluxo de status concluído (Sent -> Delivered -> Read).');
       } else {
         // Fallback for other channels
         await new Promise(r => setTimeout(r, 400));
@@ -564,13 +674,36 @@ export default function ChatPage() {
                 )}
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">Status Rede:</span>
-                  {whatsappStatus.connected ? (
+                  {(activeChannel === 'whatsapp' ? whatsappStatus.connected : telegramStats.webhookStatus === 'active') ? (
                     <span className="text-success flex items-center gap-1"><Wifi className="w-3 h-3" /> Conectado</span>
                   ) : (
                     <span className="text-destructive flex items-center gap-1"><WifiOff className="w-3 h-3" /> Erro</span>
                   )}
-
                 </div>
+
+                {activeChannel === 'telegram' && (
+                  <div className="space-y-2 pt-2 border-t border-border/50">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="text-muted-foreground uppercase">Webhook:</span>
+                      <Badge variant="outline" className="h-4 px-1 text-[8px] border-success/30 text-success">ATIVO</Badge>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="text-muted-foreground uppercase">Polling:</span>
+                      <span className="text-foreground">Idle</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="text-muted-foreground uppercase">Sinc:</span>
+                      <span className="text-foreground">{format(new Date(telegramStats.lastSync), 'HH:mm:ss')}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="text-muted-foreground uppercase">Falhas:</span>
+                      <span className={telegramStats.failureCount > 0 ? "text-destructive" : "text-success"}>
+                        {telegramStats.failureCount}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
               </div>
 
               <ScrollArea className="flex-1 p-3">
@@ -759,7 +892,26 @@ export default function ChatPage() {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col">
+                {activeChannel === 'telegram' && hasMoreHistory && (
+                  <div className="flex justify-center py-2">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={handleLoadMoreMessages} 
+                      disabled={isHistoryLoading}
+                      className="text-[10px] uppercase tracking-wider text-muted-foreground gap-2"
+                    >
+                      {isHistoryLoading ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <HistoryIcon className="w-3 h-3" />
+                      )}
+                      {isHistoryLoading ? 'Carregando...' : 'Carregar Mensagens Antigas'}
+                    </Button>
+                  </div>
+                )}
+                
                 {messages.map((m) => (
                   <motion.div
                     key={m.id}
@@ -781,6 +933,12 @@ export default function ChatPage() {
                               <RefreshCw className="w-2.5 h-2.5 animate-spin" />
                             ) : m.status === 'error' ? (
                               <AlertCircle className="w-2.5 h-2.5 text-destructive-foreground" />
+                            ) : m.status === 'sent' ? (
+                              <Check className="w-2.5 h-2.5" />
+                            ) : m.status === 'delivered' ? (
+                              <Checks className="w-3 h-3" />
+                            ) : m.status === 'read' ? (
+                              <Checks className="w-3 h-3 text-sky-300" />
                             ) : (
                               <CheckCircle2 className="w-2.5 h-2.5" />
                             )}
@@ -793,6 +951,85 @@ export default function ChatPage() {
               </div>
 
               <div className="border-t border-border p-3">
+                {/* File Preview */}
+                {filePreview && (
+                  <div className="mb-2 p-2 bg-secondary/40 rounded-lg relative flex items-center gap-3">
+                    <div className="w-12 h-12 rounded bg-black/20 overflow-hidden flex items-center justify-center">
+                      <img src={filePreview} alt="Preview" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{selectedFile?.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{(selectedFile!.size / 1024).toFixed(1)} KB</p>
+                    </div>
+                    <button 
+                      onClick={() => { setSelectedFile(null); setFilePreview(null); }}
+                      className="p-1.5 hover:bg-destructive/10 rounded-full text-destructive"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                
+                {selectedFile && !filePreview && (
+                  <div className="mb-2 p-2 bg-secondary/40 rounded-lg relative flex items-center gap-3">
+                    <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center">
+                      <FileDown className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{selectedFile?.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{(selectedFile!.size / 1024).toFixed(1)} KB</p>
+                    </div>
+                    <button 
+                      onClick={() => { setSelectedFile(null); }}
+                      className="p-1.5 hover:bg-destructive/10 rounded-full text-destructive"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                {fileError && (
+                  <div className="mb-2 px-3 py-2 bg-destructive/10 text-destructive text-xs rounded-lg flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    {fileError}
+                  </div>
+                )}
+
+                {isScheduling && (
+                  <div className="mb-2 p-3 bg-primary/5 border border-primary/20 rounded-lg flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="sm" className="h-8 gap-2">
+                            <Calendar className="w-3.5 h-3.5" />
+                            {scheduledDate ? format(scheduledDate, 'dd/MM/yyyy') : 'Escolher data'}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <CalendarComponent 
+                            mode="single"
+                            selected={scheduledDate}
+                            onSelect={setScheduledDate}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <input 
+                        type="time" 
+                        value={scheduledTime}
+                        onChange={(e) => setScheduledTime(e.target.value)}
+                        className="h-8 bg-background border border-border rounded px-2 text-xs outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Agendamento Ativo</span>
+                      <button onClick={() => setIsScheduling(false)} className="text-muted-foreground hover:text-foreground">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2">
                   <div className="relative">
                     <button className="p-2 rounded-lg hover:bg-secondary">
@@ -801,30 +1038,51 @@ export default function ChatPage() {
                     <input 
                       type="file" 
                       className="absolute inset-0 opacity-0 cursor-pointer" 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          addDebugLog('info', `Anexo selecionado para Telegram: ${file.name}`);
-                          toast({ title: 'Arquivo pronto', description: `${file.name} será enviado.` });
-                        }
-                      }}
+                      onChange={handleFileSelect}
                     />
                   </div>
                   <input
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                    placeholder="Digite sua mensagem..."
+                    placeholder={isScheduling ? "Digite a mensagem para agendar..." : "Digite sua mensagem..."}
                     className="flex-1 bg-secondary rounded-xl px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"
                   />
+                  
+                  {activeChannel === 'telegram' && (
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className={`h-10 w-10 rounded-xl ${isScheduling ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary'}`}
+                      onClick={() => setIsScheduling(!isScheduling)}
+                      title="Agendar Mensagem"
+                    >
+                      <Clock className="w-5 h-5" />
+                    </Button>
+                  )}
+
                   <button 
                     onClick={handleSendMessage}
-                    disabled={!messageText}
+                    disabled={!messageText && !selectedFile}
                     className="p-2.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
                   >
                     <Send className="w-4 h-4" />
                   </button>
                 </div>
+
+                {scheduledMessages.length > 0 && activeChannel === 'telegram' && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {scheduledMessages.map(sm => (
+                      <Badge key={sm.id} variant="secondary" className="text-[9px] py-0 px-2 h-5 gap-1.5 font-normal">
+                        <Clock className="w-2.5 h-2.5 text-primary" />
+                        Agendada: {sm.scheduledFor}
+                        <button onClick={() => setScheduledMessages(prev => prev.filter(m => m.id !== sm.id))}>
+                          <X className="w-2.5 h-2.5 hover:text-destructive" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           )}
