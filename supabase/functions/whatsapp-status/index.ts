@@ -58,18 +58,22 @@ async function checkUaz(url: string, token: string) {
     const data = JSON.parse(text);
     
     // Improved UAZ connection detection based on common API responses
+    // Checking both root level and nested 'status' or 'instance' objects
     const isConnected = 
       data.status === "open" || 
+      data.status === "connected" ||
       data.state === "CONNECTED" || 
       data.instanceStatus === "CONNECTED" || 
       data.connectionStatus === "open" ||
       data.connected === true ||
-      data.loggedIn === true;
+      data.loggedIn === true ||
+      data.instance?.status === "connected" ||
+      data.status?.connected === true;
     
     // Ensure status is a string
-    let displayStatus = data.status || data.state || data.instanceStatus || data.connectionStatus || (data.connected ? "connected" : "disconnected");
+    let displayStatus = data.status || data.state || data.instanceStatus || data.connectionStatus || data.instance?.status || (data.status?.connected ? "connected" : null) || (data.connected ? "connected" : "disconnected");
     if (typeof displayStatus === 'object') {
-      displayStatus = JSON.stringify(displayStatus);
+      displayStatus = displayStatus.connected ? "connected" : JSON.stringify(displayStatus);
     }
 
     console.log(`[UAZ DEBUG] Success! Status: ${displayStatus}`);
@@ -77,6 +81,7 @@ async function checkUaz(url: string, token: string) {
     return { 
       connected: isConnected, 
       status: displayStatus,
+      phone: data.instance?.owner || data.status?.jid || data.jid || null,
       raw: data 
     };
   } catch (err) {
