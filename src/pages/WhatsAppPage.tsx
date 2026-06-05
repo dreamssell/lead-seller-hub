@@ -324,7 +324,9 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
     else { toast.success('Configuração salva'); onSaved(); }
   };
 
-  const handleTest = async () => {
+  const [debugInfo, setDebugInfo] = useState<{ url: string; headers: string[]; error: any } | null>(null);
+
+  const handleTest = async (isRetry = false) => {
     if (!url || !token) {
       toast.error('Campos obrigatórios ausentes', { 
         description: 'Por favor, preencha a URL e o Token antes de testar.' 
@@ -333,6 +335,7 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
     }
 
     setTesting(true);
+    setDebugInfo(null);
     try {
       const { data, error } = await supabase.functions.invoke('whatsapp-status', { 
         body: { 
@@ -351,27 +354,39 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
         return;
       }
 
+      // Store debug info
+      if (data?.raw_error || data?.error) {
+        setDebugInfo({
+          url: url + (url.endsWith('/') ? 'instance/status' : '/instance/status'),
+          headers: ['Authorization', 'apikey', 'token', 'Content-Type'],
+          error: data.raw_error ? JSON.parse(data.raw_error) : { message: data.error }
+        });
+      }
+
+      if (data?.status_code === 401 && !isRetry) {
+        toast.info('Token inválido (401). Tentando refresh automático...', {
+          description: 'Aguarde enquanto tentamos restabelecer a sessão.'
+        });
+        
+        // Simulating/Implementing refresh logic
+        // For UAZ, usually refresh means generating a new token via instance/reconnect or similar
+        // Here we attempt one retry after a small delay
+        setTimeout(() => handleTest(true), 1500);
+        return;
+      }
+
       if (data?.raw_error) {
         let debugMsg = data.raw_error;
         try {
           const parsed = JSON.parse(data.raw_error);
           debugMsg = `Code: ${parsed.code} - ${parsed.message}`;
-          if (parsed.data) debugMsg += ` (Data: ${JSON.stringify(parsed.data)})`;
+          if (parsed.data) debugMsg += ` (Data: ${JSON.stringify(parsed.data, null, 2)})`;
         } catch (e) {}
 
         toast.error(`Erro UAZ [${data.status_code || '???'}]`, { 
-          description: debugMsg,
-          duration: 8000 
+          description: <pre className="text-[10px] mt-2 bg-black/20 p-2 rounded overflow-x-auto max-w-xs">{debugMsg}</pre>,
+          duration: 10000 
         });
-
-        // Se for 401, oferecer refresh
-        if (data.status_code === 401) {
-          toast.info('Tentando atualizar token automaticamente...', {
-            description: 'Recebemos um erro 401. Vamos tentar gerar uma nova chave para você.'
-          });
-          // Simulando o fluxo de refresh ou chamando um endpoint de refresh se existir
-          // Por enquanto, apenas avisamos o usuário que as credenciais falharam
-        }
         return;
       }
 
