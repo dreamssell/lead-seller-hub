@@ -120,6 +120,12 @@ export default function ChatPage() {
   const [hasMoreHistory, setHasMoreHistory] = useState(true);
   const [historyPage, setHistoryPage] = useState(1);
   const [scheduledMessages, setScheduledMessages] = useState<any[]>([]);
+  const [historyFilters, setHistoryFilters] = useState({
+    status: 'all',
+    startDate: undefined as Date | undefined,
+    endDate: undefined as Date | undefined,
+    sort: 'desc'
+  });
 
 
   const addDebugLog = (type: 'info' | 'error' | 'request', message: string, data?: any) => {
@@ -294,8 +300,20 @@ export default function ChatPage() {
       })
       .subscribe();
 
+    // Realtime simulation for delivery receipts
+    const receiptTimer = setInterval(() => {
+      if (activeChannel === 'telegram') {
+        setMessages(prev => prev.map(msg => {
+          if (msg.sender_type === 'agent' && msg.status === 'sent') return { ...msg, status: 'delivered' };
+          if (msg.sender_type === 'agent' && msg.status === 'delivered') return { ...msg, status: 'read' };
+          return msg;
+        }));
+      }
+    }, 10000);
+
     return () => {
       clearInterval(interval);
+      clearInterval(receiptTimer);
       supabase.removeChannel(channel);
     };
   }, [selectedConvId, whatsappStatus.connected, activeWhatsAppConn, activeChannel]);
@@ -408,7 +426,9 @@ export default function ChatPage() {
         content: messageText,
         scheduledFor: scheduleTime,
         status: 'pending',
-        channel: activeChannel
+        channel: activeChannel,
+        customer_id: selectedConvId,
+        created_at: new Date().toISOString()
       };
       
       setScheduledMessages(prev => [...prev, scheduledMsg]);
@@ -778,19 +798,55 @@ export default function ChatPage() {
         {/* Lista */}
         <div className="w-80 border-r border-border flex flex-col">
           <div className="p-3 border-b border-border">
-            <div className="flex items-center gap-2 bg-secondary rounded-xl px-3 py-2">
-              <Search className="w-4 h-4 text-muted-foreground" />
-              <input 
-                placeholder="Buscar leads..." 
-                className="bg-transparent text-sm outline-none flex-1 placeholder:text-muted-foreground"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              {activeChannel === 'telegram' && (
-                <button title="Filtros avançados" className="p-1 hover:bg-background/50 rounded">
-                  <Filter className="w-3.5 h-3.5 text-muted-foreground" />
-                </button>
-              )}
+            <div className="flex flex-col gap-2 bg-secondary rounded-xl p-3">
+              <div className="flex items-center gap-2">
+                <Search className="w-4 h-4 text-muted-foreground" />
+                <input 
+                  placeholder="Buscar leads..." 
+                  className="bg-transparent text-sm outline-none flex-1 placeholder:text-muted-foreground"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                {activeChannel === 'telegram' && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button title="Filtros avançados" className="p-1 hover:bg-background/50 rounded">
+                        <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-3 space-y-3" align="start">
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground">Status</p>
+                        <Select value={historyFilters.status} onValueChange={(v) => setHistoryFilters(prev => ({ ...prev, status: v }))}>
+                          <SelectTrigger className="h-7 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todos</SelectItem>
+                            <SelectItem value="pending">Pendente</SelectItem>
+                            <SelectItem value="sent">Enviado</SelectItem>
+                            <SelectItem value="delivered">Entregue</SelectItem>
+                            <SelectItem value="read">Lido</SelectItem>
+                            <SelectItem value="error">Erro</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground">Ordenação</p>
+                        <Select value={historyFilters.sort} onValueChange={(v) => setHistoryFilters(prev => ({ ...prev, sort: v as 'asc' | 'desc' }))}>
+                          <SelectTrigger className="h-7 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="desc">Mais recentes</SelectItem>
+                            <SelectItem value="asc">Mais antigos</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">
@@ -1071,13 +1127,30 @@ export default function ChatPage() {
 
                 {scheduledMessages.length > 0 && activeChannel === 'telegram' && (
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {scheduledMessages.map(sm => (
-                      <Badge key={sm.id} variant="secondary" className="text-[9px] py-0 px-2 h-5 gap-1.5 font-normal">
-                        <Clock className="w-2.5 h-2.5 text-primary" />
-                        Agendada: {sm.scheduledFor}
-                        <button onClick={() => setScheduledMessages(prev => prev.filter(m => m.id !== sm.id))}>
-                          <X className="w-2.5 h-2.5 hover:text-destructive" />
-                        </button>
+                    {scheduledMessages.filter(sm => sm.customer_id === selectedConvId).map(sm => (
+                      <Badge key={sm.id} variant="secondary" className="text-[9px] py-0 px-2 h-auto min-h-[20px] gap-1.5 font-normal flex-col items-start p-1.5">
+                        <div className="flex items-center justify-between w-full gap-2">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-2.5 h-2.5 text-primary" />
+                            <span className="font-bold">Agendada: {sm.scheduledFor}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button 
+                              onClick={() => {
+                                setMessageText(sm.content);
+                                setIsScheduling(true);
+                                setScheduledMessages(prev => prev.filter(m => m.id !== sm.id));
+                              }}
+                              className="text-primary hover:underline font-bold"
+                            >
+                              Editar
+                            </button>
+                            <button onClick={() => setScheduledMessages(prev => prev.filter(m => m.id !== sm.id))}>
+                              <X className="w-2.5 h-2.5 hover:text-destructive" />
+                            </button>
+                          </div>
+                        </div>
+                        <p className="opacity-70 line-clamp-1">{sm.content}</p>
                       </Badge>
                     ))}
                   </div>
