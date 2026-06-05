@@ -327,7 +327,13 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
   const handleTest = async () => {
     setTesting(true);
     const { data, error } = await supabase.functions.invoke('whatsapp-status', { 
-      body: { provider: conn.provider, url, token, ...(conn.provider === 'meta' && { phone_number_id: extra }) } 
+      body: { 
+        connection_id: conn.id,
+        provider: conn.provider, 
+        url, 
+        token, 
+        ...(conn.provider === 'meta' && { phone_number_id: extra }) 
+      } 
     });
     setTesting(false);
     if (error) toast.error('Falha ao testar', { description: error.message });
@@ -346,7 +352,14 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
               {conn.provider === 'meta' ? <ShieldCheck className="w-5 h-5 text-primary" /> : <Plug className="w-5 h-5 text-primary" />}
               {conn.display_name}
             </CardTitle>
-            <CardDescription className="mt-1">{defaults.description}</CardDescription>
+            <CardDescription className="mt-1">
+              {defaults.description}
+              {conn.status === 'error' && conn.last_error && (
+                <p className="text-destructive text-[10px] mt-1 font-medium bg-destructive/10 p-1 px-2 rounded-md border border-destructive/20 max-w-xs break-words">
+                  {conn.last_error}
+                </p>
+              )}
+            </CardDescription>
           </div>
           {statusBadge(conn.status)}
         </div>
@@ -721,22 +734,53 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
 export default function WhatsAppPage() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
 
   const load = async () => {
+    setLoading(true);
     const { data } = await supabase.from('whatsapp_connections').select('*').order('provider');
     if (data) setConnections(data as Connection[]);
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  const syncAllStatuses = async () => {
+    setSyncing(true);
+    const { data } = await supabase.from('whatsapp_connections').select('id');
+    if (data) {
+      await Promise.all(data.map(conn => 
+        supabase.functions.invoke('whatsapp-status', { body: { connection_id: conn.id } })
+      ));
+      await load();
+      toast.success('Status sincronizado com os provedores');
+    }
+    setSyncing(false);
+  };
+
+  useEffect(() => { 
+    load(); 
+    syncAllStatuses();
+  }, []);
 
   return (
     <AppLayout title="WhatsApp Business" subtitle="Integração UAZ e Meta">
       <Tabs defaultValue="connections" className="space-y-6">
-        <TabsList className="mb-4">
-          <TabsTrigger value="connections">Conexões</TabsTrigger>
-          <TabsTrigger value="audit">Auditoria</TabsTrigger>
-        </TabsList>
+        <div className="flex items-center justify-between gap-4">
+          <TabsList>
+            <TabsTrigger value="connections">Conexões</TabsTrigger>
+            <TabsTrigger value="audit">Auditoria</TabsTrigger>
+          </TabsList>
+          
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={syncAllStatuses} 
+            disabled={syncing}
+            className="gap-2"
+          >
+            {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Sincronizar Status
+          </Button>
+        </div>
 
         <TabsContent value="connections">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

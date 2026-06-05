@@ -6,14 +6,25 @@ const corsHeaders = {
 };
 
 async function checkUaz(url: string, token: string) {
-  const res = await fetch(`${url}/instance/status`, {
-    headers: { "Authorization": `Bearer ${token}` },
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`UAZ [${res.status}]: ${text.slice(0, 300)}`);
+  try {
+    const res = await fetch(`${url}/instance/status`, {
+      headers: { "Authorization": `Bearer ${token}` },
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      return { connected: false, status: "error", error: `UAZ [${res.status}]: ${text.slice(0, 300)}` };
+    }
+    const data = JSON.parse(text);
+    // UAZ returns status: "open", "connecting", "close", etc.
+    const isConnected = data.status === "open" || data.state === "CONNECTED";
+    return { 
+      connected: isConnected, 
+      status: data.status || data.state,
+      raw: data 
+    };
+  } catch (err) {
+    return { connected: false, status: "error", error: err.message };
   }
-  return JSON.parse(text);
 }
 
 Deno.serve(async (req) => {
@@ -28,28 +39,69 @@ Deno.serve(async (req) => {
   let result: any = null;
   let status = "success";
   let message = "Status verificado com sucesso";
+  let connectionId: string | null = null;
 
   try {
     const body = await req.json();
-    if (!body?.provider || !["uaz", "meta"].includes(body.provider)) {
+    let provider = body?.provider;
+    let url = body?.url;
+    let token = body?.token;
+    connectionId = body?.connection_id;
+
+    if (connectionId && !provider) {
+      const { data: conn } = await supabaseAdmin
+        .from("whatsapp_connections")
+        .select("*")
+        .eq("id", connectionId)
+        .single();
+      
+      if (conn) {
+        provider = conn.provider;
+        url = conn.metadata?.url;
+        token = conn.metadata?.token;
+      }
+    }
+
+    if (!provider || !["uaz", "meta"].includes(provider)) {
       throw new Error("Provedor inválido ou ausente");
     }
 
-    if (body.provider === "uaz") {
-      const url = body.url || Deno.env.get("UAZ_API_URL") || "https://api.uazapi.dev";
-      const token = body.token;
+    if (provider === "uaz") {
+      const uazUrl = url || Deno.env.get("UAZ_API_URL") || "https://api.uazapi.dev";
       if (!token) throw new Error("Token UAZ ausente");
 
-      result = await checkUaz(url, token);
+      result = await checkUaz(uazUrl, token);
     } else {
       // Mock Meta for now
-      result = { connected: false };
+      result = { connected: false, status: "disconnected" };
+    }
+
+    // Update Database Status
+    if (connectionId) {
+      let dbStatus: "connected" | "disconnected" | "connecting" | "error" = "disconnected";
+      
+      if (result.connected) {
+        dbStatus = "connected";
+      } else if (result.status === "connecting") {
+        dbStatus = "connecting";
+      } else if (result.status === "error") {
+        dbStatus = "error";
+      }
+
+      await supabaseAdmin
+        .from("whatsapp_connections")
+        .update({ 
+          status: dbStatus,
+          last_checked_at: new Date().toISOString(),
+          last_error: result.error || null
+        })
+        .eq("id", connectionId);
     }
 
   } catch (err) {
     status = "error";
     message = err.message;
-    result = { error: err.message };
+    result = { error: err.message, connected: false };
   } finally {
     // Audit status check
     await supabaseAdmin.from("uaz_audit_logs").insert({
@@ -61,7 +113,7 @@ Deno.serve(async (req) => {
     });
 
     return new Response(JSON.stringify(result), {
-      status: status === "success" ? 200 : 400,
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

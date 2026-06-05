@@ -85,6 +85,7 @@ export default function ChatPage() {
 
         const { data, error } = await supabase.functions.invoke('whatsapp-status', {
           body: {
+            connection_id: conn.id,
             provider: 'uaz',
             url: metadata.url || 'https://api.uazapi.dev',
             token: metadata.token,
@@ -125,6 +126,7 @@ export default function ChatPage() {
       }
     }
 
+    checkUAZ();
     loadConversations();
 
     // Realtime subscription
