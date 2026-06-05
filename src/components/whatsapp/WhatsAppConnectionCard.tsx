@@ -19,7 +19,9 @@ import {
   PROVIDER_CONFIGS, 
   ConnectionStatus 
 } from './types';
-import { UazStats } from './UazStats'; // We'll create this next
+import { UazStats } from './UazStats';
+import { FacebookDiagnostics } from './FacebookDiagnostics';
+import { WidgetSettings } from './WidgetSettings';
 
 interface ConnectionCardProps {
   conn: WhatsAppConnection;
