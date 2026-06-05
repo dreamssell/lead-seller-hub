@@ -96,7 +96,7 @@ export default function UazAuditTab({ initialLogId, initialTenantId }: UazAuditT
       loadLogs();
     }, 300);
     return () => clearTimeout(timer);
-  }, [page, search, statusFilter, typeFilter]);
+  }, [page, search, statusFilter, typeFilter, activeLogId, activeTenantId]);
 
   const totalPages = Math.ceil(totalCount / pageSize);
 
