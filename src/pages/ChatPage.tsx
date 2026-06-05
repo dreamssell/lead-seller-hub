@@ -4,7 +4,7 @@ import {
   Send, Paperclip, Phone, Video, MoreVertical, Search, Circle,
   Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Settings,
   Database, Activity, ShieldAlert, Wifi, WifiOff, Terminal, ChevronDown, ChevronUp, History as HistoryIcon, Bug, Play, Share2,
-  FileDown, Filter, Calendar, Clock, Loader2, X, AlertTriangle, Check, Checks
+  FileDown, Filter, Calendar, Clock, Loader2, X, AlertTriangle, Check
 } from 'lucide-react';
 import {
   Popover,
@@ -935,9 +935,9 @@ export default function ChatPage() {
                             ) : m.status === 'sent' ? (
                               <Check className="w-2.5 h-2.5" />
                             ) : m.status === 'delivered' ? (
-                              <Checks className="w-3 h-3" />
+                              <div className="flex -space-x-1.5"><Check className="w-2.5 h-2.5" /><Check className="w-2.5 h-2.5" /></div>
                             ) : m.status === 'read' ? (
-                              <Checks className="w-3 h-3 text-sky-300" />
+                              <div className="flex -space-x-1.5 text-sky-300"><Check className="w-2.5 h-2.5" /><Check className="w-2.5 h-2.5" /></div>
                             ) : (
                               <CheckCircle2 className="w-2.5 h-2.5" />
                             )}
