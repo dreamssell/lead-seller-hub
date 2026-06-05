@@ -1,6 +1,6 @@
-import { MessageSquare, Phone, ShieldCheck, LucideIcon } from 'lucide-react';
+import { MessageSquare, Phone, ShieldCheck, LucideIcon, Globe, ThumbsUp } from 'lucide-react';
 
-export type WhatsAppProvider = 'uaz' | 'meta' | 'wavoip' | 'instagram' | 'telegram' | 'linkedin' | 'tiktok' | 'youtube' | 'facebook';
+export type WhatsAppProvider = 'uaz' | 'meta' | 'wavoip' | 'instagram' | 'telegram' | 'linkedin' | 'tiktok' | 'youtube' | 'facebook' | 'widget';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'error';
 
@@ -63,7 +63,7 @@ export const PROVIDER_CONFIGS: Record<WhatsAppProvider, ProviderConfig> = {
   facebook: {
     name: 'Facebook Messenger',
     description: 'Conecte sua Página para responder no Messenger.',
-    icon: MessageSquare,
+    icon: ThumbsUp,
     color: 'text-blue-600',
     url: 'https://graph.facebook.com/v17.0',
     tokenLabel: 'Page Access Token',
@@ -100,5 +100,13 @@ export const PROVIDER_CONFIGS: Record<WhatsAppProvider, ProviderConfig> = {
     color: 'text-red-600',
     url: 'https://www.googleapis.com/youtube/v3',
     tokenLabel: 'Google API Key / OAuth Token',
+  },
+  widget: {
+    name: 'Widget de Site',
+    description: 'Chat ao vivo integrado diretamente no seu site.',
+    icon: Globe,
+    color: 'text-violet-500',
+    url: 'https://widget.example.com',
+    tokenLabel: 'Widget API Key',
   },
 };
