@@ -3,8 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Paperclip, Phone, Video, MoreVertical, Search, Circle,
   Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Settings,
-  Database, Activity, ShieldAlert, Wifi, WifiOff, Terminal, ChevronDown, ChevronUp, History as HistoryIcon, Bug
+  Database, Activity, ShieldAlert, Wifi, WifiOff, Terminal, ChevronDown, ChevronUp, History as HistoryIcon, Bug, Play, Share2
 } from 'lucide-react';
+
+
+
+
 import { useState, useMemo, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -20,7 +24,7 @@ import { WhatsAppConnection, PROVIDER_CONFIGS } from '@/components/whatsapp/type
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-type ChannelKey = 'instagram' | 'facebook' | 'linkedin' | 'whatsapp' | 'widget';
+type ChannelKey = 'instagram' | 'facebook' | 'linkedin' | 'whatsapp' | 'widget' | 'youtube' | 'tiktok';
 
 const channels: Array<{
   key: ChannelKey; name: string; icon: any; color: string; bg: string; leads: number; open: number;
@@ -29,16 +33,25 @@ const channels: Array<{
   { key: 'instagram', name: 'Instagram', icon: Camera, color: 'text-pink-500', bg: 'bg-pink-500/10', leads: 87, open: 12 },
   { key: 'facebook', name: 'Facebook', icon: ThumbsUp, color: 'text-blue-500', bg: 'bg-blue-500/10', leads: 64, open: 9 },
   { key: 'linkedin', name: 'LinkedIn', icon: Briefcase, color: 'text-sky-600', bg: 'bg-sky-500/10', leads: 31, open: 4 },
+  { key: 'youtube', name: 'YouTube', icon: Play, color: 'text-red-500', bg: 'bg-red-500/10', leads: 22, open: 3 },
+  { key: 'tiktok', name: 'TikTok', icon: Share2, color: 'text-zinc-900', bg: 'bg-zinc-500/10', leads: 45, open: 6 },
   { key: 'widget', name: 'Widget de Site', icon: Globe, color: 'text-violet-500', bg: 'bg-violet-500/10', leads: 53, open: 7 },
 ];
+
+
+
+
 
 const conversationsByChannel: Record<ChannelKey, Array<{ id: string; name: string; msg: string; time: string; online: boolean; botEnabled: boolean; assignedTo: string; phone?: string }>> = {
   whatsapp: [],
   instagram: [],
   facebook: [],
   linkedin: [],
+  youtube: [],
+  tiktok: [],
   widget: [],
 };
+
 
 const aiAgents = [
   { id: 'bot:vendas', name: 'Agente de Vendas IA' },
