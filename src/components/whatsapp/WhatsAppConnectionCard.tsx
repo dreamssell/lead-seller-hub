@@ -232,14 +232,18 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
         {/* Debug Panel Toggle */}
         <div className="flex items-center justify-between">
           <div className="flex gap-2">
-            <Button size="sm" onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} 
-              Salvar
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => handleTest()} disabled={testing}>
-              {testing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} 
-              Testar Conexão
-            </Button>
+            {conn.provider !== 'widget' && (
+              <>
+                <Button size="sm" onClick={handleSave} disabled={saving}>
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} 
+                  Salvar
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => handleTest()} disabled={testing}>
+                  {testing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} 
+                  Testar Conexão
+                </Button>
+              </>
+            )}
           </div>
           
           <Button 
