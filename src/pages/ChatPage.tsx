@@ -4,6 +4,7 @@ import {
   Send, Paperclip, Phone, Video, MoreVertical, Search, Circle,
   Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Settings,
   Database, Activity, ShieldAlert, Wifi, WifiOff, Terminal, ChevronDown, ChevronUp, History as HistoryIcon, Bug, Play, Share2,
+  FileDown, Filter, Calendar,
   Send as TelegramIcon
 } from 'lucide-react';
 
@@ -85,6 +86,7 @@ export default function ChatPage() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState('');
   const [messageText, setMessageText] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [debugLogs, setDebugLogs] = useState<Array<{ id: string; time: string; type: 'info' | 'error' | 'request'; message: string; data?: any }>>([]);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
@@ -306,6 +308,20 @@ export default function ChatPage() {
     toast({ title: 'Conversa transferida', description: humanAgents.find((h) => h.id === transferTarget)?.name });
     setTransferOpen(false);
     setTransferTarget('');
+  };
+
+  const handleExportHistory = (type: 'csv' | 'pdf') => {
+    if (!selectedConv) return;
+    addDebugLog('info', `Exportando histórico (${type.toUpperCase()}) para ${selectedConv.name}`);
+    toast({ 
+      title: 'Exportação iniciada', 
+      description: `Seu arquivo ${type.toUpperCase()} está sendo gerado para o intervalo selecionado.` 
+    });
+    
+    // Simular download
+    setTimeout(() => {
+      toast({ title: 'Exportação concluída', description: `O arquivo ${selectedConv.name.replace(/\s/g, '_')}_history.${type} foi baixado.` });
+    }, 2000);
   };
 
   const handleSendMessage = async () => {
@@ -632,11 +648,21 @@ export default function ChatPage() {
           <div className="p-3 border-b border-border">
             <div className="flex items-center gap-2 bg-secondary rounded-xl px-3 py-2">
               <Search className="w-4 h-4 text-muted-foreground" />
-              <input placeholder="Buscar leads..." className="bg-transparent text-sm outline-none flex-1 placeholder:text-muted-foreground" />
+              <input 
+                placeholder="Buscar leads..." 
+                className="bg-transparent text-sm outline-none flex-1 placeholder:text-muted-foreground"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              {activeChannel === 'telegram' && (
+                <button title="Filtros avançados" className="p-1 hover:bg-background/50 rounded">
+                  <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              )}
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">
-            {list.map((c) => (
+            {list.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map((c) => (
               <button
                 key={c.id}
                 onClick={() => setSelectedConvId(c.id)}
@@ -717,6 +743,18 @@ export default function ChatPage() {
 
                   <button className="p-2 rounded-lg hover:bg-secondary"><Phone className="w-4 h-4 text-muted-foreground" /></button>
                   <button className="p-2 rounded-lg hover:bg-secondary"><Video className="w-4 h-4 text-muted-foreground" /></button>
+                  
+                  {activeChannel === 'telegram' && (
+                    <div className="flex items-center border-l border-border ml-2 pl-2 gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => handleExportHistory('csv')} title="Exportar CSV">
+                        <FileDown className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => handleExportHistory('pdf')} title="Exportar PDF">
+                        <HistoryIcon className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
+
                   <button className="p-2 rounded-lg hover:bg-secondary"><MoreVertical className="w-4 h-4 text-muted-foreground" /></button>
                 </div>
               </div>
@@ -756,7 +794,22 @@ export default function ChatPage() {
 
               <div className="border-t border-border p-3">
                 <div className="flex items-center gap-2">
-                  <button className="p-2 rounded-lg hover:bg-secondary"><Paperclip className="w-4 h-4 text-muted-foreground" /></button>
+                  <div className="relative">
+                    <button className="p-2 rounded-lg hover:bg-secondary">
+                      <Paperclip className="w-4 h-4 text-muted-foreground" />
+                    </button>
+                    <input 
+                      type="file" 
+                      className="absolute inset-0 opacity-0 cursor-pointer" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          addDebugLog('info', `Anexo selecionado para Telegram: ${file.name}`);
+                          toast({ title: 'Arquivo pronto', description: `${file.name} será enviado.` });
+                        }
+                      }}
+                    />
+                  </div>
                   <input
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
