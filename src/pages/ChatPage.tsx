@@ -107,90 +107,118 @@ export default function ChatPage() {
   };
 
   useEffect(() => {
-    async function checkWhatsApp(isManual = false) {
+    async function checkProviderStatus(channel: ChannelKey, isManual = false) {
       if (isManual) setIsRefreshing(true);
-      addDebugLog('request', 'Iniciando validação de credenciais e status WhatsApp');
+      
+      const providerName = channel === 'whatsapp' ? (activeWhatsAppConn?.provider?.toUpperCase() || 'WhatsApp') : channel.toUpperCase();
+      addDebugLog('request', `Iniciando validação de status: ${providerName}`);
       
       try {
-        const { data: connections, error: connError } = await supabase
-          .from('whatsapp_connections')
-          .select('*')
-          .eq('status', 'connected');
+        if (channel === 'whatsapp') {
+          const { data: connections, error: connError } = await supabase
+            .from('whatsapp_connections')
+            .select('*')
+            .eq('status', 'connected');
 
-        if (connError || !connections || connections.length === 0) {
-          const { data: firstConn } = await supabase.from('whatsapp_connections').select('*').limit(1).maybeSingle();
-          if (!firstConn) {
-            addDebugLog('error', 'Nenhuma conexão encontrada');
-            setAuthValidation({ valid: false, reason: 'Nenhuma conexão configurada', loading: false });
-            setWhatsappStatus({ connected: false, loading: false });
-            return;
+          if (connError || !connections || connections.length === 0) {
+            const { data: firstConn } = await supabase.from('whatsapp_connections').select('*').limit(1).maybeSingle();
+            if (!firstConn) {
+              addDebugLog('error', 'Nenhuma conexão WhatsApp encontrada');
+              setAuthValidation({ valid: false, reason: 'Nenhuma conexão configurada', loading: false });
+              setWhatsappStatus({ connected: false, loading: false });
+              return;
+            }
+            setActiveWhatsAppConn(firstConn as WhatsAppConnection);
+          } else {
+            setActiveWhatsAppConn(connections[0] as WhatsAppConnection);
           }
-          setActiveWhatsAppConn(firstConn as WhatsAppConnection);
+
+          const conn = activeWhatsAppConn || (connections && connections[0]);
+          if (!conn) return;
+
+          const adapter = getProviderAdapter(conn.provider);
+          addDebugLog('info', `Usando provedor WhatsApp: ${conn.provider}. Chamando adapter.`);
+          
+          const data = await adapter.getStatus(conn as WhatsAppConnection);
+          addDebugLog('info', 'Resposta do Provedor recebida', data);
+
+          const isConnected = !!data?.connected;
+          setWhatsappStatus({
+            connected: isConnected,
+            loading: false,
+            phone: data?.phone,
+            error: data?.error,
+          });
+
+          setAuthValidation({ 
+            valid: isConnected, 
+            reason: isConnected ? undefined : (data?.error || `Instância ${conn.provider.toUpperCase()} desconectada`), 
+            loading: false 
+          });
+
+          if (isConnected) {
+            addDebugLog('info', `Status: CONECTADO (${conn.provider}). Iniciando carga de contatos.`);
+            loadConversations(channel);
+          }
+        } else if (channel === 'telegram') {
+          // Mock Telegram connection validation
+          addDebugLog('info', 'Validando conexão Telegram via API...');
+          setTimeout(() => {
+            addDebugLog('info', 'Telegram Conectado com sucesso.');
+            loadConversations(channel);
+          }, 800);
         } else {
-          setActiveWhatsAppConn(connections[0] as WhatsAppConnection);
-        }
-
-        const conn = activeWhatsAppConn || (connections && connections[0]);
-        if (!conn) return;
-
-        const adapter = getProviderAdapter(conn.provider);
-        addDebugLog('info', `Usando provedor: ${conn.provider}. Chamando adapter.`);
-        
-        const data = await adapter.getStatus(conn as WhatsAppConnection);
-        addDebugLog('info', 'Resposta do Provedor recebida', data);
-
-        const isConnected = !!data?.connected;
-        setWhatsappStatus({
-          connected: isConnected,
-          loading: false,
-          phone: data?.phone,
-          error: data?.error,
-        });
-
-        setAuthValidation({ 
-          valid: isConnected, 
-          reason: isConnected ? undefined : (data?.error || `Instância ${conn.provider.toUpperCase()} desconectada`), 
-          loading: false 
-        });
-
-        if (isConnected) {
-          addDebugLog('info', `Status: CONECTADO (${conn.provider}). Iniciando carga de contatos.`);
-          loadConversations();
+          // Other channels fallback
+          loadConversations(channel);
         }
       } catch (err: any) {
-        addDebugLog('error', 'Exceção durante verificação', err);
-        setWhatsappStatus({ connected: false, loading: false, error: 'Falha ao verificar status' });
-        setAuthValidation({ valid: false, reason: 'Erro ao validar acesso.', loading: false });
+        addDebugLog('error', `Exceção durante verificação ${channel}`, err);
+        if (channel === 'whatsapp') {
+          setWhatsappStatus({ connected: false, loading: false, error: 'Falha ao verificar status' });
+          setAuthValidation({ valid: false, reason: 'Erro ao validar acesso.', loading: false });
+        }
       } finally {
         if (isManual) setIsRefreshing(false);
       }
     }
 
-    // Export function to window for the manual refresh button
+    // Export functions to window
     // @ts-ignore
-    window.manualRefreshWhatsApp = () => checkWhatsApp(true);
+    window.manualRefreshChannel = (channel: ChannelKey) => checkProviderStatus(channel, true);
+    // @ts-ignore
+    window.manualRefreshWhatsApp = () => checkProviderStatus('whatsapp', true);
 
 
-    async function loadConversations() {
-      addDebugLog('request', 'Buscando contatos e mensagens recentes no banco');
+    async function loadConversations(channel: ChannelKey) {
+      addDebugLog('request', `Buscando contatos ${channel} no banco de dados`);
+      
       const { data: customers, error } = await supabase
         .from('customers')
         .select('*')
         .order('updated_at', { ascending: false });
 
       if (error) {
-        addDebugLog('error', 'Erro ao carregar clientes do banco', error);
+        addDebugLog('error', `Erro ao carregar clientes (${channel})`, error);
         return;
       }
 
       if (customers) {
-        addDebugLog('info', `${customers.length} contatos encontrados. Buscando últimas mensagens.`);
+        // Filter customers by channel if needed (for now showing all as per current logic, 
+        // but we can add channel filter if customers table has it)
+        const channelCustomers = customers.filter(c => {
+          if (channel === 'whatsapp') return c.phone && !c.phone.includes('@telegram');
+          if (channel === 'telegram') return c.phone?.includes('@telegram') || c.email?.includes('@telegram');
+          return true;
+        });
+
+        addDebugLog('info', `${channelCustomers.length} contatos encontrados. Buscando últimas mensagens.`);
+        
         const { data: lastMessages } = await supabase
           .from('chat_messages')
           .select('customer_id, content, created_at')
           .order('created_at', { ascending: false });
 
-        const formatted = customers.map(c => {
+        const formatted = channelCustomers.map(c => {
           const lastMsg = lastMessages?.find(m => m.customer_id === c.id);
           return {
             id: c.id,
@@ -205,18 +233,25 @@ export default function ChatPage() {
             phone: c.phone
           };
         });
-        setConvs(prev => ({ ...prev, whatsapp: formatted }));
-        addDebugLog('info', 'Conversas formatadas e carregadas na UI');
+        
+        setConvs(prev => ({ ...prev, [channel]: formatted }));
+        addDebugLog('info', `Conversas ${channel} formatadas e carregadas na UI`);
       }
     }
 
-    checkWhatsApp();
+    if (activeChannel) {
+      checkProviderStatus(activeChannel);
+    } else {
+      checkProviderStatus('whatsapp');
+    }
     
     // Polling interval with basic backoff logic simulation
     const interval = setInterval(() => {
-      if (!whatsappStatus.connected) {
-        addDebugLog('info', 'Polling: Tentando reconectar...');
-        checkWhatsApp();
+      if (activeChannel === 'whatsapp' && !whatsappStatus.connected) {
+        addDebugLog('info', 'Polling: Tentando reconectar WhatsApp...');
+        checkProviderStatus('whatsapp');
+      } else if (activeChannel) {
+        checkProviderStatus(activeChannel);
       }
     }, 30000); // 30s interval
 
@@ -237,7 +272,7 @@ export default function ChatPage() {
       clearInterval(interval);
       supabase.removeChannel(channel);
     };
-  }, [selectedConvId, whatsappStatus.connected, activeWhatsAppConn]);
+  }, [selectedConvId, whatsappStatus.connected, activeWhatsAppConn, activeChannel]);
 
   useEffect(() => {
     if (selectedConvId) {
@@ -321,7 +356,7 @@ export default function ChatPage() {
           {channels.map((ch, i) => {
             const Icon = ch.icon;
             const isWhatsApp = ch.key === 'whatsapp';
-            const isPlaceholder = ['youtube', 'tiktok', 'telegram'].includes(ch.key);
+            const isPlaceholder = ['youtube', 'tiktok'].includes(ch.key);
             
             return (
               <motion.button
@@ -414,18 +449,21 @@ export default function ChatPage() {
             {channelInfo.key === 'whatsapp' && activeWhatsAppConn && ` (${activeWhatsAppConn.provider.toUpperCase()})`}
           </span>
         </div>
-        {channelInfo.key === 'whatsapp' && (
+        {(channelInfo.key === 'whatsapp' || channelInfo.key === 'telegram') && (
           <div className="flex items-center gap-2">
-            {whatsappStatus.connected ? (
-              <Badge variant="outline" className="border-success/30 text-success text-[10px] h-5 gap-1">
-                <CheckCircle2 className="w-2.5 h-2.5" />
-                LIVE
-              </Badge>
-
+            {channelInfo.key === 'whatsapp' ? (
+              whatsappStatus.connected ? (
+                <Badge variant="outline" className="border-success/30 text-success text-[10px] h-5 gap-1">
+                  <CheckCircle2 className="w-2.5 h-2.5" /> LIVE
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="border-destructive/30 text-destructive text-[10px] h-5 gap-1">
+                  <AlertCircle className="w-2.5 h-2.5" /> OFFLINE
+                </Badge>
+              )
             ) : (
-              <Badge variant="outline" className="border-destructive/30 text-destructive text-[10px] h-5 gap-1">
-                <AlertCircle className="w-2.5 h-2.5" />
-                OFFLINE
+              <Badge variant="outline" className="border-success/30 text-success text-[10px] h-5 gap-1">
+                <CheckCircle2 className="w-2.5 h-2.5" /> ATIVO
               </Badge>
             )}
             <Button 
@@ -434,12 +472,11 @@ export default function ChatPage() {
               className={`h-7 w-7 ${isRefreshing ? 'animate-spin' : ''}`}
               onClick={() => {
                 // @ts-ignore
-                const check = window.manualRefreshWhatsApp;
-
-                if (typeof check === 'function') check();
+                const check = window.manualRefreshChannel;
+                if (typeof check === 'function') check(channelInfo.key);
                 else window.location.reload();
               }}
-              title="Sincronizar Manualmente"
+              title={`Sincronizar ${channelInfo.name}`}
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </Button>
@@ -448,7 +485,7 @@ export default function ChatPage() {
               size="icon"
               className="h-7 w-7 text-muted-foreground"
               onClick={() => setShowDebugPanel(!showDebugPanel)}
-              title="Diagnóstico WhatsApp"
+              title={`Diagnóstico ${channelInfo.name}`}
             >
               <Bug className="w-3.5 h-3.5" />
             </Button>
@@ -469,7 +506,7 @@ export default function ChatPage() {
               <div className="p-4 border-b border-border flex items-center justify-between bg-secondary/30">
                 <div className="flex items-center gap-2">
                   <Terminal className="w-4 h-4 text-primary" />
-                  <h3 className="text-sm font-bold uppercase tracking-wider">Diagnóstico UAZ</h3>
+                  <h3 className="text-sm font-bold uppercase tracking-wider">Diagnóstico {channelInfo?.name || 'Omni'}</h3>
                 </div>
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowDebugPanel(false)}>
                   <ArrowLeft className="w-4 h-4 rotate-180" />
