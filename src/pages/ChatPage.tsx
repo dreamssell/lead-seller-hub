@@ -15,6 +15,8 @@ import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 
+import { ScrollArea } from '@/components/ui/scroll-area';
+
 type ChannelKey = 'instagram' | 'facebook' | 'linkedin' | 'whatsapp' | 'widget';
 
 const channels: Array<{
@@ -154,6 +156,10 @@ export default function ChatPage() {
         if (isManual) setIsRefreshing(false);
       }
     }
+
+    // Export function to window for the manual refresh button
+    // @ts-ignore
+    window.manualRefreshUAZ = () => checkUAZ(true);
 
     async function loadConversations() {
       addDebugLog('request', 'Buscando contatos e mensagens recentes no banco');
