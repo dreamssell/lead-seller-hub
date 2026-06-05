@@ -2,7 +2,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Paperclip, Phone, Video, MoreVertical, Search, Circle,
-  Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle,
+  Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Settings
 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -106,22 +106,38 @@ export default function ChatPage() {
       }
     }
     async function loadConversations() {
-      const { data: customers } = await supabase
+      const { data: customers, error } = await supabase
         .from('customers')
         .select('*')
         .order('updated_at', { ascending: false });
 
+      if (error) {
+        console.error('Error loading customers:', error);
+        return;
+      }
+
       if (customers) {
-        const formatted = customers.map(c => ({
-          id: c.id,
-          name: c.name,
-          msg: 'Ver conversa...',
-          time: new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          online: false,
-          botEnabled: false,
-          assignedTo: '',
-          phone: c.phone
-        }));
+        // Obter a última mensagem de cada cliente para mostrar no resumo
+        const { data: lastMessages } = await supabase
+          .from('chat_messages')
+          .select('customer_id, content, created_at')
+          .order('created_at', { ascending: false });
+
+        const formatted = customers.map(c => {
+          const lastMsg = lastMessages?.find(m => m.customer_id === c.id);
+          return {
+            id: c.id,
+            name: c.name || c.phone || 'Cliente sem nome',
+            msg: lastMsg?.content || 'Sem mensagens ainda',
+            time: lastMsg 
+              ? new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            online: false,
+            botEnabled: false,
+            assignedTo: '',
+            phone: c.phone
+          };
+        });
         setConvs(prev => ({ ...prev, whatsapp: formatted }));
       }
     }
@@ -160,7 +176,7 @@ export default function ChatPage() {
   }, [selectedConvId]);
 
   const list = activeChannel ? convs[activeChannel] : [];
-  const selectedConv = list.find((c) => c.id === selectedConvId) || list[0];
+  const selectedConv = list.find((c) => c.id === selectedConvId) || (selectedConvId ? null : list[0]);
 
   const toggleBot = (id: string) => {
     if (!activeChannel) return;
@@ -318,7 +334,27 @@ export default function ChatPage() {
         )}
       </div>
 
-      <div className="flex h-[calc(100vh-13rem)] glass-card overflow-hidden">
+      <div className="flex h-[calc(100vh-13rem)] glass-card overflow-hidden relative">
+        {!uazStatus.connected && activeChannel === 'whatsapp' && (
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-50 flex items-center justify-center p-6 text-center">
+            <div className="glass-card p-8 max-w-md border-destructive/20 shadow-2xl animate-in fade-in zoom-in duration-300">
+              <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="w-8 h-8 text-destructive" />
+              </div>
+              <h3 className="text-xl font-bold mb-2">WhatsApp Desconectado</h3>
+              <p className="text-muted-foreground mb-6">
+                Para visualizar e responder mensagens, sua conexão UAZ precisa estar ativa.
+              </p>
+              <Button asChild>
+                <Link to="/whatsapp">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Configurar Conexão
+                </Link>
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Lista */}
         <div className="w-80 border-r border-border flex flex-col">
           <div className="p-3 border-b border-border">
