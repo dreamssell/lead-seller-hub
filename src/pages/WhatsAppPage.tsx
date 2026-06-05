@@ -358,11 +358,11 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
       }
 
       // Store debug info for UI
-      if (data?.raw_error || data?.error) {
+      if (data?.raw_error || data?.error || data?.raw) {
         setDebugInfo({
           url: url + (url.endsWith('/') ? 'instance/status' : '/instance/status'),
           headers: ['Authorization', 'apikey', 'token', 'Content-Type'],
-          error: data.raw_error ? JSON.parse(data.raw_error) : { message: data.error }
+          error: data.raw_error ? (typeof data.raw_error === 'string' ? JSON.parse(data.raw_error) : data.raw_error) : (data.raw || { message: data.error })
         });
       }
 
@@ -372,7 +372,6 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
           description: 'Aguarde enquanto tentamos restabelecer a sessão.'
         });
         
-        // Simulating refresh logic (could call a specific endpoint like /instance/reconnect)
         setTimeout(() => handleTest(true), 1500);
         return;
       }
@@ -380,8 +379,8 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
       if (data?.raw_error) {
         let debugMsg = data.raw_error;
         try {
-          const parsed = JSON.parse(data.raw_error);
-          debugMsg = `Code: ${parsed.code} - ${parsed.message}`;
+          const parsed = typeof data.raw_error === 'string' ? JSON.parse(data.raw_error) : data.raw_error;
+          debugMsg = `Code: ${parsed.code ?? 'N/A'} - ${parsed.message ?? 'N/A'}`;
           if (parsed.data) debugMsg += ` (Data: ${JSON.stringify(parsed.data, null, 2)})`;
         } catch (e) {}
 
@@ -390,7 +389,7 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
             <div className="space-y-2 mt-2">
                <p className="text-xs font-semibold">Resposta bruta:</p>
                <pre className="text-[10px] bg-black/20 p-2 rounded overflow-x-auto max-h-32">
-                 {debugMsg}
+                 {typeof debugMsg === 'string' ? debugMsg : JSON.stringify(debugMsg, null, 2)}
                </pre>
             </div>
           ),
@@ -404,8 +403,9 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
       } else if (data?.connected) {
         toast.success('Conectado!', { description: `Dispositivo: ${data.phone || 'WhatsApp Active'}` });
       } else {
+        const displayStatus = typeof data.status === 'object' ? JSON.stringify(data.status) : data.status;
         toast.warning('Provedor respondeu, mas instância não está aberta', {
-          description: `Status retornado: ${data.status || 'unknown'}`
+          description: `Status retornado: ${displayStatus || 'unknown'}`
         });
       }
       onSaved();
