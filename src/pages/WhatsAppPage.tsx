@@ -119,6 +119,7 @@ export default function WhatsAppPage() {
                   <SelectItem value="linkedin">LinkedIn Business</SelectItem>
                   <SelectItem value="tiktok">TikTok Business</SelectItem>
                   <SelectItem value="youtube">YouTube Business</SelectItem>
+                  <SelectItem value="widget">Widget de Site</SelectItem>
                 </SelectContent>
               </Select>
 

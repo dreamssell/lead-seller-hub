@@ -240,12 +240,12 @@ export default function ChatPage() {
         const channelCustomers = customers.filter(c => {
           if (channel === 'whatsapp') return c.channel === 'whatsapp' || (!c.channel && c.phone && !c.phone.includes('@telegram'));
           if (channel === 'telegram') return c.channel === 'telegram' || c.phone?.includes('@telegram') || c.email?.includes('@telegram');
-          if (channel === 'instagram') return c.channel === 'instagram';
-          if (channel === 'facebook') return c.channel === 'facebook';
-          if (channel === 'linkedin') return c.channel === 'linkedin';
-          if (channel === 'tiktok') return c.channel === 'tiktok';
-          if (channel === 'youtube') return c.channel === 'youtube';
-          if (channel === 'widget') return c.channel === 'widget';
+          if (channel === 'instagram') return c.channel === 'instagram' || c.phone?.includes('@instagram');
+          if (channel === 'facebook') return c.channel === 'facebook' || c.phone?.includes('@facebook');
+          if (channel === 'linkedin') return c.channel === 'linkedin' || c.phone?.includes('@linkedin');
+          if (channel === 'tiktok') return c.channel === 'tiktok' || c.phone?.includes('@tiktok');
+          if (channel === 'youtube') return c.channel === 'youtube' || c.phone?.includes('@youtube');
+          if (channel === 'widget') return c.channel === 'widget' || c.phone?.includes('@widget');
           return true;
         });
 
