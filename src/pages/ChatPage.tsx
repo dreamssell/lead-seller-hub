@@ -14,6 +14,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
+import { getProviderAdapter } from '@/components/whatsapp/adapters';
+import { WhatsAppConnection, PROVIDER_CONFIGS } from '@/components/whatsapp/types';
+
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -70,10 +73,12 @@ export default function ChatPage() {
   const [debugLogs, setDebugLogs] = useState<Array<{ id: string; time: string; type: 'info' | 'error' | 'request'; message: string; data?: any }>>([]);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
   const [authValidation, setAuthValidation] = useState<{ valid: boolean; reason?: string; loading: boolean }>({ valid: false, loading: true });
-  const [uazStatus, setUazStatus] = useState<{ connected: boolean; loading: boolean; phone?: string; error?: string }>({
+  const [activeWhatsAppConn, setActiveWhatsAppConn] = useState<WhatsAppConnection | null>(null);
+  const [whatsappStatus, setWhatsappStatus] = useState<{ connected: boolean; loading: boolean; phone?: string; error?: string }>({
     connected: false,
     loading: true,
   });
+
 
   const addDebugLog = (type: 'info' | 'error' | 'request', message: string, data?: any) => {
     setDebugLogs(prev => [{
@@ -86,52 +91,40 @@ export default function ChatPage() {
   };
 
   useEffect(() => {
-    async function checkUAZ(isManual = false) {
+    async function checkWhatsApp(isManual = false) {
       if (isManual) setIsRefreshing(true);
-      addDebugLog('request', 'Iniciando validação de credenciais e status UAZ');
+      addDebugLog('request', 'Iniciando validação de credenciais e status WhatsApp');
       
       try {
-        const { data: conn, error: connError } = await supabase
+        const { data: connections, error: connError } = await supabase
           .from('whatsapp_connections')
           .select('*')
-          .eq('provider', 'uaz')
-          .single();
+          .eq('status', 'connected');
 
-        if (connError) {
-          addDebugLog('error', 'Erro ao buscar conexão no banco', connError);
-          setAuthValidation({ valid: false, reason: 'Conexão não configurada no banco de dados', loading: false });
-          setUazStatus({ connected: false, loading: false });
-          return;
+        if (connError || !connections || connections.length === 0) {
+          const { data: firstConn } = await supabase.from('whatsapp_connections').select('*').limit(1).maybeSingle();
+          if (!firstConn) {
+            addDebugLog('error', 'Nenhuma conexão encontrada');
+            setAuthValidation({ valid: false, reason: 'Nenhuma conexão configurada', loading: false });
+            setWhatsappStatus({ connected: false, loading: false });
+            return;
+          }
+          setActiveWhatsAppConn(firstConn as WhatsAppConnection);
+        } else {
+          setActiveWhatsAppConn(connections[0] as WhatsAppConnection);
         }
 
-        const metadata = (conn.metadata as any) || {};
-        if (!metadata.token) {
-          addDebugLog('error', 'Token ausente na configuração');
-          setAuthValidation({ valid: false, reason: 'Token da API não encontrado. Configure em Conexões.', loading: false });
-          setUazStatus({ connected: false, loading: false });
-          return;
-        }
+        const conn = activeWhatsAppConn || (connections && connections[0]);
+        if (!conn) return;
 
-        addDebugLog('info', 'Credenciais locais validadas, chamando Edge Function status');
+        const adapter = getProviderAdapter(conn.provider);
+        addDebugLog('info', `Usando provedor: ${conn.provider}. Chamando adapter.`);
         
-        const { data, error } = await supabase.functions.invoke('whatsapp-status', {
-          body: {
-            connection_id: conn.id,
-            provider: 'uaz',
-            url: metadata.url || 'https://api.uazapi.dev',
-            token: metadata.token,
-          },
-        });
-
-        if (error) {
-          addDebugLog('error', 'Falha na comunicação com Edge Function', error);
-          throw error;
-        }
-
+        const data = await adapter.getStatus(conn as WhatsAppConnection);
         addDebugLog('info', 'Resposta do Provedor recebida', data);
 
         const isConnected = !!data?.connected;
-        setUazStatus({
+        setWhatsappStatus({
           connected: isConnected,
           loading: false,
           phone: data?.phone,
@@ -140,18 +133,18 @@ export default function ChatPage() {
 
         setAuthValidation({ 
           valid: isConnected, 
-          reason: isConnected ? undefined : (data?.error || 'Instância UAZ desconectada ou não autenticada'), 
+          reason: isConnected ? undefined : (data?.error || `Instância ${conn.provider.toUpperCase()} desconectada`), 
           loading: false 
         });
 
         if (isConnected) {
-          addDebugLog('info', 'Status: CONECTADO. Iniciando carga de contatos.');
+          addDebugLog('info', `Status: CONECTADO (${conn.provider}). Iniciando carga de contatos.`);
           loadConversations();
         }
       } catch (err: any) {
         addDebugLog('error', 'Exceção durante verificação', err);
-        setUazStatus({ connected: false, loading: false, error: 'Falha ao verificar status' });
-        setAuthValidation({ valid: false, reason: 'Erro de rede ou permissão ao validar acesso.', loading: false });
+        setWhatsappStatus({ connected: false, loading: false, error: 'Falha ao verificar status' });
+        setAuthValidation({ valid: false, reason: 'Erro ao validar acesso.', loading: false });
       } finally {
         if (isManual) setIsRefreshing(false);
       }
@@ -159,7 +152,8 @@ export default function ChatPage() {
 
     // Export function to window for the manual refresh button
     // @ts-ignore
-    window.manualRefreshUAZ = () => checkUAZ(true);
+    window.manualRefreshWhatsApp = () => checkWhatsApp(true);
+
 
     async function loadConversations() {
       addDebugLog('request', 'Buscando contatos e mensagens recentes no banco');
@@ -200,15 +194,16 @@ export default function ChatPage() {
       }
     }
 
-    checkUAZ();
+    checkWhatsApp();
     
     // Polling interval with basic backoff logic simulation
     const interval = setInterval(() => {
-      if (!uazStatus.connected) {
+      if (!whatsappStatus.connected) {
         addDebugLog('info', 'Polling: Tentando reconectar...');
-        checkUAZ();
+        checkWhatsApp();
       }
     }, 30000); // 30s interval
+
 
     // Realtime subscription
     const channel = supabase
@@ -226,7 +221,7 @@ export default function ChatPage() {
       clearInterval(interval);
       supabase.removeChannel(channel);
     };
-  }, [selectedConvId, uazStatus.connected]);
+  }, [selectedConvId, whatsappStatus.connected, activeWhatsAppConn]);
 
   useEffect(() => {
     if (selectedConvId) {
@@ -281,19 +276,13 @@ export default function ChatPage() {
     const currentText = messageText;
     setMessageText('');
 
-    // 2. Chamar Edge Function para envio real via UAZ
+    // 2. Chamar Adapter para envio
     try {
-      const { data, error } = await supabase.functions.invoke('uaz-send-message', {
-        body: {
-          customer_id: selectedConvId,
-          content: currentText,
-          client_msg_id: clientMsgId
-        }
-      });
+      if (!activeWhatsAppConn) throw new Error('Conexão ativa não encontrada');
+      const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+      
+      const data = await adapter.sendMessage(activeWhatsAppConn, selectedConvId, currentText);
 
-      if (error) throw error;
-
-      // O Edge Function já inseriu no banco para garantir idempotência.
       // O Realtime atualizará a lista, mas podemos marcar como 'sent' localmente também.
       setMessages(prev => prev.map(m => 
         m.id === clientMsgId ? { ...m, status: 'sent', id: data?.data?.key?.id || m.id } : m
@@ -305,6 +294,7 @@ export default function ChatPage() {
         m.id === clientMsgId ? { ...m, status: 'error' } : m
       ));
     }
+
   };
 
   // Painel principal: mini-cards de canais
@@ -328,12 +318,14 @@ export default function ChatPage() {
               >
                 {isWhatsApp && (
                   <div className="absolute top-3 right-3">
-                    {uazStatus.loading ? (
+                    {whatsappStatus.loading ? (
                       <RefreshCw className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
-                    ) : uazStatus.connected ? (
+                    ) : whatsappStatus.connected ? (
                       <div className="flex items-center gap-1.5 bg-success/10 px-2 py-0.5 rounded-full border border-success/20">
                         <CheckCircle2 className="w-3 h-3 text-success" />
-                        <span className="text-[10px] font-bold text-success uppercase tracking-wider">UAZ Ativo</span>
+                        <span className="text-[10px] font-bold text-success uppercase tracking-wider">
+                          {activeWhatsAppConn?.provider?.toUpperCase() || 'WhatsApp'} Ativo
+                        </span>
                       </div>
                     ) : (
                       <Link to="/whatsapp" onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 bg-destructive/10 px-2 py-0.5 rounded-full border border-destructive/20 hover:bg-destructive/20 transition-colors">
@@ -341,6 +333,7 @@ export default function ChatPage() {
                         <span className="text-[10px] font-bold text-destructive uppercase tracking-wider">Desconectado</span>
                       </Link>
                     )}
+
                   </div>
                 )}
 
@@ -348,9 +341,10 @@ export default function ChatPage() {
                   <Icon className={`w-6 h-6 ${ch.color}`} />
                 </div>
                 <h3 className="text-sm font-semibold text-foreground mb-1">{ch.name}</h3>
-                {isWhatsApp && uazStatus.phone && !uazStatus.loading && (
-                  <p className="text-[10px] text-muted-foreground mb-2 font-medium">{uazStatus.phone}</p>
+                {isWhatsApp && whatsappStatus.phone && !whatsappStatus.loading && (
+                  <p className="text-[10px] text-muted-foreground mb-2 font-medium">{whatsappStatus.phone}</p>
                 )}
+
                 <div className="flex items-center gap-3 mt-3">
                   <div>
                     <p className="text-xl font-bold text-foreground">{ch.leads}</p>
@@ -390,16 +384,17 @@ export default function ChatPage() {
           <ChannelIcon className={`w-3.5 h-3.5 ${channelInfo.color}`} />
           <span className={`text-xs font-medium ${channelInfo.color}`}>
             {channelInfo.name} 
-            {channelInfo.key === 'whatsapp' && uazStatus.connected && ' (UAZ)'}
+            {channelInfo.key === 'whatsapp' && activeWhatsAppConn && ` (${activeWhatsAppConn.provider.toUpperCase()})`}
           </span>
         </div>
         {channelInfo.key === 'whatsapp' && (
           <div className="flex items-center gap-2">
-            {uazStatus.connected ? (
+            {whatsappStatus.connected ? (
               <Badge variant="outline" className="border-success/30 text-success text-[10px] h-5 gap-1">
                 <CheckCircle2 className="w-2.5 h-2.5" />
                 LIVE
               </Badge>
+
             ) : (
               <Badge variant="outline" className="border-destructive/30 text-destructive text-[10px] h-5 gap-1">
                 <AlertCircle className="w-2.5 h-2.5" />
@@ -412,7 +407,8 @@ export default function ChatPage() {
               className={`h-7 w-7 ${isRefreshing ? 'animate-spin' : ''}`}
               onClick={() => {
                 // @ts-ignore
-                const check = window.manualRefreshUAZ;
+                const check = window.manualRefreshWhatsApp;
+
                 if (typeof check === 'function') check();
                 else window.location.reload();
               }}
@@ -475,11 +471,12 @@ export default function ChatPage() {
                 )}
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">Status Rede:</span>
-                  {uazStatus.connected ? (
+                  {whatsappStatus.connected ? (
                     <span className="text-success flex items-center gap-1"><Wifi className="w-3 h-3" /> Conectado</span>
                   ) : (
                     <span className="text-destructive flex items-center gap-1"><WifiOff className="w-3 h-3" /> Erro</span>
                   )}
+
                 </div>
               </div>
 
@@ -526,7 +523,7 @@ export default function ChatPage() {
           )}
         </AnimatePresence>
 
-        {!uazStatus.connected && activeChannel === 'whatsapp' && (
+        {!whatsappStatus.connected && activeChannel === 'whatsapp' && (
           <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-50 flex items-center justify-center p-6 text-center">
             <div className="glass-card p-8 max-w-md border-destructive/20 shadow-2xl animate-in fade-in zoom-in duration-300">
               <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
@@ -534,7 +531,7 @@ export default function ChatPage() {
               </div>
               <h3 className="text-xl font-bold mb-2">WhatsApp Desconectado</h3>
               <p className="text-muted-foreground mb-6">
-                {authValidation.reason || 'Sua conexão UAZ precisa estar ativa para visualizar e responder mensagens.'}
+                {authValidation.reason || `Sua conexão ${activeWhatsAppConn?.provider?.toUpperCase() || 'WhatsApp'} precisa estar ativa para visualizar e responder mensagens.`}
               </p>
               <div className="flex items-center gap-3 justify-center">
                 <Button asChild variant="outline">

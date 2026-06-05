@@ -107,9 +107,14 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
         setDebugInfo({
           url: url + (url.endsWith('/') ? 'instance/status' : '/instance/status'),
           headers: ['Authorization', 'apikey', 'token', 'Content-Type'],
-          error: data.raw_error ? (typeof data.raw_error === 'string' ? JSON.parse(data.raw_error) : data.raw_error) : (data.raw || { message: data.error })
+          error: {
+            provider: conn.provider,
+            status_code: data.status_code || (data.error ? 500 : 200),
+            payload: data.raw_error ? (typeof data.raw_error === 'string' ? JSON.parse(data.raw_error) : data.raw_error) : (data.raw || { message: data.error })
+          }
         });
       }
+
 
       if (data?.status_code === 401 && !isRetry) {
         toast.info('Token inválido (401). Tentando refresh automático...', {
