@@ -1,902 +1,184 @@
+
 import { useEffect, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CheckCircle2, Loader2, Plug, RefreshCw, ShieldCheck, XCircle, History, Activity, Zap, Clock, LineChart as LineChartIcon, AlertTriangle, Settings, ChevronLeft, ChevronRight, MessageCircle, BarChart3, Filter, ExternalLink, Eye, AlertOctagon, AlertCircle, Download, FileJson, FileSpreadsheet, Copy } from 'lucide-react';
+import { 
+  PlusCircle, RefreshCw, MessageCircle, Activity, 
+  History, ShieldCheck, Phone, Plug, Loader2
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import UazAuditTab from '@/components/settings/UazAuditTab';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { motion } from 'framer-motion';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ScrollArea } from '@/components/ui/scroll-area';
-
-type Provider = 'uaz' | 'meta';
-type Status = 'disconnected' | 'connecting' | 'connected' | 'error';
-
-interface Connection {
-  id: string;
-  provider: Provider;
-  display_name: string;
-  phone_number: string | null;
-  status: Status;
-  last_checked_at: string | null;
-  last_error: string | null;
-  metadata: Record<string, any>;
-}
-
-const PROVIDER_DEFAULTS: Record<Provider, { url: string; tokenLabel: string; extraLabel?: string; description: string; docs: string }> = {
-  uaz: {
-    url: 'https://api.uazapi.dev',
-    tokenLabel: 'Token da Instância',
-    description: 'Conexão via UAZ API — ideal para WhatsApp não oficial com QR Code.',
-    docs: 'https://docs.uazapi.com',
-  },
-  meta: {
-    url: 'https://graph.facebook.com/v21.0',
-    tokenLabel: 'Access Token',
-    extraLabel: 'Phone Number ID',
-    description: 'Integração oficial via Meta Cloud API (WhatsApp Business Platform).',
-    docs: 'https://developers.facebook.com/docs/whatsapp/cloud-api',
-  },
-};
-
-function statusBadge(status: Status) {
-  const map: Record<Status, { label: string; cls: string; icon: any }> = {
-    connected: { label: 'Conectado', cls: 'text-success border-success/30', icon: CheckCircle2 },
-    connecting: { label: 'Conectando...', cls: 'text-primary border-primary/30', icon: Loader2 },
-    error: { label: 'Erro', cls: 'text-destructive border-destructive/30', icon: XCircle },
-    disconnected: { label: 'Desconectado', cls: 'text-muted-foreground border-border', icon: Plug },
-  };
-  const { label, cls, icon: Icon } = map[status];
-  return (
-    <Badge variant="outline" className={cls}>
-      <Icon className={`w-3 h-3 mr-1 ${status === 'connecting' ? 'animate-spin' : ''}`} />
-      {label}
-    </Badge>
-  );
-}
-
-function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSaved: () => void; onOpenAudit: (filters?: { tenantId?: string; logId?: string }) => void }) {
-  const defaults = PROVIDER_DEFAULTS[conn.provider];
-  const [url, setUrl] = useState<string>(conn.metadata?.url ?? defaults.url);
-  const [token, setToken] = useState<string>(conn.metadata?.token ?? '');
-  const [extra, setExtra] = useState<string>(conn.metadata?.phone_number_id ?? '');
-  const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [metrics, setMetrics] = useState<{ sessions?: number; latency?: number; lastSync?: string; failures?: number; lastAttempt?: string }>({});
-  const [latencyHistory, setLatencyHistory] = useState<any[]>([]);
-  const [latencyPeriod, setLatencyPeriod] = useState<'24h' | '7d' | '30d'>('24h');
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [latencyThreshold, setLatencyThreshold] = useState<number>(conn.metadata?.latency_threshold ?? 500);
-  const [globalThreshold, setGlobalThreshold] = useState<number>(500);
-  const [systemSettings, setSystemSettings] = useState<any>(null);
-  const [lastSendAttempt, setLastSendAttempt] = useState<any>(null);
-  const [queueStats, setQueueStats] = useState<{ current_queue: number; trend: any[] }>({ current_queue: 0, trend: [] });
-  const [loadingQueue, setLoadingQueue] = useState(false);
-  const [alerts, setAlerts] = useState<any[]>([]);
-  const [alertsPage, setAlertsPage] = useState(0);
-  const [totalAlerts, setTotalAlerts] = useState(0);
-  const [loadingAlerts, setLoadingAlerts] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [filterTenant, setFilterTenant] = useState<string>('all');
-  const [filterChannel, setFilterChannel] = useState<string>('whatsapp');
-  const [subCompanies, setSubCompanies] = useState<any[]>([]);
-  const [resendingLast, setResendingLast] = useState(false);
-
-  const [drillDownOpen, setDrillDownOpen] = useState(false);
-  const [drillDownLogs, setDrillDownLogs] = useState<any[]>([]);
-  const [loadingDrillDown, setLoadingDrillDown] = useState(false);
-  const [selectedRange, setSelectedRange] = useState<{ start: string; end: string } | null>(null);
-  const [selectedDetailLog, setSelectedDetailLog] = useState<any>(null);
-
-  const loadHistory = async () => {
-    setLoadingHistory(true);
-    const now = new Date();
-    let fromDate = new Date();
-    if (latencyPeriod === '24h') fromDate.setHours(now.getHours() - 24);
-    else if (latencyPeriod === '7d') fromDate.setDate(now.getDate() - 7);
-    else fromDate.setDate(now.getDate() - 30);
-
-    const { data } = await supabase
-      .from('uaz_audit_logs')
-      .select('latency_ms, created_at')
-      .eq('event_type', 'webhook')
-      .gte('created_at', fromDate.toISOString())
-      .order('created_at', { ascending: true });
-
-    if (data) {
-      setLatencyHistory(data.map(d => ({
-        time: new Date(d.created_at).toLocaleTimeString([], { 
-          hour: '2-digit', 
-          minute: '2-digit',
-          ...(latencyPeriod !== '24h' && { day: '2-digit', month: '2-digit' })
-        }),
-        timestamp: d.created_at,
-        latency: d.latency_ms
-      })));
-    }
-    setLoadingHistory(false);
-  };
-
-  const loadQueue = async () => {
-    setLoadingQueue(true);
-    const { data } = await supabase.functions.invoke('uaz-queue-stats', {
-      body: { tenant_id: filterTenant === 'all' ? null : filterTenant, channel_type: filterChannel === 'all' ? null : filterChannel }
-    });
-    if (data) {
-      setQueueStats(data);
-      if (data.alert) {
-        toast.warning('Alerta de Fila UAZ', { 
-          description: data.alert.reason,
-          duration: 10000,
-          icon: <AlertOctagon className="w-4 h-4 text-warning" />
-        });
-      }
-    }
-    setLoadingQueue(false);
-  };
-
-  const loadMetrics = async () => {
-    const { data: recentLogs } = await supabase
-      .from('uaz_audit_logs')
-      .select('latency_ms, created_at, status, event_type, response, message, payload')
-      .order('created_at', { ascending: false })
-      .limit(50);
-    
-    if (recentLogs && recentLogs.length > 0) {
-      const filtered = recentLogs.filter(l => {
-        const payload = l.payload as any;
-        const matchesTenant = filterTenant === 'all' || payload?.tenant_id === filterTenant || payload?.sub_company_id === filterTenant;
-        const matchesChannel = filterChannel === 'all' || l.event_type.toLowerCase().startsWith(filterChannel.toLowerCase());
-        return matchesTenant && matchesChannel;
-      });
-
-      const successes = filtered.filter(l => l.status === 'success');
-      const avgLatency = successes.length > 0 
-        ? Math.round(successes.reduce((acc, curr) => acc + (curr.latency_ms || 0), 0) / successes.length)
-        : 0;
-        
-      setMetrics({
-        sessions: 1,
-        latency: avgLatency,
-        lastSync: successes[0]?.created_at,
-        failures: filtered.filter(l => l.status === 'error').length,
-        lastAttempt: filtered[0]?.created_at
-      });
-
-      const lastSend = filtered.find(l => l.event_type === 'send_message');
-      if (lastSend) setLastSendAttempt(lastSend);
-    }
-  };
-
-  const loadAlerts = async () => {
-    setLoadingAlerts(true);
-    const { data, count } = await supabase
-      .from('uaz_audit_logs')
-      .select('*', { count: 'exact' })
-      .or(`status.eq.error,latency_ms.gt.${latencyThreshold}`)
-      .order('created_at', { ascending: false })
-      .range(alertsPage * 5, (alertsPage + 1) * 5 - 1);
-    
-    const filteredAlerts = data?.filter(l => {
-      const payload = l.payload as any;
-      const matchesTenant = filterTenant === 'all' || payload?.tenant_id === filterTenant || payload?.sub_company_id === filterTenant;
-      const matchesChannel = filterChannel === 'all' || l.event_type.toLowerCase().startsWith(filterChannel.toLowerCase());
-      return matchesTenant && matchesChannel;
-    }) || [];
-
-    setAlerts(filteredAlerts);
-    setTotalAlerts(count || 0);
-    setLoadingAlerts(false);
-  };
-
-  const loadSettings = async () => {
-    const { data } = await supabase.from('uaz_system_settings').select('*').eq('id', 'global').single();
-    if (data) {
-      setGlobalThreshold(data.alert_threshold_latency);
-      setSystemSettings(data);
-    }
-  };
-
-  const loadSubCompanies = async () => {
-    const { data } = await supabase.from('sub_companies').select('id, name');
-    if (data) setSubCompanies(data);
-  };
-
-  const exportQueueToCSV = () => {
-    if (!queueStats.trend || queueStats.trend.length === 0) {
-      toast.error('Sem dados para exportar');
-      return;
-    }
-
-    const headers = ['Horário', 'Timestamp', 'Mensagens Pendentes', 'Tenant', 'Canal'];
-    const rows = queueStats.trend.map(point => [
-      point.time,
-      point.timestamp,
-      point.pending,
-      filterTenant === 'all' ? 'Todos' : subCompanies.find(c => c.id === filterTenant)?.name || filterTenant,
-      filterChannel.toUpperCase()
-    ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `uaz_queue_metrics_${filterTenant}_${filterChannel}_${new Date().toISOString()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success('Métricas exportadas em CSV');
-  };
-
-  const exportLogToJSON = (log: any) => {
-    const exportData = {
-      id: log.id,
-      event_type: log.event_type,
-      status: log.status,
-      created_at: log.created_at,
-      latency_ms: log.latency_ms,
-      payload: log.payload,
-      response: log.response,
-      final_cause: log.final_cause,
-      full_trace: log.full_trace
-    };
-
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `uaz_log_${log.id}_${new Date().getTime()}.json`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success('Log exportado em JSON');
-  };
-
-  const handleChartClick = async (data: any) => {
-    if (!data || !data.activePayload || data.activePayload.length === 0) return;
-    
-    const point = data.activePayload[0].payload;
-    if (!point.timestamp) return;
-
-    const clickedTime = new Date(point.timestamp);
-    const start = new Date(clickedTime.getTime() - 15 * 60000).toISOString(); // 15 mins before
-    const end = new Date(clickedTime.getTime() + 15 * 60000).toISOString();   // 15 mins after
-
-    setSelectedRange({ start, end });
-    setDrillDownOpen(true);
-    setLoadingDrillDown(true);
-
-    let query = supabase
-      .from('uaz_audit_logs')
-      .select('*')
-      .gte('created_at', start)
-      .lte('created_at', end)
-      .order('created_at', { ascending: false });
-
-    if (filterTenant !== 'all') {
-      query = query.or(`payload->>tenant_id.eq.${filterTenant},payload->>sub_company_id.eq.${filterTenant}`);
-    }
-
-    if (filterChannel !== 'all') {
-      query = query.filter('event_type', 'ilike', `${filterChannel}%`);
-    }
-
-    const { data: logs } = await query;
-    setDrillDownLogs(logs || []);
-    setLoadingDrillDown(false);
-  };
-
-  useEffect(() => {
-    if (conn.provider === 'uaz' && conn.status === 'connected') {
-      loadHistory();
-      loadQueue();
-      loadMetrics();
-      loadAlerts();
-      loadSettings();
-      loadSubCompanies();
-    }
-  }, [conn.status, conn.provider, latencyPeriod, filterTenant, filterChannel, alertsPage]);
-
-  const updateThreshold = async (val: number) => {
-    setLatencyThreshold(val);
-    await supabase.from('whatsapp_connections').update({ metadata: { ...(conn.metadata ?? {}), latency_threshold: val } }).eq('id', conn.id);
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    const metadata = { ...(conn.metadata ?? {}), url, token, ...(conn.provider === 'meta' && { phone_number_id: extra }) };
-    const { error } = await supabase.from('whatsapp_connections').update({ metadata }).eq('id', conn.id);
-    setSaving(false);
-    if (error) toast.error('Erro ao salvar', { description: error.message });
-    else { toast.success('Configuração salva'); onSaved(); }
-  };
-
-  const [debugInfo, setDebugInfo] = useState<{ url: string; headers: string[]; error: any } | null>(null);
-
-  const handleTest = async (retryData?: any) => {
-    // Check if it's a retry from an event or a direct boolean call
-    const isRetry = typeof retryData === 'boolean' ? retryData : false;
-
-    if (!url || !token) {
-      toast.error('Campos obrigatórios ausentes', { 
-        description: 'Por favor, preencha a URL e o Token antes de testar.' 
-      });
-      return;
-    }
-
-    setTesting(true);
-    setDebugInfo(null);
-    try {
-      const { data, error } = await supabase.functions.invoke('whatsapp-status', { 
-        body: { 
-          connection_id: conn.id,
-          provider: conn.provider, 
-          url, 
-          token, 
-          ...(conn.provider === 'meta' && { phone_number_id: extra }) 
-        } 
-      });
-
-      setTesting(false);
-
-      if (error) {
-        toast.error('Falha na comunicação com o servidor', { description: error.message });
-        return;
-      }
-
-      // Store debug info for UI
-      if (data?.raw_error || data?.error || data?.raw) {
-        setDebugInfo({
-          url: url + (url.endsWith('/') ? 'instance/status' : '/instance/status'),
-          headers: ['Authorization', 'apikey', 'token', 'Content-Type'],
-          error: data.raw_error ? (typeof data.raw_error === 'string' ? JSON.parse(data.raw_error) : data.raw_error) : (data.raw || { message: data.error })
-        });
-      }
-
-      // 401 Automatic Refresh Flow
-      if (data?.status_code === 401 && !isRetry) {
-        toast.info('Token inválido (401). Tentando refresh automático...', {
-          description: 'Aguarde enquanto tentamos restabelecer a sessão.'
-        });
-        
-        setTimeout(() => handleTest(true), 1500);
-        return;
-      }
-
-      if (data?.raw_error) {
-        let debugMsg = data.raw_error;
-        try {
-          const parsed = typeof data.raw_error === 'string' ? JSON.parse(data.raw_error) : data.raw_error;
-          debugMsg = `Code: ${parsed.code ?? 'N/A'} - ${parsed.message ?? 'N/A'}`;
-          if (parsed.data) debugMsg += ` (Data: ${JSON.stringify(parsed.data, null, 2)})`;
-        } catch (e) {}
-
-        toast.error(`Erro UAZ [${data.status_code || '???'}]`, { 
-          description: (
-            <div className="space-y-2 mt-2">
-               <p className="text-xs font-semibold">Resposta bruta:</p>
-               <pre className="text-[10px] bg-black/20 p-2 rounded overflow-x-auto max-h-32">
-                 {typeof debugMsg === 'string' ? debugMsg : JSON.stringify(debugMsg, null, 2)}
-               </pre>
-            </div>
-          ),
-          duration: 10000 
-        });
-        return;
-      }
-
-      if (data?.error) {
-        toast.error('Conexão falhou', { description: data.error });
-      } else if (data?.connected) {
-        toast.success('Conectado!', { description: `Dispositivo: ${data.phone || 'WhatsApp Active'}` });
-      } else {
-        const displayStatus = typeof data.status === 'object' ? JSON.stringify(data.status) : data.status;
-        toast.warning('Provedor respondeu, mas instância não está aberta', {
-          description: `Status retornado: ${displayStatus || 'unknown'}`
-        });
-      }
-      onSaved();
-    } catch (err: any) {
-      setTesting(false);
-      toast.error('Erro inesperado', { description: err.message });
-    }
-  };
-
-  return (
-    <Card className="glass-card">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              {conn.provider === 'meta' ? <ShieldCheck className="w-5 h-5 text-primary" /> : <Plug className="w-5 h-5 text-primary" />}
-              {conn.display_name}
-            </CardTitle>
-            <CardDescription className="mt-1">
-              {defaults.description}
-              {conn.status === 'error' && conn.last_error && (
-                <p className="text-destructive text-[10px] mt-1 font-medium bg-destructive/10 p-1 px-2 rounded-md border border-destructive/20 max-w-xs break-words">
-                  {conn.last_error}
-                </p>
-              )}
-            </CardDescription>
-          </div>
-          {statusBadge(conn.status)}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {conn.provider === 'uaz' && conn.status === 'connected' && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Sessões</p>
-                <p className="text-sm font-bold">{metrics.sessions || 0}</p>
-              </div>
-              <div className={`p-2 rounded-lg border ${ (metrics.latency || 0) > latencyThreshold ? 'bg-destructive/10 border-destructive/40' : 'bg-secondary/30 border-border/40' }`}>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Latência</p>
-                <p className="text-sm font-bold">{metrics.latency || 0}ms</p>
-              </div>
-              <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Falhas</p>
-                <p className="text-sm font-bold">{metrics.failures || 0}</p>
-              </div>
-              <div className="bg-secondary/30 p-2 rounded-lg border border-border/40">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Última Sync</p>
-                <p className="text-sm font-bold truncate">{metrics.lastSync ? new Date(metrics.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</p>
-              </div>
-            </div>
-
-            <div className="space-y-3 pt-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-foreground uppercase">Configurações & Diagnóstico</span>
-                <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={() => setShowSettings(!showSettings)}>
-                  {showSettings ? 'Ocultar' : 'Ver Detalhes'}
-                </Button>
-              </div>
-
-              {showSettings && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4 border-t border-border/40 pt-3">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <Label className="text-[10px] uppercase font-bold text-muted-foreground">Limite Canal (ms)</Label>
-                      <Input type="number" value={latencyThreshold} onChange={(e) => updateThreshold(Number(e.target.value))} className="h-8 text-xs" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[10px] uppercase font-bold text-muted-foreground">Limite Global</Label>
-                      <div className="h-8 flex items-center px-3 rounded-md bg-secondary/30 border border-border/40 text-xs">{globalThreshold}ms</div>
-                    </div>
-                  </div>
-
-                  <div className="bg-secondary/20 p-3 rounded-xl border border-border/40 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase">Fila de Mensagens</span>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-5 w-5 text-muted-foreground hover:text-primary" 
-                          onClick={exportQueueToCSV}
-                          title="Exportar métricas em CSV"
-                        >
-                          <FileSpreadsheet className="w-3 h-3" />
-                        </Button>
-                      </div>
-                      <div className="flex gap-2">
-                        <select value={filterTenant} onChange={(e) => setFilterTenant(e.target.value)} className="bg-background border border-border/40 rounded px-2 py-0.5 text-[9px] font-bold">
-                          <option value="all">Todas Empresas</option>
-                          {subCompanies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
-                        <select value={filterChannel} onChange={(e) => setFilterChannel(e.target.value)} className="bg-background border border-border/40 rounded px-2 py-0.5 text-[9px] font-bold">
-                          <option value="whatsapp">WhatsApp</option>
-                          <option value="voip">VoIP</option>
-                          <option value="video">Vídeo</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="h-[100px] w-full">
-                      {loadingQueue ? <Loader2 className="w-4 h-4 animate-spin m-auto" /> : (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={queueStats.trend} onClick={handleChartClick} style={{ cursor: 'pointer' }}>
-                            <XAxis dataKey="time" fontSize={8} hide />
-                            <YAxis fontSize={8} hide />
-                            <RechartsTooltip 
-                              labelStyle={{ color: 'black', fontSize: '10px' }} 
-                              contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                            />
-                            <Line type="monotone" dataKey="pending" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="bg-secondary/20 p-3 rounded-xl border border-border/40">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase">Latência Histórica</span>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-5 w-5 text-muted-foreground hover:text-primary" 
-                          onClick={() => {
-                            if (!latencyHistory || latencyHistory.length === 0) {
-                              toast.error('Sem dados para exportar');
-                              return;
-                            }
-                            const headers = ['Horário', 'Latência (ms)'];
-                            const csvContent = [headers.join(','), ...latencyHistory.map(p => [p.time, p.latency].join(','))].join('\n');
-                            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                            const url = URL.createObjectURL(blob);
-                            const link = document.createElement('a');
-                            link.setAttribute('href', url);
-                            link.setAttribute('download', `uaz_latency_${latencyPeriod}_${new Date().getTime()}.csv`);
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                            toast.success('Latência exportada em CSV');
-                          }}
-                          title="Exportar latência em CSV"
-                        >
-                          <FileSpreadsheet className="w-3 h-3" />
-                        </Button>
-                      </div>
-                      <div className="flex gap-1">
-                        {(['24h', '7d', '30d'] as const).map(p => (
-                          <Button key={p} variant={latencyPeriod === p ? 'default' : 'ghost'} size="sm" className="h-5 px-1.5 text-[8px]" onClick={() => setLatencyPeriod(p)}>{p.toUpperCase()}</Button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="h-[100px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={latencyHistory} onClick={handleChartClick} style={{ cursor: 'pointer' }}>
-                          <XAxis dataKey="time" fontSize={8} hide />
-                          <YAxis fontSize={8} hide />
-                          <RechartsTooltip 
-                            labelStyle={{ color: 'black', fontSize: '10px' }} 
-                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                          />
-                          <Line type="monotone" dataKey="latency" stroke="#10b981" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <Label>URL da API</Label>
-          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={defaults.url} />
-        </div>
-        <div className="space-y-2">
-          <Label>{defaults.tokenLabel}</Label>
-          <Input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Token" />
-        </div>
-        <Separator />
-        
-        {debugInfo && (
-          <div className="p-3 bg-destructive/5 rounded-lg border border-destructive/20 space-y-2">
-            <div className="flex items-center gap-2 text-destructive">
-              <AlertCircle className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase">Painel de Debug</span>
-            </div>
-            <div className="grid grid-cols-1 gap-1 text-[10px] font-mono">
-              <p><span className="text-muted-foreground">URL:</span> {debugInfo.url}</p>
-              <p><span className="text-muted-foreground">Headers:</span> {debugInfo.headers.join(', ')}</p>
-              <div className="mt-1">
-                <span className="text-muted-foreground">Resposta:</span>
-                <pre className="mt-1 p-2 bg-black/10 rounded overflow-x-auto max-h-40">
-                  {JSON.stringify(debugInfo.error, null, 2)}
-                </pre>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          <Button onClick={handleSave} disabled={saving}>{saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Salvar</Button>
-          <Button variant="outline" onClick={() => handleTest()} disabled={testing}>{testing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Testar</Button>
-        </div>
-
-        {/* Drill-down Dialog */}
-        <Dialog open={drillDownOpen} onOpenChange={setDrillDownOpen}>
-          <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Activity className="w-5 h-5 text-primary" />
-                Drill-down: Logs no Intervalo Selecionado
-              </DialogTitle>
-              <p className="text-xs text-muted-foreground">
-                {selectedRange ? `${new Date(selectedRange.start).toLocaleString()} - ${new Date(selectedRange.end).toLocaleString()}` : ''}
-              </p>
-            </DialogHeader>
-
-            <div className="flex-1 overflow-hidden flex flex-col gap-4">
-              <ScrollArea className="flex-1 border rounded-md">
-                <Table>
-                  <TableHeader className="bg-muted/50 sticky top-0 z-10">
-                    <TableRow>
-                      <TableHead className="w-[150px]">Data/Hora</TableHead>
-                      <TableHead>Evento</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Latência</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {loadingDrillDown ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="h-32 text-center">
-                          <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
-                          Carregando logs...
-                        </TableCell>
-                      </TableRow>
-                    ) : drillDownLogs.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
-                          Nenhum log encontrado para este intervalo.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      drillDownLogs.map((log) => (
-                        <TableRow key={log.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedDetailLog(log)}>
-                          <TableCell className="text-[10px] font-medium">
-                            {new Date(log.created_at).toLocaleString([], { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                          </TableCell>
-                          <TableCell className="font-mono text-[10px]">{log.event_type}</TableCell>
-                          <TableCell>
-                            <Badge variant={log.status === 'success' ? 'outline' : 'destructive'} className="text-[9px] h-5">
-                              {log.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-[10px]">{log.latency_ms ? `${log.latency_ms}ms` : '-'}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button variant="ghost" size="icon" className="h-6 w-6" title="Ver Detalhes">
-                                <Eye className="h-3 w-3" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-6 w-6 text-primary" 
-                                title="Ver na Auditoria"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onOpenAudit({ logId: log.id, tenantId: log.payload?.tenant_id || log.payload?.sub_company_id });
-                                }}
-                              >
-                                <History className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Log Detail Dialog */}
-        <Dialog open={!!selectedDetailLog} onOpenChange={() => setSelectedDetailLog(null)}>
-          <DialogContent className="max-w-2xl max-h-[70vh] flex flex-col">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                Detalhes do Log
-                <Badge variant={selectedDetailLog?.status === 'success' ? 'outline' : 'destructive'}>
-                  {selectedDetailLog?.status}
-                </Badge>
-              </DialogTitle>
-            </DialogHeader>
-            <ScrollArea className="flex-1 pr-4">
-              <div className="space-y-4 py-2">
-                <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Data/Hora</Label>
-                    <p className="font-medium">{selectedDetailLog?.created_at && new Date(selectedDetailLog.created_at).toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Latência</Label>
-                    <p className="font-medium">{selectedDetailLog?.latency_ms}ms</p>
-                  </div>
-                  <div className="col-span-2">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Evento</Label>
-                    <p className="font-mono bg-secondary/30 p-1 rounded">{selectedDetailLog?.event_type}</p>
-                  </div>
-                </div>
-
-                {selectedDetailLog?.final_cause && (
-                  <div>
-                    <Label className="text-[10px] uppercase font-bold text-destructive">Última Causa</Label>
-                    <p className="text-sm font-medium text-destructive bg-destructive/5 p-2 rounded border border-destructive/20 mt-1">
-                      {selectedDetailLog.final_cause}
-                    </p>
-                  </div>
-                )}
-
-                <div>
-                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">Payload (Inclui Headers se disponível)</Label>
-                  <pre className="mt-1 p-2 bg-secondary/50 rounded-md text-[10px] overflow-auto max-h-[200px] font-mono border border-border/40">
-                    {JSON.stringify(selectedDetailLog?.payload, null, 2)}
-                  </pre>
-                </div>
-
-                <div>
-                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">Resposta</Label>
-                  <pre className="mt-1 p-2 bg-secondary/50 rounded-md text-[10px] overflow-auto max-h-[200px] font-mono border border-border/40">
-                    {JSON.stringify(selectedDetailLog?.response, null, 2)}
-                  </pre>
-                </div>
-
-                <div className="pt-2 flex justify-end gap-2">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-7 text-[10px] gap-1.5"
-                    onClick={() => {
-                      navigator.clipboard.writeText(JSON.stringify(selectedDetailLog, null, 2));
-                      toast.success('Log copiado para a área de transferência');
-                    }}
-                  >
-                    <Copy className="w-3 h-3" /> Copiar JSON
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-7 text-[10px] gap-1.5"
-                    onClick={() => exportLogToJSON(selectedDetailLog)}
-                  >
-                    <FileJson className="w-3 h-3" /> Baixar JSON
-                  </Button>
-                </div>
-
-                {selectedDetailLog?.full_trace && (
-                  <div>
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Trace Completo</Label>
-                    <pre className="mt-1 p-2 bg-secondary/50 rounded-md text-[10px] overflow-auto max-h-[200px] font-mono border border-border/40">
-                      {JSON.stringify(selectedDetailLog.full_trace, null, 2)}
-                    </pre>
-                  </div>
-                )}
-
-                <div className="pt-4 flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    className="flex-1 text-xs gap-2"
-                    onClick={() => {
-                      onOpenAudit({ logId: selectedDetailLog.id, tenantId: selectedDetailLog.payload?.tenant_id || selectedDetailLog.payload?.sub_company_id });
-                      setSelectedDetailLog(null);
-                      setDrillDownOpen(false);
-                    }}
-                  >
-                    <History className="w-4 h-4" /> Ir para Auditoria
-                  </Button>
-                  
-                  {selectedDetailLog?.status === 'error' && (
-                    <Button 
-                      variant="destructive" 
-                      className="flex-1 text-xs gap-2"
-                      onClick={async () => {
-                        const { data: incident } = await supabase
-                          .from('uaz_incidents')
-                          .select('id')
-                          .eq('original_log_id', selectedDetailLog.id)
-                          .maybeSingle();
-                        
-                        if (incident) {
-                          toast.info('Incidente Encontrado', {
-                            description: 'Navegue até a aba de Incidentes para ver mais detalhes.',
-                          });
-                        } else {
-                          toast.error('Incidente não encontrado', {
-                            description: 'Esta falha ainda não atingiu o limite para gerar um incidente crítico.'
-                          });
-                        }
-                      }}
-                    >
-                      <AlertCircle className="w-4 h-4" /> Verificar Incidente
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </ScrollArea>
-          </DialogContent>
-        </Dialog>
-      </CardContent>
-    </Card>
-  );
-}
+import { WhatsAppConnectionCard } from '@/components/whatsapp/WhatsAppConnectionCard';
+import { WhatsAppConnection, WhatsAppProvider } from '@/components/whatsapp/types';
 
 export default function WhatsAppPage() {
-  const [connections, setConnections] = useState<Connection[]>([]);
+  const [connections, setConnections] = useState<WhatsAppConnection[]>([]);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
+  const [auditFilters, setAuditFilters] = useState<{ tenantId?: string; logId?: string } | null>(null);
+  const [activeTab, setActiveTab] = useState('connections');
 
-  const load = async () => {
+  const loadConnections = async () => {
     setLoading(true);
-    const { data } = await supabase.from('whatsapp_connections').select('*').order('provider');
-    if (data) setConnections(data as Connection[]);
+    const { data, error } = await supabase
+      .from('whatsapp_connections')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      toast.error('Erro ao carregar conexões');
+    } else {
+      setConnections(data as WhatsAppConnection[]);
+    }
     setLoading(false);
   };
 
-  const syncAllStatuses = async () => {
-    setSyncing(true);
-    const { data } = await supabase.from('whatsapp_connections').select('id');
-    if (data) {
-      await Promise.all(data.map(conn => 
-        supabase.functions.invoke('whatsapp-status', { body: { connection_id: conn.id } })
-      ));
-      await load();
-      toast.success('Status sincronizado com os provedores');
-    }
-    setSyncing(false);
-  };
-
-  useEffect(() => { 
-    load(); 
-    syncAllStatuses();
+  useEffect(() => {
+    loadConnections();
   }, []);
 
+  const handleOpenAudit = (filters?: { tenantId?: string; logId?: string }) => {
+    setAuditFilters(filters || null);
+    setActiveTab('audit');
+  };
+
+  const addConnection = async (provider: WhatsAppProvider) => {
+    const { data, error } = await supabase
+      .from('whatsapp_connections')
+      .insert({
+        provider,
+        display_name: `Nova Conexão ${provider.toUpperCase()}`,
+        status: 'disconnected',
+        metadata: {}
+      })
+      .select()
+      .single();
+
+    if (error) {
+      toast.error('Erro ao criar conexão');
+    } else {
+      toast.success('Conexão criada!');
+      loadConnections();
+    }
+  };
+
   return (
-    <AppLayout title="WhatsApp Business" subtitle="Integração UAZ e Meta">
-      <Tabs defaultValue="connections" className="space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <TabsList>
-            <TabsTrigger value="connections">Conexões</TabsTrigger>
-            <TabsTrigger value="audit">Auditoria</TabsTrigger>
-          </TabsList>
-          
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={syncAllStatuses} 
-            disabled={syncing}
-            className="gap-2"
-          >
-            {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            Sincronizar Status
-          </Button>
-        </div>
+    <AppLayout 
+      title="Conexões WhatsApp" 
+      subtitle="Gerencie suas instâncias UAZ, Meta e Wavoip em um único lugar."
+    >
+      <div className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <div className="flex items-center justify-between mb-4">
+            <TabsList className="bg-secondary/50 border border-border/40">
+              <TabsTrigger value="connections" className="gap-2">
+                <Plug className="w-4 h-4" />
+                Conexões
+              </TabsTrigger>
+              <TabsTrigger value="audit" className="gap-2">
+                <History className="w-4 h-4" />
+                Auditoria & Logs
+              </TabsTrigger>
+              <TabsTrigger value="health" className="gap-2">
+                <Activity className="w-4 h-4" />
+                Saúde do Sistema
+              </TabsTrigger>
+            </TabsList>
 
-        <TabsContent value="connections">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {connections.map(c => (
-              <ConnectionCard 
-                key={c.id} 
-                conn={c} 
-                onSaved={load} 
-                onOpenAudit={(filters) => {
-                  const searchParams = new URLSearchParams();
-                  if (filters?.tenantId) searchParams.set('tenantId', filters.tenantId);
-                  if (filters?.logId) searchParams.set('logId', filters.logId);
-                  window.history.replaceState(null, '', `${window.location.pathname}?${searchParams.toString()}`);
-
-                  const tabs = document.querySelectorAll('[role="tab"]');
-                  const auditTab = Array.from(tabs).find(t => t.textContent?.includes('Auditoria')) as HTMLElement;
-                  auditTab?.click();
-                }}
-              />
-            ))}
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={loadConnections} 
+                disabled={loading}
+                className="h-9"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                Sincronizar
+              </Button>
+              <Button size="sm" onClick={() => addConnection('uaz')} className="h-9">
+                <PlusCircle className="w-4 h-4 mr-2" />
+                Nova Conexão
+              </Button>
+            </div>
           </div>
-        </TabsContent>
-        <TabsContent value="audit"><UazAuditTab /></TabsContent>
-      </Tabs>
+
+          <TabsContent value="connections" className="space-y-6 mt-0">
+            {loading && connections.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground font-medium">Carregando suas conexões...</p>
+              </div>
+            ) : connections.length === 0 ? (
+              <Card className="glass-card border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center mb-4">
+                    <MessageCircle className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                  <CardTitle className="mb-2">Nenhuma conexão encontrada</CardTitle>
+                  <CardDescription className="max-w-xs mb-6">
+                    Você ainda não configurou nenhuma integração com WhatsApp. Comece adicionando uma nova conexão UAZ.
+                  </CardDescription>
+                  <Button onClick={() => addConnection('uaz')}>
+                    Configurar Primeira Conexão
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 gap-6">
+                {connections.map((conn) => (
+                  <WhatsAppConnectionCard 
+                    key={conn.id} 
+                    conn={conn} 
+                    onSaved={loadConnections}
+                    onOpenAudit={handleOpenAudit}
+                  />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="audit" className="mt-0">
+            <UazAuditTab 
+              initialLogId={auditFilters?.logId} 
+              initialTenantId={auditFilters?.tenantId} 
+            />
+          </TabsContent>
+
+          <TabsContent value="health" className="mt-0">
+            <Card className="glass-card">
+              <CardHeader>
+                <CardTitle>Status Global das APIs</CardTitle>
+                <CardDescription>Monitoramento em tempo real dos provedores integrados.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[
+                    { name: 'UAZ API', status: 'online', icon: Plug, color: 'text-primary' },
+                    { name: 'Meta Cloud API', status: 'online', icon: ShieldCheck, color: 'text-primary' },
+                    { name: 'Wavoip Network', status: 'online', icon: Phone, color: 'text-emerald-500' }
+                  ].map((p) => (
+                    <div key={p.name} className="flex items-center gap-3 p-4 rounded-xl bg-secondary/30 border border-border/40">
+                      <div className={`w-10 h-10 rounded-lg bg-background flex items-center justify-center ${p.color}`}>
+                        <p.icon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold">{p.name}</p>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          <span className="text-[10px] font-medium text-muted-foreground uppercase">Operacional</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
     </AppLayout>
   );
 }

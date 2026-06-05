@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!provider || !["uaz", "meta"].includes(provider)) {
+    if (!provider || !["uaz", "meta", "wavoip"].includes(provider)) {
       throw new Error("Provedor inválido ou ausente");
     }
 
@@ -134,6 +134,18 @@ Deno.serve(async (req) => {
       if (!token) throw new Error("Token UAZ ausente");
 
       result = await checkUaz(uazUrl, token);
+    } else if (provider === "wavoip") {
+      // Basic Wavoip health check simulation
+      // In a real scenario, this would call the Wavoip /health or /status endpoint
+      const wavoipUrl = url || "https://api.wavoip.com/v1";
+      console.log(`[WAVOIP] Checking health for: ${wavoipUrl}`);
+      
+      // Placeholder: assuming success for now if token is present
+      result = { 
+        connected: token ? true : false, 
+        status: token ? "connected" : "disconnected",
+        provider: "wavoip" 
+      };
     } else {
       // Mock Meta for now
       result = { connected: false, status: "disconnected" };

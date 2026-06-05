@@ -25,7 +25,12 @@ import {
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
 
-export default function UazAuditTab() {
+export interface UazAuditTabProps {
+  initialLogId?: string;
+  initialTenantId?: string;
+}
+
+export default function UazAuditTab({ initialLogId, initialTenantId }: UazAuditTabProps) {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -34,13 +39,19 @@ export default function UazAuditTab() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
+  const [activeLogId, setActiveLogId] = useState<string | undefined>(initialLogId);
+  const [activeTenantId, setActiveTenantId] = useState<string | undefined>(initialTenantId);
+
+  useEffect(() => {
+    if (initialLogId) setActiveLogId(initialLogId);
+    if (initialTenantId) setActiveTenantId(initialTenantId);
+  }, [initialLogId, initialTenantId]);
 
   const loadLogs = async () => {
     setLoading(true);
     try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const logId = urlParams.get('logId');
-      const tenantId = urlParams.get('tenantId');
+      const logId = activeLogId;
+      const tenantId = activeTenantId;
 
       let query = supabase
         .from('uaz_audit_logs')
@@ -85,13 +96,13 @@ export default function UazAuditTab() {
       loadLogs();
     }, 300);
     return () => clearTimeout(timer);
-  }, [page, search, statusFilter, typeFilter]);
+  }, [page, search, statusFilter, typeFilter, activeLogId, activeTenantId]);
 
   const totalPages = Math.ceil(totalCount / pageSize);
 
   return (
     <div className="space-y-4">
-      {new URLSearchParams(window.location.search).get('logId') && (
+      {activeLogId && (
         <div className="flex items-center justify-between bg-primary/10 p-3 rounded-lg border border-primary/20">
           <p className="text-xs text-primary font-medium flex items-center gap-2">
             <Filter className="w-3 h-3" /> Filtrando por log específico
@@ -101,8 +112,8 @@ export default function UazAuditTab() {
             size="sm" 
             className="h-6 text-[10px] hover:bg-primary/20"
             onClick={() => {
+              setActiveLogId(undefined);
               window.history.replaceState(null, '', window.location.pathname);
-              loadLogs();
             }}
           >
             Limpar Filtros
