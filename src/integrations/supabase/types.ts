@@ -2226,7 +2226,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "atendente" | "closer"
-      whatsapp_provider: "uaz" | "meta"
+      whatsapp_provider: "uaz" | "meta" | "wavoip"
       whatsapp_status: "disconnected" | "connecting" | "connected" | "error"
     }
     CompositeTypes: {
@@ -2356,7 +2356,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "atendente", "closer"],
-      whatsapp_provider: ["uaz", "meta"],
+      whatsapp_provider: ["uaz", "meta", "wavoip"],
       whatsapp_status: ["disconnected", "connecting", "connected", "error"],
     },
   },
