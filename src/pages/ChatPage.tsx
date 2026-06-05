@@ -25,7 +25,7 @@ import { WhatsAppConnection, PROVIDER_CONFIGS } from '@/components/whatsapp/type
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-type ChannelKey = 'instagram' | 'facebook' | 'linkedin' | 'whatsapp' | 'widget' | 'youtube' | 'tiktok';
+type ChannelKey = 'instagram' | 'facebook' | 'linkedin' | 'whatsapp' | 'widget' | 'youtube' | 'tiktok' | 'telegram';
 
 const channels: Array<{
   key: ChannelKey; name: string; icon: any; color: string; bg: string; leads: number; open: number;
@@ -33,6 +33,7 @@ const channels: Array<{
   { key: 'whatsapp', name: 'WhatsApp', icon: MessageCircle, color: 'text-emerald-500', bg: 'bg-emerald-500/10', leads: 142, open: 18 },
   { key: 'instagram', name: 'Instagram', icon: Camera, color: 'text-pink-500', bg: 'bg-pink-500/10', leads: 87, open: 12 },
   { key: 'facebook', name: 'Facebook', icon: ThumbsUp, color: 'text-blue-500', bg: 'bg-blue-500/10', leads: 64, open: 9 },
+  { key: 'telegram', name: 'Telegram', icon: TelegramIcon, color: 'text-sky-500', bg: 'bg-sky-500/10', leads: 38, open: 5 },
   { key: 'linkedin', name: 'LinkedIn', icon: Briefcase, color: 'text-sky-600', bg: 'bg-sky-500/10', leads: 31, open: 4 },
   { key: 'youtube', name: 'YouTube', icon: Play, color: 'text-red-500', bg: 'bg-red-500/10', leads: 22, open: 3 },
   { key: 'tiktok', name: 'TikTok', icon: Share2, color: 'text-zinc-900', bg: 'bg-zinc-500/10', leads: 45, open: 6 },
