@@ -327,7 +327,13 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
   const handleTest = async () => {
     setTesting(true);
     const { data, error } = await supabase.functions.invoke('whatsapp-status', { 
-      body: { provider: conn.provider, url, token, ...(conn.provider === 'meta' && { phone_number_id: extra }) } 
+      body: { 
+        connection_id: conn.id,
+        provider: conn.provider, 
+        url, 
+        token, 
+        ...(conn.provider === 'meta' && { phone_number_id: extra }) 
+      } 
     });
     setTesting(false);
     if (error) toast.error('Falha ao testar', { description: error.message });
