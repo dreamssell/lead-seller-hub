@@ -91,52 +91,40 @@ export default function ChatPage() {
   };
 
   useEffect(() => {
-    async function checkUAZ(isManual = false) {
+    async function checkWhatsApp(isManual = false) {
       if (isManual) setIsRefreshing(true);
-      addDebugLog('request', 'Iniciando validação de credenciais e status UAZ');
+      addDebugLog('request', 'Iniciando validação de credenciais e status WhatsApp');
       
       try {
-        const { data: conn, error: connError } = await supabase
+        const { data: connections, error: connError } = await supabase
           .from('whatsapp_connections')
           .select('*')
-          .eq('provider', 'uaz')
-          .single();
+          .eq('status', 'connected');
 
-        if (connError) {
-          addDebugLog('error', 'Erro ao buscar conexão no banco', connError);
-          setAuthValidation({ valid: false, reason: 'Conexão não configurada no banco de dados', loading: false });
-          setUazStatus({ connected: false, loading: false });
-          return;
+        if (connError || !connections || connections.length === 0) {
+          const { data: firstConn } = await supabase.from('whatsapp_connections').select('*').limit(1).maybeSingle();
+          if (!firstConn) {
+            addDebugLog('error', 'Nenhuma conexão encontrada');
+            setAuthValidation({ valid: false, reason: 'Nenhuma conexão configurada', loading: false });
+            setWhatsappStatus({ connected: false, loading: false });
+            return;
+          }
+          setActiveWhatsAppConn(firstConn as WhatsAppConnection);
+        } else {
+          setActiveWhatsAppConn(connections[0] as WhatsAppConnection);
         }
 
-        const metadata = (conn.metadata as any) || {};
-        if (!metadata.token) {
-          addDebugLog('error', 'Token ausente na configuração');
-          setAuthValidation({ valid: false, reason: 'Token da API não encontrado. Configure em Conexões.', loading: false });
-          setUazStatus({ connected: false, loading: false });
-          return;
-        }
+        const conn = activeWhatsAppConn || (connections && connections[0]);
+        if (!conn) return;
 
-        addDebugLog('info', 'Credenciais locais validadas, chamando Edge Function status');
+        const adapter = getProviderAdapter(conn.provider);
+        addDebugLog('info', `Usando provedor: ${conn.provider}. Chamando adapter.`);
         
-        const { data, error } = await supabase.functions.invoke('whatsapp-status', {
-          body: {
-            connection_id: conn.id,
-            provider: 'uaz',
-            url: metadata.url || 'https://api.uazapi.dev',
-            token: metadata.token,
-          },
-        });
-
-        if (error) {
-          addDebugLog('error', 'Falha na comunicação com Edge Function', error);
-          throw error;
-        }
-
+        const data = await adapter.getStatus(conn as WhatsAppConnection);
         addDebugLog('info', 'Resposta do Provedor recebida', data);
 
         const isConnected = !!data?.connected;
-        setUazStatus({
+        setWhatsappStatus({
           connected: isConnected,
           loading: false,
           phone: data?.phone,
@@ -145,18 +133,18 @@ export default function ChatPage() {
 
         setAuthValidation({ 
           valid: isConnected, 
-          reason: isConnected ? undefined : (data?.error || 'Instância UAZ desconectada ou não autenticada'), 
+          reason: isConnected ? undefined : (data?.error || `Instância ${conn.provider.toUpperCase()} desconectada`), 
           loading: false 
         });
 
         if (isConnected) {
-          addDebugLog('info', 'Status: CONECTADO. Iniciando carga de contatos.');
+          addDebugLog('info', `Status: CONECTADO (${conn.provider}). Iniciando carga de contatos.`);
           loadConversations();
         }
       } catch (err: any) {
         addDebugLog('error', 'Exceção durante verificação', err);
-        setUazStatus({ connected: false, loading: false, error: 'Falha ao verificar status' });
-        setAuthValidation({ valid: false, reason: 'Erro de rede ou permissão ao validar acesso.', loading: false });
+        setWhatsappStatus({ connected: false, loading: false, error: 'Falha ao verificar status' });
+        setAuthValidation({ valid: false, reason: 'Erro ao validar acesso.', loading: false });
       } finally {
         if (isManual) setIsRefreshing(false);
       }
@@ -164,7 +152,8 @@ export default function ChatPage() {
 
     // Export function to window for the manual refresh button
     // @ts-ignore
-    window.manualRefreshUAZ = () => checkUAZ(true);
+    window.manualRefreshWhatsApp = () => checkWhatsApp(true);
+
 
     async function loadConversations() {
       addDebugLog('request', 'Buscando contatos e mensagens recentes no banco');

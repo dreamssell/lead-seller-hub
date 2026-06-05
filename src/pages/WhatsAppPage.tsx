@@ -9,7 +9,9 @@ import {
   History, ShieldCheck, Phone, Plug, Loader2, Smartphone
 } from 'lucide-react';
 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
+
 import { toast } from 'sonner';
 import UazAuditTab from '@/components/settings/UazAuditTab';
 import { WhatsAppConnectionCard } from '@/components/whatsapp/WhatsAppConnectionCard';
