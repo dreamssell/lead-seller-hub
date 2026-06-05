@@ -471,11 +471,12 @@ export default function ChatPage() {
                 )}
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">Status Rede:</span>
-                  {uazStatus.connected ? (
+                  {whatsappStatus.connected ? (
                     <span className="text-success flex items-center gap-1"><Wifi className="w-3 h-3" /> Conectado</span>
                   ) : (
                     <span className="text-destructive flex items-center gap-1"><WifiOff className="w-3 h-3" /> Erro</span>
                   )}
+
                 </div>
               </div>
 
@@ -522,7 +523,7 @@ export default function ChatPage() {
           )}
         </AnimatePresence>
 
-        {!uazStatus.connected && activeChannel === 'whatsapp' && (
+        {!whatsappStatus.connected && activeChannel === 'whatsapp' && (
           <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-50 flex items-center justify-center p-6 text-center">
             <div className="glass-card p-8 max-w-md border-destructive/20 shadow-2xl animate-in fade-in zoom-in duration-300">
               <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
@@ -530,7 +531,7 @@ export default function ChatPage() {
               </div>
               <h3 className="text-xl font-bold mb-2">WhatsApp Desconectado</h3>
               <p className="text-muted-foreground mb-6">
-                {authValidation.reason || 'Sua conexão UAZ precisa estar ativa para visualizar e responder mensagens.'}
+                {authValidation.reason || `Sua conexão ${activeWhatsAppConn?.provider?.toUpperCase() || 'WhatsApp'} precisa estar ativa para visualizar e responder mensagens.`}
               </p>
               <div className="flex items-center gap-3 justify-center">
                 <Button asChild variant="outline">
