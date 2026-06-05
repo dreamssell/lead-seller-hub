@@ -7,22 +7,34 @@ const corsHeaders = {
 
 async function checkUaz(url: string, token: string) {
   try {
-    const res = await fetch(`${url}/instance/status`, {
-      headers: { "Authorization": `Bearer ${token}` },
-    });
+    // Note: Some UAZ versions expect 'apikey' or 'Authorization' header.
+    // Based on user error "Missing token", the backend didn't see the token.
+    // Trying common variants for UAZ API.
+    const headers = { 
+      "Authorization": `Bearer ${token}`,
+      "apikey": token 
+    };
+
+    console.log(`Checking UAZ status at: ${url}/instance/status`);
+    
+    const res = await fetch(`${url}/instance/status`, { headers });
     const text = await res.text();
+    
     if (!res.ok) {
+      console.error(`UAZ Error [${res.status}]: ${text}`);
       return { connected: false, status: "error", error: `UAZ [${res.status}]: ${text.slice(0, 300)}` };
     }
+    
     const data = JSON.parse(text);
-    // UAZ returns status: "open", "connecting", "close", etc.
-    const isConnected = data.status === "open" || data.state === "CONNECTED";
+    // UAZ returns status: "open", "connecting", "close", etc. or state: "CONNECTED"
+    const isConnected = data.status === "open" || data.state === "CONNECTED" || data.instanceStatus === "CONNECTED";
     return { 
       connected: isConnected, 
-      status: data.status || data.state,
+      status: data.status || data.state || data.instanceStatus,
       raw: data 
     };
   } catch (err) {
+    console.error(`Fetch exception: ${err.message}`);
     return { connected: false, status: "error", error: err.message };
   }
 }
