@@ -73,7 +73,11 @@ Deno.serve(async (req) => {
 
         const res = await fetch(`${uazUrl}/message/text`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${uazToken}` },
+          headers: { 
+            "Content-Type": "application/json", 
+            "Authorization": `Bearer ${uazToken}`,
+            "apikey": uazToken
+          },
           body: JSON.stringify({ number: phone, text: content }),
           signal: controller.signal
         });
