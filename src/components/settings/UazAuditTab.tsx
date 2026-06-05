@@ -25,7 +25,12 @@ import {
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
 
-export default function UazAuditTab() {
+export interface UazAuditTabProps {
+  initialLogId?: string;
+  initialTenantId?: string;
+}
+
+export default function UazAuditTab({ initialLogId, initialTenantId }: UazAuditTabProps) {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -34,13 +39,19 @@ export default function UazAuditTab() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
+  const [activeLogId, setActiveLogId] = useState<string | undefined>(initialLogId);
+  const [activeTenantId, setActiveTenantId] = useState<string | undefined>(initialTenantId);
+
+  useEffect(() => {
+    if (initialLogId) setActiveLogId(initialLogId);
+    if (initialTenantId) setActiveTenantId(initialTenantId);
+  }, [initialLogId, initialTenantId]);
 
   const loadLogs = async () => {
     setLoading(true);
     try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const logId = urlParams.get('logId');
-      const tenantId = urlParams.get('tenantId');
+      const logId = activeLogId;
+      const tenantId = activeTenantId;
 
       let query = supabase
         .from('uaz_audit_logs')
