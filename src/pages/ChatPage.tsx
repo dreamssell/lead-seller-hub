@@ -126,6 +126,7 @@ export default function ChatPage() {
       }
     }
 
+    checkUAZ();
     loadConversations();
 
     // Realtime subscription
