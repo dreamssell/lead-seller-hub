@@ -264,7 +264,7 @@ export default function ChatPage() {
         if (payload.new.customer_id === selectedConvId) {
           setMessages(prev => [...prev, payload.new]);
         }
-        loadConversations();
+        if (activeChannel) loadConversations(activeChannel);
       })
       .subscribe();
 
