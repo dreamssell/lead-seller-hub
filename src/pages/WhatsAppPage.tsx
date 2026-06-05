@@ -326,7 +326,10 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
 
   const [debugInfo, setDebugInfo] = useState<{ url: string; headers: string[]; error: any } | null>(null);
 
-  const handleTest = async (isRetry = false) => {
+  const handleTest = async (retryData?: any) => {
+    // Check if it's a retry from an event or a direct boolean call
+    const isRetry = typeof retryData === 'boolean' ? retryData : false;
+
     if (!url || !token) {
       toast.error('Campos obrigatórios ausentes', { 
         description: 'Por favor, preencha a URL e o Token antes de testar.' 
@@ -354,7 +357,7 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
         return;
       }
 
-      // Store debug info
+      // Store debug info for UI
       if (data?.raw_error || data?.error) {
         setDebugInfo({
           url: url + (url.endsWith('/') ? 'instance/status' : '/instance/status'),
@@ -363,14 +366,13 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
         });
       }
 
+      // 401 Automatic Refresh Flow
       if (data?.status_code === 401 && !isRetry) {
         toast.info('Token inválido (401). Tentando refresh automático...', {
           description: 'Aguarde enquanto tentamos restabelecer a sessão.'
         });
         
-        // Simulating/Implementing refresh logic
-        // For UAZ, usually refresh means generating a new token via instance/reconnect or similar
-        // Here we attempt one retry after a small delay
+        // Simulating refresh logic (could call a specific endpoint like /instance/reconnect)
         setTimeout(() => handleTest(true), 1500);
         return;
       }
@@ -384,7 +386,14 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
         } catch (e) {}
 
         toast.error(`Erro UAZ [${data.status_code || '???'}]`, { 
-          description: <pre className="text-[10px] mt-2 bg-black/20 p-2 rounded overflow-x-auto max-w-xs">{debugMsg}</pre>,
+          description: (
+            <div className="space-y-2 mt-2">
+               <p className="text-xs font-semibold">Resposta bruta:</p>
+               <pre className="text-[10px] bg-black/20 p-2 rounded overflow-x-auto max-h-32">
+                 {debugMsg}
+               </pre>
+            </div>
+          ),
           duration: 10000 
         });
         return;
@@ -578,9 +587,29 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
           <Input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Token" />
         </div>
         <Separator />
+        
+        {debugInfo && (
+          <div className="p-3 bg-destructive/5 rounded-lg border border-destructive/20 space-y-2">
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="w-4 h-4" />
+              <span className="text-[10px] font-bold uppercase">Painel de Debug</span>
+            </div>
+            <div className="grid grid-cols-1 gap-1 text-[10px] font-mono">
+              <p><span className="text-muted-foreground">URL:</span> {debugInfo.url}</p>
+              <p><span className="text-muted-foreground">Headers:</span> {debugInfo.headers.join(', ')}</p>
+              <div className="mt-1">
+                <span className="text-muted-foreground">Resposta:</span>
+                <pre className="mt-1 p-2 bg-black/10 rounded overflow-x-auto max-h-40">
+                  {JSON.stringify(debugInfo.error, null, 2)}
+                </pre>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <Button onClick={handleSave} disabled={saving}>{saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Salvar</Button>
-          <Button variant="outline" onClick={handleTest} disabled={testing}>{testing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Testar</Button>
+          <Button variant="outline" onClick={() => handleTest()} disabled={testing}>{testing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Testar</Button>
         </div>
 
         {/* Drill-down Dialog */}
