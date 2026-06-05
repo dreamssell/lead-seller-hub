@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Paperclip, Phone, Video, MoreVertical, Search, Circle,
   Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Settings,
-  Database, Activity, ShieldAlert, Wifi, WifiOff, Terminal, ChevronDown, ChevronUp, History as HistoryIcon, Bug, Play, Share2
+  Database, Activity, ShieldAlert, Wifi, WifiOff, Terminal, ChevronDown, ChevronUp, History as HistoryIcon, Bug, Play, Share2,
+  Send as TelegramIcon
 } from 'lucide-react';
 
 
@@ -24,7 +25,7 @@ import { WhatsAppConnection, PROVIDER_CONFIGS } from '@/components/whatsapp/type
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-type ChannelKey = 'instagram' | 'facebook' | 'linkedin' | 'whatsapp' | 'widget' | 'youtube' | 'tiktok';
+type ChannelKey = 'instagram' | 'facebook' | 'linkedin' | 'whatsapp' | 'widget' | 'youtube' | 'tiktok' | 'telegram';
 
 const channels: Array<{
   key: ChannelKey; name: string; icon: any; color: string; bg: string; leads: number; open: number;
@@ -32,6 +33,7 @@ const channels: Array<{
   { key: 'whatsapp', name: 'WhatsApp', icon: MessageCircle, color: 'text-emerald-500', bg: 'bg-emerald-500/10', leads: 142, open: 18 },
   { key: 'instagram', name: 'Instagram', icon: Camera, color: 'text-pink-500', bg: 'bg-pink-500/10', leads: 87, open: 12 },
   { key: 'facebook', name: 'Facebook', icon: ThumbsUp, color: 'text-blue-500', bg: 'bg-blue-500/10', leads: 64, open: 9 },
+  { key: 'telegram', name: 'Telegram', icon: TelegramIcon, color: 'text-sky-500', bg: 'bg-sky-500/10', leads: 38, open: 5 },
   { key: 'linkedin', name: 'LinkedIn', icon: Briefcase, color: 'text-sky-600', bg: 'bg-sky-500/10', leads: 31, open: 4 },
   { key: 'youtube', name: 'YouTube', icon: Play, color: 'text-red-500', bg: 'bg-red-500/10', leads: 22, open: 3 },
   { key: 'tiktok', name: 'TikTok', icon: Share2, color: 'text-zinc-900', bg: 'bg-zinc-500/10', leads: 45, open: 6 },
@@ -46,6 +48,7 @@ const conversationsByChannel: Record<ChannelKey, Array<{ id: string; name: strin
   whatsapp: [],
   instagram: [],
   facebook: [],
+  telegram: [],
   linkedin: [],
   youtube: [],
   tiktok: [],
@@ -318,20 +321,21 @@ export default function ChatPage() {
           {channels.map((ch, i) => {
             const Icon = ch.icon;
             const isWhatsApp = ch.key === 'whatsapp';
+            const isPlaceholder = ['youtube', 'tiktok', 'telegram'].includes(ch.key);
             
             return (
               <motion.button
                 key={ch.key}
                 onClick={() => setActiveChannel(ch.key)}
-                className="glass-card p-5 text-left hover:border-primary/40 transition-all group relative overflow-hidden"
+                className={`glass-card p-5 text-left hover:border-primary/40 transition-all group relative overflow-hidden ${isPlaceholder ? 'opacity-90' : ''}`}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
                 whileHover={{ y: -3 }}
               >
-                {isWhatsApp && (
-                  <div className="absolute top-3 right-3">
-                    {whatsappStatus.loading ? (
+                <div className="absolute top-3 right-3">
+                  {isWhatsApp ? (
+                    whatsappStatus.loading ? (
                       <RefreshCw className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
                     ) : whatsappStatus.connected ? (
                       <div className="flex items-center gap-1.5 bg-success/10 px-2 py-0.5 rounded-full border border-success/20">
@@ -345,18 +349,28 @@ export default function ChatPage() {
                         <AlertCircle className="w-3 h-3 text-destructive" />
                         <span className="text-[10px] font-bold text-destructive uppercase tracking-wider">Desconectado</span>
                       </Link>
-                    )}
-
-                  </div>
-                )}
+                    )
+                  ) : isPlaceholder ? (
+                    <Badge variant="outline" className="text-[9px] h-4 px-1.5 font-bold uppercase tracking-tighter opacity-70">
+                      Em Breve
+                    </Badge>
+                  ) : (
+                    <div className="flex items-center gap-1.5 bg-success/10 px-2 py-0.5 rounded-full border border-success/20 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <CheckCircle2 className="w-3 h-3 text-success" />
+                      <span className="text-[10px] font-bold text-success uppercase tracking-wider">Ativo</span>
+                    </div>
+                  )}
+                </div>
 
                 <div className={`w-12 h-12 rounded-2xl ${ch.bg} flex items-center justify-center mb-4`}>
                   <Icon className={`w-6 h-6 ${ch.color}`} />
                 </div>
                 <h3 className="text-sm font-semibold text-foreground mb-1">{ch.name}</h3>
-                {isWhatsApp && whatsappStatus.phone && !whatsappStatus.loading && (
+                {isWhatsApp && whatsappStatus.phone && !whatsappStatus.loading ? (
                   <p className="text-[10px] text-muted-foreground mb-2 font-medium">{whatsappStatus.phone}</p>
-                )}
+                ) : isPlaceholder ? (
+                  <p className="text-[10px] text-muted-foreground mb-2 font-medium italic">Integração em desenvolvimento</p>
+                ) : null}
 
                 <div className="flex items-center gap-3 mt-3">
                   <div>
