@@ -2,7 +2,8 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Paperclip, Phone, Video, MoreVertical, Search, Circle,
-  Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Settings
+  Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Settings,
+  Database, Activity, ShieldAlert, Wifi, WifiOff, Terminal, ChevronDown, ChevronUp, History as HistoryIcon, Bug
 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -63,26 +64,54 @@ export default function ChatPage() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState('');
   const [messageText, setMessageText] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [debugLogs, setDebugLogs] = useState<Array<{ id: string; time: string; type: 'info' | 'error' | 'request'; message: string; data?: any }>>([]);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const [authValidation, setAuthValidation] = useState<{ valid: boolean; reason?: string; loading: boolean }>({ valid: false, loading: true });
   const [uazStatus, setUazStatus] = useState<{ connected: boolean; loading: boolean; phone?: string; error?: string }>({
     connected: false,
     loading: true,
   });
 
+  const addDebugLog = (type: 'info' | 'error' | 'request', message: string, data?: any) => {
+    setDebugLogs(prev => [{
+      id: crypto.randomUUID(),
+      time: new Date().toLocaleTimeString(),
+      type,
+      message,
+      data
+    }, ...prev].slice(0, 50));
+  };
+
   useEffect(() => {
-    async function checkUAZ() {
+    async function checkUAZ(isManual = false) {
+      if (isManual) setIsRefreshing(true);
+      addDebugLog('request', 'Iniciando validação de credenciais e status UAZ');
+      
       try {
-        const { data: conn } = await supabase
+        const { data: conn, error: connError } = await supabase
           .from('whatsapp_connections')
           .select('*')
           .eq('provider', 'uaz')
           .single();
 
-        const metadata = (conn.metadata as any) || {};
-        if (!metadata.token) {
+        if (connError) {
+          addDebugLog('error', 'Erro ao buscar conexão no banco', connError);
+          setAuthValidation({ valid: false, reason: 'Conexão não configurada no banco de dados', loading: false });
           setUazStatus({ connected: false, loading: false });
           return;
         }
 
+        const metadata = (conn.metadata as any) || {};
+        if (!metadata.token) {
+          addDebugLog('error', 'Token ausente na configuração');
+          setAuthValidation({ valid: false, reason: 'Token da API não encontrado. Configure em Conexões.', loading: false });
+          setUazStatus({ connected: false, loading: false });
+          return;
+        }
+
+        addDebugLog('info', 'Credenciais locais validadas, chamando Edge Function status');
+        
         const { data, error } = await supabase.functions.invoke('whatsapp-status', {
           body: {
             connection_id: conn.id,
@@ -92,32 +121,54 @@ export default function ChatPage() {
           },
         });
 
-        if (error) throw error;
+        if (error) {
+          addDebugLog('error', 'Falha na comunicação com Edge Function', error);
+          throw error;
+        }
 
+        addDebugLog('info', 'Resposta do Provedor recebida', data);
+
+        const isConnected = !!data?.connected;
         setUazStatus({
-          connected: !!data?.connected,
+          connected: isConnected,
           loading: false,
           phone: data?.phone,
           error: data?.error,
         });
-      } catch (err) {
-        console.error('Error checking UAZ status:', err);
+
+        setAuthValidation({ 
+          valid: isConnected, 
+          reason: isConnected ? undefined : (data?.error || 'Instância UAZ desconectada ou não autenticada'), 
+          loading: false 
+        });
+
+        if (isConnected) {
+          addDebugLog('info', 'Status: CONECTADO. Iniciando carga de contatos.');
+          loadConversations();
+        }
+      } catch (err: any) {
+        addDebugLog('error', 'Exceção durante verificação', err);
         setUazStatus({ connected: false, loading: false, error: 'Falha ao verificar status' });
+        setAuthValidation({ valid: false, reason: 'Erro de rede ou permissão ao validar acesso.', loading: false });
+      } finally {
+        if (isManual) setIsRefreshing(false);
       }
     }
+
     async function loadConversations() {
+      addDebugLog('request', 'Buscando contatos e mensagens recentes no banco');
       const { data: customers, error } = await supabase
         .from('customers')
         .select('*')
         .order('updated_at', { ascending: false });
 
       if (error) {
-        console.error('Error loading customers:', error);
+        addDebugLog('error', 'Erro ao carregar clientes do banco', error);
         return;
       }
 
       if (customers) {
-        // Obter a última mensagem de cada cliente para mostrar no resumo
+        addDebugLog('info', `${customers.length} contatos encontrados. Buscando últimas mensagens.`);
         const { data: lastMessages } = await supabase
           .from('chat_messages')
           .select('customer_id, content, created_at')
@@ -139,16 +190,25 @@ export default function ChatPage() {
           };
         });
         setConvs(prev => ({ ...prev, whatsapp: formatted }));
+        addDebugLog('info', 'Conversas formatadas e carregadas na UI');
       }
     }
 
     checkUAZ();
-    loadConversations();
+    
+    // Polling interval with basic backoff logic simulation
+    const interval = setInterval(() => {
+      if (!uazStatus.connected) {
+        addDebugLog('info', 'Polling: Tentando reconectar...');
+        checkUAZ();
+      }
+    }, 30000); // 30s interval
 
     // Realtime subscription
     const channel = supabase
       .channel('chat_updates')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
+        addDebugLog('info', 'Nova mensagem recebida via Realtime', payload.new);
         if (payload.new.customer_id === selectedConvId) {
           setMessages(prev => [...prev, payload.new]);
         }
@@ -157,9 +217,10 @@ export default function ChatPage() {
       .subscribe();
 
     return () => {
+      clearInterval(interval);
       supabase.removeChannel(channel);
     };
-  }, [selectedConvId]);
+  }, [selectedConvId, uazStatus.connected]);
 
   useEffect(() => {
     if (selectedConvId) {
@@ -326,15 +387,139 @@ export default function ChatPage() {
             {channelInfo.key === 'whatsapp' && uazStatus.connected && ' (UAZ)'}
           </span>
         </div>
-        {channelInfo.key === 'whatsapp' && uazStatus.connected && (
-          <Badge variant="outline" className="border-success/30 text-success text-[10px] h-5 gap-1">
-            <CheckCircle2 className="w-2.5 h-2.5" />
-            LIVE
-          </Badge>
+        {channelInfo.key === 'whatsapp' && (
+          <div className="flex items-center gap-2">
+            {uazStatus.connected ? (
+              <Badge variant="outline" className="border-success/30 text-success text-[10px] h-5 gap-1">
+                <CheckCircle2 className="w-2.5 h-2.5" />
+                LIVE
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="border-destructive/30 text-destructive text-[10px] h-5 gap-1">
+                <AlertCircle className="w-2.5 h-2.5" />
+                OFFLINE
+              </Badge>
+            )}
+            <Button 
+              variant="outline" 
+              size="icon" 
+              className={`h-7 w-7 ${isRefreshing ? 'animate-spin' : ''}`}
+              onClick={() => {
+                // @ts-ignore
+                const check = window.manualRefreshUAZ;
+                if (typeof check === 'function') check();
+                else window.location.reload();
+              }}
+              title="Sincronizar Manualmente"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground"
+              onClick={() => setShowDebugPanel(!showDebugPanel)}
+              title="Diagnóstico WhatsApp"
+            >
+              <Bug className="w-3.5 h-3.5" />
+            </Button>
+          </div>
         )}
       </div>
 
       <div className="flex h-[calc(100vh-13rem)] glass-card overflow-hidden relative">
+        {/* Painel de Diagnóstico */}
+        <AnimatePresence>
+          {showDebugPanel && (
+            <motion.div 
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              className="absolute right-0 top-0 bottom-0 w-80 bg-background/95 backdrop-blur-md z-[100] border-l border-border flex flex-col shadow-2xl"
+            >
+              <div className="p-4 border-b border-border flex items-center justify-between bg-secondary/30">
+                <div className="flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-primary" />
+                  <h3 className="text-sm font-bold uppercase tracking-wider">Diagnóstico UAZ</h3>
+                </div>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowDebugPanel(false)}>
+                  <ArrowLeft className="w-4 h-4 rotate-180" />
+                </Button>
+              </div>
+              
+              <div className="p-4 bg-muted/30 border-b border-border space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Autorização:</span>
+                  {authValidation.loading ? (
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                  ) : authValidation.valid ? (
+                    <span className="text-success font-bold flex items-center gap-1">
+                      <ShieldAlert className="w-3 h-3" /> OK
+                    </span>
+                  ) : (
+                    <span className="text-destructive font-bold flex items-center gap-1">
+                      <ShieldAlert className="w-3 h-3" /> BLOQUEADO
+                    </span>
+                  )}
+                </div>
+                {!authValidation.valid && authValidation.reason && (
+                  <p className="text-[10px] text-destructive bg-destructive/5 p-2 rounded border border-destructive/10">
+                    {authValidation.reason}
+                  </p>
+                )}
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Status Rede:</span>
+                  {uazStatus.connected ? (
+                    <span className="text-success flex items-center gap-1"><Wifi className="w-3 h-3" /> Conectado</span>
+                  ) : (
+                    <span className="text-destructive flex items-center gap-1"><WifiOff className="w-3 h-3" /> Erro</span>
+                  )}
+                </div>
+              </div>
+
+              <ScrollArea className="flex-1 p-3">
+                <div className="space-y-3">
+                  {debugLogs.length === 0 && (
+                    <p className="text-[10px] text-muted-foreground text-center py-10 italic">
+                      Nenhuma atividade registrada ainda.
+                    </p>
+                  )}
+                  {debugLogs.map(log => (
+                    <div key={log.id} className="text-[10px] font-mono border-b border-border/50 pb-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-muted-foreground">[{log.time}]</span>
+                        <Badge 
+                          variant="outline" 
+                          className={`text-[8px] h-3.5 px-1 ${
+                            log.type === 'error' ? 'text-destructive border-destructive/30' : 
+                            log.type === 'request' ? 'text-primary border-primary/30' : 
+                            'text-muted-foreground'
+                          }`}
+                        >
+                          {log.type.toUpperCase()}
+                        </Badge>
+                      </div>
+                      <p className={log.type === 'error' ? 'text-destructive' : 'text-foreground'}>
+                        {log.message}
+                      </p>
+                      {log.data && (
+                        <details className="mt-1">
+                          <summary className="cursor-pointer text-primary/70 hover:text-primary list-none flex items-center gap-1">
+                            <Database className="w-2.5 h-2.5" /> Ver Resposta Raw
+                          </summary>
+                          <pre className="mt-1 bg-black/20 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-40">
+                            {JSON.stringify(log.data, null, 2)}
+                          </pre>
+                        </details>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {!uazStatus.connected && activeChannel === 'whatsapp' && (
           <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-50 flex items-center justify-center p-6 text-center">
             <div className="glass-card p-8 max-w-md border-destructive/20 shadow-2xl animate-in fade-in zoom-in duration-300">
@@ -343,17 +528,24 @@ export default function ChatPage() {
               </div>
               <h3 className="text-xl font-bold mb-2">WhatsApp Desconectado</h3>
               <p className="text-muted-foreground mb-6">
-                Para visualizar e responder mensagens, sua conexão UAZ precisa estar ativa.
+                {authValidation.reason || 'Sua conexão UAZ precisa estar ativa para visualizar e responder mensagens.'}
               </p>
-              <Button asChild>
-                <Link to="/whatsapp">
-                  <Settings className="w-4 h-4 mr-2" />
-                  Configurar Conexão
-                </Link>
-              </Button>
+              <div className="flex items-center gap-3 justify-center">
+                <Button asChild variant="outline">
+                  <Link to="/whatsapp">
+                    <Settings className="w-4 h-4 mr-2" />
+                    Configurar
+                  </Link>
+                </Button>
+                <Button onClick={() => window.location.reload()}>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Tentar Novamente
+                </Button>
+              </div>
             </div>
           </div>
         )}
+
 
         {/* Lista */}
         <div className="w-80 border-r border-border flex flex-col">
