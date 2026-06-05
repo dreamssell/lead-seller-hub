@@ -704,7 +704,6 @@ export default function ChatPage() {
                   </div>
                 )}
               </div>
-              </div>
 
               <ScrollArea className="flex-1 p-3">
                 <div className="space-y-3">
