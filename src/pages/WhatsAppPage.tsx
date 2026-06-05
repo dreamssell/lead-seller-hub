@@ -72,8 +72,8 @@ export default function WhatsAppPage() {
 
   return (
     <AppLayout 
-      title="Conexões WhatsApp" 
-      subtitle="Gerencie suas instâncias UAZ, Meta e Wavoip em um único lugar."
+      title="Conexões & Canais" 
+      subtitle="Gerencie suas instâncias de WhatsApp e redes sociais em um único lugar."
     >
       <div className="space-y-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -105,14 +105,20 @@ export default function WhatsAppPage() {
                 Sincronizar
               </Button>
               <Select onValueChange={(v) => addConnection(v as WhatsAppProvider)}>
-                <SelectTrigger className="h-9 w-[180px]">
+                <SelectTrigger className="h-9 w-[220px]">
                   <PlusCircle className="w-4 h-4 mr-2" />
-                  <SelectValue placeholder="Adicionar Provedor" />
+                  <SelectValue placeholder="Adicionar Canal" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="uaz">UAZ API</SelectItem>
-                  <SelectItem value="wavoip">Wavoip</SelectItem>
-                  <SelectItem value="meta">Meta Official API</SelectItem>
+                  <SelectItem value="uaz">WhatsApp (UAZ API)</SelectItem>
+                  <SelectItem value="wavoip">WhatsApp (Wavoip)</SelectItem>
+                  <SelectItem value="meta">WhatsApp (Meta Official)</SelectItem>
+                  <SelectItem value="instagram">Instagram Business</SelectItem>
+                  <SelectItem value="facebook">Facebook Messenger</SelectItem>
+                  <SelectItem value="telegram">Telegram Bot</SelectItem>
+                  <SelectItem value="linkedin">LinkedIn Business</SelectItem>
+                  <SelectItem value="tiktok">TikTok Business</SelectItem>
+                  <SelectItem value="youtube">YouTube Business</SelectItem>
                 </SelectContent>
               </Select>
 

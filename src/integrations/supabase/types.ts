@@ -642,6 +642,7 @@ export type Database = {
       customers: {
         Row: {
           address: string | null
+          channel: string | null
           company: string | null
           created_at: string
           created_by: string
@@ -655,6 +656,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          channel?: string | null
           company?: string | null
           created_at?: string
           created_by: string
@@ -668,6 +670,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          channel?: string | null
           company?: string | null
           created_at?: string
           created_by?: string
@@ -2226,7 +2229,16 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "atendente" | "closer"
-      whatsapp_provider: "uaz" | "meta" | "wavoip"
+      whatsapp_provider:
+        | "uaz"
+        | "meta"
+        | "wavoip"
+        | "instagram"
+        | "telegram"
+        | "facebook"
+        | "linkedin"
+        | "tiktok"
+        | "youtube"
       whatsapp_status: "disconnected" | "connecting" | "connected" | "error"
     }
     CompositeTypes: {
@@ -2356,7 +2368,17 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "atendente", "closer"],
-      whatsapp_provider: ["uaz", "meta", "wavoip"],
+      whatsapp_provider: [
+        "uaz",
+        "meta",
+        "wavoip",
+        "instagram",
+        "telegram",
+        "facebook",
+        "linkedin",
+        "tiktok",
+        "youtube",
+      ],
       whatsapp_status: ["disconnected", "connecting", "connected", "error"],
     },
   },

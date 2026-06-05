@@ -238,8 +238,14 @@ export default function ChatPage() {
         // Filter customers by channel if needed (for now showing all as per current logic, 
         // but we can add channel filter if customers table has it)
         const channelCustomers = customers.filter(c => {
-          if (channel === 'whatsapp') return c.phone && !c.phone.includes('@telegram');
-          if (channel === 'telegram') return c.phone?.includes('@telegram') || c.email?.includes('@telegram');
+          if (channel === 'whatsapp') return c.channel === 'whatsapp' || (!c.channel && c.phone && !c.phone.includes('@telegram'));
+          if (channel === 'telegram') return c.channel === 'telegram' || c.phone?.includes('@telegram') || c.email?.includes('@telegram');
+          if (channel === 'instagram') return c.channel === 'instagram';
+          if (channel === 'facebook') return c.channel === 'facebook';
+          if (channel === 'linkedin') return c.channel === 'linkedin';
+          if (channel === 'tiktok') return c.channel === 'tiktok';
+          if (channel === 'youtube') return c.channel === 'youtube';
+          if (channel === 'widget') return c.channel === 'widget';
           return true;
         });
 

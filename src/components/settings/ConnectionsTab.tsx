@@ -6,10 +6,10 @@ const sections = [
     title: 'Instagram Business',
     items: [{
       icon: <Camera className="w-6 h-6 text-pink-500" />,
-      name: 'Instagram Business',
+      name: 'Omnichannel & Redes Sociais',
       tags: ['MENSAGENS & COMENTÁRIOS'],
-      desc: 'Conecte contas do Instagram para automações de comentários e DMs',
-      cta: 'Gerenciar Instagram',
+      desc: 'Conecte WhatsApp, Instagram, Telegram, TikTok e outros canais para centralizar seu atendimento.',
+      cta: 'Gerenciar Canais',
       to: '/whatsapp',
     }],
   },
