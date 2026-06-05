@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   PlusCircle, RefreshCw, MessageCircle, Activity, 
-  History, ShieldCheck, Phone, Plug, Loader2
+  History, ShieldCheck, Phone, Plug, Loader2, Smartphone
 } from 'lucide-react';
+
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import UazAuditTab from '@/components/settings/UazAuditTab';
@@ -44,12 +45,14 @@ export default function WhatsAppPage() {
     setActiveTab('audit');
   };
 
+  const [isAddingConnection, setIsAddingConnection] = useState(false);
+
   const addConnection = async (provider: WhatsAppProvider) => {
     const { data, error } = await supabase
       .from('whatsapp_connections')
       .insert({
         provider,
-        display_name: `Nova Conexão ${provider.toUpperCase()}`,
+        display_name: `Conexão ${provider.toUpperCase()} ${connections.length + 1}`,
         status: 'disconnected',
         metadata: {}
       })
@@ -59,10 +62,11 @@ export default function WhatsAppPage() {
     if (error) {
       toast.error('Erro ao criar conexão');
     } else {
-      toast.success('Conexão criada!');
+      toast.success(`Conexão ${provider.toUpperCase()} criada!`);
       loadConnections();
     }
   };
+
 
   return (
     <AppLayout 
@@ -98,10 +102,18 @@ export default function WhatsAppPage() {
                 <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Sincronizar
               </Button>
-              <Button size="sm" onClick={() => addConnection('uaz')} className="h-9">
-                <PlusCircle className="w-4 h-4 mr-2" />
-                Nova Conexão
-              </Button>
+              <Select onValueChange={(v) => addConnection(v as WhatsAppProvider)}>
+                <SelectTrigger className="h-9 w-[180px]">
+                  <PlusCircle className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Adicionar Provedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="uaz">UAZ API</SelectItem>
+                  <SelectItem value="wavoip">Wavoip</SelectItem>
+                  <SelectItem value="meta">Meta Official API</SelectItem>
+                </SelectContent>
+              </Select>
+
             </div>
           </div>
 
