@@ -56,10 +56,18 @@ async function checkUaz(url: string, token: string) {
     }
     
     const data = JSON.parse(text);
-    const isConnected = data.status === "open" || data.state === "CONNECTED" || data.instanceStatus === "CONNECTED" || data.connectionStatus === "open";
+    
+    // Improved UAZ connection detection based on common API responses
+    const isConnected = 
+      data.status === "open" || 
+      data.state === "CONNECTED" || 
+      data.instanceStatus === "CONNECTED" || 
+      data.connectionStatus === "open" ||
+      data.connected === true ||
+      data.loggedIn === true;
     
     // Ensure status is a string
-    let displayStatus = data.status || data.state || data.instanceStatus || data.connectionStatus || "unknown";
+    let displayStatus = data.status || data.state || data.instanceStatus || data.connectionStatus || (data.connected ? "connected" : "disconnected");
     if (typeof displayStatus === 'object') {
       displayStatus = JSON.stringify(displayStatus);
     }
