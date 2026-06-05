@@ -352,7 +352,14 @@ function ConnectionCard({ conn, onSaved, onOpenAudit }: { conn: Connection; onSa
               {conn.provider === 'meta' ? <ShieldCheck className="w-5 h-5 text-primary" /> : <Plug className="w-5 h-5 text-primary" />}
               {conn.display_name}
             </CardTitle>
-            <CardDescription className="mt-1">{defaults.description}</CardDescription>
+            <CardDescription className="mt-1">
+              {defaults.description}
+              {conn.status === 'error' && conn.last_error && (
+                <p className="text-destructive text-[10px] mt-1 font-medium bg-destructive/10 p-1 px-2 rounded-md border border-destructive/20 max-w-xs break-words">
+                  {conn.last_error}
+                </p>
+              )}
+            </CardDescription>
           </div>
           {statusBadge(conn.status)}
         </div>
