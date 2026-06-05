@@ -58,11 +58,17 @@ async function checkUaz(url: string, token: string) {
     const data = JSON.parse(text);
     const isConnected = data.status === "open" || data.state === "CONNECTED" || data.instanceStatus === "CONNECTED" || data.connectionStatus === "open";
     
-    console.log(`[UAZ DEBUG] Success! Status: ${data.status || data.state}`);
+    // Ensure status is a string
+    let displayStatus = data.status || data.state || data.instanceStatus || data.connectionStatus || "unknown";
+    if (typeof displayStatus === 'object') {
+      displayStatus = JSON.stringify(displayStatus);
+    }
+
+    console.log(`[UAZ DEBUG] Success! Status: ${displayStatus}`);
 
     return { 
       connected: isConnected, 
-      status: data.status || data.state || data.instanceStatus || data.connectionStatus,
+      status: displayStatus,
       raw: data 
     };
   } catch (err) {
