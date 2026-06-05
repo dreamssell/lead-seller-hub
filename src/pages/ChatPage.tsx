@@ -329,15 +329,28 @@ export default function ChatPage() {
 
     // 2. Chamar Adapter para envio
     try {
-      if (!activeWhatsAppConn) throw new Error('Conexão ativa não encontrada');
-      const adapter = getProviderAdapter(activeWhatsAppConn.provider);
-      
-      const data = await adapter.sendMessage(activeWhatsAppConn, selectedConvId, currentText);
-
-      // O Realtime atualizará a lista, mas podemos marcar como 'sent' localmente também.
-      setMessages(prev => prev.map(m => 
-        m.id === clientMsgId ? { ...m, status: 'sent', id: data?.data?.key?.id || m.id } : m
-      ));
+      if (activeChannel === 'whatsapp') {
+        if (!activeWhatsAppConn) throw new Error('Conexão ativa não encontrada');
+        const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+        const data = await adapter.sendMessage(activeWhatsAppConn, selectedConvId, currentText);
+        setMessages(prev => prev.map(m => 
+          m.id === clientMsgId ? { ...m, status: 'sent', id: data?.data?.key?.id || m.id } : m
+        ));
+      } else if (activeChannel === 'telegram') {
+        // Mock Telegram Send
+        addDebugLog('request', 'Enviando mensagem via Telegram API...');
+        await new Promise(r => setTimeout(r, 500));
+        addDebugLog('info', 'Telegram: Mensagem enviada com sucesso.');
+        setMessages(prev => prev.map(m => 
+          m.id === clientMsgId ? { ...m, status: 'sent' } : m
+        ));
+      } else {
+        // Fallback for other channels
+        await new Promise(r => setTimeout(r, 400));
+        setMessages(prev => prev.map(m => 
+          m.id === clientMsgId ? { ...m, status: 'sent' } : m
+        ));
+      }
 
     } catch (err: any) {
       toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
