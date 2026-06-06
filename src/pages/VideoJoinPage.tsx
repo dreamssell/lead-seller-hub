@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Video, Mic, Shield, Loader2, Camera, Volume2, Wifi, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Video, Mic, Shield, Loader2, Camera, Volume2, Wifi, AlertCircle, CheckCircle2, RefreshCw, XCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,19 +15,17 @@ export default function VideoJoinPage() {
   const { roomId } = useParams();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
-  const { startCall, status } = useVideoCall();
+  const navigate = useNavigate();
+  const { startCall, status, endCall } = useVideoCall();
   const [userName, setUserName] = useState('');
   const [isJoining, setIsJoining] = useState(false);
   const [isValidating, setIsValidating] = useState(true);
   const [roomData, setRoomData] = useState<any>(null);
   
-  // Media Checklist State
   const [mediaDevices, setMediaDevices] = useState<{
     cameras: MediaDeviceInfo[];
     microphones: MediaDeviceInfo[];
   }>({ cameras: [], microphones: [] });
-  const [selectedCamera, setSelectedCamera] = useState('');
-  const [selectedMic, setSelectedMic] = useState('');
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [latency, setLatency] = useState<number | null>(null);
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
@@ -37,7 +35,6 @@ export default function VideoJoinPage() {
     loadDevices();
     simulateLatencyTest();
     
-    // Auto-fill user name if logged in
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         setUserName(user.email?.split('@')[0] || '');
@@ -50,11 +47,12 @@ export default function VideoJoinPage() {
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [roomId]);
+  }, [roomId, token]);
 
   const validateRoom = async () => {
     try {
       if (!roomId) return;
+      setIsValidating(true);
       
       const { data, error } = await supabase
         .from('video_rooms')
@@ -63,12 +61,12 @@ export default function VideoJoinPage() {
         .single();
 
       if (error || !data || !data.is_active) {
-        toast.error('Esta sala não existe ou já foi encerrada.');
+        setRoomData(null);
         return;
       }
 
       if (data.invite_token !== token) {
-        toast.error('Token de convite inválido ou expirado.');
+        setRoomData(null);
         return;
       }
 
@@ -88,26 +86,20 @@ export default function VideoJoinPage() {
       }
       
       const devices = await navigator.mediaDevices.enumerateDevices();
-      const cameras = devices.filter(d => d.kind === 'videoinput');
-      const mics = devices.filter(d => d.kind === 'audioinput');
-      
-      setMediaDevices({ cameras, microphones: mics });
-      if (cameras.length > 0) setSelectedCamera(cameras[0].deviceId);
-      if (mics.length > 0) setSelectedMic(mics[0].deviceId);
-      
+      setMediaDevices({ 
+        cameras: devices.filter(d => d.kind === 'videoinput'), 
+        microphones: devices.filter(d => d.kind === 'audioinput') 
+      });
       setMediaError(null);
     } catch (err: any) {
       console.error('Erro de mídia:', err);
-      if (err.name === 'NotAllowedError') {
-        setMediaError('Acesso negado. Por favor, habilite a câmera e microfone nas configurações do navegador.');
-      } else {
-        setMediaError('Não foi possível encontrar dispositivos de áudio ou vídeo.');
-      }
+      setMediaError(err.name === 'NotAllowedError' 
+        ? 'Acesso negado. Por favor, habilite a câmera e microfone.' 
+        : 'Não foi possível encontrar dispositivos de mídia.');
     }
   };
 
   const simulateLatencyTest = () => {
-    // Simula um teste de latência
     const fakeLatency = Math.floor(Math.random() * 50) + 20;
     setTimeout(() => setLatency(fakeLatency), 1500);
   };
@@ -118,13 +110,10 @@ export default function VideoJoinPage() {
       return;
     }
     setIsJoining(true);
-    
-    // Para o preview local antes de iniciar a chamada real
     if (videoPreviewRef.current?.srcObject) {
       const stream = videoPreviewRef.current.srcObject as MediaStream;
       stream.getTracks().forEach(track => track.stop());
     }
-    
     await startCall(roomData?.is_group || false, roomId!, userName);
     setIsJoining(false);
   };
@@ -142,11 +131,27 @@ export default function VideoJoinPage() {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
         <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
-        <h1 className="text-2xl font-bold text-white mb-2">Sala Indisponível</h1>
+        <h1 className="text-2xl font-bold text-white mb-2">Acesso Negado</h1>
         <p className="text-zinc-400 mb-6 text-center max-w-sm">
-          O link que você acessou é inválido, expirou ou a sala foi encerrada pelo anfitrião.
+          Este link de convite é inválido ou foi revogado pelo anfitrião.
         </p>
-        <Button onClick={() => window.location.href = '/'}>Voltar ao Início</Button>
+        <Button onClick={() => navigate('/')}>Voltar ao Início</Button>
+      </div>
+    );
+  }
+
+  if (status === 'rejected') {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
+        <XCircle className="w-16 h-16 text-red-500 mb-4" />
+        <h1 className="text-2xl font-bold text-white mb-2">Entrada Recusada</h1>
+        <p className="text-zinc-400 mb-6 text-center max-w-sm">
+          Sua solicitação para entrar nesta reunião foi recusada pelo anfitrião.
+        </p>
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={() => navigate('/')}>Sair</Button>
+          <Button onClick={() => window.location.reload()}>Tentar Novamente</Button>
+        </div>
       </div>
     );
   }
@@ -162,7 +167,6 @@ export default function VideoJoinPage() {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-2 gap-6"
       >
-        {/* Preview Panel */}
         <Card className="glass-card border-white/10 bg-zinc-900/50 backdrop-blur-xl overflow-hidden flex flex-col">
           <div className="relative aspect-video bg-zinc-800 flex items-center justify-center overflow-hidden">
             {mediaError ? (
@@ -173,20 +177,10 @@ export default function VideoJoinPage() {
               </div>
             ) : (
               <>
-                <video 
-                  ref={videoPreviewRef} 
-                  autoPlay 
-                  muted 
-                  playsInline 
-                  className="w-full h-full object-cover mirror"
-                />
+                <video ref={videoPreviewRef} autoPlay muted playsInline className="w-full h-full object-cover mirror" />
                 <div className="absolute bottom-4 left-4 flex gap-2">
-                   <Badge className="bg-black/60 backdrop-blur-md border-white/10 gap-2">
-                      <Camera className="w-3 h-3" /> Câmera OK
-                   </Badge>
-                   <Badge className="bg-black/60 backdrop-blur-md border-white/10 gap-2">
-                      <Volume2 className="w-3 h-3" /> Áudio OK
-                   </Badge>
+                   <Badge className="bg-black/60 backdrop-blur-md border-white/10 gap-2"><Camera className="w-3 h-3" /> Câmera OK</Badge>
+                   <Badge className="bg-black/60 backdrop-blur-md border-white/10 gap-2"><Volume2 className="w-3 h-3" /> Áudio OK</Badge>
                 </div>
               </>
             )}
@@ -194,7 +188,7 @@ export default function VideoJoinPage() {
           <CardContent className="p-6 space-y-4 flex-1">
              <div className="space-y-4">
                <h3 className="font-bold text-white flex items-center gap-2">
-                 <Wifi className="w-4 h-4 text-primary" /> Status da Conexão
+                 <Wifi className="w-4 h-4 text-primary" /> Status da Rede
                </h3>
                <div className="space-y-3">
                  <div className="flex items-center justify-between text-sm">
@@ -204,18 +198,13 @@ export default function VideoJoinPage() {
                    </span>
                  </div>
                  <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
-                   <motion.div 
-                     initial={{ width: 0 }}
-                     animate={{ width: latency ? '100%' : '40%' }}
-                     className={`h-full ${latency && latency < 60 ? 'bg-green-500' : 'bg-amber-500'}`}
-                   />
+                   <motion.div initial={{ width: 0 }} animate={{ width: latency ? '100%' : '40%' }} className={`h-full ${latency && latency < 60 ? 'bg-green-500' : 'bg-amber-500'}`} />
                  </div>
                </div>
              </div>
           </CardContent>
         </Card>
 
-        {/* Join Panel */}
         <Card className="glass-card border-white/10 bg-zinc-900/50 backdrop-blur-xl text-white">
           <CardHeader className="space-y-4">
             <div className="space-y-2">
@@ -230,22 +219,20 @@ export default function VideoJoinPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-300">Como você deseja ser chamado?</label>
               <Input 
-                placeholder="Seu nome ou apelido" 
+                placeholder="Seu nome" 
                 value={userName}
                 onChange={(e) => setUserName(e.target.value)}
-                className="bg-zinc-800/50 border-white/10 text-white h-12 text-lg focus:ring-primary/50"
+                className="bg-zinc-800/50 border-white/10 text-white h-12 text-lg"
                 onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
               />
             </div>
 
             <div className="space-y-4 pt-4 border-t border-white/5">
                <div className="flex items-center gap-3 text-sm text-zinc-400">
-                 <CheckCircle2 className="w-4 h-4 text-green-500" /> 
-                 Seu áudio e vídeo estão configurados corretamente.
+                 <CheckCircle2 className="w-4 h-4 text-green-500" /> Dispositivos prontos.
                </div>
                <div className="flex items-center gap-3 text-sm text-zinc-400">
-                 <Shield className="w-4 h-4 text-primary" /> 
-                 Chamada protegida por criptografia nativa.
+                 <Shield className="w-4 h-4 text-primary" /> Criptografia ativa.
                </div>
             </div>
 
@@ -254,19 +241,9 @@ export default function VideoJoinPage() {
               onClick={handleJoin}
               disabled={!userName.trim() || isJoining || !!mediaError}
             >
-              {isJoining ? (
-                <>
-                  <Loader2 className="w-6 h-6 mr-3 animate-spin" />
-                  Conectando...
-                </>
-              ) : (
-                'Entrar na Reunião'
-              )}
+              {isJoining ? <><Loader2 className="w-6 h-6 mr-3 animate-spin" /> Conectando...</> : 'Entrar na Reunião'}
             </Button>
-
-            <p className="text-[11px] text-center text-zinc-500 uppercase tracking-widest font-bold">
-              Powered by Lead Video Engine v2.0
-            </p>
+            <p className="text-[11px] text-center text-zinc-500 uppercase tracking-widest font-bold">Lead Video Engine v2.0</p>
           </CardContent>
         </Card>
       </motion.div>
