@@ -8,6 +8,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { GlobalStateProvider } from "@/contexts/GlobalStateContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { VoipProvider } from "@/contexts/VoipContext";
+import { VideoCallProvider } from "@/contexts/VideoCallContext";
 import Dashboard from "./pages/Dashboard";
 import ChatPage from "./pages/ChatPage";
 import CallsPage from "./pages/CallsPage";
@@ -46,6 +47,7 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <VoipProvider>
+            <VideoCallProvider>
             <Routes>
               {/* Rota pública — recebe tokens da página externa */}
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
@@ -77,6 +79,7 @@ const App = () => (
               <Route path="/documentation" element={<ProtectedRoute pageKey="documentation"><DocumentationPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </VideoCallProvider>
             </VoipProvider>
           </AuthProvider>
         </BrowserRouter>
