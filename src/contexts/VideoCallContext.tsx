@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useRef, useEffect, useCallback } f
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { CheckCircle2, AlertTriangle } from 'lucide-react';
 
 export type ParticipantRole = 'host' | 'moderator' | 'participant';
 
