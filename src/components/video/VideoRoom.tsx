@@ -360,25 +360,54 @@ export function VideoRoom({ isGroup = false }) {
       </div>
 
       <AnimatePresence>
-        {(showParticipants || showAuditLogs) && (
+        {(showParticipants || showAuditLogs || showPendingTab) && (
           <motion.div initial={{ x: 400 }} animate={{ x: 0 }} exit={{ x: 400 }} className="w-full lg:w-80 bg-zinc-900 border-l border-white/10 flex flex-col h-full z-[210]">
             <div className="p-4 flex items-center justify-between border-b border-white/5">
                <h3 className="font-bold text-white flex items-center gap-2">
-                 {showParticipants ? <Users className="w-4 h-4 text-primary" /> : <FileText className="w-4 h-4 text-primary" />}
-                  {showParticipants ? 'Participantes' : 'Logs de Auditoria'}
+                 {showPendingTab ? <Shield className="w-4 h-4 text-primary" /> : showParticipants ? <Users className="w-4 h-4 text-primary" /> : <FileText className="w-4 h-4 text-primary" />}
+                 {showPendingTab ? 'Pendentes' : showParticipants ? 'Participantes' : 'Logs de Auditoria'}
                </h3>
                <div className="flex items-center gap-1">
                  {showAuditLogs && (
                    <Button variant="ghost" size="icon" onClick={exportAuditLogs} title="Exportar CSV"><Download className="w-4 h-4" /></Button>
                  )}
-                 <Button variant="ghost" size="icon" onClick={() => { setShowParticipants(false); setShowAuditLogs(false); }}><X className="w-4 h-4" /></Button>
+                 <Button variant="ghost" size="icon" onClick={() => { setShowParticipants(false); setShowAuditLogs(false); setShowPendingTab(false); }}><X className="w-4 h-4" /></Button>
                </div>
             </div>
 
-
             <ScrollArea className="flex-1">
               <div className="p-4">
-                {showParticipants ? (
+                {showPendingTab ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-[10px] font-bold uppercase tracking-widest text-primary">Aguardando Aprovação</h4>
+                      <Badge variant="outline" className="text-[10px]">{pendingParticipants.length}</Badge>
+                    </div>
+                    {pendingParticipants.length === 0 ? (
+                      <div className="text-center py-10 text-zinc-500 text-xs">Nenhuma solicitação pendente.</div>
+                    ) : (
+                      pendingParticipants.map(p => (
+                        <div key={p.id} className="p-4 rounded-xl bg-zinc-800/50 border border-white/5 space-y-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center font-bold text-primary">{p.name.charAt(0)}</div>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-bold text-white">{p.name}</span>
+                              <span className="text-[10px] text-zinc-500 font-mono">ID: {p.id.substring(0,8)}</span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button className="flex-1 h-9 bg-primary hover:bg-primary/90 text-xs gap-2" onClick={() => approveParticipant(p.id)}>
+                              <Check className="w-3 h-3" /> Aceitar
+                            </Button>
+                            <Button variant="outline" className="flex-1 h-9 text-xs gap-2 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/50" onClick={() => rejectParticipant(p.id)}>
+                              <X className="w-3 h-3" /> Recusar
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                ) : showParticipants ? (
                   <div className="space-y-6">
                     {isAdmin && pendingParticipants.length > 0 && (
                       <div className="space-y-3">
