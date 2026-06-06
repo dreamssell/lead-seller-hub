@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +11,7 @@ import {
   MessageSquare, Activity, CheckCircle2, XCircle, Clock,
   Search, Filter, ChevronLeft, ChevronRight,
   Loader2, AlertTriangle, Play, ShieldAlert, Terminal,
-  FileSpreadsheet, Palette
+  FileSpreadsheet, Palette, History as HistoryIcon
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { WhatsAppConnection } from './types';
@@ -315,7 +314,7 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-3 rounded-lg border border-border/40 bg-secondary/10 space-y-2">
               <Label className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1.5">
-                <History className="w-3 h-3" /> Status de Retenção
+                <HistoryIcon className="w-3 h-3" /> Status de Retenção
               </Label>
               <div className="grid grid-cols-2 gap-2">
                 <div>
