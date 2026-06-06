@@ -16,15 +16,20 @@ export async function runVideoSmokeTest() {
     let targetRoomId;
     if (!rooms || rooms.length === 0) {
       console.log('📝 Nenhuma sala ativa encontrada, criando sala de teste...');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário autenticado necessário para criar sala de teste.");
+
       const { data: newRoom, error: createError } = await supabase
         .from('video_rooms')
         .insert({
           title: 'Sala de Smoke Test',
           is_active: true,
-          invite_token: 'smoke-test-token'
+          invite_token: 'smoke-test-token',
+          host_id: user.id
         })
         .select()
         .single();
+
       
       if (createError) throw createError;
       targetRoomId = newRoom.id;
