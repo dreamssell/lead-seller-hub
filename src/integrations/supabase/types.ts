@@ -1863,6 +1863,7 @@ export type Database = {
       video_participants: {
         Row: {
           id: string
+          is_banned: boolean | null
           is_guest: boolean
           joined_at: string | null
           last_seen_at: string | null
@@ -1875,6 +1876,7 @@ export type Database = {
         }
         Insert: {
           id?: string
+          is_banned?: boolean | null
           is_guest?: boolean
           joined_at?: string | null
           last_seen_at?: string | null
@@ -1887,6 +1889,7 @@ export type Database = {
         }
         Update: {
           id?: string
+          is_banned?: boolean | null
           is_guest?: boolean
           joined_at?: string | null
           last_seen_at?: string | null
@@ -1909,6 +1912,7 @@ export type Database = {
       }
       video_rooms: {
         Row: {
+          blacklist: string[] | null
           created_at: string
           expires_at: string | null
           host_id: string
@@ -1916,11 +1920,14 @@ export type Database = {
           invite_token: string
           is_active: boolean
           is_group: boolean
+          is_locked: boolean | null
+          permissions_config: Json | null
           settings: Json
           title: string
           updated_at: string
         }
         Insert: {
+          blacklist?: string[] | null
           created_at?: string
           expires_at?: string | null
           host_id: string
@@ -1928,11 +1935,14 @@ export type Database = {
           invite_token: string
           is_active?: boolean
           is_group?: boolean
+          is_locked?: boolean | null
+          permissions_config?: Json | null
           settings?: Json
           title: string
           updated_at?: string
         }
         Update: {
+          blacklist?: string[] | null
           created_at?: string
           expires_at?: string | null
           host_id?: string
@@ -1940,6 +1950,8 @@ export type Database = {
           invite_token?: string
           is_active?: boolean
           is_group?: boolean
+          is_locked?: boolean | null
+          permissions_config?: Json | null
           settings?: Json
           title?: string
           updated_at?: string
