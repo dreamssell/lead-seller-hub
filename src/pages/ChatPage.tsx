@@ -332,7 +332,7 @@ export default function ChatPage() {
         event: 'INSERT', 
         schema: 'public', 
         table: 'connection_events' 
-      }, (payload) => {
+      }, async (payload) => {
         const newEvent = payload.new;
         addDebugLog(
           newEvent.status === 'success' ? 'info' : 'error', 
@@ -347,11 +347,28 @@ export default function ChatPage() {
             description: `Um novo lead vindo do Widget acaba de ser registrado.` 
           });
         } else if (newEvent.status === 'failure') {
-          toast({ 
-            variant: 'destructive',
-            title: 'Falha detectada', 
-            description: `Erro no canal ${newEvent.event_type}: ${newEvent.error_message}` 
-          });
+          // Check for consecutive failures logic (simplified for frontend demo)
+          const { data: recentFailures } = await supabase
+            .from('connection_events')
+            .select('id')
+            .eq('connection_id', newEvent.connection_id)
+            .eq('status', 'failure')
+            .order('created_at', { ascending: false })
+            .limit(5);
+
+          if (recentFailures && recentFailures.length >= 3) {
+            toast({ 
+              variant: 'destructive',
+              title: 'ALERTA CRÍTICO: Falhas Consecutivas', 
+              description: `O canal detectou múltiplas falhas seguidas. Verifique o painel de conexões.` 
+            });
+          } else {
+            toast({ 
+              variant: 'destructive',
+              title: 'Falha detectada', 
+              description: `Erro no canal ${newEvent.event_type}: ${newEvent.error_message}` 
+            });
+          }
         }
       })
       .subscribe();
