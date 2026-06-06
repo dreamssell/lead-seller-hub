@@ -218,6 +218,8 @@ export default function VideoJoinPage() {
               <CardTitle className="text-3xl font-bold">Pronto para entrar?</CardTitle>
               <CardDescription className="text-zinc-400">
                 Sala: <span className="text-white font-medium">{roomData.title}</span>
+                <br />
+                <span className="text-[10px] font-mono text-zinc-500">ID: {roomId}</span>
               </CardDescription>
             </div>
           </CardHeader>
