@@ -32,8 +32,19 @@ interface WidgetSettingsProps {
   onSaved: () => void;
 }
 
+interface UnauthorizedAttempt {
+  id: string;
+  domain: string;
+  user_agent: string;
+  ip_address: string;
+  created_at: string;
+}
+
 export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
   const [domain, setDomain] = useState(conn.metadata?.domain || '');
+  const [authorizedDomains, setAuthorizedDomains] = useState<string[]>(conn.authorized_domains || []);
+  const [logRetentionDays, setLogRetentionDays] = useState(conn.log_retention_days || 30);
+  const [unauthorizedAttempts, setUnauthorizedAttempts] = useState<UnauthorizedAttempt[]>([]);
   const [primaryColor, setPrimaryColor] = useState(conn.metadata?.color || '#8B5CF6');
   const [welcomeMsg, setWelcomeMsg] = useState(conn.metadata?.welcome_msg || 'Olá! Como podemos ajudar hoje?');
   const [autoOpen, setAutoOpen] = useState(conn.metadata?.auto_open || false);
@@ -84,7 +95,11 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
 
     const { error } = await supabase
       .from('whatsapp_connections')
-      .update({ metadata })
+      .update({ 
+        metadata,
+        authorized_domains: authorizedDomains,
+        log_retention_days: logRetentionDays
+      })
       .eq('id', conn.id);
 
     if (error) {
@@ -93,6 +108,64 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
       toast.success('Configurações do widget atualizadas!');
       onSaved();
     }
+  };
+
+  const loadUnauthorizedAttempts = async () => {
+    const { data } = await supabase
+      .from('unauthorized_embed_attempts')
+      .select('*')
+      .eq('connection_id', conn.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    
+    if (data) setUnauthorizedAttempts(data as UnauthorizedAttempt[]);
+  };
+
+  const handleExportLogs = async (format: 'csv' | 'json') => {
+    toast.info(`Iniciando exportação em ${format.toUpperCase()}...`);
+    
+    let query = supabase
+      .from('connection_events')
+      .select('*')
+      .eq('connection_id', conn.id);
+
+    if (typeFilter !== 'all') query = query.eq('event_type', typeFilter);
+    if (statusFilter !== 'all') query = query.eq('status', statusFilter);
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+
+    if (error || !data) {
+      toast.error('Erro ao buscar dados para exportação');
+      return;
+    }
+
+    let content = '';
+    let fileName = `logs_widget_${conn.id}_${new Date().toISOString()}`;
+
+    if (format === 'json') {
+      content = JSON.stringify(data, null, 2);
+      fileName += '.json';
+    } else {
+      const headers = ['id', 'event_type', 'status', 'created_at', 'payload'];
+      const rows = data.map(log => [
+        log.id,
+        log.event_type,
+        log.status,
+        log.created_at,
+        JSON.stringify(log.payload).replace(/"/g, '""')
+      ].join(','));
+      content = [headers.join(','), ...rows].join('\n');
+      fileName += '.csv';
+    }
+
+    const blob = new Blob([content], { type: format === 'json' ? 'application/json' : 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success('Exportação concluída!');
   };
 
   const loadLogs = async () => {
@@ -161,6 +234,7 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
 
   useEffect(() => {
     loadLogs();
+    loadUnauthorizedAttempts();
     const channel = supabase
       .channel(`widget-logs-${conn.id}`)
       .on('postgres_changes', { 
@@ -169,6 +243,12 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
         table: 'connection_events',
         filter: `connection_id=eq.${conn.id}`
       }, () => loadLogs())
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'unauthorized_embed_attempts',
+        filter: `connection_id=eq.${conn.id}`
+      }, () => loadUnauthorizedAttempts())
       .subscribe();
 
     return () => {
@@ -181,18 +261,22 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
   return (
     <div className="space-y-6 pt-4">
       <Tabs defaultValue="config" className="w-full">
-        <TabsList className="bg-secondary/40 w-full grid grid-cols-3">
+        <TabsList className="bg-secondary/40 w-full grid grid-cols-4">
           <TabsTrigger value="config" className="gap-2">
             <Settings className="w-4 h-4" />
-            Ajustes
+            <span className="hidden md:inline">Ajustes</span>
           </TabsTrigger>
           <TabsTrigger value="embed" className="gap-2">
             <Code className="w-4 h-4" />
-            Script de Embed
+            <span className="hidden md:inline">Embed</span>
           </TabsTrigger>
           <TabsTrigger value="status" className="gap-2">
             <Activity className="w-4 h-4" />
-            Status & Logs
+            <span className="hidden md:inline">Logs</span>
+          </TabsTrigger>
+          <TabsTrigger value="security" className="gap-2">
+            <ShieldAlert className="w-4 h-4" />
+            <span className="hidden md:inline">Segurança</span>
           </TabsTrigger>
         </TabsList>
 
@@ -200,20 +284,55 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-bold uppercase">Domínio Autorizado</Label>
-                {domain && (
+                <Label className="text-xs font-bold uppercase">Domínios Autorizados</Label>
+                {authorizedDomains.length > 0 && (
                   <Badge variant="outline" className="h-4 text-[8px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
-                    <ShieldAlert className="w-2.5 h-2.5 mr-1" /> Validado
+                    <ShieldAlert className="w-2.5 h-2.5 mr-1" /> {authorizedDomains.length} Domínios
                   </Badge>
                 )}
               </div>
               <Input 
                 value={domain} 
                 onChange={(e) => setDomain(e.target.value)} 
-                placeholder="ex: meusite.com.br" 
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && domain) {
+                    setAuthorizedDomains(prev => [...new Set([...prev, domain])]);
+                    setDomain('');
+                    e.preventDefault();
+                  }
+                }}
+                placeholder="Pressione Enter para adicionar domínio" 
               />
-              <p className="text-[10px] text-muted-foreground">O widget só funcionará nos domínios listados aqui. Caso tente em outro domínio, o acesso será bloqueado.</p>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {authorizedDomains.map(d => (
+                  <Badge key={d} variant="secondary" className="gap-1 text-[9px]">
+                    {d}
+                    <XCircle 
+                      className="w-3 h-3 cursor-pointer hover:text-destructive" 
+                      onClick={() => setAuthorizedDomains(prev => prev.filter(x => x !== d))}
+                    />
+                  </Badge>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground">O widget só funcionará nos domínios listados aqui.</p>
             </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase">Retenção de Logs (Dias)</Label>
+              <Select value={logRetentionDays.toString()} onValueChange={(v) => setLogRetentionDays(parseInt(v))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a retenção" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7">7 Dias</SelectItem>
+                  <SelectItem value="15">15 Dias</SelectItem>
+                  <SelectItem value="30">30 Dias</SelectItem>
+                  <SelectItem value="60">60 Dias</SelectItem>
+                  <SelectItem value="90">90 Dias</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground">Logs mais antigos que este período serão limpos automaticamente.</p>
+            </div>
+          </div>
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase">Cor Principal</Label>
               <div className="flex gap-2">
@@ -252,15 +371,26 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
             <Button onClick={handleSave} className="w-full">
               Salvar Configurações
             </Button>
-            <Button 
-              variant="outline" 
-              onClick={handleSendTestEvent} 
-              disabled={isTesting}
-              className="gap-2"
-            >
-              {isTesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-              Enviar Evento Teste
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => handleSendTestEvent('lead')} 
+                disabled={isTesting}
+                className="gap-2 flex-1"
+              >
+                {isTesting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                Lead Teste
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => handleSendTestEvent('message')} 
+                disabled={isTesting}
+                className="gap-2 flex-1"
+              >
+                {isTesting ? <Loader2 className="w-3 h-3 animate-spin" /> : <MessageSquare className="w-3 h-3" />}
+                Msg Teste
+              </Button>
+            </div>
           </div>
         </TabsContent>
 
@@ -318,7 +448,15 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
                     <Terminal className="w-4 h-4 text-primary" />
                     <CardTitle className="text-xs font-bold uppercase tracking-wider">Histórico de Eventos</CardTitle>
                   </div>
-                  <Badge variant="outline" className="text-[9px] h-5">Total: {totalCount}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="icon" className="h-6 w-6" title="Exportar CSV" onClick={() => handleExportLogs('csv')}>
+                      <FileSpreadsheet className="w-3 h-3" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" title="Exportar JSON" onClick={() => handleExportLogs('json')}>
+                      <Code className="w-3 h-3" />
+                    </Button>
+                    <Badge variant="outline" className="text-[9px] h-5">Total: {totalCount}</Badge>
+                  </div>
                 </div>
                 
                 <div className="flex items-center gap-2">
@@ -377,6 +515,9 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
                           )}
                         </div>
                         <div className="flex items-center gap-3">
+                          <span className="text-[9px] text-muted-foreground font-mono">
+                            ID: {log.id.substring(0, 8)}
+                          </span>
                           <span className="text-muted-foreground font-mono">
                             {format(new Date(log.created_at), "HH:mm:ss")}
                           </span>
@@ -389,6 +530,46 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
                   </div>
                 )}
               </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="security" className="space-y-4 pt-4">
+          <Card className="bg-destructive/5 border-destructive/20">
+            <CardHeader className="p-4 pb-2">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-destructive" />
+                <CardTitle className="text-sm">Acessos Não Autorizados</CardTitle>
+              </div>
+              <CardDescription className="text-xs">Tentativas de embutir o widget em domínios não permitidos.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-4">
+              <ScrollArea className="h-[250px] pr-4">
+                {unauthorizedAttempts.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
+                    <CheckCircle2 className="w-8 h-8 opacity-20 text-emerald-500" />
+                    <p className="text-[10px]">Nenhuma tentativa de acesso não autorizado registrada.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {unauthorizedAttempts.map((attempt) => (
+                      <div key={attempt.id} className="p-2 rounded bg-background/50 border border-destructive/10 text-[10px] space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-destructive">{attempt.domain}</span>
+                          <span className="text-muted-foreground">{format(new Date(attempt.created_at), "dd/MM HH:mm:ss")}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-[9px] text-muted-foreground">
+                          <p><span className="font-semibold">IP:</span> {attempt.ip_address}</p>
+                          <p className="truncate"><span className="font-semibold">User-Agent:</span> {attempt.user_agent}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
               
               {totalPages > 1 && (
                 <div className="flex items-center justify-center gap-3 mt-3 pt-2 border-t border-border/10">
