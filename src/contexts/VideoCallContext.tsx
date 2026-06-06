@@ -3,11 +3,14 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
-interface Participant {
+export type ParticipantRole = 'host' | 'moderator' | 'participant';
+
+export interface Participant {
   id: string;
   name: string;
   is_guest: boolean;
   status: 'pending' | 'approved' | 'rejected' | 'left';
+  role: ParticipantRole;
   media_status: {
     audio: boolean;
     video: boolean;
@@ -15,12 +18,13 @@ interface Participant {
 }
 
 interface VideoCallContextType {
-  status: 'idle' | 'calling' | 'connected' | 'ended' | 'waiting_approval';
+  status: 'idle' | 'calling' | 'connected' | 'ended' | 'waiting_approval' | 'rejected';
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
   isMuted: boolean;
   isVideoOff: boolean;
   participants: Participant[];
+  userRole: ParticipantRole;
   isAdmin: boolean;
   roomId: string | null;
   startCall: (isGroup: boolean, roomId: string, userName: string) => Promise<void>;
@@ -31,6 +35,8 @@ interface VideoCallContextType {
   rejectParticipant: (participantId: string) => Promise<void>;
   kickParticipant: (participantId: string) => Promise<void>;
   muteParticipant: (participantId: string) => Promise<void>;
+  promoteParticipant: (participantId: string) => Promise<void>;
+  regenerateToken: () => Promise<string | null>;
 }
 
 const VideoCallContext = createContext<VideoCallContextType | null>(null);
@@ -42,18 +48,20 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState<ParticipantRole>('participant');
   const [roomId, setRoomId] = useState<string | null>(null);
   const [currentParticipantId, setCurrentParticipantId] = useState<string | null>(null);
   
   const channelRef = useRef<RealtimeChannel | null>(null);
+
+  const isAdmin = userRole === 'host' || userRole === 'moderator';
 
   const cleanup = useCallback(() => {
     localStream?.getTracks().forEach(track => track.stop());
     setLocalStream(null);
     setRemoteStream(null);
     setParticipants([]);
-    setIsAdmin(false);
+    setUserRole('participant');
     setRoomId(null);
     setCurrentParticipantId(null);
     if (channelRef.current) {
@@ -64,11 +72,11 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
 
   const startCall = async (isGroup: boolean, roomId: string, userName: string) => {
     try {
+      cleanup();
       setRoomId(roomId);
       const { data: { user } } = await supabase.auth.getUser();
       const isGuest = !user;
 
-      // 1. Get Room Info
       const { data: room, error: roomError } = await supabase
         .from('video_rooms')
         .select('*')
@@ -80,21 +88,16 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const hostId = room.host_id;
-      const isRoomAdmin = user?.id === hostId;
-      setIsAdmin(isRoomAdmin);
+      const isHost = user?.id === room.host_id;
+      const role: ParticipantRole = isHost ? 'host' : 'participant';
+      setUserRole(role);
 
-      // 2. Request Media Permissions
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: true, 
-        audio: true 
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       setLocalStream(stream);
 
       const settings = room.settings as any;
-      const initialStatus = (isGuest && settings?.guest_approval_required && !isRoomAdmin) ? 'pending' : 'approved';
+      const initialStatus = (isGuest && settings?.guest_approval_required && !isHost) ? 'pending' : 'approved';
 
-      // 3. Register Participant
       const { data: participant, error: pError } = await supabase
         .from('video_participants')
         .insert({
@@ -103,6 +106,7 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
           name: userName,
           is_guest: isGuest,
           status: initialStatus,
+          role: role,
           media_status: { audio: true, video: true }
         })
         .select()
@@ -113,12 +117,10 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
 
       if (participant.status === 'pending') {
         setStatus('waiting_approval');
-        toast.info('Aguardando aprovação do anfitrião...');
       } else {
         setStatus('calling');
       }
 
-      // 4. Setup Realtime Channel
       const channel = supabase.channel(`room:${roomId}`)
         .on('postgres_changes', { 
           event: '*', 
@@ -129,22 +131,25 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
           if (payload.eventType === 'INSERT') {
             const newP = payload.new as any;
             setParticipants(prev => [...prev, newP as Participant]);
-            if (isRoomAdmin && newP.status === 'pending') {
+            if (isAdmin && newP.status === 'pending') {
               toast.info(`${newP.name} solicitou entrada na reunião.`);
             }
           } else if (payload.eventType === 'UPDATE') {
             const updatedP = payload.new as any;
             setParticipants(prev => prev.map(p => p.id === updatedP.id ? updatedP as Participant : p));
             
-            // Check if current user was approved
             if (updatedP.id === participant.id) {
               if (updatedP.status === 'approved') {
                 setStatus('connected');
-                toast.success('Entrada aprovada!');
+                toast.success('Sua entrada foi aprovada!');
               } else if (updatedP.status === 'rejected') {
-                toast.error('Sua entrada foi recusada pelo anfitrião.');
+                setStatus('rejected');
+                toast.error('Sua entrada foi recusada.');
                 cleanup();
-                setStatus('idle');
+              }
+              if (updatedP.role !== userRole) {
+                setUserRole(updatedP.role as ParticipantRole);
+                toast.info(`Sua permissão foi alterada para: ${updatedP.role}`);
               }
             }
           }
@@ -153,7 +158,7 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
           if (payload.payload.participantId === participant.id) {
             localStream?.getAudioTracks().forEach(track => track.enabled = false);
             setIsMuted(true);
-            toast.info('Você foi silenciado pelo anfitrião.');
+            toast.info('Você foi silenciado por um moderador.');
             updateMediaStatus({ audio: false });
           }
         })
@@ -161,7 +166,6 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
 
       channelRef.current = channel;
 
-      // 5. Initial participants load
       const { data: initialParticipants } = await supabase
         .from('video_participants')
         .select('*')
@@ -171,6 +175,7 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
       if (initialParticipants) {
         setParticipants(initialParticipants.map(p => ({
           ...p,
+          role: (p.role as ParticipantRole) || 'participant',
           status: p.status as Participant['status'],
           media_status: (p.media_status as any) || { audio: true, video: true }
         })));
@@ -182,17 +187,14 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
 
     } catch (err: any) {
       console.error('Erro ao iniciar chamada:', err);
-      toast.error('Erro ao conectar à sala.');
+      toast.error('Erro ao conectar.');
       setStatus('idle');
     }
   };
 
   const endCall = async () => {
     if (currentParticipantId) {
-      await supabase
-        .from('video_participants')
-        .update({ status: 'left' })
-        .eq('id', currentParticipantId);
+      await supabase.from('video_participants').update({ status: 'left' }).eq('id', currentParticipantId);
     }
     cleanup();
     setStatus('ended');
@@ -222,45 +224,92 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
       const current = participants.find(p => p.id === currentParticipantId);
       await supabase
         .from('video_participants')
-        .update({ 
-          media_status: { ...current?.media_status, ...update } 
-        })
+        .update({ media_status: { ...current?.media_status, ...update } })
         .eq('id', currentParticipantId);
     }
   };
 
   const approveParticipant = async (id: string) => {
+    const target = participants.find(p => p.id === id);
+    const { data: { user } } = await supabase.auth.getUser();
     await supabase.from('video_participants').update({ status: 'approved' }).eq('id', id);
+    await supabase.rpc('log_video_action', {
+      p_room_id: roomId,
+      p_target_name: target?.name || 'Desconhecido',
+      p_target_user_id: null,
+      p_action: 'approved',
+      p_performed_by: user?.id
+    });
     toast.success('Participante aprovado.');
   };
 
   const rejectParticipant = async (id: string) => {
+    const target = participants.find(p => p.id === id);
+    const { data: { user } } = await supabase.auth.getUser();
     await supabase.from('video_participants').update({ status: 'rejected' }).eq('id', id);
+    await supabase.rpc('log_video_action', {
+      p_room_id: roomId,
+      p_target_name: target?.name || 'Desconhecido',
+      p_target_user_id: null,
+      p_action: 'rejected',
+      p_performed_by: user?.id
+    });
     toast.info('Participante recusado.');
   };
 
   const kickParticipant = async (id: string) => {
+    const target = participants.find(p => p.id === id);
+    const { data: { user } } = await supabase.auth.getUser();
     await supabase.from('video_participants').update({ status: 'rejected' }).eq('id', id);
-    toast.info('Participante removido da sala.');
+    await supabase.rpc('log_video_action', {
+      p_room_id: roomId,
+      p_target_name: target?.name || 'Desconhecido',
+      p_target_user_id: null,
+      p_action: 'kicked',
+      p_performed_by: user?.id
+    });
   };
 
   const muteParticipant = async (id: string) => {
+    const target = participants.find(p => p.id === id);
+    const { data: { user } } = await supabase.auth.getUser();
     if (channelRef.current) {
-      channelRef.current.send({
-        type: 'broadcast',
-        event: 'mute_request',
-        payload: { participantId: id }
+      channelRef.current.send({ type: 'broadcast', event: 'mute_request', payload: { participantId: id } });
+      await supabase.rpc('log_video_action', {
+        p_room_id: roomId,
+        p_target_name: target?.name || 'Desconhecido',
+        p_target_user_id: null,
+        p_action: 'muted',
+        p_performed_by: user?.id
       });
       toast.info('Solicitação de silenciamento enviada.');
     }
   };
 
+  const promoteParticipant = async (id: string) => {
+    await supabase.from('video_participants').update({ role: 'moderator' }).eq('id', id);
+    toast.success('Participante promovido a moderador.');
+  };
+
+  const regenerateToken = async () => {
+    if (!roomId) return null;
+    const newToken = Math.random().toString(36).substring(2, 15);
+    const { error } = await supabase.from('video_rooms').update({ invite_token: newToken }).eq('id', roomId);
+    if (error) {
+      toast.error('Erro ao regenerar token.');
+      return null;
+    }
+    toast.success('Token regenerado com sucesso!');
+    return newToken;
+  };
+
   return (
     <VideoCallContext.Provider value={{ 
       status, localStream, remoteStream, isMuted, isVideoOff, 
-      participants, isAdmin, roomId,
+      participants, userRole, isAdmin, roomId,
       startCall, endCall, toggleMute, toggleVideo,
-      approveParticipant, rejectParticipant, kickParticipant, muteParticipant
+      approveParticipant, rejectParticipant, kickParticipant, muteParticipant, promoteParticipant,
+      regenerateToken
     }}>
       {children}
     </VideoCallContext.Provider>
