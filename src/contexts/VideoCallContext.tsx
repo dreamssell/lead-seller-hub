@@ -259,6 +259,10 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
               
               if (isAdmin && newP.status === 'pending') {
                 console.log(`[Realtime Confirm] Pedido de entrada recebido para ${newP.name} na sala ${roomId}`);
+                toast.info('Solicitação de entrada recebida', {
+                  description: `O convidado ${newP.name} está aguardando. (Evento recebido com sucesso)`,
+                  icon: <CheckCircle2 className="w-4 h-4 text-green-500" />
+                });
               }
             } else if (payload.eventType === 'UPDATE') {
               const updatedP = payload.new as any;

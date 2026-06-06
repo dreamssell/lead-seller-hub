@@ -31,6 +31,7 @@ export function VideoRoom({ isGroup = false }) {
 
   
   const [showParticipants, setShowParticipants] = useState(false);
+  const [showPendingTab, setShowPendingTab] = useState(false);
   const [hasNewPending, setHasNewPending] = useState(false);
   const [showAuditLogs, setShowAuditLogs] = useState(false);
   const [lastPollTime, setLastPollTime] = useState<Date>(new Date());
@@ -314,28 +315,45 @@ export function VideoRoom({ isGroup = false }) {
 
           <div className="bg-zinc-900/90 backdrop-blur-2xl border border-white/10 p-2 rounded-2xl flex items-center gap-2">
             {isAdmin && (
-              <Button 
-                variant={showAuditLogs ? 'secondary' : 'ghost'} 
-                size="icon" 
-                onClick={() => { setShowAuditLogs(!showAuditLogs); setShowParticipants(false); }}
-                className="rounded-xl h-10 w-10"
-              >
-                <FileText className="w-5 h-5" />
-              </Button>
+              <>
+                <Button 
+                  variant={showPendingTab ? 'secondary' : 'ghost'} 
+                  size="icon" 
+                  onClick={() => { setShowPendingTab(!showPendingTab); setShowParticipants(false); setShowAuditLogs(false); }}
+                  className="rounded-xl h-10 w-10 relative"
+                  title="Pedidos Pendentes"
+                >
+                  <Shield className="w-5 h-5" />
+                  {pendingParticipants.length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-[10px] font-bold rounded-full flex items-center justify-center text-white">
+                      {pendingParticipants.length}
+                    </span>
+                  )}
+                </Button>
+                <Button 
+                  variant={showAuditLogs ? 'secondary' : 'ghost'} 
+                  size="icon" 
+                  onClick={() => { setShowAuditLogs(!showAuditLogs); setShowParticipants(false); setShowPendingTab(false); }}
+                  className="rounded-xl h-10 w-10"
+                  title="Auditoria"
+                >
+                  <FileText className="w-5 h-5" />
+                </Button>
+              </>
             )}
             <Button 
               variant={showParticipants ? 'secondary' : 'ghost'} 
               size="icon" 
-              onClick={() => { setShowParticipants(!showParticipants); setShowAuditLogs(false); }}
+              onClick={() => { setShowParticipants(!showParticipants); setShowAuditLogs(false); setShowPendingTab(false); }}
               className="rounded-xl h-10 w-10 relative"
+              title="Participantes"
             >
               <Users className="w-5 h-5" />
-              {pendingParticipants.length > 0 && (
+              {pendingParticipants.length > 0 && !showPendingTab && (
                 <span className={`absolute -top-1 -right-1 w-4 h-4 bg-primary text-[10px] font-bold rounded-full flex items-center justify-center text-white ${hasNewPending ? 'animate-bounce shadow-[0_0_10px_rgba(234,179,8,0.5)]' : ''}`}>
                   {pendingParticipants.length}
                 </span>
               )}
-
             </Button>
           </div>
         </div>
