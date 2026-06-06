@@ -125,29 +125,32 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
     setLoadingLogs(false);
   };
 
-  const handleSendTestEvent = async () => {
+  const handleSendTestEvent = async (type: 'lead' | 'message') => {
     setIsTesting(true);
     const testPayload = {
+      type,
       name: "Lead de Teste",
-      email: "teste@exemplo.com",
-      message: "Esta é uma mensagem sintética de teste.",
-      browser: "Chrome (Synthetic)",
-      domain: domain || "localhost"
+      message: type === 'lead' ? "Interesse em produto" : "Olá, gostaria de mais informações.",
+      created_at: new Date().toISOString()
     };
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('connection_events')
         .insert({
           connection_id: conn.id,
-          event_type: 'lead',
+          event_type: type,
           status: 'success',
           payload: testPayload,
           metadata_json: { is_test: true }
-        });
+        })
+        .select()
+        .single();
 
       if (error) throw error;
-      toast.success('Evento de teste enviado!', { description: 'Verifique o painel de logs para confirmar o recebimento.' });
+      toast.success(`Evento de teste (${type}) enviado!`, { 
+        description: `ID do Evento: ${data.id.substring(0, 8)}` 
+      });
       loadLogs();
     } catch (err: any) {
       toast.error('Falha ao enviar evento de teste', { description: err.message });
