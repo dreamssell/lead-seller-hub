@@ -59,7 +59,9 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [highlightedEventId, setHighlightedEventId] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
+  const [testProgress, setTestProgress] = useState<{ step: string; status: 'idle' | 'loading' | 'success' | 'error' }>({ step: '', status: 'idle' });
 
   const embedScript = `
 <!-- Lovable Chat Widget -->
@@ -200,6 +202,8 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
 
   const handleSendTestEvent = async (type: 'lead' | 'message') => {
     setIsTesting(true);
+    setTestProgress({ step: 'Iniciando simulação...', status: 'loading' });
+    
     const testPayload = {
       type,
       name: "Lead de Teste",
@@ -208,6 +212,9 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
     };
 
     try {
+      await new Promise(r => setTimeout(r, 600));
+      setTestProgress({ step: 'Enviando para o banco...', status: 'loading' });
+      
       const { data, error } = await supabase
         .from('connection_events')
         .insert({
@@ -221,12 +228,25 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
         .single();
 
       if (error) throw error;
+      
+      setTestProgress({ step: 'Evento registrado com sucesso!', status: 'success' });
       toast.success(`Evento de teste (${type}) enviado!`, { 
-        description: `ID do Evento: ${data.id.substring(0, 8)}` 
+        description: `ID: ${data.id.substring(0, 8)}`,
+        action: {
+          label: 'Ver Log',
+          onClick: () => {
+            setHighlightedEventId(data.id);
+            setSearch(data.id);
+            loadLogs();
+          }
+        }
       });
       loadLogs();
+      setTimeout(() => setTestProgress({ step: '', status: 'idle' }), 3000);
     } catch (err: any) {
+      setTestProgress({ step: 'Falha no envio.', status: 'error' });
       toast.error('Falha ao enviar evento de teste', { description: err.message });
+      setTimeout(() => setTestProgress({ step: '', status: 'idle' }), 3000);
     } finally {
       setIsTesting(false);
     }
@@ -290,7 +310,42 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
                     <ShieldAlert className="w-2.5 h-2.5 mr-1" /> {authorizedDomains.length} Domínios
                   </Badge>
                 )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-3 rounded-lg border border-border/40 bg-secondary/10 space-y-2">
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1.5">
+                <History className="w-3 h-3" /> Status de Retenção
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-[9px] text-muted-foreground uppercase">Última Limpeza</p>
+                  <p className="text-[11px] font-medium">{conn.last_cleanup_at ? format(new Date(conn.last_cleanup_at), "dd/MM HH:mm") : 'Pendente'}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] text-muted-foreground uppercase">Próxima Atualização</p>
+                  <p className="text-[11px] font-medium">{conn.next_cleanup_at ? format(new Date(conn.next_cleanup_at), "dd/MM HH:mm") : 'Agendado'}</p>
+                </div>
               </div>
+            </div>
+            {testProgress.status !== 'idle' && (
+              <div className={`p-3 rounded-lg border flex items-center gap-3 animate-in fade-in slide-in-from-top-2 ${
+                testProgress.status === 'error' ? 'border-destructive/30 bg-destructive/5' : 'border-primary/30 bg-primary/5'
+              }`}>
+                {testProgress.status === 'loading' ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                ) : testProgress.status === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                ) : (
+                  <XCircle className="w-4 h-4 text-destructive" />
+                )}
+                <div className="flex-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider">{testProgress.status === 'loading' ? 'Processando' : 'Resultado'}</p>
+                  <p className="text-xs">{testProgress.step}</p>
+                </div>
+              </div>
+            )}
+          </div>
               <Input 
                 value={domain} 
                 onChange={(e) => setDomain(e.target.value)} 
@@ -508,7 +563,15 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
                 ) : (
                   <div className="space-y-2">
                     {logs.map((log) => (
-                      <div key={log.id} className="flex items-center justify-between p-2 rounded bg-background/40 border border-border/10 text-[10px] group hover:border-primary/20">
+                      <div 
+                        key={log.id} 
+                        className={`flex items-center justify-between p-2 rounded bg-background/40 border text-[10px] group transition-all duration-500 ${
+                          highlightedEventId === log.id 
+                            ? 'border-primary shadow-[0_0_10px_rgba(139,92,246,0.3)] bg-primary/5' 
+                            : 'border-border/10 hover:border-primary/20'
+                        }`}
+                        onClick={() => setHighlightedEventId(log.id)}
+                      >
                         <div className="flex items-center gap-2">
                           <div className={`w-1.5 h-1.5 rounded-full ${log.status === 'success' ? 'bg-emerald-500' : 'bg-destructive'}`} />
                           <span className="font-bold text-primary uppercase">{log.event_type}</span>
@@ -517,9 +580,17 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
                           )}
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className="text-[9px] text-muted-foreground font-mono">
+                          <button 
+                            className={`text-[9px] font-mono hover:text-primary underline-offset-2 hover:underline cursor-pointer ${highlightedEventId === log.id ? 'text-primary font-bold' : 'text-muted-foreground'}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setHighlightedEventId(log.id);
+                              setSearch(log.id);
+                              loadLogs();
+                            }}
+                          >
                             ID: {log.id.substring(0, 8)}
-                          </span>
+                          </button>
                           <span className="text-muted-foreground font-mono">
                             {format(new Date(log.created_at), "HH:mm:ss")}
                           </span>

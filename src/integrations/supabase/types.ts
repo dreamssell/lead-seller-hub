@@ -873,6 +873,41 @@ export type Database = {
         }
         Relationships: []
       }
+      log_cleanup_history: {
+        Row: {
+          connection_id: string | null
+          created_at: string | null
+          deleted_count: number | null
+          error_message: string | null
+          id: string
+          status: string | null
+        }
+        Insert: {
+          connection_id?: string | null
+          created_at?: string | null
+          deleted_count?: number | null
+          error_message?: string | null
+          id?: string
+          status?: string | null
+        }
+        Update: {
+          connection_id?: string | null
+          created_at?: string | null
+          deleted_count?: number | null
+          error_message?: string | null
+          id?: string
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "log_cleanup_history_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mcp_server_logs: {
         Row: {
           created_at: string
@@ -2090,10 +2125,12 @@ export type Database = {
           display_name: string
           id: string
           last_checked_at: string | null
+          last_cleanup_at: string | null
           last_degradation_at: string | null
           last_error: string | null
           log_retention_days: number | null
           metadata: Json
+          next_cleanup_at: string | null
           phone_number: string | null
           provider: Database["public"]["Enums"]["whatsapp_provider"]
           status: Database["public"]["Enums"]["whatsapp_status"]
@@ -2106,10 +2143,12 @@ export type Database = {
           display_name: string
           id?: string
           last_checked_at?: string | null
+          last_cleanup_at?: string | null
           last_degradation_at?: string | null
           last_error?: string | null
           log_retention_days?: number | null
           metadata?: Json
+          next_cleanup_at?: string | null
           phone_number?: string | null
           provider: Database["public"]["Enums"]["whatsapp_provider"]
           status?: Database["public"]["Enums"]["whatsapp_status"]
@@ -2122,10 +2161,12 @@ export type Database = {
           display_name?: string
           id?: string
           last_checked_at?: string | null
+          last_cleanup_at?: string | null
           last_degradation_at?: string | null
           last_error?: string | null
           log_retention_days?: number | null
           metadata?: Json
+          next_cleanup_at?: string | null
           phone_number?: string | null
           provider?: Database["public"]["Enums"]["whatsapp_provider"]
           status?: Database["public"]["Enums"]["whatsapp_status"]
@@ -2218,6 +2259,7 @@ export type Database = {
     }
     Functions: {
       calculate_next_retry: { Args: { retry_count: number }; Returns: string }
+      cleanup_connection_events: { Args: never; Returns: undefined }
       cleanup_expired_idempotency_keys: {
         Args: { ttl_hours?: number }
         Returns: number

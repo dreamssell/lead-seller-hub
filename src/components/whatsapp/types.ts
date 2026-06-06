@@ -12,6 +12,8 @@ export interface WhatsAppConnection {
   metadata: any;
   authorized_domains?: string[];
   log_retention_days?: number;
+  last_cleanup_at?: string;
+  next_cleanup_at?: string;
   created_at?: string;
   updated_at?: string;
 }
