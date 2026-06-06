@@ -1,7 +1,7 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Video, Calendar, Users, Link2, Sparkles, MessageCircle, Mic, Monitor, Shield, Plus } from 'lucide-react';
+import { Video, Calendar, Users, Link2, Sparkles, MessageCircle, Mic, Monitor, Shield, Plus, Activity } from 'lucide-react';
 import { useVideoCall } from '@/contexts/VideoCallContext';
 import { VideoRoom } from '@/components/video/VideoRoom';
 import { Badge } from '@/components/ui/badge';
