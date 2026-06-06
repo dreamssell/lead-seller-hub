@@ -1821,6 +1821,7 @@ export type Database = {
           action: string
           created_at: string
           id: string
+          is_bypass: boolean | null
           performed_by: string | null
           reason: string | null
           room_id: string
@@ -1831,6 +1832,7 @@ export type Database = {
           action: string
           created_at?: string
           id?: string
+          is_bypass?: boolean | null
           performed_by?: string | null
           reason?: string | null
           room_id: string
@@ -1841,6 +1843,7 @@ export type Database = {
           action?: string
           created_at?: string
           id?: string
+          is_bypass?: boolean | null
           performed_by?: string | null
           reason?: string | null
           room_id?: string
