@@ -31,7 +31,9 @@ export function VideoRoom({ isGroup = false }) {
 
   
   const [showParticipants, setShowParticipants] = useState(false);
+  const [hasNewPending, setHasNewPending] = useState(false);
   const [showAuditLogs, setShowAuditLogs] = useState(false);
+
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -117,6 +119,16 @@ export function VideoRoom({ isGroup = false }) {
 
   const approvedParticipants = participants.filter(p => p.status === 'approved');
   const pendingParticipants = participants.filter(p => p.status === 'pending');
+
+  useEffect(() => {
+    if (pendingParticipants.length > 0 && !showParticipants) {
+      setHasNewPending(true);
+      // Opcional: tocar um som de notificação
+    } else if (pendingParticipants.length === 0 || showParticipants) {
+      setHasNewPending(false);
+    }
+  }, [pendingParticipants.length, showParticipants]);
+
 
   const handleCopyLink = async () => {
     const { data: room } = await supabase.from('video_rooms').select('invite_token').eq('id', roomId).single();
@@ -273,7 +285,12 @@ export function VideoRoom({ isGroup = false }) {
               className="rounded-xl h-10 w-10 relative"
             >
               <Users className="w-5 h-5" />
-              {pendingParticipants.length > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-[10px] font-bold rounded-full flex items-center justify-center text-white">{pendingParticipants.length}</span>}
+              {pendingParticipants.length > 0 && (
+                <span className={`absolute -top-1 -right-1 w-4 h-4 bg-primary text-[10px] font-bold rounded-full flex items-center justify-center text-white ${hasNewPending ? 'animate-bounce shadow-[0_0_10px_rgba(234,179,8,0.5)]' : ''}`}>
+                  {pendingParticipants.length}
+                </span>
+              )}
+
             </Button>
           </div>
         </div>
