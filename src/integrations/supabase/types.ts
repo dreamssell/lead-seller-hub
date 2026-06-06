@@ -355,6 +355,38 @@ export type Database = {
         }
         Relationships: []
       }
+      connection_alerts: {
+        Row: {
+          connection_id: string | null
+          consecutive_failures: number | null
+          created_at: string | null
+          id: string
+          last_alert_at: string | null
+        }
+        Insert: {
+          connection_id?: string | null
+          consecutive_failures?: number | null
+          created_at?: string | null
+          id?: string
+          last_alert_at?: string | null
+        }
+        Update: {
+          connection_id?: string | null
+          consecutive_failures?: number | null
+          created_at?: string | null
+          id?: string
+          last_alert_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "connection_alerts_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       connection_events: {
         Row: {
           connection_id: string
@@ -362,8 +394,10 @@ export type Database = {
           error_message: string | null
           event_type: string
           id: string
+          metadata_json: Json | null
           payload: Json | null
           status: string
+          status_detail: string | null
         }
         Insert: {
           connection_id: string
@@ -371,8 +405,10 @@ export type Database = {
           error_message?: string | null
           event_type: string
           id?: string
+          metadata_json?: Json | null
           payload?: Json | null
           status: string
+          status_detail?: string | null
         }
         Update: {
           connection_id?: string
@@ -380,8 +416,10 @@ export type Database = {
           error_message?: string | null
           event_type?: string
           id?: string
+          metadata_json?: Json | null
           payload?: Json | null
           status?: string
+          status_detail?: string | null
         }
         Relationships: [
           {
