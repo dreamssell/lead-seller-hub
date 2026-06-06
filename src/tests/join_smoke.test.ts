@@ -7,7 +7,7 @@ import { supabase } from '../integrations/supabase/client';
  * se as permissões de RLS permitem que um convidado (anon) realize a ação.
  */
 describe('Smoke Test: Join Room Flow', () => {
-  const TEST_ROOM_ID = '00000000-0000-0000-0000-000000000000'; // ID Fictício para teste
+  const TEST_ROOM_ID = '198f06a3-6f85-40f9-b038-778c87f95ec2'; 
   const TEST_USER_NAME = 'SmokeTestUser';
 
   it('should allow a guest to insert a pending participant', async () => {
