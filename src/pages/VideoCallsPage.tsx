@@ -1,41 +1,193 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Video, Calendar, Users, Link2 } from 'lucide-react';
+import { Video, Calendar, Users, Link2, Sparkles, MessageCircle, Mic, Monitor, Shield, Plus } from 'lucide-react';
+import { useVideoCall } from '@/contexts/VideoCallContext';
+import { VideoRoom } from '@/components/video/VideoRoom';
+import { Badge } from '@/components/ui/badge';
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { motion } from 'framer-motion';
 
 export default function VideoCallsPage() {
-  return (
-    <AppLayout title="Videochamadas" subtitle="Agende e realize reuniões em vídeo direto da plataforma">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <Card className="glass-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Video className="w-5 h-5 text-primary" /> Iniciar Reunião Agora</CardTitle>
-            <CardDescription>Crie uma sala instantânea e compartilhe o link.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex gap-2">
-            <Button><Video className="w-4 h-4 mr-2" /> Nova Sala</Button>
-            <Button variant="outline"><Link2 className="w-4 h-4 mr-2" /> Copiar Link</Button>
-          </CardContent>
-        </Card>
-        <Card className="glass-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Calendar className="w-5 h-5 text-primary" /> Agendar Reunião</CardTitle>
-            <CardDescription>Programe uma videochamada com convidados.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline"><Calendar className="w-4 h-4 mr-2" /> Abrir Agenda</Button>
-          </CardContent>
-        </Card>
-      </div>
+  const { startCall, status } = useVideoCall();
+  const [activeRoomType, setActiveRoomType] = useState<'individual' | 'group'>('individual');
 
-      <Card className="glass-card">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Users className="w-5 h-5" /> Próximas Reuniões</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">Nenhuma reunião agendada para hoje.</p>
-        </CardContent>
-      </Card>
+  const features = [
+    { title: 'IA Noise Cancellation', description: 'Redução de ruído inteligente para áudio cristalino.', icon: Mic },
+    { title: 'Tradução em Tempo Real', description: 'Legendas automáticas em mais de 30 idiomas.', icon: MessageCircle },
+    { title: 'Compartilhamento 4K', description: 'Stream de tela em alta definição sem latência.', icon: Monitor },
+    { title: 'Criptografia Ponta-a-Ponta', description: 'Máxima segurança para suas reuniões corporativas.', icon: Shield },
+  ];
+
+  const stats = [
+    { label: 'Reuniões Hoje', value: '12' },
+    { label: 'Minutos em Chamada', value: '840' },
+    { label: 'Média Participantes', value: '8' },
+  ];
+
+  return (
+    <AppLayout title="Lead Video Center" subtitle="Sistema nativo de videochamadas inteligentes">
+      <VideoRoom isGroup={activeRoomType === 'group'} />
+
+      <div className="space-y-6">
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2 glass-card overflow-hidden group">
+            <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+               <Video className="w-32 h-32 text-primary" />
+            </div>
+            <CardHeader className="relative z-10">
+              <div className="flex items-center gap-2 mb-2">
+                <Badge variant="secondary" className="bg-primary/10 text-primary border-none">NATIVO</Badge>
+                <Badge variant="outline" className="text-[10px] font-bold">WEB RTC + SFU</Badge>
+              </div>
+              <CardTitle className="text-2xl font-bold flex items-center gap-2">
+                Sala de Conferência Própria
+              </CardTitle>
+              <CardDescription className="max-w-md">
+                Inicie chamadas individuais ou em grupo para até 100 pessoas com estabilidade premium e recursos de IA.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="relative z-10 flex flex-wrap gap-3">
+              <Button 
+                size="lg" 
+                className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
+                onClick={() => {
+                  setActiveRoomType('individual');
+                  startCall(false);
+                }}
+              >
+                <Video className="w-4 h-4 mr-2" /> Iniciar Individual (1:1)
+              </Button>
+              <Button 
+                size="lg" 
+                variant="secondary"
+                onClick={() => {
+                  setActiveRoomType('group');
+                  startCall(true, 'conferencia-geral');
+                }}
+              >
+                <Users className="w-4 h-4 mr-2" /> Sala em Grupo (100+)
+              </Button>
+              <Button 
+                size="lg" 
+                variant="outline"
+                onClick={() => {
+                  const link = `${window.location.origin}/video/join/${Math.random().toString(36).substring(7)}`;
+                  navigator.clipboard.writeText(link);
+                  toast.success('Link de convite copiado!');
+                }}
+              >
+                <Link2 className="w-4 h-4 mr-2" /> Link de Convite
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="glass-card flex flex-col">
+            <CardHeader>
+              <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <Activity className="w-4 h-4" /> Desempenho Hoje
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col justify-around">
+              {stats.map(s => (
+                <div key={s.label} className="flex items-center justify-between border-b border-border/40 pb-4 last:border-0 last:pb-0">
+                  <span className="text-sm text-muted-foreground">{s.label}</span>
+                  <span className="text-2xl font-bold">{s.value}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Intelligence Features */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {features.map((f, i) => (
+            <motion.div
+              key={f.title}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+            >
+              <Card className="glass-card h-full hover:border-primary/40 transition-colors">
+                <CardContent className="p-5 space-y-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                    <f.icon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm">{f.title}</h4>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
+                      {f.description}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Schedule & History */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="glass-card">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-primary" /> Agendadas
+                </CardTitle>
+                <CardDescription>Suas próximas reuniões confirmadas.</CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" className="gap-2">
+                <Plus className="w-4 h-4" /> Novo Agendamento
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[
+                { title: 'Review Mensal - Marketing', time: '14:00 - 15:00', host: 'Ana Silva', type: 'Grupo' },
+                { title: 'Onboarding Cliente #882', time: '16:30 - 17:00', host: 'João Pedro', type: '1:1' },
+              ].map((m, i) => (
+                <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-secondary/30 border border-border/40 hover:border-primary/20 transition-all group">
+                   <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-xs">
+                         {m.time.split(':')[0]}h
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold group-hover:text-primary transition-colors">{m.title}</p>
+                        <p className="text-[10px] text-muted-foreground">{m.time} • Host: {m.host}</p>
+                      </div>
+                   </div>
+                   <Badge variant="outline" className="text-[9px] uppercase">{m.type}</Badge>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="glass-card">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-500" /> Insights Recentes
+              </CardTitle>
+              <CardDescription>Resumos gerados por IA das últimas chamadas.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[
+                { title: 'Weekly Sprint #24', date: 'Hoje, 09:30', summary: 'Definição de metas para o Q3 e alinhamento do novo layout do painel.' },
+                { title: 'Treinamento Comercial', date: 'Ontem, 15:00', summary: 'Apresentação das novas funcionalidades do Widget e técnicas de fechamento.' },
+              ].map((h, i) => (
+                <div key={i} className="space-y-1 pb-4 border-b border-border/40 last:border-0 last:pb-0">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-bold">{h.title}</p>
+                    <span className="text-[10px] text-muted-foreground">{h.date}</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground line-clamp-2 italic">
+                    "{h.summary}"
+                  </p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </AppLayout>
   );
 }
