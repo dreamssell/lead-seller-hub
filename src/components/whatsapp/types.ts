@@ -10,6 +10,8 @@ export interface WhatsAppConnection {
   display_name: string;
   status: ConnectionStatus;
   metadata: any;
+  authorized_domains?: string[];
+  log_retention_days?: number;
   created_at?: string;
   updated_at?: string;
 }

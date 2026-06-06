@@ -398,6 +398,7 @@ export type Database = {
           payload: Json | null
           status: string
           status_detail: string | null
+          test_event_id: string | null
         }
         Insert: {
           connection_id: string
@@ -409,6 +410,7 @@ export type Database = {
           payload?: Json | null
           status: string
           status_detail?: string | null
+          test_event_id?: string | null
         }
         Update: {
           connection_id?: string
@@ -420,6 +422,7 @@ export type Database = {
           payload?: Json | null
           status?: string
           status_detail?: string | null
+          test_event_id?: string | null
         }
         Relationships: [
           {
@@ -1640,6 +1643,41 @@ export type Database = {
         }
         Relationships: []
       }
+      unauthorized_embed_attempts: {
+        Row: {
+          connection_id: string | null
+          created_at: string | null
+          domain: string
+          id: string
+          ip_address: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          connection_id?: string | null
+          created_at?: string | null
+          domain: string
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          connection_id?: string | null
+          created_at?: string | null
+          domain?: string
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unauthorized_embed_attempts_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_account_access: {
         Row: {
           allowed_pages: string[]
@@ -2046,6 +2084,7 @@ export type Database = {
       }
       whatsapp_connections: {
         Row: {
+          authorized_domains: string[] | null
           created_at: string
           degradation_status: string | null
           display_name: string
@@ -2053,6 +2092,7 @@ export type Database = {
           last_checked_at: string | null
           last_degradation_at: string | null
           last_error: string | null
+          log_retention_days: number | null
           metadata: Json
           phone_number: string | null
           provider: Database["public"]["Enums"]["whatsapp_provider"]
@@ -2060,6 +2100,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          authorized_domains?: string[] | null
           created_at?: string
           degradation_status?: string | null
           display_name: string
@@ -2067,6 +2108,7 @@ export type Database = {
           last_checked_at?: string | null
           last_degradation_at?: string | null
           last_error?: string | null
+          log_retention_days?: number | null
           metadata?: Json
           phone_number?: string | null
           provider: Database["public"]["Enums"]["whatsapp_provider"]
@@ -2074,6 +2116,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          authorized_domains?: string[] | null
           created_at?: string
           degradation_status?: string | null
           display_name?: string
@@ -2081,6 +2124,7 @@ export type Database = {
           last_checked_at?: string | null
           last_degradation_at?: string | null
           last_error?: string | null
+          log_retention_days?: number | null
           metadata?: Json
           phone_number?: string | null
           provider?: Database["public"]["Enums"]["whatsapp_provider"]
