@@ -148,15 +148,19 @@ export default function VideoJoinPage() {
         <XCircle className="w-16 h-16 text-red-500 mb-4" />
         <h1 className="text-2xl font-bold text-white mb-2">Entrada Recusada</h1>
         <p className="text-zinc-400 mb-6 text-center max-w-sm">
-          Sua solicitação para entrar nesta reunião foi recusada pelo anfitrião.
+          Sua solicitação foi recusada ou você está em período de espera (cooldown). 
+          Por favor, verifique se digitou seu nome corretamente ou tente novamente em alguns minutos.
         </p>
         <div className="flex gap-3">
           <Button variant="outline" onClick={() => navigate('/')}>Sair</Button>
-          <Button onClick={() => window.location.reload()}>Tentar Novamente</Button>
+          <Button onClick={() => window.location.reload()} className="gap-2">
+            <RefreshCw className="w-4 h-4" /> Tentar Novamente
+          </Button>
         </div>
       </div>
     );
   }
+
 
   if (status === 'connected' || status === 'calling' || status === 'waiting_approval') {
     return <VideoRoom isGroup={roomData?.is_group || false} />;

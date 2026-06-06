@@ -212,9 +212,21 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (pError) {
-        await logVideoError(`Erro ao inserir participante: ${pError.message}`, 'participant_insert', pError);
-        throw pError;
+        const errorDetail = pError.message;
+        const correlationId = await logVideoError(
+          `Falha crítica na inserção de participante: ${errorDetail}`, 
+          'participant_insert_detailed', 
+          { 
+            code: pError.code, 
+            details: pError.details, 
+            hint: pError.hint,
+            room_id: roomId,
+            user_name: userName
+          }
+        );
+        throw new Error(`Erro de registro (${correlationId?.substring(0, 8)}): ${errorDetail}`);
       }
+
 
       setCurrentParticipantId(participant.id);
 
