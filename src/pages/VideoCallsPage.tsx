@@ -1,17 +1,19 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Video, Calendar, Users, Link2, Sparkles, MessageCircle, Mic, Monitor, Shield, Plus, Activity } from 'lucide-react';
+import { Video, Calendar, Users, Link2, Sparkles, MessageCircle, Mic, Monitor, Shield, Plus, Activity, Loader2 } from 'lucide-react';
 import { useVideoCall } from '@/contexts/VideoCallContext';
 import { VideoRoom } from '@/components/video/VideoRoom';
 import { Badge } from '@/components/ui/badge';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function VideoCallsPage() {
   const { startCall, status } = useVideoCall();
   const [activeRoomType, setActiveRoomType] = useState<'individual' | 'group'>('individual');
+  const [isLoading, setIsLoading] = useState(false);
 
   const features = [
     { title: 'IA Noise Cancellation', description: 'Redução de ruído inteligente para áudio cristalino.', icon: Mic },
@@ -25,6 +27,83 @@ export default function VideoCallsPage() {
     { label: 'Minutos em Chamada', value: '840' },
     { label: 'Média Participantes', value: '8' },
   ];
+
+  const handleStartCall = async (isGroup: boolean) => {
+    try {
+      setIsLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Você precisa estar logado para iniciar uma reunião.');
+        return;
+      }
+
+      // Create a room record
+      const roomId = crypto.randomUUID();
+      const inviteToken = Math.random().toString(36).substring(2, 15);
+      
+      const { data: room, error } = await supabase
+        .from('video_rooms')
+        .insert({
+          id: roomId,
+          host_id: user.id,
+          title: isGroup ? 'Conferência em Grupo' : 'Conversa Individual',
+          is_group: isGroup,
+          invite_token: inviteToken,
+          settings: { guest_approval_required: true, allow_chat: true }
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setActiveRoomType(isGroup ? 'group' : 'individual');
+      await startCall(isGroup, room.id, user.email?.split('@')[0] || 'Anfitrião');
+      
+    } catch (error) {
+      console.error('Erro ao criar sala:', error);
+      toast.error('Falha ao criar a sala de reunião.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get or create an active room for the user to get a link
+      const { data: room } = await supabase
+        .from('video_rooms')
+        .select('id, invite_token')
+        .eq('host_id', user.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      let link = '';
+      if (room) {
+        link = `${window.location.origin}/video/join/${room.id}?token=${room.invite_token}`;
+      } else {
+        // Create a temporary one just for the link if none active
+        const roomId = crypto.randomUUID();
+        const inviteToken = Math.random().toString(36).substring(2, 15);
+        await supabase.from('video_rooms').insert({
+          id: roomId,
+          host_id: user.id,
+          title: 'Sala de Reunião',
+          invite_token: inviteToken
+        });
+        link = `${window.location.origin}/video/join/${roomId}?token=${inviteToken}`;
+      }
+      
+      navigator.clipboard.writeText(link);
+      toast.success('Link de convite copiado!');
+    } catch (error) {
+      toast.error('Erro ao gerar link de convite.');
+    }
+  };
 
   return (
     <AppLayout title="Lead Video Center" subtitle="Sistema nativo de videochamadas inteligentes">
@@ -53,31 +132,25 @@ export default function VideoCallsPage() {
               <Button 
                 size="lg" 
                 className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
-                onClick={() => {
-                  setActiveRoomType('individual');
-                  startCall(false);
-                }}
+                onClick={() => handleStartCall(false)}
+                disabled={isLoading || status !== 'idle'}
               >
-                <Video className="w-4 h-4 mr-2" /> Iniciar Individual (1:1)
+                {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Video className="w-4 h-4 mr-2" />} 
+                Iniciar Individual (1:1)
               </Button>
               <Button 
                 size="lg" 
                 variant="secondary"
-                onClick={() => {
-                  setActiveRoomType('group');
-                  startCall(true, 'conferencia-geral');
-                }}
+                onClick={() => handleStartCall(true)}
+                disabled={isLoading || status !== 'idle'}
               >
-                <Users className="w-4 h-4 mr-2" /> Sala em Grupo (100+)
+                {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Users className="w-4 h-4 mr-2" />} 
+                Sala em Grupo (100+)
               </Button>
               <Button 
                 size="lg" 
                 variant="outline"
-                onClick={() => {
-                  const link = `${window.location.origin}/video/join/${Math.random().toString(36).substring(7)}`;
-                  navigator.clipboard.writeText(link);
-                  toast.success('Link de convite copiado!');
-                }}
+                onClick={handleCopyLink}
               >
                 <Link2 className="w-4 h-4 mr-2" /> Link de Convite
               </Button>
@@ -93,8 +166,8 @@ export default function VideoCallsPage() {
             <CardContent className="flex-1 flex flex-col justify-around">
               {stats.map(s => (
                 <div key={s.label} className="flex items-center justify-between border-b border-border/40 pb-4 last:border-0 last:pb-0">
-                  <span className="text-sm text-muted-foreground">{s.label}</span>
-                  <span className="text-2xl font-bold">{s.value}</span>
+                   <span className="text-sm text-muted-foreground">{s.label}</span>
+                   <span className="text-2xl font-bold">{s.value}</span>
                 </div>
               ))}
             </CardContent>
