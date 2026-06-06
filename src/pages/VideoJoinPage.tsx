@@ -110,14 +110,25 @@ export default function VideoJoinPage() {
       return;
     }
     setIsJoining(true);
+    const correlationId = `join_${Math.random().toString(36).substring(2, 9)}`;
+    console.log(`[Join Start] ID: ${correlationId} | Room: ${roomId} | User: ${userName}`);
+    
     localStorage.setItem('video_user_name', userName);
 
     if (videoPreviewRef.current?.srcObject) {
       const stream = videoPreviewRef.current.srcObject as MediaStream;
       stream.getTracks().forEach(track => track.stop());
     }
-    await startCall(roomData?.is_group || false, roomId!, userName);
-    setIsJoining(false);
+    
+    try {
+      await startCall(roomData?.is_group || false, roomId!, userName);
+      console.log(`[Join Success] ID: ${correlationId}`);
+    } catch (err: any) {
+      console.error(`[Join Error] ID: ${correlationId} | Reason:`, err);
+      toast.error(`Erro ao entrar: ${err.message}. ID: ${correlationId}`);
+    } finally {
+      setIsJoining(false);
+    }
   };
 
   if (isValidating) {
