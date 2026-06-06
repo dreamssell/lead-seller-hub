@@ -3,7 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, Clock, User, Globe, Info, RefreshCw } from 'lucide-react';
+import { AlertCircle, Clock, User, Globe, Info, RefreshCw, Search, Hash, Calendar as CalendarIcon } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -11,15 +12,26 @@ import { ptBR } from 'date-fns/locale';
 export function VideoErrorLogs() {
   const [logs, setLogs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roomFilter, setRoomFilter] = useState('');
 
   const fetchLogs = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
+      let query = supabase
         .from('video_error_logs')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(20);
+        .order('created_at', { ascending: false });
+
+      if (searchTerm) {
+        query = query.ilike('user_name', `%${searchTerm}%`);
+      }
+      if (roomFilter) {
+        query = query.eq('room_id', roomFilter);
+      }
+
+      const { data, error } = await query.limit(50);
+
 
       if (error) throw error;
       setLogs(data || []);
@@ -47,17 +59,43 @@ export function VideoErrorLogs() {
 
   return (
     <Card className="glass-card border-red-500/20">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <div className="space-y-1">
-          <CardTitle className="text-lg flex items-center gap-2 text-red-500">
-            <AlertCircle className="w-5 h-5" /> Diagnóstico de Falhas
-          </CardTitle>
-          <CardDescription>Últimos erros registrados nas videochamadas.</CardDescription>
+      <CardHeader className="flex flex-col space-y-4 pb-4">
+        <div className="flex flex-row items-center justify-between w-full">
+          <div className="space-y-1">
+            <CardTitle className="text-lg flex items-center gap-2 text-red-500">
+              <AlertCircle className="w-5 h-5" /> Diagnóstico de Falhas
+            </CardTitle>
+            <CardDescription>Últimos erros registrados nas videochamadas.</CardDescription>
+          </div>
+          <Button variant="ghost" size="sm" onClick={fetchLogs} disabled={isLoading}>
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </Button>
         </div>
-        <Button variant="ghost" size="sm" onClick={fetchLogs} disabled={isLoading}>
-          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-        </Button>
+        
+        <div className="flex flex-wrap gap-3">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input 
+              placeholder="Buscar por nome do convidado..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 bg-zinc-900/50 border-white/10"
+              onKeyDown={(e) => e.key === 'Enter' && fetchLogs()}
+            />
+          </div>
+          <div className="relative w-full md:w-[300px]">
+            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input 
+              placeholder="Filtrar por ID da Sala (UUID)" 
+              value={roomFilter}
+              onChange={(e) => setRoomFilter(e.target.value)}
+              className="pl-10 bg-zinc-900/50 border-white/10"
+              onKeyDown={(e) => e.key === 'Enter' && fetchLogs()}
+            />
+          </div>
+        </div>
       </CardHeader>
+
       <CardContent>
         {logs.length === 0 && !isLoading ? (
           <div className="py-12 text-center space-y-2">
@@ -69,7 +107,9 @@ export function VideoErrorLogs() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[80px]">ID Log</TableHead>
                   <TableHead className="w-[180px]">Data/Hora</TableHead>
+
                   <TableHead>Usuário</TableHead>
                   <TableHead>Contexto</TableHead>
                   <TableHead>Mensagem de Erro</TableHead>
@@ -79,7 +119,11 @@ export function VideoErrorLogs() {
               <TableBody>
                 {logs.map((log) => (
                   <TableRow key={log.id} className="group">
+                    <TableCell className="text-[10px] font-mono opacity-50">
+                      {log.id.substring(0, 8)}
+                    </TableCell>
                     <TableCell className="text-xs font-mono">
+
                       <div className="flex items-center gap-2">
                         <Clock className="w-3 h-3 text-muted-foreground" />
                         {format(new Date(log.created_at), 'dd/MM HH:mm:ss', { locale: ptBR })}

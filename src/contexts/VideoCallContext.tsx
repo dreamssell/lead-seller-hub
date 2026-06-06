@@ -39,6 +39,7 @@ interface VideoCallContextType {
   regenerateToken: () => Promise<string | null>;
   lockRoom: (locked: boolean) => Promise<void>;
   blacklistParticipant: (name: string) => Promise<void>;
+  logVideoError: (message: string, context: string, error?: any) => Promise<string | null>;
 }
 
 const VideoCallContext = createContext<VideoCallContextType | null>(null);
@@ -53,12 +54,15 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<ParticipantRole>('participant');
   const [roomId, setRoomId] = useState<string | null>(null);
   const [currentParticipantId, setCurrentParticipantId] = useState<string | null>(null);
-  
+  const channelRef = useRef<RealtimeChannel | null>(null);
+
+  const isAdmin = userRole === 'host' || userRole === 'moderator';
+
   const logVideoError = async (message: string, context: string, error?: any) => {
     console.error(`[VideoCall Error] ${context}:`, message, error);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('video_error_logs').insert({
+      const { data, error: insertError } = await supabase.from('video_error_logs').insert({
         room_id: roomId || null,
         user_id: user?.id || null,
         user_name: localStorage.getItem('video_user_name') || 'Desconhecido',
@@ -71,16 +75,15 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
           platform: (navigator as any).platform,
           url: window.location.href
         }
-      });
+      }).select('id').single();
+
+      if (insertError) throw insertError;
+      return data?.id || null;
     } catch (logErr) {
       console.error('Falha ao registrar log de erro no banco:', logErr);
+      return null;
     }
   };
-
-  
-  const channelRef = useRef<RealtimeChannel | null>(null);
-
-  const isAdmin = userRole === 'host' || userRole === 'moderator';
 
   const cleanup = useCallback(() => {
     localStream?.getTracks().forEach(track => track.stop());
@@ -139,7 +142,6 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
       const role: ParticipantRole = isHost ? 'host' : 'participant';
       setUserRole(role);
 
-
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -195,9 +197,7 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
               toast.info(`${newP.name} solicitou entrada na reunião.`, {
                 action: {
                   label: 'Ver',
-                  onClick: () => {
-                    // Aqui poderia abrir a aba de participantes
-                  }
+                  onClick: () => {}
                 }
               });
             }
@@ -221,7 +221,6 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
             }
           }
         })
-
         .on('broadcast', { event: 'mute_request' }, (payload) => {
           if (payload.payload.participantId === participant.id) {
             localStream?.getAudioTracks().forEach(track => track.enabled = false);
@@ -254,11 +253,14 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
       }
 
     } catch (err: any) {
-      await logVideoError(err.message || 'Erro desconhecido ao iniciar chamada', 'start_call_catch', err);
-      toast.error('Erro ao conectar.');
+      const correlationId = await logVideoError(err.message || 'Erro desconhecido ao iniciar chamada', 'start_call_catch', err);
+      toast.error(
+        correlationId 
+          ? `Erro ao conectar. Informe o ID: ${correlationId.substring(0, 8)} ao suporte.` 
+          : 'Erro ao conectar.'
+      );
       setStatus('idle');
     }
-
   };
 
   const endCall = async () => {
@@ -360,7 +362,6 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-
   const muteParticipant = async (id: string) => {
     const target = participants.find(p => p.id === id);
     const { data: { user } } = await supabase.auth.getUser();
@@ -400,13 +401,12 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
       participants, userRole, isAdmin, roomId,
       startCall, endCall, toggleMute, toggleVideo,
       approveParticipant, rejectParticipant, kickParticipant, muteParticipant, promoteParticipant,
-      regenerateToken, lockRoom, blacklistParticipant
+      regenerateToken, lockRoom, blacklistParticipant, logVideoError
     }}>
       {children}
     </VideoCallContext.Provider>
   );
 }
-
 
 export const useVideoCall = () => {
   const ctx = useContext(VideoCallContext);
