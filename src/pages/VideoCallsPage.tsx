@@ -29,7 +29,16 @@ export default function VideoCallsPage() {
     { label: 'Média Participantes', value: '8' },
   ];
 
+  const [roomSettings, setRoomSettings] = useState({
+    guest_approval_required: true,
+    allow_chat: true,
+    host_permissions: ["approve", "kick", "mute", "promote", "screen_share"],
+    moderator_permissions: ["approve", "kick", "mute", "screen_share"],
+    participant_permissions: ["screen_share"]
+  });
+
   const handleStartCall = async (isGroup: boolean) => {
+
     try {
       setIsLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
@@ -50,7 +59,16 @@ export default function VideoCallsPage() {
           title: isGroup ? 'Conferência em Grupo' : 'Conversa Individual',
           is_group: isGroup,
           invite_token: inviteToken,
-          settings: { guest_approval_required: true, allow_chat: true }
+          settings: {
+            ...roomSettings,
+            is_group: isGroup
+          },
+          permissions_config: {
+            host: roomSettings.host_permissions,
+            moderator: roomSettings.moderator_permissions,
+            participant: roomSettings.participant_permissions
+          }
+
         })
         .select()
         .single();
