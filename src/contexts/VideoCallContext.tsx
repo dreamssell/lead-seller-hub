@@ -138,7 +138,32 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // Verificar Cooldown/Banimento anterior
+      const { data: existingP } = await supabase
+        .from('video_participants')
+        .select('id, status, cooldown_until, is_banned')
+        .eq('room_id', roomId)
+        .eq('name', userName)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (existingP && user?.id !== room.host_id) {
+        if (existingP.is_banned) {
+          toast.error('Você foi banido desta sala.');
+          setStatus('idle');
+          return;
+        }
+        if (existingP.cooldown_until && new Date(existingP.cooldown_until) > new Date()) {
+          const timeLeft = Math.ceil((new Date(existingP.cooldown_until).getTime() - new Date().getTime()) / 60000);
+          toast.error(`Aguarde ${timeLeft} minutos antes de tentar novamente.`);
+          setStatus('idle');
+          return;
+        }
+      }
+
       const isHost = user?.id === room.host_id;
+
       const role: ParticipantRole = isHost ? 'host' : 'participant';
       setUserRole(role);
 

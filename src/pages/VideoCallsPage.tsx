@@ -29,6 +29,7 @@ export default function VideoCallsPage() {
     { label: 'Média Participantes', value: '8' },
   ];
 
+  const [showSettings, setShowSettings] = useState(false);
   const [roomSettings, setRoomSettings] = useState({
     guest_approval_required: true,
     allow_chat: true,
@@ -36,6 +37,18 @@ export default function VideoCallsPage() {
     moderator_permissions: ["approve", "kick", "mute", "screen_share"],
     participant_permissions: ["screen_share"]
   });
+
+  const togglePermission = (role: 'host' | 'moderator' | 'participant', permission: string) => {
+    const key = `${role}_permissions` as keyof typeof roomSettings;
+    const current = roomSettings[key] as string[];
+    setRoomSettings(prev => ({
+      ...prev,
+      [key]: current.includes(permission) 
+        ? current.filter(p => p !== permission)
+        : [...current, permission]
+    }));
+  };
+
 
   const handleStartCall = async (isGroup: boolean) => {
 
@@ -129,6 +142,51 @@ export default function VideoCallsPage() {
       <VideoRoom isGroup={activeRoomType === 'group'} />
 
       <div className="space-y-6">
+        {/* Settings Dialog/Panel */}
+        {showSettings && (
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
+            <Card className="glass-card border-primary/20">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Settings className="w-5 h-5 text-primary" /> Configurações de Permissão
+                  </CardTitle>
+                  <CardDescription>Defina o que cada nível de usuário pode fazer na sala.</CardDescription>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setShowSettings(false)}><X className="w-4 h-4" /></Button>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {['host', 'moderator', 'participant'].map((role) => (
+                    <div key={role} className="space-y-4">
+                      <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-500 border-b border-white/5 pb-2">
+                        {role === 'host' ? 'Anfitrião' : role === 'moderator' ? 'Moderador' : 'Participante'}
+                      </h4>
+                      <div className="space-y-3">
+                        {["approve", "kick", "mute", "promote", "screen_share"].map((perm) => (
+                          <div key={perm} className="flex items-center justify-between group">
+                            <span className="text-xs text-zinc-400 capitalize">{perm.replace('_', ' ')}</span>
+                            <button 
+                              onClick={() => togglePermission(role as any, perm)}
+                              className={`w-10 h-5 rounded-full transition-colors relative ${
+                                (roomSettings[`${role}_permissions` as keyof typeof roomSettings] as string[]).includes(perm) ? 'bg-primary' : 'bg-zinc-800'
+                              }`}
+                            >
+                              <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${
+                                (roomSettings[`${role}_permissions` as keyof typeof roomSettings] as string[]).includes(perm) ? 'left-6' : 'left-1'
+                              }`} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
         {/* Quick Actions */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2 glass-card overflow-hidden group">
