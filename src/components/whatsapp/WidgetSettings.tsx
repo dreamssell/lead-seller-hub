@@ -9,10 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { 
   Globe, Code, Settings, Copy, Check, 
-  MessageSquare, Layout, Palette, Terminal,
-  Activity, CheckCircle2, XCircle, Clock,
+  MessageSquare, Activity, CheckCircle2, XCircle, Clock,
   Search, Filter, ChevronLeft, ChevronRight,
-  Loader2, AlertTriangle, Play, ShieldAlert
+  Loader2, AlertTriangle, Play, ShieldAlert, Terminal,
+  FileSpreadsheet, Palette
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { WhatsAppConnection } from './types';
@@ -333,6 +333,8 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
               <p className="text-[10px] text-muted-foreground">Logs mais antigos que este período serão limpos automaticamente.</p>
             </div>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase">Cor Principal</Label>
               <div className="flex gap-2">
@@ -367,7 +369,7 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
             <Switch checked={autoOpen} onCheckedChange={setAutoOpen} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3 pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
             <Button onClick={handleSave} className="w-full">
               Salvar Configurações
             </Button>
@@ -435,7 +437,7 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase text-muted-foreground">Origem Ativa</p>
-                <p className="text-xs font-medium truncate max-w-[120px]">{domain || 'Aguardando site...'}</p>
+                <p className="text-xs font-medium truncate max-w-[120px]">{authorizedDomains[0] || 'Aguardando site...'}</p>
               </div>
             </div>
           </div>
@@ -530,6 +532,32 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
                   </div>
                 )}
               </ScrollArea>
+              
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-3 mt-3 pt-2 border-t border-border/10">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6" 
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                  >
+                    <ChevronLeft className="w-3 h-3" />
+                  </Button>
+                  <span className="text-[9px] font-bold">
+                    {page + 1} / {totalPages}
+                  </span>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6" 
+                    onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                    disabled={page === totalPages - 1}
+                  >
+                    <ChevronRight className="w-3 h-3" />
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -567,35 +595,6 @@ export function WidgetSettings({ conn, onSaved }: WidgetSettingsProps) {
                   </div>
                 )}
               </ScrollArea>
-            </CardContent>
-          </Card>
-        </TabsContent>
-              
-              {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-3 mt-3 pt-2 border-t border-border/10">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-6 w-6" 
-                    onClick={() => setPage(p => Math.max(0, p - 1))}
-                    disabled={page === 0}
-                  >
-                    <ChevronLeft className="w-3 h-3" />
-                  </Button>
-                  <span className="text-[9px] font-bold">
-                    {page + 1} / {totalPages}
-                  </span>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-6 w-6" 
-                    onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                    disabled={page === totalPages - 1}
-                  >
-                    <ChevronRight className="w-3 h-3" />
-                  </Button>
-                </div>
-              )}
             </CardContent>
           </Card>
         </TabsContent>
