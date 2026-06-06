@@ -52,6 +52,30 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
   const [roomId, setRoomId] = useState<string | null>(null);
   const [currentParticipantId, setCurrentParticipantId] = useState<string | null>(null);
   
+  const logVideoError = async (message: string, context: string, error?: any) => {
+    console.error(`[VideoCall Error] ${context}:`, message, error);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('video_error_logs').insert({
+        room_id: roomId || null,
+        user_id: user?.id || null,
+        user_name: localStorage.getItem('video_user_name') || 'Desconhecido',
+        error_message: message,
+        error_stack: error?.stack || JSON.stringify(error),
+        context: context,
+        browser_info: {
+          userAgent: navigator.userAgent,
+          language: navigator.language,
+          platform: (navigator as any).platform,
+          url: window.location.href
+        }
+      });
+    } catch (logErr) {
+      console.error('Falha ao registrar log de erro no banco:', logErr);
+    }
+  };
+
+  
   const channelRef = useRef<RealtimeChannel | null>(null);
 
   const isAdmin = userRole === 'host' || userRole === 'moderator';
@@ -74,7 +98,13 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
     try {
       cleanup();
       setRoomId(roomId);
-      const { data: { user } } = await supabase.auth.getUser();
+      setStatus('calling');
+      
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) {
+        await logVideoError('Erro ao obter usuário auth', 'start_call', authError);
+      }
+      
       const isGuest = !user;
 
       const { data: room, error: roomError } = await supabase
@@ -84,16 +114,28 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (roomError || !room) {
+        const msg = roomError?.message || 'Sala não encontrada ou inválida.';
+        await logVideoError(msg, 'start_call_room_fetch', roomError);
         toast.error('Sala não encontrada ou inválida.');
+        setStatus('idle');
         return;
       }
+
 
       const isHost = user?.id === room.host_id;
       const role: ParticipantRole = isHost ? 'host' : 'participant';
       setUserRole(role);
 
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      setLocalStream(stream);
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        setLocalStream(stream);
+      } catch (mediaErr: any) {
+        await logVideoError(`Erro de mídia: ${mediaErr.name} - ${mediaErr.message}`, 'media_access', mediaErr);
+        toast.error('Erro ao acessar câmera ou microfone.');
+        setStatus('idle');
+        return;
+      }
 
       const settings = room.settings as any;
       const initialStatus = (isGuest && settings?.guest_approval_required && !isHost) ? 'pending' : 'approved';
@@ -112,7 +154,11 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
         .select()
         .single();
 
-      if (pError) throw pError;
+      if (pError) {
+        await logVideoError(`Erro ao inserir participante: ${pError.message}`, 'participant_insert', pError);
+        throw pError;
+      }
+
       setCurrentParticipantId(participant.id);
 
       if (participant.status === 'pending') {
@@ -186,10 +232,11 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
       }
 
     } catch (err: any) {
-      console.error('Erro ao iniciar chamada:', err);
+      await logVideoError(err.message || 'Erro desconhecido ao iniciar chamada', 'start_call_catch', err);
       toast.error('Erro ao conectar.');
       setStatus('idle');
     }
+
   };
 
   const endCall = async () => {

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Video, Calendar, Users, Link2, Sparkles, MessageCircle, Mic, Monitor, Shield, Plus, Activity, Loader2 } from 'lucide-react';
 import { useVideoCall } from '@/contexts/VideoCallContext';
 import { VideoRoom } from '@/components/video/VideoRoom';
+import { VideoErrorLogs } from '@/components/video/VideoErrorLogs';
 import { Badge } from '@/components/ui/badge';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -259,6 +260,11 @@ export default function VideoCallsPage() {
               ))}
             </CardContent>
           </Card>
+        </div>
+
+        {/* Diagnostic Logs */}
+        <div className="pt-6 border-t border-border/40">
+           <VideoErrorLogs />
         </div>
       </div>
     </AppLayout>
