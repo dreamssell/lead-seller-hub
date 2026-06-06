@@ -245,20 +245,17 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
         }, (payload) => {
           if (payload.eventType === 'INSERT') {
             const newP = payload.new as any;
-            setParticipants(prev => [...prev, newP as Participant]);
+            console.log(`[Realtime] Novo participante detectado na sala ${roomId}:`, newP);
+            setParticipants(prev => {
+              if (prev.find(p => p.id === newP.id)) return prev;
+              return [...prev, newP as Participant];
+            });
+            
             if (isAdmin && newP.status === 'pending') {
-              toast.info(`${newP.name} solicitou entrada na reunião.`, {
-                duration: 10000,
-                action: {
-                  label: 'Ver Pedidos',
-                  onClick: () => {
-                    // O VideoRoom reage ao estado dos participantes, 
-                    // apenas disparar o som ou abrir a aba se possível.
-                  }
-                }
-              });
+              // A notificação visual e sonora agora é tratada pelo componente VideoRoom
+              // para evitar duplicidade, mas mantemos o log de confirmação
+              console.log(`[Realtime Confirm] Pedido de entrada recebido para ${newP.name} na sala ${roomId}`);
             }
-
           } else if (payload.eventType === 'UPDATE') {
             const updatedP = payload.new as any;
             setParticipants(prev => prev.map(p => p.id === updatedP.id ? updatedP as Participant : p));
