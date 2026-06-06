@@ -138,7 +138,32 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // Verificar Cooldown/Banimento anterior
+      const { data: existingP } = await supabase
+        .from('video_participants')
+        .select('id, status, cooldown_until, is_banned')
+        .eq('room_id', roomId)
+        .eq('name', userName)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (existingP && user?.id !== room.host_id) {
+        if (existingP.is_banned) {
+          toast.error('Você foi banido desta sala.');
+          setStatus('idle');
+          return;
+        }
+        if (existingP.cooldown_until && new Date(existingP.cooldown_until) > new Date()) {
+          const timeLeft = Math.ceil((new Date(existingP.cooldown_until).getTime() - new Date().getTime()) / 60000);
+          toast.error(`Aguarde ${timeLeft} minutos antes de tentar novamente.`);
+          setStatus('idle');
+          return;
+        }
+      }
+
       const isHost = user?.id === room.host_id;
+
       const role: ParticipantRole = isHost ? 'host' : 'participant';
       setUserRole(role);
 
@@ -317,7 +342,16 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
   const rejectParticipant = async (id: string) => {
     const target = participants.find(p => p.id === id);
     const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('video_participants').update({ status: 'rejected' }).eq('id', id);
+    
+    // Cooldown de 5 minutos para nova tentativa após recusa
+    const cooldownUntil = new Date();
+    cooldownUntil.setMinutes(cooldownUntil.getMinutes() + 5);
+
+    await supabase.from('video_participants').update({ 
+      status: 'rejected',
+      cooldown_until: cooldownUntil.toISOString()
+    }).eq('id', id);
+
     await supabase.rpc('log_video_action', {
       p_room_id: roomId,
       p_target_name: target?.name || 'Desconhecido',
@@ -325,8 +359,9 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
       p_action: 'rejected',
       p_performed_by: user?.id
     });
-    toast.info('Participante recusado.');
+    toast.info('Participante recusado (Cooldown aplicado).');
   };
+
 
   const blacklistParticipant = async (name: string) => {
     if (!roomId) return;
