@@ -3,7 +3,7 @@ import {
   Mic, MicOff, Video, VideoOff, PhoneOff, 
   Settings, Users, MessageSquare, Monitor, 
   Hand, Grid, MoreVertical, Maximize2, Shield,
-  Check, X, UserMinus, VolumeX, Crown, ShieldCheck, Clipboard, RefreshCw, FileText
+  Check, X, UserMinus, VolumeX, Crown, ShieldCheck, Clipboard, RefreshCw, FileText, Lock, Unlock, Download, Filter
 } from 'lucide-react';
 import { useVideoCall } from '@/contexts/VideoCallContext';
 import { Button } from '@/components/ui/button';
@@ -19,8 +19,13 @@ export function VideoRoom({ isGroup = false }) {
     localStream, remoteStream, status, endCall, 
     toggleMute, toggleVideo, isMuted, isVideoOff,
     participants, userRole, isAdmin, approveParticipant, rejectParticipant, 
-    kickParticipant, muteParticipant, promoteParticipant, regenerateToken, roomId
+    kickParticipant, muteParticipant, promoteParticipant, regenerateToken, roomId,
+    lockRoom
   } = useVideoCall();
+  
+  const [isLocked, setIsLocked] = useState(false);
+  const [filterType, setFilterType] = useState('all');
+
   
   const [showParticipants, setShowParticipants] = useState(false);
   const [showAuditLogs, setShowAuditLogs] = useState(false);
@@ -50,11 +55,34 @@ export function VideoRoom({ isGroup = false }) {
       .eq('room_id', roomId)
       .order('created_at', { ascending: false });
     if (data) setAuditLogs(data);
+
+    // Get room lock status
+    const { data: room } = await supabase.from('video_rooms').select('is_locked').eq('id', roomId).single();
+    if (room) setIsLocked(room.is_locked);
   };
 
-  useEffect(() => {
-    if (showAuditLogs) loadAuditLogs();
-  }, [showAuditLogs]);
+  const exportAuditLogs = () => {
+    const headers = ['Data', 'Ação', 'Alvo', 'Realizado Por'];
+    const rows = auditLogs.map(log => [
+      new Date(log.created_at).toLocaleString(),
+      log.action,
+      log.target_name,
+      log.performed_by || 'Sistema'
+    ]);
+    
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `audit_logs_${roomId}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Logs exportados com sucesso!');
+  };
+
 
   if (status === 'idle') return null;
 
@@ -123,8 +151,22 @@ export function VideoRoom({ isGroup = false }) {
                 <Button variant="ghost" size="sm" onClick={handleRegenerateToken} className="text-white hover:bg-white/10 h-8 gap-2">
                   <RefreshCw className="w-4 h-4" /> Revogar
                 </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => {
+                    const nextState = !isLocked;
+                    setIsLocked(nextState);
+                    lockRoom(nextState);
+                  }} 
+                  className={`text-white hover:bg-white/10 h-8 gap-2 ${isLocked ? 'text-red-400' : ''}`}
+                >
+                  {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                  {isLocked ? 'Trancada' : 'Trancar'}
+                </Button>
               </div>
             )}
+
             <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 rounded-full h-10 w-10">
               <Maximize2 className="w-5 h-5" />
             </Button>
@@ -203,10 +245,16 @@ export function VideoRoom({ isGroup = false }) {
             <div className="p-4 flex items-center justify-between border-b border-white/5">
                <h3 className="font-bold text-white flex items-center gap-2">
                  {showParticipants ? <Users className="w-4 h-4 text-primary" /> : <FileText className="w-4 h-4 text-primary" />}
-                 {showParticipants ? 'Participantes' : 'Logs de Auditoria'}
+                  {showParticipants ? 'Participantes' : 'Logs de Auditoria'}
                </h3>
-               <Button variant="ghost" size="icon" onClick={() => { setShowParticipants(false); setShowAuditLogs(false); }}><X className="w-4 h-4" /></Button>
+               <div className="flex items-center gap-1">
+                 {showAuditLogs && (
+                   <Button variant="ghost" size="icon" onClick={exportAuditLogs} title="Exportar CSV"><Download className="w-4 h-4" /></Button>
+                 )}
+                 <Button variant="ghost" size="icon" onClick={() => { setShowParticipants(false); setShowAuditLogs(false); }}><X className="w-4 h-4" /></Button>
+               </div>
             </div>
+
 
             <ScrollArea className="flex-1">
               <div className="p-4">
@@ -257,7 +305,23 @@ export function VideoRoom({ isGroup = false }) {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {auditLogs.map((log, i) => (
+                    <div className="flex items-center gap-2 mb-2">
+                      <Filter className="w-3 h-3 text-zinc-500" />
+                      <select 
+                        className="bg-zinc-800 text-[10px] border-none rounded p-1 outline-none text-zinc-400"
+                        value={filterType}
+                        onChange={(e) => setFilterType(e.target.value)}
+                      >
+                        <option value="all">Todos</option>
+                        <option value="approved">Aprovados</option>
+                        <option value="rejected">Recusados</option>
+                        <option value="kicked">Expulsos</option>
+                      </select>
+                    </div>
+                    {auditLogs
+                      .filter(log => filterType === 'all' || log.action === filterType)
+                      .map((log, i) => (
+
                       <div key={i} className="p-3 rounded-lg bg-white/5 border border-white/5 space-y-1">
                         <div className="flex justify-between items-center">
                           <Badge variant="outline" className={`text-[9px] uppercase ${

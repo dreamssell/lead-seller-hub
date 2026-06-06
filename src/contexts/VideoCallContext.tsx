@@ -37,6 +37,8 @@ interface VideoCallContextType {
   muteParticipant: (participantId: string) => Promise<void>;
   promoteParticipant: (participantId: string) => Promise<void>;
   regenerateToken: () => Promise<string | null>;
+  lockRoom: (locked: boolean) => Promise<void>;
+  blacklistParticipant: (name: string) => Promise<void>;
 }
 
 const VideoCallContext = createContext<VideoCallContextType | null>(null);
