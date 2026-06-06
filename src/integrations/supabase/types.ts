@@ -1903,6 +1903,7 @@ export type Database = {
       }
       video_participants: {
         Row: {
+          cooldown_until: string | null
           id: string
           is_banned: boolean | null
           is_guest: boolean
@@ -1916,6 +1917,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          cooldown_until?: string | null
           id?: string
           is_banned?: boolean | null
           is_guest?: boolean
@@ -1929,6 +1931,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          cooldown_until?: string | null
           id?: string
           is_banned?: boolean | null
           is_guest?: boolean
