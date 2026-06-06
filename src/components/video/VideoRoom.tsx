@@ -123,11 +123,23 @@ export function VideoRoom({ isGroup = false }) {
   useEffect(() => {
     if (pendingParticipants.length > 0 && !showParticipants) {
       setHasNewPending(true);
-      // Opcional: tocar um som de notificação
+      
+      // Tocar som de notificação apenas uma vez por novo participante
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audio.volume = 0.5;
+      audio.play().catch(e => console.error("Erro ao tocar som:", e));
+      
+      toast.info(`Novo pedido de entrada: ${pendingParticipants[pendingParticipants.length - 1].name}`, {
+        description: `Sala ID: ${roomId?.substring(0, 8)}...`,
+        action: {
+          label: 'Ver Pedidos',
+          onClick: () => setShowParticipants(true)
+        }
+      });
     } else if (pendingParticipants.length === 0 || showParticipants) {
       setHasNewPending(false);
     }
-  }, [pendingParticipants.length, showParticipants]);
+  }, [pendingParticipants.length, showParticipants, roomId]);
 
 
   const handleCopyLink = async () => {
@@ -189,6 +201,9 @@ export function VideoRoom({ isGroup = false }) {
             <Badge variant="outline" className="bg-white/5 backdrop-blur-md border-white/10 text-white gap-2 h-8">
               <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
               LIVE: {isGroup ? 'Conferência Geral' : 'Chamada Privada'}
+            </Badge>
+            <Badge variant="outline" className="bg-white/5 backdrop-blur-md border-white/10 text-white gap-2 h-8 font-mono text-[10px]">
+              ID: {roomId}
             </Badge>
             <Badge variant="outline" className="bg-white/5 backdrop-blur-md border-white/10 text-white gap-2 h-8">
               <Users className="w-3 h-3" /> {approvedParticipants.length} Participantes
