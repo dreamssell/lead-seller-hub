@@ -1775,6 +1775,89 @@ export type Database = {
         }
         Relationships: []
       }
+      video_participants: {
+        Row: {
+          id: string
+          is_guest: boolean
+          joined_at: string | null
+          last_seen_at: string | null
+          media_status: Json | null
+          name: string
+          room_id: string
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          id?: string
+          is_guest?: boolean
+          joined_at?: string | null
+          last_seen_at?: string | null
+          media_status?: Json | null
+          name: string
+          room_id: string
+          status?: string
+          user_id?: string | null
+        }
+        Update: {
+          id?: string
+          is_guest?: boolean
+          joined_at?: string | null
+          last_seen_at?: string | null
+          media_status?: Json | null
+          name?: string
+          room_id?: string
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_participants_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "video_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      video_rooms: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          host_id: string
+          id: string
+          invite_token: string
+          is_active: boolean
+          is_group: boolean
+          settings: Json
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          host_id: string
+          id?: string
+          invite_token: string
+          is_active?: boolean
+          is_group?: boolean
+          settings?: Json
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          host_id?: string
+          id?: string
+          invite_token?: string
+          is_active?: boolean
+          is_group?: boolean
+          settings?: Json
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       wavoip_audit_logs: {
         Row: {
           id: string
