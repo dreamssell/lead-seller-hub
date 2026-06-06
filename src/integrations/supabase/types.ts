@@ -1775,6 +1775,47 @@ export type Database = {
         }
         Relationships: []
       }
+      video_audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          performed_by: string | null
+          reason: string | null
+          room_id: string
+          target_name: string
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          performed_by?: string | null
+          reason?: string | null
+          room_id: string
+          target_name: string
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          performed_by?: string | null
+          reason?: string | null
+          room_id?: string
+          target_name?: string
+          target_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_audit_logs_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "video_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       video_participants: {
         Row: {
           id: string
@@ -1783,6 +1824,7 @@ export type Database = {
           last_seen_at: string | null
           media_status: Json | null
           name: string
+          role: string
           room_id: string
           status: string
           user_id: string | null
@@ -1794,6 +1836,7 @@ export type Database = {
           last_seen_at?: string | null
           media_status?: Json | null
           name: string
+          role?: string
           room_id: string
           status?: string
           user_id?: string | null
@@ -1805,6 +1848,7 @@ export type Database = {
           last_seen_at?: string | null
           media_status?: Json | null
           name?: string
+          role?: string
           room_id?: string
           status?: string
           user_id?: string | null
@@ -2406,6 +2450,16 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      log_video_action: {
+        Args: {
+          p_action: string
+          p_performed_by: string
+          p_room_id: string
+          p_target_name: string
+          p_target_user_id: string
+        }
+        Returns: undefined
       }
       release_provision_lock: { Args: { p_email: string }; Returns: undefined }
       search_audit_logs: {
