@@ -14,11 +14,22 @@ export function VideoRoom({ isGroup = false }) {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
+  // Monitora mudanças no stream para garantir que o vídeo seja renderizado
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
+      // Garante que o autoplay funcione após o stream ser setado
+      localVideoRef.current.play().catch(e => console.error("Erro no play local:", e));
     }
-  }, [localStream]);
+  }, [localStream, status]);
+
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStream) {
+      remoteVideoRef.current.srcObject = remoteStream;
+      remoteVideoRef.current.play().catch(e => console.error("Erro no play remoto:", e));
+    }
+  }, [remoteStream, status]);
+
 
   if (status === 'idle') return null;
 

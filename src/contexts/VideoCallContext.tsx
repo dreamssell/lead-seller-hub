@@ -26,20 +26,37 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
 
   const startCall = async (isGroup: boolean, roomId?: string) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      console.log('Iniciando chamada:', { isGroup, roomId });
+      
+      // Solicita permissões explicitamente
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: true, 
+        audio: true 
+      });
+      
       setLocalStream(stream);
       setStatus('calling');
       
-      // Aqui integraria com um servidor de sinalização (WebRTC via Supabase ou MediaSoup)
-      toast.info(isGroup ? `Iniciando conferência em grupo: ${roomId || 'Sala'}...` : 'Iniciando chamada individual...');
+      // Feedback visual para o usuário
+      const msg = isGroup 
+        ? `Entrando na conferência: ${roomId || 'Sala'}...` 
+        : 'Iniciando chamada individual...';
+      toast.info(msg);
       
-      // Simulação de conexão bem-sucedida
+      // Simulação de negociação WebRTC
+      // Em um ambiente real, aqui enviaríamos o SDP offer via Supabase Realtime
       setTimeout(() => {
         setStatus('connected');
-        toast.success('Chamada conectada!');
-      }, 2000);
-    } catch (err) {
-      toast.error('Não foi possível acessar câmera/microfone');
+        toast.success('Conectado à sala de vídeo!');
+      }, 1500);
+      
+    } catch (err: any) {
+      console.error('Erro ao acessar mídia:', err);
+      const errorMsg = err.name === 'NotAllowedError' 
+        ? 'Acesso à câmera/microfone negado. Por favor, permita o acesso nas configurações do navegador.' 
+        : 'Não foi possível encontrar câmera ou microfone disponíveis.';
+      toast.error(errorMsg);
+      setStatus('idle');
     }
   };
 

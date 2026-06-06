@@ -34,6 +34,8 @@ import SubLoginPage from "./pages/SubLoginPage";
 import DocumentationPage from "./pages/DocumentationPage";
 import PublicStatusPage from "./pages/PublicStatusPage";
 import NotFound from "./pages/NotFound";
+import VideoJoinPage from "./pages/VideoJoinPage";
+
 
 const queryClient = new QueryClient();
 
@@ -53,6 +55,8 @@ const App = () => (
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
               <Route path="/s/:subId/login" element={<SubLoginPage />} />
               <Route path="/status-view" element={<PublicStatusPage />} />
+              <Route path="/video/join/:roomId" element={<VideoJoinPage />} />
+
 
 
               {/* Rotas protegidas */}
