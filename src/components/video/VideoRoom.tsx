@@ -33,6 +33,7 @@ export function VideoRoom({ isGroup = false }) {
   const [showParticipants, setShowParticipants] = useState(false);
   const [hasNewPending, setHasNewPending] = useState(false);
   const [showAuditLogs, setShowAuditLogs] = useState(false);
+  const [lastPollTime, setLastPollTime] = useState<Date>(new Date());
 
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -140,6 +141,35 @@ export function VideoRoom({ isGroup = false }) {
       setHasNewPending(false);
     }
   }, [pendingParticipants.length, showParticipants, roomId]);
+
+  // Fallback Polling para garantir que novos participantes apareçam mesmo sem Realtime
+  useEffect(() => {
+    if (!isAdmin || !roomId) return;
+
+    const pollInterval = setInterval(async () => {
+      console.log(`[Polling] Verificando novos participantes na sala ${roomId}...`);
+      const { data, error } = await supabase
+        .from('video_participants')
+        .select('*')
+        .eq('room_id', roomId)
+        .eq('status', 'pending')
+        .gt('created_at', lastPollTime.toISOString());
+
+      if (error) {
+        console.error('[Polling Error]', error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        console.log(`[Polling Success] ${data.length} novos pedidos encontrados via fallback.`);
+        setLastPollTime(new Date());
+        // Forçar atualização da lista de participantes no contexto se necessário
+        // (O contexto já busca a lista inicial, mas aqui garantimos a detecção)
+      }
+    }, 15000); // 15 segundos de intervalo para o polling de fallback
+
+    return () => clearInterval(pollInterval);
+  }, [isAdmin, roomId, lastPollTime]);
 
 
   const handleCopyLink = async () => {

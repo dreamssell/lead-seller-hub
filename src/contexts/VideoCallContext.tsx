@@ -295,7 +295,15 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
             updateMediaStatus({ audio: false });
           }
         })
-        .subscribe();
+        .subscribe((status) => {
+          console.log(`[Realtime Status] Sala ${roomId}:`, status);
+          if (status === 'SUBSCRIBED') {
+            toast.success('Conexão em tempo real estabelecida.');
+          }
+          if (status === 'CHANNEL_ERROR') {
+            logVideoError('Erro na conexão em tempo real', 'realtime_subscribe_error');
+          }
+        });
 
       channelRef.current = channel;
 
