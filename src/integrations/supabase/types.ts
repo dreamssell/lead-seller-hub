@@ -1775,6 +1775,47 @@ export type Database = {
         }
         Relationships: []
       }
+      video_alerts: {
+        Row: {
+          alert_type: string
+          created_at: string
+          id: string
+          is_resolved: boolean | null
+          message: string | null
+          metadata: Json | null
+          room_id: string | null
+          severity: string | null
+        }
+        Insert: {
+          alert_type: string
+          created_at?: string
+          id?: string
+          is_resolved?: boolean | null
+          message?: string | null
+          metadata?: Json | null
+          room_id?: string | null
+          severity?: string | null
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          id?: string
+          is_resolved?: boolean | null
+          message?: string | null
+          metadata?: Json | null
+          room_id?: string | null
+          severity?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_alerts_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "video_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       video_audit_logs: {
         Row: {
           action: string

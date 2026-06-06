@@ -39,6 +39,7 @@ interface VideoCallContextType {
   regenerateToken: () => Promise<string | null>;
   lockRoom: (locked: boolean) => Promise<void>;
   blacklistParticipant: (name: string) => Promise<void>;
+  logVideoError: (message: string, context: string, error?: any) => Promise<string | null>;
 }
 
 const VideoCallContext = createContext<VideoCallContextType | null>(null);
@@ -254,10 +255,15 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
       }
 
     } catch (err: any) {
-      await logVideoError(err.message || 'Erro desconhecido ao iniciar chamada', 'start_call_catch', err);
-      toast.error('Erro ao conectar.');
+      const correlationId = await logVideoError(err.message || 'Erro desconhecido ao iniciar chamada', 'start_call_catch', err);
+      toast.error(
+        correlationId 
+          ? `Erro ao conectar. Informe o ID: ${correlationId.substring(0, 8)} ao suporte.` 
+          : 'Erro ao conectar.'
+      );
       setStatus('idle');
     }
+
 
   };
 

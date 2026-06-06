@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { AlertTriangle } from 'lucide-react';
 
 export function VideoRoom({ isGroup = false }) {
   const { 
@@ -25,6 +26,8 @@ export function VideoRoom({ isGroup = false }) {
   
   const [isLocked, setIsLocked] = useState(false);
   const [filterType, setFilterType] = useState('all');
+  const [roomAlerts, setRoomAlerts] = useState<any[]>([]);
+
 
   
   const [showParticipants, setShowParticipants] = useState(false);
@@ -56,10 +59,18 @@ export function VideoRoom({ isGroup = false }) {
       .order('created_at', { ascending: false });
     if (data) setAuditLogs(data);
 
-    // Get room lock status
+    // Get room lock status and alerts
     const { data: room } = await supabase.from('video_rooms').select('is_locked').eq('id', roomId).single();
     if (room) setIsLocked(room.is_locked);
+
+    const { data: alerts } = await supabase
+      .from('video_alerts')
+      .select('*')
+      .eq('room_id', roomId)
+      .eq('is_resolved', false);
+    if (alerts) setRoomAlerts(alerts);
   };
+
 
   const exportAuditLogs = () => {
     const headers = ['Data', 'Ação', 'Alvo', 'Realizado Por'];
@@ -131,7 +142,36 @@ export function VideoRoom({ isGroup = false }) {
       className="fixed inset-0 z-[200] bg-zinc-950 flex flex-col lg:flex-row overflow-hidden"
     >
       <div className="flex-1 flex flex-col relative">
+        {/* Alertas Críticos */}
+        <AnimatePresence>
+          {roomAlerts.length > 0 && isAdmin && (
+            <motion.div 
+              initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }}
+              className="absolute top-20 left-1/2 -translate-x-1/2 z-50 w-full max-w-md"
+            >
+              {roomAlerts.map(alert => (
+                <div key={alert.id} className="bg-red-600/90 backdrop-blur-md text-white p-3 rounded-xl shadow-2xl flex items-center justify-between gap-3 border border-red-400/30 mb-2">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5" />
+                    <p className="text-xs font-bold">{alert.message}</p>
+                  </div>
+                  <Button 
+                    variant="ghost" size="sm" className="h-7 text-[10px] hover:bg-white/10"
+                    onClick={async () => {
+                      await supabase.from('video_alerts').update({ is_resolved: true }).eq('id', alert.id);
+                      setRoomAlerts(prev => prev.filter(a => a.id !== alert.id));
+                    }}
+                  >
+                    OK
+                  </Button>
+                </div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Top Bar */}
+
         <div className="absolute top-6 left-6 right-6 flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
             <Badge variant="outline" className="bg-white/5 backdrop-blur-md border-white/10 text-white gap-2 h-8">
