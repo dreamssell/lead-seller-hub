@@ -236,76 +236,93 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
         setStatus('calling');
       }
 
-      const channel = supabase.channel(`room:${roomId}`)
-        .on('postgres_changes', { 
-          event: '*', 
-          schema: 'public', 
-          table: 'video_participants',
-          filter: `room_id=eq.${roomId}`
-        }, (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const newP = payload.new as any;
-            console.log(`[Realtime] Novo participante detectado na sala ${roomId}:`, newP);
-            setParticipants(prev => {
-              if (prev.find(p => p.id === newP.id)) return prev;
-              return [...prev, newP as Participant];
-            });
-            
-            if (isAdmin && newP.status === 'pending') {
-              // A notificação visual e sonora agora é tratada pelo componente VideoRoom
-              // para evitar duplicidade, mas mantemos o log de confirmação
-              console.log(`[Realtime Confirm] Pedido de entrada recebido para ${newP.name} na sala ${roomId}`);
-            }
-          } else if (payload.eventType === 'UPDATE') {
-            const updatedP = payload.new as any;
-            setParticipants(prev => prev.map(p => p.id === updatedP.id ? updatedP as Participant : p));
-            
-            if (updatedP.id === participant.id) {
-              if (updatedP.status === 'approved') {
-                setStatus('connected');
-                toast.success('Sua entrada foi aprovada!');
-              } else if (updatedP.status === 'rejected') {
-                setStatus('rejected');
-                toast.error(updatedP.is_banned ? 'Você foi banido da reunião.' : 'Sua entrada foi recusada.');
-                cleanup();
+      const setupRealtimeSubscription = () => {
+        if (channelRef.current) {
+          supabase.removeChannel(channelRef.current);
+        }
+
+        const channel = supabase.channel(`room:${roomId}`)
+          .on('postgres_changes', { 
+            event: '*', 
+            schema: 'public', 
+            table: 'video_participants',
+            filter: `room_id=eq.${roomId}`
+          }, (payload) => {
+            if (payload.eventType === 'INSERT') {
+              const newP = payload.new as any;
+              console.log(`[Realtime] Novo participante detectado na sala ${roomId}:`, newP);
+              setParticipants(prev => {
+                if (prev.find(p => p.id === newP.id)) return prev;
+                return [...prev, newP as Participant];
+              });
+              
+              if (isAdmin && newP.status === 'pending') {
+                console.log(`[Realtime Confirm] Pedido de entrada recebido para ${newP.name} na sala ${roomId}`);
               }
-              if (updatedP.role !== userRole) {
-                setUserRole(updatedP.role as ParticipantRole);
-                toast.info(`Sua permissão foi alterada para: ${updatedP.role}`);
+            } else if (payload.eventType === 'UPDATE') {
+              const updatedP = payload.new as any;
+              setParticipants(prev => prev.map(p => p.id === updatedP.id ? updatedP as Participant : p));
+              
+              if (updatedP.id === participant.id) {
+                if (updatedP.status === 'approved') {
+                  setStatus('connected');
+                  toast.success('Sua entrada foi aprovada!');
+                } else if (updatedP.status === 'rejected') {
+                  setStatus('rejected');
+                  toast.error(updatedP.is_banned ? 'Você foi banido da reunião.' : 'Sua entrada foi recusada.');
+                  cleanup();
+                }
+                if (updatedP.role !== userRole) {
+                  setUserRole(updatedP.role as ParticipantRole);
+                  toast.info(`Sua permissão foi alterada para: ${updatedP.role}`);
+                }
               }
             }
-          }
-        })
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'video_rooms',
-          filter: `id=eq.${roomId}`
-        }, (payload) => {
-          const updatedRoom = payload.new as any;
-          toast.info('As configurações da sala foram atualizadas pelo anfitrião.');
-        })
+          })
+          .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'video_rooms',
+            filter: `id=eq.${roomId}`
+          }, (payload) => {
+            const updatedRoom = payload.new as any;
+            toast.info('As configurações da sala foram atualizadas pelo anfitrião.');
+          })
+          .on('broadcast', { event: 'mute_request' }, (payload) => {
+            if (payload.payload.participantId === participant.id) {
+              localStream?.getAudioTracks().forEach(track => track.enabled = false);
+              setIsMuted(true);
+              toast.info('Você foi silenciado por um moderador.');
+              updateMediaStatus({ audio: false });
+            }
+          })
+          .subscribe((status) => {
+            console.log(`[Realtime Status] Sala ${roomId}:`, status);
+            
+            if (status === 'SUBSCRIBED') {
+              // Validar sincronização de roomId
+              const currentPath = window.location.pathname;
+              const pathRoomId = currentPath.split('/').pop();
+              const isSynced = pathRoomId === roomId || roomId === room.id;
+              
+              toast.success(`Conexão estabelecida. Sincronia: ${isSynced ? '✓ OK' : '✗ Diferente'}`, {
+                description: `ID Local: ${roomId?.substring(0,8)}... | ID Alvo: ${room.id?.substring(0,8)}...`
+              });
+            }
 
-        .on('broadcast', { event: 'mute_request' }, (payload) => {
+            if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+              console.warn(`[Realtime Reconnect] Conexão ${status}. Tentando reconectar em 3s...`);
+              logVideoError(`Conexão em tempo real ${status}`, 'realtime_status_alert');
+              setTimeout(() => {
+                if (roomId) setupRealtimeSubscription();
+              }, 3000);
+            }
+          });
 
-          if (payload.payload.participantId === participant.id) {
-            localStream?.getAudioTracks().forEach(track => track.enabled = false);
-            setIsMuted(true);
-            toast.info('Você foi silenciado por um moderador.');
-            updateMediaStatus({ audio: false });
-          }
-        })
-        .subscribe((status) => {
-          console.log(`[Realtime Status] Sala ${roomId}:`, status);
-          if (status === 'SUBSCRIBED') {
-            toast.success('Conexão em tempo real estabelecida.');
-          }
-          if (status === 'CHANNEL_ERROR') {
-            logVideoError('Erro na conexão em tempo real', 'realtime_subscribe_error');
-          }
-        });
+        channelRef.current = channel;
+      };
 
-      channelRef.current = channel;
+      setupRealtimeSubscription();
 
       const { data: initialParticipants } = await supabase
         .from('video_participants')
