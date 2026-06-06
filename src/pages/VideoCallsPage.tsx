@@ -1,7 +1,7 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Video, Calendar, Users, Link2, Sparkles, MessageCircle, Mic, Monitor, Shield, Plus, Activity, Loader2 } from 'lucide-react';
+import { Video, Calendar, Users, Link2, Sparkles, MessageCircle, Mic, Monitor, Shield, Plus, Activity, Loader2, Settings, X } from 'lucide-react';
 import { useVideoCall } from '@/contexts/VideoCallContext';
 import { VideoRoom } from '@/components/video/VideoRoom';
 import { VideoErrorLogs } from '@/components/video/VideoErrorLogs';
@@ -227,10 +227,19 @@ export default function VideoCallsPage() {
               <Button 
                 size="lg" 
                 variant="outline"
+                onClick={() => setShowSettings(!showSettings)}
+                className={showSettings ? 'border-primary text-primary' : ''}
+              >
+                <Settings className="w-4 h-4 mr-2" /> Configurações
+              </Button>
+              <Button 
+                size="lg" 
+                variant="outline"
                 onClick={handleCopyLink}
               >
                 <Link2 className="w-4 h-4 mr-2" /> Link de Convite
               </Button>
+
             </CardContent>
           </Card>
 

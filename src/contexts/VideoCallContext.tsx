@@ -342,7 +342,16 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
   const rejectParticipant = async (id: string) => {
     const target = participants.find(p => p.id === id);
     const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('video_participants').update({ status: 'rejected' }).eq('id', id);
+    
+    // Cooldown de 5 minutos para nova tentativa após recusa
+    const cooldownUntil = new Date();
+    cooldownUntil.setMinutes(cooldownUntil.getMinutes() + 5);
+
+    await supabase.from('video_participants').update({ 
+      status: 'rejected',
+      cooldown_until: cooldownUntil.toISOString()
+    }).eq('id', id);
+
     await supabase.rpc('log_video_action', {
       p_room_id: roomId,
       p_target_name: target?.name || 'Desconhecido',
@@ -350,8 +359,9 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
       p_action: 'rejected',
       p_performed_by: user?.id
     });
-    toast.info('Participante recusado.');
+    toast.info('Participante recusado (Cooldown aplicado).');
   };
+
 
   const blacklistParticipant = async (name: string) => {
     if (!roomId) return;
