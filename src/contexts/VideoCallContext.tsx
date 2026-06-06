@@ -37,6 +37,8 @@ interface VideoCallContextType {
   muteParticipant: (participantId: string) => Promise<void>;
   promoteParticipant: (participantId: string) => Promise<void>;
   regenerateToken: () => Promise<string | null>;
+  lockRoom: (locked: boolean) => Promise<void>;
+  blacklistParticipant: (name: string) => Promise<void>;
 }
 
 const VideoCallContext = createContext<VideoCallContextType | null>(null);
@@ -121,10 +123,22 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      if (room.is_locked && user?.id !== room.host_id) {
+        toast.error('Esta sala está trancada pelo anfitrião.');
+        setStatus('idle');
+        return;
+      }
+
+      if (room.blacklist?.includes(userName) && user?.id !== room.host_id) {
+        toast.error('Seu acesso a esta sala foi bloqueado.');
+        setStatus('idle');
+        return;
+      }
 
       const isHost = user?.id === room.host_id;
       const role: ParticipantRole = isHost ? 'host' : 'participant';
       setUserRole(role);
+
 
       let stream: MediaStream;
       try {
@@ -178,7 +192,14 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
             const newP = payload.new as any;
             setParticipants(prev => [...prev, newP as Participant]);
             if (isAdmin && newP.status === 'pending') {
-              toast.info(`${newP.name} solicitou entrada na reunião.`);
+              toast.info(`${newP.name} solicitou entrada na reunião.`, {
+                action: {
+                  label: 'Ver',
+                  onClick: () => {
+                    // Aqui poderia abrir a aba de participantes
+                  }
+                }
+              });
             }
           } else if (payload.eventType === 'UPDATE') {
             const updatedP = payload.new as any;
@@ -190,7 +211,7 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
                 toast.success('Sua entrada foi aprovada!');
               } else if (updatedP.status === 'rejected') {
                 setStatus('rejected');
-                toast.error('Sua entrada foi recusada.');
+                toast.error(updatedP.is_banned ? 'Você foi banido da reunião.' : 'Sua entrada foi recusada.');
                 cleanup();
               }
               if (updatedP.role !== userRole) {
@@ -200,6 +221,7 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
             }
           }
         })
+
         .on('broadcast', { event: 'mute_request' }, (payload) => {
           if (payload.payload.participantId === participant.id) {
             localStream?.getAudioTracks().forEach(track => track.enabled = false);
@@ -304,10 +326,22 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
     toast.info('Participante recusado.');
   };
 
+  const blacklistParticipant = async (name: string) => {
+    if (!roomId) return;
+    const { data: room } = await supabase.from('video_rooms').select('blacklist').eq('id', roomId).single();
+    const newList = Array.from(new Set([...(room?.blacklist || []), name]));
+    await supabase.from('video_rooms').update({ blacklist: newList }).eq('id', roomId);
+  };
+
   const kickParticipant = async (id: string) => {
     const target = participants.find(p => p.id === id);
     const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('video_participants').update({ status: 'rejected' }).eq('id', id);
+    await supabase.from('video_participants').update({ status: 'rejected', is_banned: true }).eq('id', id);
+    
+    if (target?.name) {
+      await blacklistParticipant(target.name);
+    }
+
     await supabase.rpc('log_video_action', {
       p_room_id: roomId,
       p_target_name: target?.name || 'Desconhecido',
@@ -315,7 +349,17 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
       p_action: 'kicked',
       p_performed_by: user?.id
     });
+    toast.error(`${target?.name} foi expulso e banido.`);
   };
+
+  const lockRoom = async (locked: boolean) => {
+    if (!roomId) return;
+    const { error } = await supabase.from('video_rooms').update({ is_locked: locked }).eq('id', roomId);
+    if (!error) {
+      toast.success(locked ? 'Sala bloqueada para novas entradas.' : 'Sala desbloqueada.');
+    }
+  };
+
 
   const muteParticipant = async (id: string) => {
     const target = participants.find(p => p.id === id);
@@ -356,12 +400,13 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
       participants, userRole, isAdmin, roomId,
       startCall, endCall, toggleMute, toggleVideo,
       approveParticipant, rejectParticipant, kickParticipant, muteParticipant, promoteParticipant,
-      regenerateToken
+      regenerateToken, lockRoom, blacklistParticipant
     }}>
       {children}
     </VideoCallContext.Provider>
   );
 }
+
 
 export const useVideoCall = () => {
   const ctx = useContext(VideoCallContext);
