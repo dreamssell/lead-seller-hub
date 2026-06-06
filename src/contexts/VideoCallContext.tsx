@@ -149,6 +149,14 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
             }
           }
         })
+        .on('broadcast', { event: 'mute_request' }, (payload) => {
+          if (payload.payload.participantId === participant.id) {
+            localStream?.getAudioTracks().forEach(track => track.enabled = false);
+            setIsMuted(true);
+            toast.info('Você foi silenciado pelo anfitrião.');
+            updateMediaStatus({ audio: false });
+          }
+        })
         .subscribe();
 
       channelRef.current = channel;
