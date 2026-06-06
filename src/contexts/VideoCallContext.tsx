@@ -306,10 +306,22 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
     toast.info('Participante recusado.');
   };
 
+  const blacklistParticipant = async (name: string) => {
+    if (!roomId) return;
+    const { data: room } = await supabase.from('video_rooms').select('blacklist').eq('id', roomId).single();
+    const newList = Array.from(new Set([...(room?.blacklist || []), name]));
+    await supabase.from('video_rooms').update({ blacklist: newList }).eq('id', roomId);
+  };
+
   const kickParticipant = async (id: string) => {
     const target = participants.find(p => p.id === id);
     const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('video_participants').update({ status: 'rejected' }).eq('id', id);
+    await supabase.from('video_participants').update({ status: 'rejected', is_banned: true }).eq('id', id);
+    
+    if (target?.name) {
+      await blacklistParticipant(target.name);
+    }
+
     await supabase.rpc('log_video_action', {
       p_room_id: roomId,
       p_target_name: target?.name || 'Desconhecido',
@@ -317,7 +329,17 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
       p_action: 'kicked',
       p_performed_by: user?.id
     });
+    toast.error(`${target?.name} foi expulso e banido.`);
   };
+
+  const lockRoom = async (locked: boolean) => {
+    if (!roomId) return;
+    const { error } = await supabase.from('video_rooms').update({ is_locked: locked }).eq('id', roomId);
+    if (!error) {
+      toast.success(locked ? 'Sala bloqueada para novas entradas.' : 'Sala desbloqueada.');
+    }
+  };
+
 
   const muteParticipant = async (id: string) => {
     const target = participants.find(p => p.id === id);
@@ -358,12 +380,13 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
       participants, userRole, isAdmin, roomId,
       startCall, endCall, toggleMute, toggleVideo,
       approveParticipant, rejectParticipant, kickParticipant, muteParticipant, promoteParticipant,
-      regenerateToken
+      regenerateToken, lockRoom, blacklistParticipant
     }}>
       {children}
     </VideoCallContext.Provider>
   );
 }
+
 
 export const useVideoCall = () => {
   const ctx = useContext(VideoCallContext);
