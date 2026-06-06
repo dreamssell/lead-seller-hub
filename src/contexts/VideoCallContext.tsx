@@ -303,11 +303,22 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
               // Validar sincronização de roomId
               const currentPath = window.location.pathname;
               const pathRoomId = currentPath.split('/').pop();
-              const isSynced = pathRoomId === roomId || roomId === room.id;
+              // Remove query params se existirem
+              const cleanPathRoomId = pathRoomId?.split('?')[0];
               
-              toast.success(`Conexão estabelecida. Sincronia: ${isSynced ? '✓ OK' : '✗ Diferente'}`, {
-                description: `ID Local: ${roomId?.substring(0,8)}... | ID Alvo: ${room.id?.substring(0,8)}...`
-              });
+              const isSynced = cleanPathRoomId === roomId || roomId === room.id;
+              
+              if (isSynced) {
+                toast.success('Sala sincronizada com sucesso!', {
+                  description: `ID: ${roomId?.substring(0,8)}... (Ambiente Seguro)`,
+                  icon: <CheckCircle2 className="w-4 h-4 text-green-500" />
+                });
+              } else {
+                toast.error('Atenção: IDs de sala divergentes!', {
+                  description: `Local: ${roomId?.substring(0,8)}... | URL: ${cleanPathRoomId?.substring(0,8)}...`,
+                  icon: <AlertTriangle className="w-4 h-4 text-amber-500" />
+                });
+              }
             }
 
             if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
