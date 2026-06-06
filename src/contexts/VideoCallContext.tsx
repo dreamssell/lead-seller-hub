@@ -248,12 +248,17 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
             setParticipants(prev => [...prev, newP as Participant]);
             if (isAdmin && newP.status === 'pending') {
               toast.info(`${newP.name} solicitou entrada na reunião.`, {
+                duration: 10000,
                 action: {
-                  label: 'Ver',
-                  onClick: () => {}
+                  label: 'Ver Pedidos',
+                  onClick: () => {
+                    // O VideoRoom reage ao estado dos participantes, 
+                    // apenas disparar o som ou abrir a aba se possível.
+                  }
                 }
               });
             }
+
           } else if (payload.eventType === 'UPDATE') {
             const updatedP = payload.new as any;
             setParticipants(prev => prev.map(p => p.id === updatedP.id ? updatedP as Participant : p));
