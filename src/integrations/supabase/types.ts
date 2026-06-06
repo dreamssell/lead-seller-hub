@@ -1816,6 +1816,50 @@ export type Database = {
           },
         ]
       }
+      video_error_logs: {
+        Row: {
+          browser_info: Json | null
+          context: string | null
+          created_at: string
+          error_message: string
+          error_stack: string | null
+          id: string
+          room_id: string | null
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          browser_info?: Json | null
+          context?: string | null
+          created_at?: string
+          error_message: string
+          error_stack?: string | null
+          id?: string
+          room_id?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          browser_info?: Json | null
+          context?: string | null
+          created_at?: string
+          error_message?: string
+          error_stack?: string | null
+          id?: string
+          room_id?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_error_logs_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "video_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       video_participants: {
         Row: {
           id: string
