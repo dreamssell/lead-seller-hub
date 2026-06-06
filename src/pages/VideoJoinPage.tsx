@@ -110,6 +110,8 @@ export default function VideoJoinPage() {
       return;
     }
     setIsJoining(true);
+    localStorage.setItem('video_user_name', userName);
+
     if (videoPreviewRef.current?.srcObject) {
       const stream = videoPreviewRef.current.srcObject as MediaStream;
       stream.getTracks().forEach(track => track.stop());
