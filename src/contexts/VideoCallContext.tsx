@@ -123,10 +123,22 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      if (room.is_locked && user?.id !== room.host_id) {
+        toast.error('Esta sala está trancada pelo anfitrião.');
+        setStatus('idle');
+        return;
+      }
+
+      if (room.blacklist?.includes(userName) && user?.id !== room.host_id) {
+        toast.error('Seu acesso a esta sala foi bloqueado.');
+        setStatus('idle');
+        return;
+      }
 
       const isHost = user?.id === room.host_id;
       const role: ParticipantRole = isHost ? 'host' : 'participant';
       setUserRole(role);
+
 
       let stream: MediaStream;
       try {
@@ -180,7 +192,14 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
             const newP = payload.new as any;
             setParticipants(prev => [...prev, newP as Participant]);
             if (isAdmin && newP.status === 'pending') {
-              toast.info(`${newP.name} solicitou entrada na reunião.`);
+              toast.info(`${newP.name} solicitou entrada na reunião.`, {
+                action: {
+                  label: 'Ver',
+                  onClick: () => {
+                    // Aqui poderia abrir a aba de participantes
+                  }
+                }
+              });
             }
           } else if (payload.eventType === 'UPDATE') {
             const updatedP = payload.new as any;
@@ -192,7 +211,7 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
                 toast.success('Sua entrada foi aprovada!');
               } else if (updatedP.status === 'rejected') {
                 setStatus('rejected');
-                toast.error('Sua entrada foi recusada.');
+                toast.error(updatedP.is_banned ? 'Você foi banido da reunião.' : 'Sua entrada foi recusada.');
                 cleanup();
               }
               if (updatedP.role !== userRole) {
@@ -202,6 +221,7 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
             }
           }
         })
+
         .on('broadcast', { event: 'mute_request' }, (payload) => {
           if (payload.payload.participantId === participant.id) {
             localStream?.getAudioTracks().forEach(track => track.enabled = false);
