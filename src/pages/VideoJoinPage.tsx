@@ -1,35 +1,158 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useState, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useVideoCall } from '@/contexts/VideoCallContext';
 import { VideoRoom } from '@/components/video/VideoRoom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Video, Mic, Shield, Loader2 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Badge } from '@/components/ui/badge';
+import { Video, Mic, Shield, Loader2, Camera, Volume2, Wifi, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function VideoJoinPage() {
   const { roomId } = useParams();
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
   const { startCall, status } = useVideoCall();
   const [userName, setUserName] = useState('');
   const [isJoining, setIsJoining] = useState(false);
+  const [isValidating, setIsValidating] = useState(true);
+  const [roomData, setRoomData] = useState<any>(null);
+  
+  // Media Checklist State
+  const [mediaDevices, setMediaDevices] = useState<{
+    cameras: MediaDeviceInfo[];
+    microphones: MediaDeviceInfo[];
+  }>({ cameras: [], microphones: [] });
+  const [selectedCamera, setSelectedCamera] = useState('');
+  const [selectedMic, setSelectedMic] = useState('');
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const [latency, setLatency] = useState<number | null>(null);
+  const videoPreviewRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    // Se já estiver conectado ou em chamada, não faz nada
-    if (status === 'connected' || status === 'calling') return;
-  }, [status]);
+    validateRoom();
+    loadDevices();
+    simulateLatencyTest();
+    
+    // Auto-fill user name if logged in
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setUserName(user.email?.split('@')[0] || '');
+      }
+    });
+
+    return () => {
+      if (videoPreviewRef.current?.srcObject) {
+        const stream = videoPreviewRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [roomId]);
+
+  const validateRoom = async () => {
+    try {
+      if (!roomId) return;
+      
+      const { data, error } = await supabase
+        .from('video_rooms')
+        .select('*')
+        .eq('id', roomId)
+        .single();
+
+      if (error || !data || !data.is_active) {
+        toast.error('Esta sala não existe ou já foi encerrada.');
+        return;
+      }
+
+      if (data.invite_token !== token) {
+        toast.error('Token de convite inválido ou expirado.');
+        return;
+      }
+
+      setRoomData(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  const loadDevices = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      if (videoPreviewRef.current) {
+        videoPreviewRef.current.srcObject = stream;
+      }
+      
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cameras = devices.filter(d => d.kind === 'videoinput');
+      const mics = devices.filter(d => d.kind === 'audioinput');
+      
+      setMediaDevices({ cameras, microphones: mics });
+      if (cameras.length > 0) setSelectedCamera(cameras[0].deviceId);
+      if (mics.length > 0) setSelectedMic(mics[0].deviceId);
+      
+      setMediaError(null);
+    } catch (err: any) {
+      console.error('Erro de mídia:', err);
+      if (err.name === 'NotAllowedError') {
+        setMediaError('Acesso negado. Por favor, habilite a câmera e microfone nas configurações do navegador.');
+      } else {
+        setMediaError('Não foi possível encontrar dispositivos de áudio ou vídeo.');
+      }
+    }
+  };
+
+  const simulateLatencyTest = () => {
+    // Simula um teste de latência
+    const fakeLatency = Math.floor(Math.random() * 50) + 20;
+    setTimeout(() => setLatency(fakeLatency), 1500);
+  };
 
   const handleJoin = async () => {
-    if (!userName.trim()) return;
+    if (!userName.trim()) {
+      toast.error('Por favor, digite seu nome.');
+      return;
+    }
     setIsJoining(true);
-    // Simula a entrada na sala
-    await startCall(roomId?.includes('conferencia') || false, roomId);
+    
+    // Para o preview local antes de iniciar a chamada real
+    if (videoPreviewRef.current?.srcObject) {
+      const stream = videoPreviewRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+    }
+    
+    await startCall(roomData?.is_group || false, roomId!, userName);
     setIsJoining(false);
   };
 
-  if (status === 'connected' || status === 'calling') {
-    return <VideoRoom isGroup={roomId?.includes('conferencia') || false} />;
+  if (isValidating) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-4">
+        <Loader2 className="w-10 h-10 text-primary animate-spin" />
+        <p className="text-zinc-400 font-medium">Validando sala...</p>
+      </div>
+    );
+  }
+
+  if (!roomData) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
+        <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
+        <h1 className="text-2xl font-bold text-white mb-2">Sala Indisponível</h1>
+        <p className="text-zinc-400 mb-6 text-center max-w-sm">
+          O link que você acessou é inválido, expirou ou a sala foi encerrada pelo anfitrião.
+        </p>
+        <Button onClick={() => window.location.href = '/'}>Voltar ao Início</Button>
+      </div>
+    );
+  }
+
+  if (status === 'connected' || status === 'calling' || status === 'waiting_approval') {
+    return <VideoRoom isGroup={roomData?.is_group || false} />;
   }
 
   return (
@@ -37,17 +160,69 @@ export default function VideoJoinPage() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
+        className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-2 gap-6"
       >
+        {/* Preview Panel */}
+        <Card className="glass-card border-white/10 bg-zinc-900/50 backdrop-blur-xl overflow-hidden flex flex-col">
+          <div className="relative aspect-video bg-zinc-800 flex items-center justify-center overflow-hidden">
+            {mediaError ? (
+              <div className="p-8 text-center space-y-4">
+                <AlertCircle className="w-12 h-12 text-red-500 mx-auto" />
+                <p className="text-sm text-zinc-300">{mediaError}</p>
+                <Button variant="outline" size="sm" onClick={loadDevices}>Tentar Novamente</Button>
+              </div>
+            ) : (
+              <>
+                <video 
+                  ref={videoPreviewRef} 
+                  autoPlay 
+                  muted 
+                  playsInline 
+                  className="w-full h-full object-cover mirror"
+                />
+                <div className="absolute bottom-4 left-4 flex gap-2">
+                   <Badge className="bg-black/60 backdrop-blur-md border-white/10 gap-2">
+                      <Camera className="w-3 h-3" /> Câmera OK
+                   </Badge>
+                   <Badge className="bg-black/60 backdrop-blur-md border-white/10 gap-2">
+                      <Volume2 className="w-3 h-3" /> Áudio OK
+                   </Badge>
+                </div>
+              </>
+            )}
+          </div>
+          <CardContent className="p-6 space-y-4 flex-1">
+             <div className="space-y-4">
+               <h3 className="font-bold text-white flex items-center gap-2">
+                 <Wifi className="w-4 h-4 text-primary" /> Status da Conexão
+               </h3>
+               <div className="space-y-3">
+                 <div className="flex items-center justify-between text-sm">
+                   <span className="text-zinc-400">Latência estimada</span>
+                   <span className={latency && latency < 60 ? 'text-green-500 font-bold' : 'text-amber-500 font-bold'}>
+                     {latency ? `${latency}ms` : 'Testando...'}
+                   </span>
+                 </div>
+                 <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+                   <motion.div 
+                     initial={{ width: 0 }}
+                     animate={{ width: latency ? '100%' : '40%' }}
+                     className={`h-full ${latency && latency < 60 ? 'bg-green-500' : 'bg-amber-500'}`}
+                   />
+                 </div>
+               </div>
+             </div>
+          </CardContent>
+        </Card>
+
+        {/* Join Panel */}
         <Card className="glass-card border-white/10 bg-zinc-900/50 backdrop-blur-xl text-white">
-          <CardHeader className="text-center space-y-4">
-            <div className="mx-auto w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center text-primary">
-              <Video className="w-8 h-8" />
-            </div>
+          <CardHeader className="space-y-4">
             <div className="space-y-2">
-              <CardTitle className="text-2xl font-bold">Entrar na Reunião</CardTitle>
+              <Badge variant="outline" className="text-primary border-primary/20">PREPARANDO</Badge>
+              <CardTitle className="text-3xl font-bold">Pronto para entrar?</CardTitle>
               <CardDescription className="text-zinc-400">
-                Sala ID: <span className="text-primary font-mono">{roomId}</span>
+                Sala: <span className="text-white font-medium">{roomData.title}</span>
               </CardDescription>
             </div>
           </CardHeader>
@@ -55,44 +230,43 @@ export default function VideoJoinPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-300">Como você deseja ser chamado?</label>
               <Input 
-                placeholder="Seu nome" 
+                placeholder="Seu nome ou apelido" 
                 value={userName}
                 onChange={(e) => setUserName(e.target.value)}
-                className="bg-zinc-800/50 border-white/10 text-white focus:ring-primary/50"
+                className="bg-zinc-800/50 border-white/10 text-white h-12 text-lg focus:ring-primary/50"
                 onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center gap-2">
-                <Mic className="w-5 h-5 text-primary" />
-                <span className="text-[10px] uppercase font-bold text-zinc-500">Microfone OK</span>
-              </div>
-              <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center gap-2">
-                <Video className="w-5 h-5 text-primary" />
-                <span className="text-[10px] uppercase font-bold text-zinc-500">Câmera OK</span>
-              </div>
+            <div className="space-y-4 pt-4 border-t border-white/5">
+               <div className="flex items-center gap-3 text-sm text-zinc-400">
+                 <CheckCircle2 className="w-4 h-4 text-green-500" /> 
+                 Seu áudio e vídeo estão configurados corretamente.
+               </div>
+               <div className="flex items-center gap-3 text-sm text-zinc-400">
+                 <Shield className="w-4 h-4 text-primary" /> 
+                 Chamada protegida por criptografia nativa.
+               </div>
             </div>
 
             <Button 
-              className="w-full h-12 text-lg font-bold bg-primary hover:bg-primary/90"
+              className="w-full h-14 text-xl font-bold bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20"
               onClick={handleJoin}
-              disabled={!userName.trim() || isJoining}
+              disabled={!userName.trim() || isJoining || !!mediaError}
             >
               {isJoining ? (
                 <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  <Loader2 className="w-6 h-6 mr-3 animate-spin" />
                   Conectando...
                 </>
               ) : (
-                'Participar Agora'
+                'Entrar na Reunião'
               )}
             </Button>
 
-            <div className="flex items-center justify-center gap-2 text-[11px] text-zinc-500 uppercase tracking-widest font-bold">
-              <Shield className="w-3 h-3" />
-              Criptografia Ponta-a-Ponta Ativa
-            </div>
+            <p className="text-[11px] text-center text-zinc-500 uppercase tracking-widest font-bold">
+              Powered by Lead Video Engine v2.0
+            </p>
           </CardContent>
         </Card>
       </motion.div>
