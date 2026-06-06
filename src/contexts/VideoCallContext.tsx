@@ -141,28 +141,44 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
       // Verificar Cooldown/Banimento anterior
       const { data: existingP } = await supabase
         .from('video_participants')
-        .select('id, status, cooldown_until, is_banned')
+        .select('id, status, cooldown_until, is_banned, role')
         .eq('room_id', roomId)
         .eq('name', userName)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (existingP && user?.id !== room.host_id) {
-        if (existingP.is_banned) {
+      const isHost = user?.id === room.host_id;
+
+      if (existingP && !isHost) {
+        // Bypass para moderadores
+        const isModerator = existingP.role === 'moderator' || existingP.role === 'host';
+        
+        if (existingP.is_banned && !isModerator) {
           toast.error('Você foi banido desta sala.');
           setStatus('idle');
           return;
         }
-        if (existingP.cooldown_until && new Date(existingP.cooldown_until) > new Date()) {
+        if (existingP.cooldown_until && new Date(existingP.cooldown_until) > new Date() && !isModerator) {
           const timeLeft = Math.ceil((new Date(existingP.cooldown_until).getTime() - new Date().getTime()) / 60000);
-          toast.error(`Aguarde ${timeLeft} minutos antes de tentar novamente.`);
+          toast.error(`Aguardue ${timeLeft} minutos antes de tentar novamente.`);
           setStatus('idle');
           return;
         }
+
+        if (isModerator && (existingP.is_banned || (existingP.cooldown_until && new Date(existingP.cooldown_until) > new Date()))) {
+           // Registrar bypass no log
+           await supabase.rpc('log_video_action', {
+             p_room_id: roomId,
+             p_target_name: userName,
+             p_target_user_id: user?.id || null,
+             p_action: 'bypass_security',
+             p_performed_by: user?.id
+           });
+           toast.info('Bypass de segurança ativado para sua função administrativa.');
+        }
       }
 
-      const isHost = user?.id === room.host_id;
 
       const role: ParticipantRole = isHost ? 'host' : 'participant';
       setUserRole(role);
@@ -246,7 +262,18 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
             }
           }
         })
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'video_rooms',
+          filter: `id=eq.${roomId}`
+        }, (payload) => {
+          const updatedRoom = payload.new as any;
+          toast.info('As configurações da sala foram atualizadas pelo anfitrião.');
+        })
+
         .on('broadcast', { event: 'mute_request' }, (payload) => {
+
           if (payload.payload.participantId === participant.id) {
             localStream?.getAudioTracks().forEach(track => track.enabled = false);
             setIsMuted(true);
