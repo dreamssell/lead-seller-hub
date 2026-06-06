@@ -270,9 +270,8 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
         }, (payload) => {
           const updatedRoom = payload.new as any;
           toast.info('As configurações da sala foram atualizadas pelo anfitrião.');
-          // As permissões são validadas nas ações, então apenas notificar o usuário é suficiente
-          // para que ele saiba que as regras mudaram.
         })
+
         .on('broadcast', { event: 'mute_request' }, (payload) => {
 
           if (payload.payload.participantId === participant.id) {
