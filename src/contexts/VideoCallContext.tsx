@@ -47,7 +47,6 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
   const [currentParticipantId, setCurrentParticipantId] = useState<string | null>(null);
   
   const channelRef = useRef<RealtimeChannel | null>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
 
   const cleanup = useCallback(() => {
     localStream?.getTracks().forEach(track => track.stop());
@@ -82,7 +81,8 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
       }
 
       const hostId = room.host_id;
-      setIsAdmin(user?.id === hostId);
+      const isRoomAdmin = user?.id === hostId;
+      setIsAdmin(isRoomAdmin);
 
       // 2. Request Media Permissions
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -90,6 +90,9 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
         audio: true 
       });
       setLocalStream(stream);
+
+      const settings = room.settings as any;
+      const initialStatus = (isGuest && settings?.guest_approval_required && !isRoomAdmin) ? 'pending' : 'approved';
 
       // 3. Register Participant
       const { data: participant, error: pError } = await supabase
@@ -99,7 +102,7 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
           user_id: user?.id || null,
           name: userName,
           is_guest: isGuest,
-          status: (isGuest && room.settings.guest_approval_required && user?.id !== hostId) ? 'pending' : 'approved',
+          status: initialStatus,
           media_status: { audio: true, video: true }
         })
         .select()
@@ -124,14 +127,14 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
           filter: `room_id=eq.${roomId}`
         }, (payload) => {
           if (payload.eventType === 'INSERT') {
-            const newP = payload.new as Participant;
-            setParticipants(prev => [...prev, newP]);
-            if (isAdmin && newP.status === 'pending') {
+            const newP = payload.new as any;
+            setParticipants(prev => [...prev, newP as Participant]);
+            if (isRoomAdmin && newP.status === 'pending') {
               toast.info(`${newP.name} solicitou entrada na reunião.`);
             }
           } else if (payload.eventType === 'UPDATE') {
-            const updatedP = payload.new as Participant;
-            setParticipants(prev => prev.map(p => p.id === updatedP.id ? updatedP : p));
+            const updatedP = payload.new as any;
+            setParticipants(prev => prev.map(p => p.id === updatedP.id ? updatedP as Participant : p));
             
             // Check if current user was approved
             if (updatedP.id === participant.id) {
@@ -157,7 +160,13 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
         .eq('room_id', roomId)
         .neq('status', 'left');
       
-      if (initialParticipants) setParticipants(initialParticipants);
+      if (initialParticipants) {
+        setParticipants(initialParticipants.map(p => ({
+          ...p,
+          status: p.status as Participant['status'],
+          media_status: (p.media_status as any) || { audio: true, video: true }
+        })));
+      }
 
       if (participant.status === 'approved') {
         setStatus('connected');
@@ -228,7 +237,6 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
   };
 
   const muteParticipant = async (id: string) => {
-    // This would require a signaling message via Realtime to tell the user to mute
     if (channelRef.current) {
       channelRef.current.send({
         type: 'broadcast',
