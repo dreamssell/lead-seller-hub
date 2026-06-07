@@ -148,7 +148,8 @@ export function VideoRoom({ isGroup = false }) {
     if (!isAdmin || !roomId) return;
 
     const pollInterval = setInterval(async () => {
-      console.log(`[Polling] Verificando novos participantes na sala ${roomId}...`);
+      const timestamp = new Date().toISOString();
+      console.log(`[Polling] [${timestamp}] Verificando novos participantes na sala ${roomId}...`);
       const { data, error } = await supabase
         .from('video_participants')
         .select('*')

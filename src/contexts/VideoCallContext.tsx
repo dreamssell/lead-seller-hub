@@ -60,7 +60,8 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = userRole === 'host' || userRole === 'moderator';
 
   const logVideoError = async (message: string, context: string, error?: any) => {
-    console.error(`[VideoCall Error] ${context}:`, message, error);
+    const timestamp = new Date().toISOString();
+    console.error(`[VideoCall Error] [${timestamp}] ${context}:`, message, error);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const { data, error: insertError } = await supabase.from('video_error_logs').insert({
@@ -74,14 +75,15 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
           userAgent: navigator.userAgent,
           language: navigator.language,
           platform: (navigator as any).platform,
-          url: window.location.href
+          url: window.location.href,
+          timestamp: timestamp
         }
       }).select('id').single();
 
       if (insertError) throw insertError;
       return data?.id || null;
     } catch (logErr) {
-      console.error('Falha ao registrar log de erro no banco:', logErr);
+      console.error(`[VideoCall Log Failure] [${new Date().toISOString()}] Falha ao registrar log no banco:`, logErr);
       return null;
     }
   };
@@ -251,16 +253,17 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
           }, (payload) => {
             if (payload.eventType === 'INSERT') {
               const newP = payload.new as any;
-              console.log(`[Realtime] Novo participante detectado na sala ${roomId}:`, newP);
+              const timestamp = new Date().toISOString();
+              console.log(`[Realtime] [${timestamp}] Novo participante detectado na sala ${roomId}:`, newP);
               setParticipants(prev => {
                 if (prev.find(p => p.id === newP.id)) return prev;
                 return [...prev, newP as Participant];
               });
               
               if (isAdmin && newP.status === 'pending') {
-                console.log(`[Realtime Confirm] Pedido de entrada recebido para ${newP.name} na sala ${roomId}`);
+                console.log(`[Realtime Confirm] [${timestamp}] Pedido de entrada recebido para ${newP.name} na sala ${roomId}`);
                 toast.info('Solicitação de entrada recebida', {
-                  description: `O convidado ${newP.name} está aguardando. (Evento recebido com sucesso)`,
+                  description: `O convidado ${newP.name} está aguardando. (Evento recebido com sucesso em ${new Date(timestamp).toLocaleTimeString()})`,
                   icon: <CheckCircle2 className="w-4 h-4 text-green-500" />
                 });
               }
@@ -302,7 +305,8 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
             }
           })
           .subscribe((status) => {
-            console.log(`[Realtime Status] Sala ${roomId}:`, status);
+            const timestamp = new Date().toISOString();
+            console.log(`[Realtime Status] [${timestamp}] Sala ${roomId}:`, status);
             
             if (status === 'SUBSCRIBED') {
               // Validar sincronização de roomId

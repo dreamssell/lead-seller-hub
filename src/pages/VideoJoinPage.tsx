@@ -111,7 +111,8 @@ export default function VideoJoinPage() {
     }
     setIsJoining(true);
     const correlationId = `join_${Math.random().toString(36).substring(2, 9)}`;
-    console.log(`[Join Start] ID: ${correlationId} | Room: ${roomId} | User: ${userName}`);
+    const timestamp = new Date().toISOString();
+    console.log(`[Join Start] [${timestamp}] ID: ${correlationId} | Room: ${roomId} | User: ${userName}`);
     
     localStorage.setItem('video_user_name', userName);
 
@@ -122,9 +123,9 @@ export default function VideoJoinPage() {
     
     try {
       await startCall(roomData?.is_group || false, roomId!, userName);
-      console.log(`[Join Success] ID: ${correlationId}`);
+      console.log(`[Join Success] [${new Date().toISOString()}] ID: ${correlationId}`);
     } catch (err: any) {
-      console.error(`[Join Error] ID: ${correlationId} | Reason:`, err);
+      console.error(`[Join Error] [${new Date().toISOString()}] ID: ${correlationId} | Reason:`, err);
       toast.error(`Erro ao entrar: ${err.message}. ID: ${correlationId}`);
     } finally {
       setIsJoining(false);
