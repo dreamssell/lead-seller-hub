@@ -25,6 +25,7 @@ interface VideoCallContextType {
   isMuted: boolean;
   isVideoOff: boolean;
   participants: Participant[];
+  setParticipants: React.Dispatch<React.SetStateAction<Participant[]>>;
   userRole: ParticipantRole;
   isAdmin: boolean;
   roomId: string | null;
@@ -60,7 +61,8 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = userRole === 'host' || userRole === 'moderator';
 
   const logVideoError = async (message: string, context: string, error?: any) => {
-    console.error(`[VideoCall Error] ${context}:`, message, error);
+    const timestamp = new Date().toISOString();
+    console.error(`[VideoCall Error] [${timestamp}] ${context}:`, message, error);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const { data, error: insertError } = await supabase.from('video_error_logs').insert({
@@ -74,14 +76,15 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
           userAgent: navigator.userAgent,
           language: navigator.language,
           platform: (navigator as any).platform,
-          url: window.location.href
+          url: window.location.href,
+          timestamp: timestamp
         }
       }).select('id').single();
 
       if (insertError) throw insertError;
       return data?.id || null;
     } catch (logErr) {
-      console.error('Falha ao registrar log de erro no banco:', logErr);
+      console.error(`[VideoCall Log Failure] [${new Date().toISOString()}] Falha ao registrar log no banco:`, logErr);
       return null;
     }
   };
@@ -251,16 +254,17 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
           }, (payload) => {
             if (payload.eventType === 'INSERT') {
               const newP = payload.new as any;
-              console.log(`[Realtime] Novo participante detectado na sala ${roomId}:`, newP);
+              const timestamp = new Date().toISOString();
+              console.log(`[Realtime] [${timestamp}] Novo participante detectado na sala ${roomId}:`, newP);
               setParticipants(prev => {
                 if (prev.find(p => p.id === newP.id)) return prev;
                 return [...prev, newP as Participant];
               });
               
               if (isAdmin && newP.status === 'pending') {
-                console.log(`[Realtime Confirm] Pedido de entrada recebido para ${newP.name} na sala ${roomId}`);
+                console.log(`[Realtime Confirm] [${timestamp}] Pedido de entrada recebido para ${newP.name} na sala ${roomId}`);
                 toast.info('Solicitação de entrada recebida', {
-                  description: `O convidado ${newP.name} está aguardando. (Evento recebido com sucesso)`,
+                  description: `O convidado ${newP.name} está aguardando. (Evento recebido com sucesso em ${new Date(timestamp).toLocaleTimeString()})`,
                   icon: <CheckCircle2 className="w-4 h-4 text-green-500" />
                 });
               }
@@ -302,7 +306,8 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
             }
           })
           .subscribe((status) => {
-            console.log(`[Realtime Status] Sala ${roomId}:`, status);
+            const timestamp = new Date().toISOString();
+            console.log(`[Realtime Status] [${timestamp}] Sala ${roomId}:`, status);
             
             if (status === 'SUBSCRIBED') {
               // Validar sincronização de roomId
@@ -408,9 +413,19 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
   };
 
   const approveParticipant = async (id: string) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[Action] [${timestamp}] Aprovando participante ${id} na sala ${roomId}`);
     const target = participants.find(p => p.id === id);
     const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('video_participants').update({ status: 'approved' }).eq('id', id);
+    
+    const { error } = await supabase.from('video_participants').update({ status: 'approved' }).eq('id', id);
+    
+    if (error) {
+      console.error(`[Action Error] [${new Date().toISOString()}] Erro ao aprovar participante:`, error);
+      toast.error('Erro ao aprovar participante.');
+      return;
+    }
+
     await supabase.rpc('log_video_action', {
       p_room_id: roomId,
       p_target_name: target?.name || 'Desconhecido',
@@ -422,6 +437,8 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
   };
 
   const rejectParticipant = async (id: string) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[Action] [${timestamp}] Recusando participante ${id} na sala ${roomId}`);
     const target = participants.find(p => p.id === id);
     const { data: { user } } = await supabase.auth.getUser();
     
@@ -429,10 +446,16 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
     const cooldownUntil = new Date();
     cooldownUntil.setMinutes(cooldownUntil.getMinutes() + 5);
 
-    await supabase.from('video_participants').update({ 
+    const { error } = await supabase.from('video_participants').update({ 
       status: 'rejected',
       cooldown_until: cooldownUntil.toISOString()
     }).eq('id', id);
+
+    if (error) {
+      console.error(`[Action Error] [${new Date().toISOString()}] Erro ao recusar participante:`, error);
+      toast.error('Erro ao recusar participante.');
+      return;
+    }
 
     await supabase.rpc('log_video_action', {
       p_room_id: roomId,
@@ -515,7 +538,7 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
   return (
     <VideoCallContext.Provider value={{ 
       status, localStream, remoteStream, isMuted, isVideoOff, 
-      participants, userRole, isAdmin, roomId,
+      participants, setParticipants, userRole, isAdmin, roomId,
       startCall, endCall, toggleMute, toggleVideo,
       approveParticipant, rejectParticipant, kickParticipant, muteParticipant, promoteParticipant,
       regenerateToken, lockRoom, blacklistParticipant, logVideoError

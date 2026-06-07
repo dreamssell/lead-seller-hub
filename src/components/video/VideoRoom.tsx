@@ -19,7 +19,7 @@ export function VideoRoom({ isGroup = false }) {
   const { 
     localStream, remoteStream, status, endCall, 
     toggleMute, toggleVideo, isMuted, isVideoOff,
-    participants, userRole, isAdmin, approveParticipant, rejectParticipant, 
+    participants, setParticipants, userRole, isAdmin, approveParticipant, rejectParticipant, 
     kickParticipant, muteParticipant, promoteParticipant, regenerateToken, roomId,
     lockRoom
   } = useVideoCall();
@@ -148,7 +148,8 @@ export function VideoRoom({ isGroup = false }) {
     if (!isAdmin || !roomId) return;
 
     const pollInterval = setInterval(async () => {
-      console.log(`[Polling] Verificando novos participantes na sala ${roomId}...`);
+      const timestamp = new Date().toISOString();
+      console.log(`[Polling] [${timestamp}] Verificando novos participantes na sala ${roomId}...`);
       const { data, error } = await supabase
         .from('video_participants')
         .select('*')
@@ -162,10 +163,19 @@ export function VideoRoom({ isGroup = false }) {
       }
 
       if (data && data.length > 0) {
-        console.log(`[Polling Success] ${data.length} novos pedidos encontrados via fallback.`);
+        console.log(`[Polling Success] [${new Date().toISOString()}] ${data.length} novos pedidos encontrados via fallback.`);
         setLastPollTime(new Date());
-        // Forçar atualização da lista de participantes no contexto se necessário
-        // (O contexto já busca a lista inicial, mas aqui garantimos a detecção)
+        
+        // Atualizar lista de participantes para refletir novos pedidos
+        setParticipants(prev => {
+          const newEntries = data.filter(item => !prev.find(p => p.id === item.id)).map(p => ({
+            ...p,
+            role: (p.role as any) || 'participant',
+            status: p.status as any,
+            media_status: (p.media_status as any) || { audio: true, video: true }
+          }));
+          return [...prev, ...newEntries];
+        });
       }
     }, 15000); // 15 segundos de intervalo para o polling de fallback
 
