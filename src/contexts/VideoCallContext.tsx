@@ -25,6 +25,7 @@ interface VideoCallContextType {
   isMuted: boolean;
   isVideoOff: boolean;
   participants: Participant[];
+  setParticipants: React.Dispatch<React.SetStateAction<Participant[]>>;
   userRole: ParticipantRole;
   isAdmin: boolean;
   roomId: string | null;
@@ -537,7 +538,7 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
   return (
     <VideoCallContext.Provider value={{ 
       status, localStream, remoteStream, isMuted, isVideoOff, 
-      participants, userRole, isAdmin, roomId,
+      participants, setParticipants, userRole, isAdmin, roomId,
       startCall, endCall, toggleMute, toggleVideo,
       approveParticipant, rejectParticipant, kickParticipant, muteParticipant, promoteParticipant,
       regenerateToken, lockRoom, blacklistParticipant, logVideoError

@@ -19,7 +19,7 @@ export function VideoRoom({ isGroup = false }) {
   const { 
     localStream, remoteStream, status, endCall, 
     toggleMute, toggleVideo, isMuted, isVideoOff,
-    participants, userRole, isAdmin, approveParticipant, rejectParticipant, 
+    participants, setParticipants, userRole, isAdmin, approveParticipant, rejectParticipant, 
     kickParticipant, muteParticipant, promoteParticipant, regenerateToken, roomId,
     lockRoom
   } = useVideoCall();
@@ -170,8 +170,8 @@ export function VideoRoom({ isGroup = false }) {
         setParticipants(prev => {
           const newEntries = data.filter(item => !prev.find(p => p.id === item.id)).map(p => ({
             ...p,
-            role: (p.role as ParticipantRole) || 'participant',
-            status: p.status as Participant['status'],
+            role: (p.role as any) || 'participant',
+            status: p.status as any,
             media_status: (p.media_status as any) || { audio: true, video: true }
           }));
           return [...prev, ...newEntries];
