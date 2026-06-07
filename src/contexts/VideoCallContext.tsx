@@ -412,9 +412,19 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
   };
 
   const approveParticipant = async (id: string) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[Action] [${timestamp}] Aprovando participante ${id} na sala ${roomId}`);
     const target = participants.find(p => p.id === id);
     const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('video_participants').update({ status: 'approved' }).eq('id', id);
+    
+    const { error } = await supabase.from('video_participants').update({ status: 'approved' }).eq('id', id);
+    
+    if (error) {
+      console.error(`[Action Error] [${new Date().toISOString()}] Erro ao aprovar participante:`, error);
+      toast.error('Erro ao aprovar participante.');
+      return;
+    }
+
     await supabase.rpc('log_video_action', {
       p_room_id: roomId,
       p_target_name: target?.name || 'Desconhecido',
@@ -426,6 +436,8 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
   };
 
   const rejectParticipant = async (id: string) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[Action] [${timestamp}] Recusando participante ${id} na sala ${roomId}`);
     const target = participants.find(p => p.id === id);
     const { data: { user } } = await supabase.auth.getUser();
     
@@ -433,10 +445,16 @@ export function VideoCallProvider({ children }: { children: React.ReactNode }) {
     const cooldownUntil = new Date();
     cooldownUntil.setMinutes(cooldownUntil.getMinutes() + 5);
 
-    await supabase.from('video_participants').update({ 
+    const { error } = await supabase.from('video_participants').update({ 
       status: 'rejected',
       cooldown_until: cooldownUntil.toISOString()
     }).eq('id', id);
+
+    if (error) {
+      console.error(`[Action Error] [${new Date().toISOString()}] Erro ao recusar participante:`, error);
+      toast.error('Erro ao recusar participante.');
+      return;
+    }
 
     await supabase.rpc('log_video_action', {
       p_room_id: roomId,
