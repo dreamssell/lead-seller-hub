@@ -1,6 +1,6 @@
 import { MessageSquare, Phone, ShieldCheck, LucideIcon, Globe, ThumbsUp } from 'lucide-react';
 
-export type WhatsAppProvider = 'uaz' | 'meta' | 'wavoip' | 'instagram' | 'telegram' | 'linkedin' | 'tiktok' | 'youtube' | 'facebook' | 'widget';
+export type WhatsAppProvider = 'uaz' | 'meta' | 'wavoip' | 'evolution' | 'instagram' | 'telegram' | 'linkedin' | 'tiktok' | 'youtube' | 'facebook' | 'widget';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'error';
 
