@@ -28,6 +28,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import { WhatsAppConnection, PROVIDER_CONFIGS } from '@/components/whatsapp/types';
+import { useVoip } from '@/contexts/VoipContext';
+import { ChatRightPanel } from '@/components/chat/ChatRightPanel';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { StickyNote, Zap, PhoneCall, Headphones } from 'lucide-react';
 
 
 import { ScrollArea } from '@/components/ui/scroll-area';
