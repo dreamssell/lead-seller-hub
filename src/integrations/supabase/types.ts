@@ -2699,6 +2699,7 @@ export type Database = {
         | "tiktok"
         | "youtube"
         | "widget"
+        | "evolution"
       whatsapp_status: "disconnected" | "connecting" | "connected" | "error"
     }
     CompositeTypes: {
@@ -2839,6 +2840,7 @@ export const Constants = {
         "tiktok",
         "youtube",
         "widget",
+        "evolution",
       ],
       whatsapp_status: ["disconnected", "connecting", "connected", "error"],
     },
