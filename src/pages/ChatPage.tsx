@@ -1286,6 +1286,15 @@ export default function ChatPage() {
             </>
           )}
         </div>
+
+        {rightPanelOpen && selectedConv && (
+          <ChatRightPanel
+            customerId={selectedConv.id}
+            customerName={selectedConv.name}
+            onClose={() => setRightPanelOpen(false)}
+            onUseReply={(text) => setMessageText((prev) => (prev ? `${prev} ${text}` : text))}
+          />
+        )}
       </div>
 
       <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
