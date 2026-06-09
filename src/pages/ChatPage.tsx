@@ -996,8 +996,68 @@ export default function ChatPage() {
                     Transferir
                   </Button>
 
-                  <button className="p-2 rounded-lg hover:bg-secondary"><Phone className="w-4 h-4 text-muted-foreground" /></button>
-                  <button className="p-2 rounded-lg hover:bg-secondary"><Video className="w-4 h-4 text-muted-foreground" /></button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="p-2 rounded-lg hover:bg-secondary" title="Iniciar chamada">
+                        <Phone className="w-4 h-4 text-muted-foreground" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-60">
+                      <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Ligar para {selectedConv.name}
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => {
+                          if (!selectedConv.phone) {
+                            toast({ title: 'Sem número', description: 'Este contato não possui telefone.', variant: 'destructive' });
+                            return;
+                          }
+                          toast({ title: 'Wavoip', description: `Acionando trunk Wavoip para ${selectedConv.phone}` });
+                          voip.makeCall(selectedConv.phone);
+                        }}
+                        className="gap-2"
+                      >
+                        <PhoneCall className="w-4 h-4 text-emerald-500" />
+                        <div className="flex flex-col">
+                          <span className="text-xs font-semibold">WhatsApp (Wavoip)</span>
+                          <span className="text-[10px] text-muted-foreground">Voz via WhatsApp · trunk Wavoip</span>
+                        </div>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          if (voip.status !== 'connected') {
+                            toast({
+                              title: 'VoIP desconectado',
+                              description: 'Configure o SIP/VoIP em Configurações antes de ligar.',
+                              variant: 'destructive',
+                            });
+                            return;
+                          }
+                          const target = selectedConv.phone || selectedConv.name;
+                          toast({ title: 'VoIP/SIP', description: `Discando ${target} via trunk SIP` });
+                          voip.makeCall(target);
+                        }}
+                        className="gap-2"
+                      >
+                        <Headphones className="w-4 h-4 text-primary" />
+                        <div className="flex flex-col">
+                          <span className="text-xs font-semibold">VoIP (SIP)</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            Trunk SIP · {voip.status === 'connected' ? 'pronto' : 'desconectado'}
+                          </span>
+                        </div>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <button className="p-2 rounded-lg hover:bg-secondary" title="Vídeo chamada"><Video className="w-4 h-4 text-muted-foreground" /></button>
+                  <button
+                    onClick={() => setRightPanelOpen((v) => !v)}
+                    className={`p-2 rounded-lg hover:bg-secondary ${rightPanelOpen ? 'bg-secondary text-primary' : 'text-muted-foreground'}`}
+                    title="Notas internas e respostas rápidas"
+                  >
+                    <StickyNote className="w-4 h-4" />
+                  </button>
                   
                   {activeChannel === 'telegram' && (
                     <div className="flex items-center border-l border-border ml-2 pl-2 gap-1">
