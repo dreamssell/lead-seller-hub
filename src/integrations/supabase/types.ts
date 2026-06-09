@@ -718,6 +718,33 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_notes: {
+        Row: {
+          author_id: string
+          author_name: string | null
+          content: string
+          created_at: string
+          customer_id: string
+          id: string
+        }
+        Insert: {
+          author_id: string
+          author_name?: string | null
+          content: string
+          created_at?: string
+          customer_id: string
+          id?: string
+        }
+        Update: {
+          author_id?: string
+          author_name?: string | null
+          content?: string
+          created_at?: string
+          customer_id?: string
+          id?: string
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           address: string | null
@@ -1134,6 +1161,36 @@ export type Database = {
         Update: {
           email?: string
           locked_at?: string
+        }
+        Relationships: []
+      }
+      quick_replies: {
+        Row: {
+          category: string | null
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          shortcut: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          shortcut: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          shortcut?: string
+          updated_at?: string
         }
         Relationships: []
       }
