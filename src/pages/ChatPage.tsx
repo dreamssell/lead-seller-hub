@@ -130,6 +130,9 @@ export default function ChatPage() {
     endDate: undefined as Date | undefined,
     sort: 'desc'
   });
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const voip = useVoip();
+
 
 
   const addDebugLog = (type: 'info' | 'error' | 'request', message: string, data?: any) => {
