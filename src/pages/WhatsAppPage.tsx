@@ -111,6 +111,7 @@ export default function WhatsAppPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="uaz">WhatsApp (UAZ API)</SelectItem>
+                  <SelectItem value="evolution">WhatsApp (Evolution API)</SelectItem>
                   <SelectItem value="wavoip">WhatsApp (Wavoip)</SelectItem>
                   <SelectItem value="meta">WhatsApp (Meta Official)</SelectItem>
                   <SelectItem value="instagram">Instagram Business</SelectItem>

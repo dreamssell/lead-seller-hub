@@ -1,6 +1,6 @@
 import { MessageSquare, Phone, ShieldCheck, LucideIcon, Globe, ThumbsUp } from 'lucide-react';
 
-export type WhatsAppProvider = 'uaz' | 'meta' | 'wavoip' | 'instagram' | 'telegram' | 'linkedin' | 'tiktok' | 'youtube' | 'facebook' | 'widget';
+export type WhatsAppProvider = 'uaz' | 'meta' | 'wavoip' | 'evolution' | 'instagram' | 'telegram' | 'linkedin' | 'tiktok' | 'youtube' | 'facebook' | 'widget';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'error';
 
@@ -37,6 +37,15 @@ export const PROVIDER_CONFIGS: Record<WhatsAppProvider, ProviderConfig> = {
     color: 'text-emerald-500',
     url: 'https://api.uazapi.dev',
     tokenLabel: 'API Token / Key',
+  },
+  evolution: {
+    name: 'Evolution API',
+    description: 'WhatsApp via Evolution API (Baileys self-hosted ou cloud).',
+    icon: MessageSquare,
+    color: 'text-violet-500',
+    url: 'https://evolution.api.example.com',
+    tokenLabel: 'API Key',
+    extraLabel: 'Instance Name',
   },
   wavoip: {
     name: 'Wavoip',

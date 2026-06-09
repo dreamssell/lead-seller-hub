@@ -64,12 +64,45 @@ class WavoipAdapter implements WhatsAppProviderAdapter {
   }
 }
 
+class EvolutionAdapter implements WhatsAppProviderAdapter {
+  async getStatus(conn: WhatsAppConnection) {
+    // Evolution API: GET /instance/connectionState/{instance}
+    const url = conn.metadata?.url;
+    const token = conn.metadata?.token;
+    const instance = conn.metadata?.instance || conn.metadata?.phone_number_id;
+    if (!url || !token || !instance) {
+      return { connected: false, status: 'unconfigured', error: 'Configure URL, API Key e Instance Name.' };
+    }
+    try {
+      const res = await fetch(`${url.replace(/\/$/, '')}/instance/connectionState/${instance}`, {
+        headers: { apikey: token, Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      const state = data?.instance?.state || data?.state;
+      return { connected: state === 'open', status: state || 'unknown', raw: data };
+    } catch (err: any) {
+      return { connected: false, status: 'error', error: err?.message || 'Falha na requisição' };
+    }
+  }
+
+  async sendMessage(conn: WhatsAppConnection, customerId: string, content: string) {
+    console.log('[Evolution] sendMessage placeholder', { customerId, content });
+    return { success: true, note: 'Edge function de envio Evolution ainda não implementada.' };
+  }
+
+  async syncContacts(_conn: WhatsAppConnection) {
+    return { success: true };
+  }
+}
+
 export const getProviderAdapter = (provider: string): WhatsAppProviderAdapter => {
   switch (provider) {
     case 'uaz':
       return new UazAdapter();
     case 'wavoip':
       return new WavoipAdapter();
+    case 'evolution':
+      return new EvolutionAdapter();
     default:
       throw new Error(`Provider ${provider} not supported`);
   }
