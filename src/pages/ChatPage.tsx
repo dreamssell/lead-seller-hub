@@ -29,6 +29,7 @@ import { Link } from 'react-router-dom';
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import { WhatsAppConnection, PROVIDER_CONFIGS } from '@/components/whatsapp/types';
 import { useVoip } from '@/contexts/VoipContext';
+import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
 import { ChatRightPanel } from '@/components/chat/ChatRightPanel';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { StickyNote, Zap, PhoneCall, Headphones } from 'lucide-react';
@@ -132,6 +133,7 @@ export default function ChatPage() {
   });
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const voip = useVoip();
+  const wavoip = useWavoipWebphone();
 
 
 
@@ -1013,15 +1015,26 @@ export default function ChatPage() {
                             toast({ title: 'Sem número', description: 'Este contato não possui telefone.', variant: 'destructive' });
                             return;
                           }
-                          toast({ title: 'Wavoip', description: `Acionando trunk Wavoip para ${selectedConv.phone}` });
-                          voip.makeCall(selectedConv.phone);
+                          if (!wavoip.config.enabled || wavoip.config.devices.length === 0) {
+                            toast({
+                              title: 'Wavoip não configurado',
+                              description: 'Cadastre um Device Token em Configurações > Wavoip para usar o tronco WhatsApp.',
+                              variant: 'destructive',
+                            });
+                            return;
+                          }
+                          wavoip.callWhatsApp(selectedConv.phone);
                         }}
                         className="gap-2"
                       >
                         <PhoneCall className="w-4 h-4 text-emerald-500" />
                         <div className="flex flex-col">
                           <span className="text-xs font-semibold">WhatsApp (Wavoip)</span>
-                          <span className="text-[10px] text-muted-foreground">Voz via WhatsApp · trunk Wavoip</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {wavoip.config.enabled && wavoip.config.devices.length > 0
+                              ? `Tronco pronto · ${wavoip.config.devices.length} device(s)`
+                              : 'Tronco não configurado'}
+                          </span>
                         </div>
                       </DropdownMenuItem>
                       <DropdownMenuItem
