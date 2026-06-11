@@ -8,6 +8,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { GlobalStateProvider } from "@/contexts/GlobalStateContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { VoipProvider } from "@/contexts/VoipContext";
+import { WavoipWebphoneProvider } from "@/contexts/WavoipWebphoneContext";
 import { VideoCallProvider } from "@/contexts/VideoCallContext";
 import Dashboard from "./pages/Dashboard";
 import ChatPage from "./pages/ChatPage";
@@ -49,6 +50,7 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <VoipProvider>
+            <WavoipWebphoneProvider>
             <VideoCallProvider>
             <Routes>
               {/* Rota pública — recebe tokens da página externa */}
@@ -84,6 +86,7 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
             </VideoCallProvider>
+            </WavoipWebphoneProvider>
             </VoipProvider>
           </AuthProvider>
         </BrowserRouter>

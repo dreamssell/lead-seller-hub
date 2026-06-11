@@ -90,6 +90,7 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import WavoipWebphoneSection from '@/components/settings/WavoipWebphoneSection';
 
 function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
   return (
@@ -828,6 +829,7 @@ function WavoipConfigInner({ standalone = false }: { standalone?: boolean }) {
             </TabsList>
 
             <TabsContent value="config" className="space-y-6 outline-none">
+              <WavoipWebphoneSection />
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20">
