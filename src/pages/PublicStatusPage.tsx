@@ -149,7 +149,7 @@ export default function PublicStatusPage() {
         </div>
 
         <footer className="mt-20 pt-12 border-t border-border/40 flex flex-col md:flex-row items-center justify-between gap-6 text-[10px] text-muted-foreground uppercase font-bold tracking-widest">
-          <p>© 2026 Lovable Platform</p>
+          <p>© 2026 Lead Seller Platform</p>
         </footer>
       </div>
 
