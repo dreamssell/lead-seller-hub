@@ -86,8 +86,43 @@ class EvolutionAdapter implements WhatsAppProviderAdapter {
   }
 
   async sendMessage(conn: WhatsAppConnection, customerId: string, content: string) {
-    console.log('[Evolution] sendMessage placeholder', { customerId, content });
-    return { success: true, note: 'Edge function de envio Evolution ainda não implementada.' };
+    const url = conn.metadata?.url;
+    const token = conn.metadata?.token;
+    const instance = conn.metadata?.instance || conn.metadata?.phone_number_id;
+    
+    if (!url || !token || !instance) {
+      throw new Error('Configurações da Evolution API incompletas.');
+    }
+
+    // First we need to get the customer phone
+    const { data: customer } = await supabase.from('customers').select('phone').eq('id', customerId).single();
+    if (!customer?.phone) throw new Error('Cliente não possui telefone cadastrado.');
+
+    try {
+      const res = await fetch(`${url.replace(/\/$/, '')}/message/sendText/${instance}`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          apikey: token,
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify({
+          number: customer.phone,
+          options: { delay: 1200, presence: 'composing', linkPreview: false },
+          textMessage: { text: content }
+        })
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.message || `Erro Evolution: ${res.status}`);
+      }
+      
+      return await res.json();
+    } catch (err: any) {
+      console.error('[Evolution] Error sending message:', err);
+      throw err;
+    }
   }
 
   async syncContacts(_conn: WhatsAppConnection) {
