@@ -18,29 +18,33 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+      injectRegister: null,
+      devOptions: { enabled: false },
+      filename: 'sw.js',
+      includeAssets: ['favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png'],
+      workbox: {
+        navigateFallbackDenylist: [/^\/~oauth/],
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: { cacheName: 'html-cache' },
+          },
+        ],
+      },
       manifest: {
         name: 'Lead Seller',
         short_name: 'Lead Seller',
-        description: 'Omnichannel Platform for Sales and Support',
+        description: 'Plataforma omnichannel de atendimento',
         theme_color: '#000000',
+        background_color: '#000000',
+        display: 'standalone',
+        start_url: '/',
+        scope: '/',
         icons: [
-          {
-            src: 'logo.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'logo.png',
-            sizes: '512x512',
-            type: 'image/png'
-          },
-          {
-            src: 'logo.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable'
-          }
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
         ]
       }
     })
