@@ -2595,6 +2595,7 @@ export type Database = {
           sub_company_name: string
         }[]
       }
+      get_room_invite_token: { Args: { p_room_id: string }; Returns: string }
       get_webhook_idempotency_stats: {
         Args: { p_end_date: string; p_start_date: string; p_webhook_id: string }
         Returns: {
