@@ -659,7 +659,17 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
             <RotateCcw className="w-3.5 h-3.5 mr-1" /> Resetar filtros
           </Button>
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">{events.length} de {total}</span>
+            <span className="text-xs text-muted-foreground" title={`Fuso: ${userTz}`}>{events.length} de {total}</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8"
+              onClick={resetCursor}
+              disabled={loading || loadingMore}
+              title="Voltar ao início e limpar o cursor salvo"
+            >
+              <RotateCcw className="w-3.5 h-3.5 mr-1" /> Voltar ao início
+            </Button>
             <Popover>
               <PopoverTrigger asChild>
                 <Button size="sm" variant="outline" className="h-8" title="Opções de exportação">
