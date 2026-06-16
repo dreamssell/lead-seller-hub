@@ -108,10 +108,68 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
       });
   }, [open, leadId]);
 
-  // Reset filters when reopening
+  // Reset transient state when the dialog closes (filters are restored from DB on next open)
   useEffect(() => {
-    if (!open) { setChannelFilter('all'); setDateFrom(''); setDateTo(''); setEvents([]); setTotal(0); setHasMore(false); }
+    if (!open) { setEvents([]); setTotal(0); setHasMore(false); setHydrated(false); }
   }, [open]);
+
+  // -------- Cross-device filter & scroll persistence (user_ui_state) --------
+  const [hydrated, setHydrated] = useState(false);
+  const [restoredLoadedCount, setRestoredLoadedCount] = useState<number | null>(null);
+  const ownerIdRef = useRef<string | null>(null);
+  const scope = leadId ? `lead_history:${leadId}` : null;
+
+  // Hydrate filters from DB on open
+  useEffect(() => {
+    if (!open || !leadId || !scope) return;
+    let cancelled = false;
+    (async () => {
+      const [{ data: userRes }, { data: leadRow }] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase.from('leads').select('owner_id').eq('id', leadId).maybeSingle(),
+      ]);
+      const uid = userRes.user?.id;
+      const ownerId = (leadRow as any)?.owner_id;
+      ownerIdRef.current = ownerId || null;
+      if (!uid || !ownerId) { if (!cancelled) setHydrated(true); return; }
+      const { data } = await (supabase as any).from('user_ui_state')
+        .select('state').eq('user_id', uid).eq('owner_id', ownerId).eq('scope', scope).maybeSingle();
+      if (cancelled) return;
+      const s = (data?.state as any) || {};
+      if (typeof s.channelFilter === 'string') setChannelFilter(s.channelFilter);
+      if (typeof s.dateFrom === 'string') setDateFrom(s.dateFrom);
+      if (typeof s.dateTo === 'string') setDateTo(s.dateTo);
+      if (typeof s.loadedCount === 'number' && s.loadedCount > PAGE_SIZE) setRestoredLoadedCount(s.loadedCount);
+      setHydrated(true);
+    })();
+    return () => { cancelled = true; };
+  }, [open, leadId, scope]);
+
+  // After first page loads, if we had a restored offset, keep loading until we reach it
+  useEffect(() => {
+    if (!restoredLoadedCount || loading) return;
+    if (events.length >= restoredLoadedCount || !hasMore) { setRestoredLoadedCount(null); return; }
+    loadMore();
+  }, [restoredLoadedCount, events.length, hasMore, loading, loadMore]);
+
+  // Debounced upsert of current filters + loaded count
+  useEffect(() => {
+    if (!open || !hydrated || !leadId || !scope) return;
+    const t = window.setTimeout(async () => {
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id;
+      const ownerId = ownerIdRef.current;
+      if (!uid || !ownerId) return;
+      await (supabase as any).from('user_ui_state').upsert({
+        user_id: uid,
+        owner_id: ownerId,
+        scope,
+        state: { channelFilter, dateFrom, dateTo, loadedCount: events.length },
+      }, { onConflict: 'user_id,owner_id,scope' });
+    }, 600);
+    return () => window.clearTimeout(t);
+  }, [open, hydrated, leadId, scope, channelFilter, dateFrom, dateTo, events.length]);
+
 
   // Infinite scroll with debounce + prefetch (triggers earlier and coalesces rapid scroll events)
   useEffect(() => {
