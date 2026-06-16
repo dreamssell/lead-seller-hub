@@ -20,6 +20,8 @@ import {
   Smartphone,
   AlertCircle,
   Copy,
+  TimerReset,
+  ShieldAlert,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -32,7 +34,12 @@ interface Props {
   onConnected: () => void;
 }
 
-type Step = 'credentials' | 'qr' | 'connected';
+type Step = 'credentials' | 'qr' | 'connected' | 'failed';
+type FailureReason = 'timeout' | 'auth' | 'forbidden' | 'unknown';
+
+const MIN_POLL_MS = 3000;
+const MAX_POLL_MS = 15000;
+const POLL_BACKOFF = 1.4;
 
 export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }: Props) {
   const initialMeta = (conn.metadata ?? {}) as Record<string, any>;
@@ -42,12 +49,21 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
   const [instance, setInstance] = useState<string>(
     initialMeta.instance ?? `inst-${conn.id.slice(0, 6)}`,
   );
+  const [timeoutSec, setTimeoutSec] = useState<number>(
+    Math.max(30, Math.min(600, Number(initialMeta.qr_timeout_sec) || 180)),
+  );
   const [qr, setQr] = useState<string | null>(null);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [stateText, setStateText] = useState<string>('');
-  const pollRef = useRef<number | null>(null);
+  const [remaining, setRemaining] = useState<number>(0);
+  const [failure, setFailure] = useState<{ reason: FailureReason; message: string } | null>(null);
+
+  const pollTimeoutRef = useRef<number | null>(null);
   const qrRefreshRef = useRef<number | null>(null);
+  const countdownRef = useRef<number | null>(null);
+  const deadlineRef = useRef<number>(0);
+  const pollDelayRef = useRef<number>(MIN_POLL_MS);
 
   // Reset every time the dialog opens.
   useEffect(() => {
@@ -56,21 +72,25 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
       setUrl(meta.url ?? 'https://evolution.api.example.com');
       setToken(meta.token ?? '');
       setInstance(meta.instance ?? `inst-${conn.id.slice(0, 6)}`);
+      setTimeoutSec(Math.max(30, Math.min(600, Number(meta.qr_timeout_sec) || 180)));
       setQr(null);
       setPairingCode(null);
       setStateText('');
+      setFailure(null);
       setStep(conn.status === 'connected' ? 'connected' : 'credentials');
     } else {
-      stopPolling();
+      stopAll();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const stopPolling = () => {
-    if (pollRef.current) window.clearInterval(pollRef.current);
+  const stopAll = () => {
+    if (pollTimeoutRef.current) window.clearTimeout(pollTimeoutRef.current);
     if (qrRefreshRef.current) window.clearInterval(qrRefreshRef.current);
-    pollRef.current = null;
+    if (countdownRef.current) window.clearInterval(countdownRef.current);
+    pollTimeoutRef.current = null;
     qrRefreshRef.current = null;
+    countdownRef.current = null;
   };
 
   const invoke = (action: string, extra: Record<string, any> = {}) =>
@@ -78,16 +98,34 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
       body: { action, connection_id: conn.id, url, token, instance, ...extra },
     });
 
+  const failWith = (reason: FailureReason, message: string) => {
+    stopAll();
+    setFailure({ reason, message });
+    setStep('failed');
+  };
+
+  const persistTimeout = async (sec: number) => {
+    await supabase
+      .from('whatsapp_connections')
+      .update({ metadata: { ...(conn.metadata ?? {}), qr_timeout_sec: sec } })
+      .eq('id', conn.id);
+  };
+
   const startInstance = async () => {
     if (!url.trim() || !token.trim() || !instance.trim()) {
       toast.error('Preencha URL, API Key e nome da instância.');
       return;
     }
     setBusy(true);
+    setFailure(null);
     const { data, error } = await invoke('create');
     setBusy(false);
     if (error) {
       toast.error('Falha ao criar instância', { description: error.message });
+      return;
+    }
+    if (data?.error === 'forbidden') {
+      failWith('forbidden', data.hint || 'Você não tem permissão para esta instância.');
       return;
     }
     if (data?.error) {
@@ -97,11 +135,9 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
     setQr(data?.qr ?? null);
     setPairingCode(data?.pairing_code ?? null);
     setStep('qr');
+    persistTimeout(timeoutSec);
     beginPolling();
-    if (!data?.qr) {
-      // Some Evolution versions only return QR on /instance/connect — fetch it.
-      refreshQr();
-    }
+    if (!data?.qr) refreshQr();
     toast.success(data?.already_existed ? 'Instância já existia — conectando.' : 'Instância criada!');
   };
 
@@ -113,20 +149,53 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
   };
 
   const beginPolling = () => {
-    stopPolling();
-    // Poll connection state every 3s.
-    pollRef.current = window.setInterval(async () => {
-      const { data } = await invoke('state');
-      if (data?.state) setStateText(data.state);
-      if (data?.connected) {
-        stopPolling();
-        setStep('connected');
-        toast.success('WhatsApp conectado!');
-        onConnected();
-      }
-    }, 3000);
-    // Refresh QR every 30s while waiting.
+    stopAll();
+    pollDelayRef.current = MIN_POLL_MS;
+    deadlineRef.current = Date.now() + timeoutSec * 1000;
+    setRemaining(timeoutSec);
+
+    // Countdown UI tick.
+    countdownRef.current = window.setInterval(() => {
+      const left = Math.max(0, Math.ceil((deadlineRef.current - Date.now()) / 1000));
+      setRemaining(left);
+    }, 1000);
+
+    // QR refresh every 30s.
     qrRefreshRef.current = window.setInterval(refreshQr, 30000);
+
+    const tick = async () => {
+      if (Date.now() >= deadlineRef.current) {
+        failWith(
+          'timeout',
+          `A instância não ficou conectada em ${timeoutSec}s. Verifique se você escaneou o QR e tente novamente.`,
+        );
+        return;
+      }
+      const { data, error } = await invoke('state');
+      if (error) {
+        // Network/edge error — back off and retry.
+        pollDelayRef.current = Math.min(MAX_POLL_MS, pollDelayRef.current * POLL_BACKOFF);
+      } else if (data?.auth_error) {
+        failWith('auth', data.hint || 'A API Key da Evolution foi recusada. Atualize o token e tente novamente.');
+        return;
+      } else if (data?.error === 'forbidden') {
+        failWith('forbidden', data.hint || 'Permissão negada para esta instância.');
+        return;
+      } else {
+        if (data?.state) setStateText(data.state);
+        if (data?.connected) {
+          stopAll();
+          setStep('connected');
+          toast.success('WhatsApp conectado!');
+          onConnected();
+          return;
+        }
+        // Successful poll, reset to min delay.
+        pollDelayRef.current = MIN_POLL_MS;
+      }
+      pollTimeoutRef.current = window.setTimeout(tick, pollDelayRef.current);
+    };
+    pollTimeoutRef.current = window.setTimeout(tick, pollDelayRef.current);
   };
 
   const handleLogout = async () => {
@@ -167,6 +236,23 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
           Apenas letras, números, hífen e underline. Será o identificador no Evolution.
         </p>
       </div>
+      <div className="space-y-2">
+        <Label className="flex items-center gap-2">
+          <TimerReset className="w-4 h-4" /> Tempo máximo de espera pelo QR (segundos)
+        </Label>
+        <Input
+          type="number"
+          min={30}
+          max={600}
+          value={timeoutSec}
+          onChange={(e) =>
+            setTimeoutSec(Math.max(30, Math.min(600, Number(e.target.value) || 180)))
+          }
+        />
+        <p className="text-xs text-muted-foreground">
+          Entre 30 e 600 segundos. Após esse tempo sem leitura, o wizard cancela o polling.
+        </p>
+      </div>
     </div>
   );
 
@@ -179,10 +265,15 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
             Abra WhatsApp → Aparelhos conectados → Conectar um aparelho.
           </p>
         </div>
-        <Badge variant="outline" className="gap-1.5">
-          <Loader2 className="w-3 h-3 animate-spin" />
-          {stateText || 'aguardando'}
-        </Badge>
+        <div className="flex flex-col items-end gap-1">
+          <Badge variant="outline" className="gap-1.5">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            {stateText || 'aguardando'}
+          </Badge>
+          <span className="text-[11px] text-muted-foreground tabular-nums">
+            restam {remaining}s
+          </span>
+        </div>
       </div>
       <div className="rounded-xl border border-border/60 bg-secondary/30 p-4 flex items-center justify-center min-h-[280px]">
         {qr ? (
@@ -219,7 +310,8 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
       <div className="flex items-start gap-2 text-xs text-muted-foreground bg-secondary/40 rounded-lg p-3">
         <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
         <span>
-          O QR é atualizado automaticamente a cada 30s e a conexão é detectada em tempo real.
+          O QR é atualizado a cada 30s. O polling começa em {MIN_POLL_MS / 1000}s e aplica
+          backoff até {MAX_POLL_MS / 1000}s em caso de falhas temporárias.
         </span>
       </div>
     </div>
@@ -240,6 +332,34 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
     </div>
   );
 
+  const renderFailed = () => {
+    const isAuth = failure?.reason === 'auth' || failure?.reason === 'forbidden';
+    return (
+      <div className="text-center py-6 space-y-3">
+        <div
+          className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center ${
+            isAuth ? 'bg-amber-500/10' : 'bg-destructive/10'
+          }`}
+        >
+          {isAuth ? (
+            <ShieldAlert className="w-8 h-8 text-amber-500" />
+          ) : (
+            <AlertCircle className="w-8 h-8 text-destructive" />
+          )}
+        </div>
+        <div>
+          <p className="font-semibold">
+            {failure?.reason === 'timeout' && 'Tempo esgotado'}
+            {failure?.reason === 'auth' && 'Autenticação expirou'}
+            {failure?.reason === 'forbidden' && 'Acesso negado'}
+            {failure?.reason === 'unknown' && 'Não foi possível conectar'}
+          </p>
+          <p className="text-sm text-muted-foreground px-4">{failure?.message}</p>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -258,6 +378,7 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
         {step === 'credentials' && renderCredentials()}
         {step === 'qr' && renderQr()}
         {step === 'connected' && renderConnected()}
+        {step === 'failed' && renderFailed()}
 
         <DialogFooter className="gap-2">
           {step === 'credentials' && (
@@ -272,8 +393,14 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Atualizar QR
               </Button>
-              <Button variant="ghost" onClick={() => setStep('credentials')}>
-                Voltar
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  stopAll();
+                  setStep('credentials');
+                }}
+              >
+                Cancelar
               </Button>
             </>
           )}
@@ -283,6 +410,17 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
                 Desconectar
               </Button>
               <Button onClick={() => onOpenChange(false)}>Concluir</Button>
+            </>
+          )}
+          {step === 'failed' && (
+            <>
+              <Button variant="outline" onClick={() => setStep('credentials')}>
+                Revisar credenciais
+              </Button>
+              <Button onClick={startInstance} disabled={busy}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Tentar novamente
+              </Button>
             </>
           )}
         </DialogFooter>
