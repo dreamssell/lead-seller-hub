@@ -278,24 +278,52 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
   const [exportProgress, setExportProgress] = useState(0);
   const exportCancelRef = useRef(false);
 
+  // -------- Export options (custom date range + columns) --------
+  type ColKey = 'data' | 'tipo' | 'canal' | 'origem' | 'de' | 'para';
+  const ALL_COLS: { key: ColKey; label: string }[] = [
+    { key: 'data', label: 'Data' },
+    { key: 'tipo', label: 'Tipo' },
+    { key: 'canal', label: 'Canal' },
+    { key: 'origem', label: 'Origem' },
+    { key: 'de', label: 'De' },
+    { key: 'para', label: 'Para' },
+  ];
+  const [useCustomRange, setUseCustomRange] = useState(false);
+  const [exportFrom, setExportFrom] = useState('');
+  const [exportTo, setExportTo] = useState('');
+  const [exportCols, setExportCols] = useState<ColKey[]>(['data','tipo','canal','origem','de','para']);
+  const toggleCol = (k: ColKey) =>
+    setExportCols(prev => prev.includes(k) ? prev.filter(c => c !== k) : [...prev, k]);
+
+  // Build a query honoring either current filters or export-specific date range.
+  const buildExportQuery = useCallback(() => {
+    let q = supabase.from('lead_events')
+      .select('id,type,from_stage_name,to_stage_name,channel,source,created_at,metadata', { count: 'exact' })
+      .eq('lead_id', leadId as string);
+    if (channelFilter !== 'all') q = q.eq('channel', channelFilter);
+    const from = useCustomRange ? exportFrom : dateFrom;
+    const to = useCustomRange ? exportTo : dateTo;
+    if (from) q = q.gte('created_at', `${from}T00:00:00`);
+    if (to)   q = q.lte('created_at', `${to}T23:59:59`);
+    return q.order('created_at', { ascending: false }).order('id', { ascending: false });
+  }, [leadId, channelFilter, dateFrom, dateTo, useCustomRange, exportFrom, exportTo]);
+
   // Fetch ALL events that match the current filters, in batches, with progress.
   const fetchAllFiltered = async (onProgress: (loaded: number, total: number) => void): Promise<Event[]> => {
     if (!leadId) return [];
     const BATCH = 500;
-    // First request to know the total
-    const first = await buildQuery().range(0, BATCH - 1);
+    const first = await buildExportQuery().range(0, BATCH - 1);
     const totalCount = first.count || 0;
     let all: Event[] = (first.data as Event[]) || [];
     onProgress(all.length, totalCount);
     while (all.length < totalCount) {
       if (exportCancelRef.current) break;
       const from = all.length;
-      const { data } = await buildQuery().range(from, from + BATCH - 1);
+      const { data } = await buildExportQuery().range(from, from + BATCH - 1);
       const chunk = (data as Event[]) || [];
       if (!chunk.length) break;
       all = all.concat(chunk);
       onProgress(all.length, totalCount);
-      // yield to UI
       await new Promise(r => setTimeout(r, 0));
     }
     return all;
@@ -314,8 +342,10 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
     const safe = (leadName || 'lead').replace(/[^a-z0-9\-_]+/gi, '_').toLowerCase();
     const parts = [safe, 'historico'];
     if (channelFilter !== 'all') parts.push(channelFilter);
-    if (dateFrom) parts.push(`de-${dateFrom}`);
-    if (dateTo) parts.push(`ate-${dateTo}`);
+    const from = useCustomRange ? exportFrom : dateFrom;
+    const to = useCustomRange ? exportTo : dateTo;
+    if (from) parts.push(`de-${from}`);
+    if (to) parts.push(`ate-${to}`);
     return parts.join('_');
   };
 
