@@ -234,7 +234,7 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
         <p className="font-semibold">WhatsApp conectado com sucesso</p>
         <p className="text-sm text-muted-foreground">
           Instância <span className="font-mono">{instance}</span>
-          {conn.phone_number && <> · {conn.phone_number}</>}
+          {(conn as any).phone_number && <> · {(conn as any).phone_number}</>}
         </p>
       </div>
     </div>
