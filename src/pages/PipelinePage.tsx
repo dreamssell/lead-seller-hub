@@ -267,20 +267,54 @@ export default function PipelinePage() {
         </div>
         <div className="ml-auto flex gap-2 items-center">
           <span
-            className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-full border ${
-              realtimeActive ? 'border-success/40 text-success' : 'border-muted text-muted-foreground'
+            className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-full border transition-colors ${
+              autoRefreshing
+                ? 'border-primary/60 text-primary bg-primary/5'
+                : realtimeActive ? 'border-success/40 text-success' : 'border-muted text-muted-foreground'
             }`}
-            title={realtimeActive ? 'Atualização em tempo real ativa' : 'Realtime desconectado'}
+            title={autoRefreshing ? 'Sincronizando…' : realtimeActive ? 'Atualização em tempo real ativa' : 'Realtime desconectado'}
           >
-            <Radio className={`w-3 h-3 ${realtimeActive ? 'animate-pulse' : ''}`} />
-            {realtimeActive ? 'Tempo real' : 'Offline'}
+            {autoRefreshing ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Radio className={`w-3 h-3 ${realtimeActive ? 'animate-pulse' : ''}`} />}
+            {autoRefreshing ? 'Sincronizando' : realtimeActive ? 'Tempo real' : 'Offline'}
           </span>
-          <Button variant="outline" size="sm" onClick={load}>Atualizar</Button>
+          <Button variant="outline" size="sm" onClick={() => { load(); loadLeads(); }}>Atualizar</Button>
+          <Button variant="outline" size="sm" onClick={() => setStageAuditOpen(true)} title="Auditoria de mudanças de etapa">
+            <ClipboardList className="w-4 h-4 mr-1" /> Auditoria
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setNotifPrefsOpen(true)} title="Preferências de notificação">
+            <Bell className="w-4 h-4 mr-1" /> Notificações
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setTemplatesOpen(true)}>
             <LayoutTemplate className="w-4 h-4 mr-1" /> Templates
           </Button>
           <Button size="sm" onClick={() => setManagerOpen(true)} title={canManagePipelines ? '' : 'Modo somente leitura'}>
             <Settings2 className="w-4 h-4 mr-1" /> Gerenciar funis {!canManagePipelines && <Lock className="w-3 h-3 ml-1 opacity-70" />}
+          </Button>
+        </div>
+      </div>
+
+      {/* Search + pagination bar */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar leads pelo nome…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8 h-9"
+          />
+        </div>
+        <div className="flex items-center gap-1 text-xs text-muted-foreground ml-auto">
+          <span>
+            {totalLeads === 0
+              ? 'Nenhum lead'
+              : `${page * pageSize + 1}–${Math.min((page + 1) * pageSize, totalLeads)} de ${totalLeads}`}
+          </span>
+          <Button size="icon" variant="ghost" className="h-7 w-7" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-7 w-7" disabled={(page + 1) * pageSize >= totalLeads} onClick={() => setPage(p => p + 1)}>
+            <ChevronRight className="w-4 h-4" />
           </Button>
         </div>
       </div>
