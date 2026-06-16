@@ -89,9 +89,10 @@ export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: P
       channel: newChannel === '__all__' ? null : newChannel,
       notify_new_lead: newLead,
       notify_stage_change: newStage,
+      notify_funnel_change: newFunnel,
     };
     const { data, error } = await (supabase as any).from('notification_preferences')
-      .insert(payload).select('id,sub_company_id,channel,notify_new_lead,notify_stage_change').single();
+      .insert(payload).select('id,sub_company_id,channel,notify_new_lead,notify_stage_change,notify_funnel_change').single();
     if (error) return toast.error(error.message);
     setPrefs(prev => [...prev, data as Pref]);
     toast.success('Regra adicionada');
