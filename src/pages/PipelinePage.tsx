@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { Plus, MoreVertical, User, Loader2, GitBranch, Settings2 } from 'lucide-react';
+import { Plus, MoreVertical, User, Loader2, GitBranch, Settings2, History, Lock } from 'lucide-react';
 import { PipelineManagerDialog } from '@/components/pipeline/PipelineManagerDialog';
+import { LeadHistoryDialog } from '@/components/pipeline/LeadHistoryDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -57,6 +58,8 @@ export default function PipelinePage() {
   const [selectedPipeline, setSelectedPipeline] = useState<string>('');
   const [selectedChannel, setSelectedChannel] = useState<string>('all');
   const [managerOpen, setManagerOpen] = useState(false);
+  const [historyLead, setHistoryLead] = useState<{ id: string; name: string } | null>(null);
+  const [canMove, setCanMove] = useState(false);
 
   const load = useCallback(async () => {
     if (!ownerId) return;
