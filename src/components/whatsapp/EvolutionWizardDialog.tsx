@@ -143,9 +143,14 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
       .eq('id', conn.id);
   };
 
+  const urlError = validateUrl(url);
+  const tokenError = validateToken(token);
+  const instanceError = validateInstance(instance);
+  const canSubmit = !urlError && !tokenError && !instanceError;
+
   const startInstance = async () => {
-    if (!url.trim() || !token.trim() || !instance.trim()) {
-      toast.error('Preencha URL, API Key e nome da instância.');
+    if (!canSubmit) {
+      toast.error('Corrija os campos destacados antes de gerar o QR Code.');
       return;
     }
     setBusy(true);
