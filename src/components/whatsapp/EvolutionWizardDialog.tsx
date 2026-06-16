@@ -367,6 +367,20 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
           </div>
         )}
       </div>
+      <div className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-2 pl-3">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Instância</p>
+          <p className="font-mono text-xs truncate">{instance}</p>
+        </div>
+        <div className="flex gap-1 shrink-0">
+          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={copyInstance}>
+            <Copy className="w-3.5 h-3.5 mr-1" /> ID
+          </Button>
+          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={downloadQr} disabled={!qr}>
+            <Download className="w-3.5 h-3.5 mr-1" /> QR
+          </Button>
+        </div>
+      </div>
       {pairingCode && (
         <div className="flex items-center justify-between rounded-lg border border-border/60 p-3">
           <div>
