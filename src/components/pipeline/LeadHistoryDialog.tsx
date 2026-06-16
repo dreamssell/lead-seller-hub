@@ -241,6 +241,7 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
         if (savedAtStr) setSavedAt(savedAtStr);
       } else {
         // Expired — purge stale cursor fields so they don't get re-restored.
+        // Filters de data e opções de exportação são preservados.
         try {
           await (supabase as any).from('user_ui_state').upsert({
             user_id: uid, owner_id: ownerId, scope,
@@ -248,6 +249,13 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
                      cursorTtlHours: ttl, loadedCount: 0, cursor: null, scrollTop: 0, savedAt: null },
           }, { onConflict: 'user_id,owner_id,scope' });
         } catch { /* best-effort */ }
+        setSavedAt(null);
+        // Garantir visualização do início: limpa cursor/scroll locais
+        seenIdsRef.current = new Set();
+        setCursor(null);
+        scrollTopRef.current = 0;
+        if (scrollRef.current) scrollRef.current.scrollTop = 0;
+        toast.info('Cursor salvo expirou — voltando ao início. Filtros mantidos.');
       }
       setHydrated(true);
     })();
@@ -482,9 +490,34 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
     return parts.join('_');
   };
 
+  // Resolve the EXACT date interval used by the export.
+  // - When "custom range" is OFF, mirrors the dialog filters 1:1.
+  // - Returns ISO instants computed in the user's local timezone so the
+  //   server-side filter matches what the user sees in the dialog.
+  // - Returns a validation error if the range is invalid.
+  const resolveExportRange = (): { from: string; to: string; fromIso: string | null; toIso: string | null; error: string | null } => {
+    const from = useCustomRange ? exportFrom : dateFrom;
+    const to = useCustomRange ? exportTo : dateTo;
+    if (from && to && from > to) {
+      return { from, to, fromIso: null, toIso: null, error: 'Data "De" é posterior a "Até".' };
+    }
+    try {
+      return {
+        from, to,
+        fromIso: from ? localDayStartISO(from) : null,
+        toIso: to ? localDayEndISO(to) : null,
+        error: null,
+      };
+    } catch {
+      return { from, to, fromIso: null, toIso: null, error: 'Data inválida no intervalo.' };
+    }
+  };
+
   const runExport = async (kind: 'csv' | 'pdf') => {
     if (exporting) return;
     if (exportCols.length === 0) return toast.error('Selecione ao menos uma coluna.');
+    const range = resolveExportRange();
+    if (range.error) return toast.error(range.error);
     setExporting(kind);
     setExportProgress(0);
     exportCancelRef.current = false;
@@ -525,7 +558,7 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
           `Total: ${rows.length}`,
         ].filter(Boolean).join('  ·  ');
         doc.text(filtersTxt, margin, y); y += 14;
-        doc.text(`Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`, margin, y); y += 16;
+        doc.text(`Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })} · Fuso: ${userTz}`, margin, y); y += 16;
         doc.setDrawColor(200); doc.line(margin, y, 559, y); y += 14;
         doc.setTextColor(20); doc.setFontSize(9);
         // Distribute columns evenly across usable width
@@ -566,8 +599,19 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
   const scheduleExport = async (kind: 'csv' | 'pdf') => {
     if (!leadId) return;
     if (total === 0) { toast.error('Nada a exportar com os filtros atuais.'); return; }
+    const range = resolveExportRange();
+    if (range.error) { toast.error(range.error); return; }
     setScheduling(true);
-    const capturedFilters = { channel: channelFilter, from: dateFrom, to: dateTo };
+    // Capture the EXACT resolved interval (TZ-aware ISO instants) and the
+    // selected columns at click time, so the background task uses the same
+    // window the user sees in the dialog — even after filters change.
+    const capturedFilters = {
+      channel: channelFilter,
+      from: range.from, to: range.to,
+      fromIso: range.fromIso, toIso: range.toIso,
+    };
+    const capturedCols = ALL_COLS.filter(c => exportCols.includes(c.key));
+    const capturedTz = userTz;
     const capturedLeadId = leadId;
     const capturedLeadName = leadName;
     const fileBase = filenameBase();
@@ -585,9 +629,9 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
             .select('id,type,from_stage_name,to_stage_name,channel,source,created_at,metadata', { count: 'exact' })
             .eq('lead_id', capturedLeadId);
           if (capturedFilters.channel !== 'all') q = q.eq('channel', capturedFilters.channel);
-          if (capturedFilters.from) q = q.gte('created_at', new Date(`${capturedFilters.from}T00:00:00`).toISOString());
-          if (capturedFilters.to)   q = q.lte('created_at', new Date(`${capturedFilters.to}T23:59:59.999`).toISOString());
-          return q.order('created_at', { ascending: false });
+          if (capturedFilters.fromIso) q = q.gte('created_at', capturedFilters.fromIso);
+          if (capturedFilters.toIso)   q = q.lte('created_at', capturedFilters.toIso);
+          return q.order('created_at', { ascending: false }).order('id', { ascending: false });
         };
         const first = await baseQuery().range(0, BATCH - 1);
         const totalCount = first.count || 0;
@@ -603,9 +647,12 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
         }
         const rows = buildRowsFrom(all);
         if (kind === 'csv') {
-          const headers = ['Data', 'Tipo', 'Canal', 'Origem', 'De', 'Para'];
+          const headers = capturedCols.map(c => c.label);
           const escape = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-          const csv = [headers.join(','), ...rows.map(r => [r.data, r.tipo, r.canal, r.origem, r.de, r.para].map(escape).join(','))].join('\n');
+          const csv = [
+            headers.join(','),
+            ...rows.map(r => capturedCols.map(c => escape((r as any)[c.key])).join(','))
+          ].join('\n');
           const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
@@ -618,20 +665,28 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
           doc.setFontSize(14); doc.text('Histórico do Lead', margin, y); y += 18;
           doc.setFontSize(10); doc.setTextColor(90);
           doc.text(`Lead: ${capturedLeadName || '—'}`, margin, y); y += 14;
-          doc.text(`Total: ${rows.length}  ·  Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`, margin, y); y += 16;
+          const filtersTxt = [
+            capturedFilters.channel !== 'all' ? `Canal: ${CHANNEL_LABEL[capturedFilters.channel] || capturedFilters.channel}` : 'Canal: Todos',
+            capturedFilters.from ? `De: ${capturedFilters.from}` : null,
+            capturedFilters.to ? `Até: ${capturedFilters.to}` : null,
+            `Total: ${rows.length}`,
+          ].filter(Boolean).join('  ·  ');
+          doc.text(filtersTxt, margin, y); y += 14;
+          doc.text(`Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })} · Fuso: ${capturedTz}`, margin, y); y += 16;
           doc.setDrawColor(200); doc.line(margin, y, 559, y); y += 14;
           doc.setTextColor(20); doc.setFontSize(9);
-          const colX = [margin, margin + 95, margin + 200, margin + 270, margin + 340, margin + 430];
-          const header = ['Data', 'Tipo', 'Canal', 'Origem', 'De', 'Para'];
-          doc.setFont(undefined, 'bold'); header.forEach((h, i) => doc.text(h, colX[i], y)); doc.setFont(undefined, 'normal');
+          const usable = 559 - margin;
+          const colW = Math.floor(usable / capturedCols.length);
+          const colX = capturedCols.map((_, i) => margin + i * colW);
+          doc.setFont(undefined, 'bold');
+          capturedCols.forEach((c, i) => doc.text(c.label, colX[i], y));
+          doc.setFont(undefined, 'normal');
           y += 12;
           for (let idx = 0; idx < rows.length; idx++) {
             if (y > 800) { doc.addPage(); y = margin; }
             const r = rows[idx];
-            const cells = [r.data, r.tipo, r.canal, r.origem, r.de, r.para];
-            cells.forEach((c, i) => {
-              const max = i === 0 ? 95 : i === 1 ? 100 : i === 2 ? 65 : i === 3 ? 65 : i === 4 ? 85 : 125;
-              doc.text(doc.splitTextToSize(String(c), max), colX[i], y);
+            capturedCols.forEach((c, i) => {
+              doc.text(doc.splitTextToSize(String((r as any)[c.key] ?? ''), colW - 4), colX[i], y);
             });
             y += 14;
             if (idx % 200 === 0) await new Promise(r => setTimeout(r, 0));
