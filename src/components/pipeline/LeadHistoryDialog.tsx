@@ -233,7 +233,7 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
             </Button>
           )}
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">{filtered.length} de {events.length}</span>
+            <span className="text-xs text-muted-foreground">{events.length} de {total}</span>
             <Button size="sm" variant="outline" className="h-8" onClick={exportCSV} disabled={!filtered.length}>
               <Download className="w-3.5 h-3.5 mr-1" /> CSV
             </Button>
