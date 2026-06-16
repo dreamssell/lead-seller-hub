@@ -400,11 +400,16 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
             <Label className="text-[10px] uppercase text-muted-foreground">Até</Label>
             <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-8 w-40 text-xs" />
           </div>
-          {hasFilters && (
-            <Button size="sm" variant="ghost" className="h-8" onClick={clearFilters}>
-              <X className="w-3.5 h-3.5 mr-1" /> Limpar
-            </Button>
-          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8"
+            onClick={clearFilters}
+            disabled={!hasFilters}
+            title="Voltar aos filtros padrão"
+          >
+            <RotateCcw className="w-3.5 h-3.5 mr-1" /> Resetar filtros
+          </Button>
           <div className="ml-auto flex items-center gap-2">
             <span className="text-xs text-muted-foreground">{events.length} de {total}</span>
             <Button size="sm" variant="outline" className="h-8" onClick={() => runExport('csv')} disabled={!!exporting || total === 0}>
@@ -414,6 +419,26 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
             <Button size="sm" variant="outline" className="h-8" onClick={() => runExport('pdf')} disabled={!!exporting || total === 0}>
               {exporting === 'pdf' ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <FileText className="w-3.5 h-3.5 mr-1" />}
               PDF
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8"
+              onClick={() => scheduleExport('csv')}
+              disabled={scheduling || total === 0}
+              title="Agendar CSV em segundo plano"
+            >
+              <Clock className="w-3.5 h-3.5 mr-1" /> Agendar CSV
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8"
+              onClick={() => scheduleExport('pdf')}
+              disabled={scheduling || total === 0}
+              title="Agendar PDF em segundo plano"
+            >
+              <Clock className="w-3.5 h-3.5 mr-1" /> Agendar PDF
             </Button>
           </div>
         </div>
