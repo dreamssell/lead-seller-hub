@@ -208,7 +208,20 @@ Deno.serve(async (req) => {
       }
       await admin.from("whatsapp_connections").update(update).eq("id", connection_id);
 
-      return json({ ok: r.ok, connected, state, raw: r.data });
+      const authError = r.status === 401 || r.status === 403;
+      return json({
+        ok: r.ok,
+        connected,
+        state,
+        status: r.status,
+        auth_error: authError,
+        hint: authError
+          ? "A API Key da Evolution foi recusada (token expirado ou inválido)."
+          : !r.ok
+            ? `Evolution respondeu ${r.status}. Verifique URL/instância.`
+            : null,
+        raw: r.data,
+      });
     }
 
     if (action === "logout") {
