@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { Plus, User, Loader2, GitBranch, Settings2, History, Lock } from 'lucide-react';
+import { Plus, User, Loader2, GitBranch, Settings2, History, Lock, LayoutTemplate, Radio } from 'lucide-react';
 import { PipelineManagerDialog } from '@/components/pipeline/PipelineManagerDialog';
+import { PipelineTemplatesDialog } from '@/components/pipeline/PipelineTemplatesDialog';
 import { LeadHistoryDialog } from '@/components/pipeline/LeadHistoryDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
