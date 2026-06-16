@@ -7,7 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, ArrowRight, Sparkles, History, X, Download, FileText, Clock, RotateCcw } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Separator } from '@/components/ui/separator';
+import { Loader2, ArrowRight, Sparkles, History, X, Download, FileText, Clock, RotateCcw, Settings2 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import jsPDF from 'jspdf';
@@ -176,6 +179,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
   // -------- Cross-device filter & scroll persistence (user_ui_state) --------
   const [hydrated, setHydrated] = useState(false);
   const [restoredLoadedCount, setRestoredLoadedCount] = useState<number | null>(null);
+  const [restoredScrollTop, setRestoredScrollTop] = useState<number | null>(null);
+  const scrollTopRef = useRef(0);
   const ownerIdRef = useRef<string | null>(null);
   const scope = leadId ? `lead_history:${leadId}` : null;
 
@@ -200,6 +205,7 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
       if (typeof s.dateFrom === 'string') setDateFrom(s.dateFrom);
       if (typeof s.dateTo === 'string') setDateTo(s.dateTo);
       if (typeof s.loadedCount === 'number' && s.loadedCount > PAGE_SIZE) setRestoredLoadedCount(s.loadedCount);
+      if (typeof s.scrollTop === 'number' && s.scrollTop > 0) setRestoredScrollTop(s.scrollTop);
       setHydrated(true);
     })();
     return () => { cancelled = true; };
@@ -212,7 +218,23 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
     loadMore();
   }, [restoredLoadedCount, events.length, hasMore, loading, loadMore]);
 
-  // Debounced upsert of current filters + loaded count + cursor
+  // Restore scroll position once the catch-up has finished
+  useEffect(() => {
+    if (restoredScrollTop == null) return;
+    if (loading || restoredLoadedCount != null) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    // Wait a frame for layout to settle
+    const id = requestAnimationFrame(() => {
+      const target = Math.min(restoredScrollTop, el.scrollHeight - el.clientHeight);
+      el.scrollTop = Math.max(0, target);
+      scrollTopRef.current = el.scrollTop;
+      setRestoredScrollTop(null);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [restoredScrollTop, restoredLoadedCount, loading, events.length]);
+
+  // Debounced upsert of current filters + loaded count + cursor + scroll position
   useEffect(() => {
     if (!open || !hydrated || !leadId || !scope) return;
     const t = window.setTimeout(async () => {
@@ -230,6 +252,7 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
           dateTo,
           loadedCount: events.length,
           cursor,
+          scrollTop: scrollTopRef.current,
         },
       }, { onConflict: 'user_id,owner_id,scope' });
     }, 600);
@@ -238,15 +261,36 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
 
 
   // Infinite scroll with debounce + prefetch (triggers earlier and coalesces rapid scroll events)
+  // Also tracks scroll position for cross-device restore.
+  const scrollPersistTimerRef = useRef<number | null>(null);
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     let timer: number | null = null;
     const onScroll = () => {
+      // Track position for persistence (debounced via the upsert effect)
+      scrollTopRef.current = el.scrollTop;
+      if (scrollPersistTimerRef.current !== null) window.clearTimeout(scrollPersistTimerRef.current);
+      scrollPersistTimerRef.current = window.setTimeout(async () => {
+        if (!hydrated || !leadId || !scope || !ownerIdRef.current) return;
+        const { data: userRes } = await supabase.auth.getUser();
+        const uid = userRes.user?.id;
+        if (!uid) return;
+        await (supabase as any).from('user_ui_state').upsert({
+          user_id: uid,
+          owner_id: ownerIdRef.current,
+          scope,
+          state: {
+            channelFilter, dateFrom, dateTo,
+            loadedCount: events.length, cursor,
+            scrollTop: scrollTopRef.current,
+          },
+        }, { onConflict: 'user_id,owner_id,scope' });
+      }, 800);
+
       if (timer !== null) return;
       timer = window.setTimeout(() => {
         timer = null;
-        // Prefetch: trigger when within ~600px of the bottom (one viewport ahead)
         if (el.scrollTop + el.clientHeight >= el.scrollHeight - 600) loadMore();
       }, 120);
     };
@@ -255,7 +299,7 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
       el.removeEventListener('scroll', onScroll);
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [loadMore]);
+  }, [loadMore, hydrated, leadId, scope, channelFilter, dateFrom, dateTo, events.length, cursor]);
 
   // Prefetch next page proactively after first load completes (warm cache for fast scroll)
   useEffect(() => {
@@ -264,6 +308,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
       return () => window.clearTimeout(t);
     }
   }, [loading, hasMore, events.length, loadMore]);
+
+
 
   const filtered = events; // server-filtered already
 
@@ -275,24 +321,52 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
   const [exportProgress, setExportProgress] = useState(0);
   const exportCancelRef = useRef(false);
 
+  // -------- Export options (custom date range + columns) --------
+  type ColKey = 'data' | 'tipo' | 'canal' | 'origem' | 'de' | 'para';
+  const ALL_COLS: { key: ColKey; label: string }[] = [
+    { key: 'data', label: 'Data' },
+    { key: 'tipo', label: 'Tipo' },
+    { key: 'canal', label: 'Canal' },
+    { key: 'origem', label: 'Origem' },
+    { key: 'de', label: 'De' },
+    { key: 'para', label: 'Para' },
+  ];
+  const [useCustomRange, setUseCustomRange] = useState(false);
+  const [exportFrom, setExportFrom] = useState('');
+  const [exportTo, setExportTo] = useState('');
+  const [exportCols, setExportCols] = useState<ColKey[]>(['data','tipo','canal','origem','de','para']);
+  const toggleCol = (k: ColKey) =>
+    setExportCols(prev => prev.includes(k) ? prev.filter(c => c !== k) : [...prev, k]);
+
+  // Build a query honoring either current filters or export-specific date range.
+  const buildExportQuery = useCallback(() => {
+    let q = supabase.from('lead_events')
+      .select('id,type,from_stage_name,to_stage_name,channel,source,created_at,metadata', { count: 'exact' })
+      .eq('lead_id', leadId as string);
+    if (channelFilter !== 'all') q = q.eq('channel', channelFilter);
+    const from = useCustomRange ? exportFrom : dateFrom;
+    const to = useCustomRange ? exportTo : dateTo;
+    if (from) q = q.gte('created_at', `${from}T00:00:00`);
+    if (to)   q = q.lte('created_at', `${to}T23:59:59`);
+    return q.order('created_at', { ascending: false }).order('id', { ascending: false });
+  }, [leadId, channelFilter, dateFrom, dateTo, useCustomRange, exportFrom, exportTo]);
+
   // Fetch ALL events that match the current filters, in batches, with progress.
   const fetchAllFiltered = async (onProgress: (loaded: number, total: number) => void): Promise<Event[]> => {
     if (!leadId) return [];
     const BATCH = 500;
-    // First request to know the total
-    const first = await buildQuery().range(0, BATCH - 1);
+    const first = await buildExportQuery().range(0, BATCH - 1);
     const totalCount = first.count || 0;
     let all: Event[] = (first.data as Event[]) || [];
     onProgress(all.length, totalCount);
     while (all.length < totalCount) {
       if (exportCancelRef.current) break;
       const from = all.length;
-      const { data } = await buildQuery().range(from, from + BATCH - 1);
+      const { data } = await buildExportQuery().range(from, from + BATCH - 1);
       const chunk = (data as Event[]) || [];
       if (!chunk.length) break;
       all = all.concat(chunk);
       onProgress(all.length, totalCount);
-      // yield to UI
       await new Promise(r => setTimeout(r, 0));
     }
     return all;
@@ -311,14 +385,16 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
     const safe = (leadName || 'lead').replace(/[^a-z0-9\-_]+/gi, '_').toLowerCase();
     const parts = [safe, 'historico'];
     if (channelFilter !== 'all') parts.push(channelFilter);
-    if (dateFrom) parts.push(`de-${dateFrom}`);
-    if (dateTo) parts.push(`ate-${dateTo}`);
+    const from = useCustomRange ? exportFrom : dateFrom;
+    const to = useCustomRange ? exportTo : dateTo;
+    if (from) parts.push(`de-${from}`);
+    if (to) parts.push(`ate-${to}`);
     return parts.join('_');
   };
 
   const runExport = async (kind: 'csv' | 'pdf') => {
     if (exporting) return;
-    if (total === 0) return toast.error('Nada a exportar com os filtros atuais.');
+    if (exportCols.length === 0) return toast.error('Selecione ao menos uma coluna.');
     setExporting(kind);
     setExportProgress(0);
     exportCancelRef.current = false;
@@ -327,11 +403,16 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
         setExportProgress(t ? Math.round((loaded / t) * 100) : 100);
       });
       if (exportCancelRef.current) { toast.info('Exportação cancelada'); return; }
+      if (all.length === 0) { toast.error('Nada a exportar com os filtros atuais.'); return; }
       const rows = buildRowsFrom(all);
+      const selected = ALL_COLS.filter(c => exportCols.includes(c.key));
       if (kind === 'csv') {
-        const headers = ['Data', 'Tipo', 'Canal', 'Origem', 'De', 'Para'];
+        const headers = selected.map(c => c.label);
         const escape = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-        const csv = [headers.join(','), ...rows.map(r => [r.data, r.tipo, r.canal, r.origem, r.de, r.para].map(escape).join(','))].join('\n');
+        const csv = [
+          headers.join(','),
+          ...rows.map(r => selected.map(c => escape((r as any)[c.key])).join(','))
+        ].join('\n');
         const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -345,30 +426,33 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
         doc.setFontSize(14); doc.text('Histórico do Lead', margin, y); y += 18;
         doc.setFontSize(10); doc.setTextColor(90);
         doc.text(`Lead: ${leadName || '—'}`, margin, y); y += 14;
+        const efrom = useCustomRange ? exportFrom : dateFrom;
+        const eto = useCustomRange ? exportTo : dateTo;
         const filtersTxt = [
           channelFilter !== 'all' ? `Canal: ${CHANNEL_LABEL[channelFilter] || channelFilter}` : 'Canal: Todos',
-          dateFrom ? `De: ${dateFrom}` : null,
-          dateTo ? `Até: ${dateTo}` : null,
+          efrom ? `De: ${efrom}` : null,
+          eto ? `Até: ${eto}` : null,
           `Total: ${rows.length}`,
         ].filter(Boolean).join('  ·  ');
         doc.text(filtersTxt, margin, y); y += 14;
         doc.text(`Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`, margin, y); y += 16;
         doc.setDrawColor(200); doc.line(margin, y, 559, y); y += 14;
         doc.setTextColor(20); doc.setFontSize(9);
-        const colX = [margin, margin + 95, margin + 200, margin + 270, margin + 340, margin + 430];
-        const header = ['Data', 'Tipo', 'Canal', 'Origem', 'De', 'Para'];
-        doc.setFont(undefined, 'bold'); header.forEach((h, i) => doc.text(h, colX[i], y)); doc.setFont(undefined, 'normal');
+        // Distribute columns evenly across usable width
+        const usable = 559 - margin;
+        const colW = Math.floor(usable / selected.length);
+        const colX = selected.map((_, i) => margin + i * colW);
+        doc.setFont(undefined, 'bold');
+        selected.forEach((c, i) => doc.text(c.label, colX[i], y));
+        doc.setFont(undefined, 'normal');
         y += 12;
         for (let idx = 0; idx < rows.length; idx++) {
           if (y > 800) { doc.addPage(); y = margin; }
           const r = rows[idx];
-          const cells = [r.data, r.tipo, r.canal, r.origem, r.de, r.para];
-          cells.forEach((c, i) => {
-            const max = i === 0 ? 95 : i === 1 ? 100 : i === 2 ? 65 : i === 3 ? 65 : i === 4 ? 85 : 125;
-            doc.text(doc.splitTextToSize(String(c), max), colX[i], y);
+          selected.forEach((c, i) => {
+            doc.text(doc.splitTextToSize(String((r as any)[c.key] ?? ''), colW - 4), colX[i], y);
           });
           y += 14;
-          // Yield every 200 rows so very large PDFs don't freeze the UI
           if (idx % 200 === 0) await new Promise(r => setTimeout(r, 0));
         }
         doc.save(`${filenameBase()}.pdf`);
@@ -536,6 +620,55 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
           </Button>
           <div className="ml-auto flex items-center gap-2">
             <span className="text-xs text-muted-foreground">{events.length} de {total}</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button size="sm" variant="outline" className="h-8" title="Opções de exportação">
+                  <Settings2 className="w-3.5 h-3.5 mr-1" /> Opções
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72 p-3 space-y-3 z-50 bg-popover">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-xs font-semibold">Intervalo personalizado</Label>
+                    <Checkbox
+                      checked={useCustomRange}
+                      onCheckedChange={(v) => setUseCustomRange(!!v)}
+                    />
+                  </div>
+                  <div className={`grid grid-cols-2 gap-2 ${useCustomRange ? '' : 'opacity-50 pointer-events-none'}`}>
+                    <div>
+                      <Label className="text-[10px] uppercase text-muted-foreground">De</Label>
+                      <Input type="date" value={exportFrom} onChange={e => setExportFrom(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] uppercase text-muted-foreground">Até</Label>
+                      <Input type="date" value={exportTo} onChange={e => setExportTo(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {useCustomRange ? 'Usa o intervalo acima na exportação.' : 'Usa o intervalo dos filtros do diálogo.'}
+                  </p>
+                </div>
+                <Separator />
+                <div>
+                  <Label className="text-xs font-semibold mb-2 block">Colunas</Label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {ALL_COLS.map(c => (
+                      <label key={c.key} className="flex items-center gap-2 text-xs cursor-pointer">
+                        <Checkbox
+                          checked={exportCols.includes(c.key)}
+                          onCheckedChange={() => toggleCol(c.key)}
+                        />
+                        {c.label}
+                      </label>
+                    ))}
+                  </div>
+                  {exportCols.length === 0 && (
+                    <p className="text-[10px] text-destructive mt-1">Selecione ao menos uma coluna.</p>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
             <Button size="sm" variant="outline" className="h-8" onClick={() => runExport('csv')} disabled={!!exporting || total === 0}>
               {exporting === 'csv' ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
               CSV
