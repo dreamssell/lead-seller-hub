@@ -67,6 +67,14 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
   const [cursor, setCursor] = useState<{ created_at: string; id: string } | null>(null);
   const seenIdsRef = useRef<Set<string>>(new Set());
 
+  // Convert a local YYYY-MM-DD picker value to an absolute ISO instant
+  // anchored in the user's local timezone. This guarantees the export/list
+  // interval matches exactly what the user sees in the dialog filters,
+  // regardless of where the DB/server is.
+  const localDayStartISO = (d: string) => new Date(`${d}T00:00:00`).toISOString();
+  const localDayEndISO = (d: string) => new Date(`${d}T23:59:59.999`).toISOString();
+  const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
   // Base query factory (used by exports — count + offset is fine there since
   // exports snapshot the full filtered set in one pass).
   const buildQuery = useCallback(() => {
@@ -74,8 +82,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
       .select('id,type,from_stage_name,to_stage_name,channel,source,created_at,metadata', { count: 'exact' })
       .eq('lead_id', leadId as string);
     if (channelFilter !== 'all') q = q.eq('channel', channelFilter);
-    if (dateFrom) q = q.gte('created_at', `${dateFrom}T00:00:00`);
-    if (dateTo)   q = q.lte('created_at', `${dateTo}T23:59:59`);
+    if (dateFrom) q = q.gte('created_at', localDayStartISO(dateFrom));
+    if (dateTo)   q = q.lte('created_at', localDayEndISO(dateTo));
     return q.order('created_at', { ascending: false }).order('id', { ascending: false });
   }, [leadId, channelFilter, dateFrom, dateTo]);
 
@@ -85,8 +93,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
       .select('id,type,from_stage_name,to_stage_name,channel,source,created_at,metadata')
       .eq('lead_id', leadId as string);
     if (channelFilter !== 'all') q = q.eq('channel', channelFilter);
-    if (dateFrom) q = q.gte('created_at', `${dateFrom}T00:00:00`);
-    if (dateTo)   q = q.lte('created_at', `${dateTo}T23:59:59`);
+    if (dateFrom) q = q.gte('created_at', localDayStartISO(dateFrom));
+    if (dateTo)   q = q.lte('created_at', localDayEndISO(dateTo));
     if (after) {
       // (created_at, id) < (cursor.created_at, cursor.id) in DESC order
       q = q.or(
@@ -105,8 +113,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
     if (!leadId) return;
     let q = supabase.from('lead_events').select('id', { count: 'exact', head: true }).eq('lead_id', leadId);
     if (channelFilter !== 'all') q = q.eq('channel', channelFilter);
-    if (dateFrom) q = q.gte('created_at', `${dateFrom}T00:00:00`);
-    if (dateTo)   q = q.lte('created_at', `${dateTo}T23:59:59`);
+    if (dateFrom) q = q.gte('created_at', localDayStartISO(dateFrom));
+    if (dateTo)   q = q.lte('created_at', localDayEndISO(dateTo));
     const { count } = await q;
     setTotal(count || 0);
   }, [leadId, channelFilter, dateFrom, dateTo]);
@@ -316,6 +324,38 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
   const clearFilters = () => { setChannelFilter('all'); setDateFrom(''); setDateTo(''); };
   const hasFilters = channelFilter !== 'all' || dateFrom || dateTo;
 
+  // Reset cursor: drop saved cursor/offset/scroll, clear deduplication,
+  // reload the first (newest) page and persist the cleared state to DB.
+  const resetCursor = useCallback(async () => {
+    seenIdsRef.current = new Set();
+    setCursor(null);
+    setRestoredLoadedCount(null);
+    setRestoredScrollTop(null);
+    scrollTopRef.current = 0;
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    await loadFirstPage();
+    // Persist cleared cursor immediately so other devices also reset
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id;
+      const ownerId = ownerIdRef.current;
+      if (uid && ownerId && scope) {
+        await (supabase as any).from('user_ui_state').upsert({
+          user_id: uid,
+          owner_id: ownerId,
+          scope,
+          state: {
+            channelFilter, dateFrom, dateTo,
+            loadedCount: 0, cursor: null, scrollTop: 0,
+          },
+        }, { onConflict: 'user_id,owner_id,scope' });
+      }
+    } catch { /* best-effort */ }
+    toast.success('Cursor resetado — mostrando os eventos mais recentes');
+  }, [loadFirstPage, scope, channelFilter, dateFrom, dateTo]);
+
+
+
 
   const [exporting, setExporting] = useState<null | 'csv' | 'pdf'>(null);
   const [exportProgress, setExportProgress] = useState(0);
@@ -346,8 +386,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
     if (channelFilter !== 'all') q = q.eq('channel', channelFilter);
     const from = useCustomRange ? exportFrom : dateFrom;
     const to = useCustomRange ? exportTo : dateTo;
-    if (from) q = q.gte('created_at', `${from}T00:00:00`);
-    if (to)   q = q.lte('created_at', `${to}T23:59:59`);
+    if (from) q = q.gte('created_at', localDayStartISO(from));
+    if (to)   q = q.lte('created_at', localDayEndISO(to));
     return q.order('created_at', { ascending: false }).order('id', { ascending: false });
   }, [leadId, channelFilter, dateFrom, dateTo, useCustomRange, exportFrom, exportTo]);
 
@@ -495,8 +535,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
             .select('id,type,from_stage_name,to_stage_name,channel,source,created_at,metadata', { count: 'exact' })
             .eq('lead_id', capturedLeadId);
           if (capturedFilters.channel !== 'all') q = q.eq('channel', capturedFilters.channel);
-          if (capturedFilters.from) q = q.gte('created_at', `${capturedFilters.from}T00:00:00`);
-          if (capturedFilters.to)   q = q.lte('created_at', `${capturedFilters.to}T23:59:59`);
+          if (capturedFilters.from) q = q.gte('created_at', new Date(`${capturedFilters.from}T00:00:00`).toISOString());
+          if (capturedFilters.to)   q = q.lte('created_at', new Date(`${capturedFilters.to}T23:59:59.999`).toISOString());
           return q.order('created_at', { ascending: false });
         };
         const first = await baseQuery().range(0, BATCH - 1);
@@ -619,7 +659,17 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
             <RotateCcw className="w-3.5 h-3.5 mr-1" /> Resetar filtros
           </Button>
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">{events.length} de {total}</span>
+            <span className="text-xs text-muted-foreground" title={`Fuso: ${userTz}`}>{events.length} de {total}</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8"
+              onClick={resetCursor}
+              disabled={loading || loadingMore}
+              title="Voltar ao início e limpar o cursor salvo"
+            >
+              <RotateCcw className="w-3.5 h-3.5 mr-1" /> Voltar ao início
+            </Button>
             <Popover>
               <PopoverTrigger asChild>
                 <Button size="sm" variant="outline" className="h-8" title="Opções de exportação">
