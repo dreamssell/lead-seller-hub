@@ -1386,6 +1386,48 @@ export type Database = {
           },
         ]
       }
+      pipeline_templates: {
+        Row: {
+          channel: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_system: boolean
+          name: string
+          owner_id: string | null
+          stages: Json
+          sub_company_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          channel?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_system?: boolean
+          name: string
+          owner_id?: string | null
+          stages: Json
+          sub_company_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          channel?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_system?: boolean
+          name?: string
+          owner_id?: string | null
+          stages?: Json
+          sub_company_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pipelines: {
         Row: {
           created_at: string
