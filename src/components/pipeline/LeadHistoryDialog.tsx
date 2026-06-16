@@ -261,6 +261,114 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
 
   const cancelExport = () => { exportCancelRef.current = true; };
 
+  // -------- Scheduled (background) exports --------
+  // Runs an export detached from the dialog lifecycle. The user can close the
+  // dialog and they'll get a toast + an entry in the notifications table when ready.
+  const [scheduling, setScheduling] = useState(false);
+  const scheduleExport = async (kind: 'csv' | 'pdf') => {
+    if (!leadId) return;
+    if (total === 0) { toast.error('Nada a exportar com os filtros atuais.'); return; }
+    setScheduling(true);
+    const capturedFilters = { channel: channelFilter, from: dateFrom, to: dateTo };
+    const capturedLeadId = leadId;
+    const capturedLeadName = leadName;
+    const fileBase = filenameBase();
+    toast.message('Exportação agendada', {
+      description: `O ${kind.toUpperCase()} será baixado automaticamente quando ficar pronto. Você pode fechar este diálogo.`,
+    });
+    // Detach: do not await, run in background.
+    (async () => {
+      try {
+        const cancelled = { v: false };
+        // Replicate fetchAllFiltered locally so it survives dialog close (no refs)
+        const BATCH = 500;
+        const baseQuery = () => {
+          let q = supabase.from('lead_events')
+            .select('id,type,from_stage_name,to_stage_name,channel,source,created_at,metadata', { count: 'exact' })
+            .eq('lead_id', capturedLeadId);
+          if (capturedFilters.channel !== 'all') q = q.eq('channel', capturedFilters.channel);
+          if (capturedFilters.from) q = q.gte('created_at', `${capturedFilters.from}T00:00:00`);
+          if (capturedFilters.to)   q = q.lte('created_at', `${capturedFilters.to}T23:59:59`);
+          return q.order('created_at', { ascending: false });
+        };
+        const first = await baseQuery().range(0, BATCH - 1);
+        const totalCount = first.count || 0;
+        let all: Event[] = (first.data as Event[]) || [];
+        while (all.length < totalCount) {
+          if (cancelled.v) break;
+          const { data } = await baseQuery().range(all.length, all.length + BATCH - 1);
+          const chunk = (data as Event[]) || [];
+          if (!chunk.length) break;
+          all = all.concat(chunk);
+          // Yield to keep UI responsive even when running in background
+          await new Promise(r => setTimeout(r, 30));
+        }
+        const rows = buildRowsFrom(all);
+        if (kind === 'csv') {
+          const headers = ['Data', 'Tipo', 'Canal', 'Origem', 'De', 'Para'];
+          const escape = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+          const csv = [headers.join(','), ...rows.map(r => [r.data, r.tipo, r.canal, r.origem, r.de, r.para].map(escape).join(','))].join('\n');
+          const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = `${fileBase}.csv`; a.click();
+          URL.revokeObjectURL(url);
+        } else {
+          const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+          const margin = 36;
+          let y = margin;
+          doc.setFontSize(14); doc.text('Histórico do Lead', margin, y); y += 18;
+          doc.setFontSize(10); doc.setTextColor(90);
+          doc.text(`Lead: ${capturedLeadName || '—'}`, margin, y); y += 14;
+          doc.text(`Total: ${rows.length}  ·  Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`, margin, y); y += 16;
+          doc.setDrawColor(200); doc.line(margin, y, 559, y); y += 14;
+          doc.setTextColor(20); doc.setFontSize(9);
+          const colX = [margin, margin + 95, margin + 200, margin + 270, margin + 340, margin + 430];
+          const header = ['Data', 'Tipo', 'Canal', 'Origem', 'De', 'Para'];
+          doc.setFont(undefined, 'bold'); header.forEach((h, i) => doc.text(h, colX[i], y)); doc.setFont(undefined, 'normal');
+          y += 12;
+          for (let idx = 0; idx < rows.length; idx++) {
+            if (y > 800) { doc.addPage(); y = margin; }
+            const r = rows[idx];
+            const cells = [r.data, r.tipo, r.canal, r.origem, r.de, r.para];
+            cells.forEach((c, i) => {
+              const max = i === 0 ? 95 : i === 1 ? 100 : i === 2 ? 65 : i === 3 ? 65 : i === 4 ? 85 : 125;
+              doc.text(doc.splitTextToSize(String(c), max), colX[i], y);
+            });
+            y += 14;
+            if (idx % 200 === 0) await new Promise(r => setTimeout(r, 0));
+          }
+          doc.save(`${fileBase}.pdf`);
+        }
+        // Persist a notification row so the user can find it later in the bell
+        try {
+          const [{ data: userRes }, { data: leadRow }] = await Promise.all([
+            supabase.auth.getUser(),
+            supabase.from('leads').select('owner_id, sub_company_id').eq('id', capturedLeadId).maybeSingle(),
+          ]);
+          const uid = userRes.user?.id;
+          const ownerId = (leadRow as any)?.owner_id || uid;
+          if (uid && ownerId) {
+            await supabase.from('notifications').insert({
+              user_id: uid,
+              owner_id: ownerId,
+              sub_company_id: (leadRow as any)?.sub_company_id ?? null,
+              type: 'export_ready',
+              title: `Exportação ${kind.toUpperCase()} pronta`,
+              body: `${rows.length} eventos · ${capturedLeadName || 'Lead'}`,
+              lead_id: capturedLeadId,
+            });
+          }
+        } catch { /* notification is best-effort */ }
+        toast.success(`Exportação ${kind.toUpperCase()} concluída (${rows.length} eventos)`);
+      } catch (e: any) {
+        toast.error('Falha na exportação agendada: ' + (e?.message || 'erro desconhecido'));
+      }
+    })();
+    // Release the button after a brief delay so the user sees the toast
+    setTimeout(() => setScheduling(false), 600);
+  };
+
 
 
   return (
