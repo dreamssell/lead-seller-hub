@@ -1249,6 +1249,7 @@ export type Database = {
           channel: string | null
           created_at: string
           id: string
+          notify_funnel_change: boolean
           notify_new_lead: boolean
           notify_stage_change: boolean
           owner_id: string
@@ -1260,6 +1261,7 @@ export type Database = {
           channel?: string | null
           created_at?: string
           id?: string
+          notify_funnel_change?: boolean
           notify_new_lead?: boolean
           notify_stage_change?: boolean
           owner_id: string
@@ -1271,6 +1273,7 @@ export type Database = {
           channel?: string | null
           created_at?: string
           id?: string
+          notify_funnel_change?: boolean
           notify_new_lead?: boolean
           notify_stage_change?: boolean
           owner_id?: string
