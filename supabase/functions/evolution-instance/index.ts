@@ -179,6 +179,17 @@ Deno.serve(async (req) => {
 
       const qrPayload =
         created.data?.qrcode || created.data?.instance?.qrcode || created.data || {};
+      const qrOk = !!(qrPayload?.base64 || qrPayload?.qr);
+      await logEvent(
+        "evolution.create",
+        created.ok || created.status === 403 || created.status === 409 ? "success" : "error",
+        created.ok
+          ? "Instância criada"
+          : created.status === 403 || created.status === 409
+            ? "Instância já existia — reconectando"
+            : `Evolution respondeu ${created.status}`,
+        { http_status: created.status, has_qr: qrOk },
+      );
       return json({
         ok: true,
         already_existed: !created.ok && (created.status === 403 || created.status === 409),
