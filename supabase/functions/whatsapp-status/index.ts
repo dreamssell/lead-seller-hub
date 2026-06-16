@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!provider || !["uaz", "meta", "wavoip"].includes(provider)) {
+    if (!provider || !["uaz", "meta", "wavoip", "evolution"].includes(provider)) {
       throw new Error("Provedor inválido ou ausente");
     }
 
@@ -146,6 +146,28 @@ Deno.serve(async (req) => {
         status: token ? "connected" : "disconnected",
         provider: "wavoip" 
       };
+    } else if (provider === "evolution") {
+      const evoUrl = (url || "").replace(/\/$/, "");
+      const instance = body?.instance || body?.phone_number_id;
+      if (!evoUrl || !token || !instance) {
+        result = { connected: false, status: "unconfigured", error: "URL, API Key e Instance Name são obrigatórios." };
+      } else {
+        try {
+          const res = await fetch(`${evoUrl}/instance/connectionState/${encodeURIComponent(instance)}`, {
+            headers: { apikey: token, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          });
+          const data = await res.json().catch(() => ({}));
+          const state = data?.instance?.state || data?.state || "unknown";
+          result = {
+            connected: state === "open",
+            status: state,
+            phone: data?.instance?.owner ? String(data.instance.owner).split("@")[0] : null,
+            raw: data,
+          };
+        } catch (e) {
+          result = { connected: false, status: "error", error: (e as Error).message };
+        }
+      }
     } else {
       // Mock Meta for now
       result = { connected: false, status: "disconnected" };

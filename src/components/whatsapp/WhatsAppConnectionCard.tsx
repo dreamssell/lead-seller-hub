@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { 
   CheckCircle2, Loader2, Plug, RefreshCw, XCircle, 
   Activity, AlertCircle, FileSpreadsheet, Eye, History,
-  Bug, Terminal, AlertOctagon, Phone, ShieldCheck
+  Bug, Terminal, AlertOctagon, Phone, ShieldCheck, QrCode
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -22,6 +22,7 @@ import {
 import { UazStats } from './UazStats';
 import { FacebookDiagnostics } from './FacebookDiagnostics';
 import { WidgetSettings } from './WidgetSettings';
+import { EvolutionWizardDialog } from './EvolutionWizardDialog';
 
 interface ConnectionCardProps {
   conn: WhatsAppConnection;
@@ -49,9 +50,14 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
   const config = PROVIDER_CONFIGS[conn.provider] || PROVIDER_CONFIGS.uaz;
   const [url, setUrl] = useState<string>(conn.metadata?.url ?? config.url);
   const [token, setToken] = useState<string>(conn.metadata?.token ?? '');
-  const [extra, setExtra] = useState<string>(conn.metadata?.phone_number_id ?? '');
+  const [extra, setExtra] = useState<string>(
+    conn.provider === 'evolution'
+      ? (conn.metadata?.instance ?? '')
+      : (conn.metadata?.phone_number_id ?? '')
+  );
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [showEvolutionWizard, setShowEvolutionWizard] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const [debugInfo, setDebugInfo] = useState<{ url: string; headers: string[]; error: any } | null>(null);
 
@@ -61,7 +67,8 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
       ...(conn.metadata ?? {}), 
       url, 
       token, 
-      ...(conn.provider === 'meta' && { phone_number_id: extra }) 
+      ...(conn.provider === 'meta' && { phone_number_id: extra }),
+      ...(conn.provider === 'evolution' && { instance: extra }) 
     };
     const { error } = await supabase
       .from('whatsapp_connections')
@@ -94,7 +101,8 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
           provider: conn.provider, 
           url, 
           token, 
-          ...(conn.provider === 'meta' && { phone_number_id: extra }) 
+          ...(conn.provider === 'meta' && { phone_number_id: extra }),
+          ...(conn.provider === 'evolution' && { instance: extra })
         } 
       });
 
@@ -242,6 +250,17 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
                   {testing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} 
                   Testar Conexão
                 </Button>
+                {conn.provider === 'evolution' && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setShowEvolutionWizard(true)}
+                    className="gap-2"
+                  >
+                    <QrCode className="w-4 h-4" />
+                    {conn.status === 'connected' ? 'Gerenciar QR' : 'Conectar via QR Code'}
+                  </Button>
+                )}
               </>
             )}
           </div>
@@ -279,6 +298,14 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
           </motion.div>
         )}
       </CardContent>
+      {conn.provider === 'evolution' && (
+        <EvolutionWizardDialog
+          open={showEvolutionWizard}
+          onOpenChange={setShowEvolutionWizard}
+          conn={conn}
+          onConnected={onSaved}
+        />
+      )}
     </Card>
   );
 }
