@@ -65,15 +65,45 @@ export default function WavoipWebphoneSection() {
         )}
 
         <div className="flex items-center justify-between p-3 rounded-lg border border-border/40 bg-secondary/30">
-          <div>
-            <p className="text-sm font-semibold">Tronco habilitado</p>
-            <p className="text-xs text-muted-foreground">Quando ativo, o botão "WhatsApp (Wavoip)" no chat usa esses devices.</p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-semibold">Tronco habilitado</p>
+              <Badge variant="outline" className="gap-1 text-[10px]">
+                <Building2 className="w-3 h-3" />
+                {scope.sub_company_id ? `Sub-empresa ${scope.sub_company_id.slice(0,8)}…` : 'Conta principal'}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Devices abaixo valem apenas para esta conta/sub-empresa. Cada nova sub-empresa precisa cadastrar seus próprios tokens.
+            </p>
           </div>
-          <Switch
-            checked={config.enabled}
-            onCheckedChange={(v) => saveConfig({ ...config, enabled: v })}
-          />
+          <Switch checked={config.enabled} onCheckedChange={setEnabled} />
         </div>
+
+        {/* Validar conexão real com a Wavoip */}
+        <div className="flex items-start justify-between gap-4 p-4 rounded-xl border border-primary/30 bg-primary/5">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <PlugZap className="w-4 h-4 text-primary" />
+              <p className="text-sm font-semibold">Validar conexão real Wavoip</p>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Carrega o SDK, registra e habilita cada device, e confirma com o backend da Wavoip se o WhatsApp pareado está online.
+              Use este teste se a chamada retorna <code className="text-[11px]">No device available</code>.
+            </p>
+            {lastValidation && (
+              <div className={`mt-2 flex items-start gap-2 text-xs ${lastValidation.ok ? 'text-emerald-600' : 'text-red-600'}`}>
+                {lastValidation.ok ? <CheckCircle2 className="w-4 h-4 mt-0.5" /> : <XCircle className="w-4 h-4 mt-0.5" />}
+                <span>{lastValidation.message}</span>
+              </div>
+            )}
+          </div>
+          <Button onClick={validateConnection} disabled={isValidating || config.devices.length === 0} size="sm">
+            {isValidating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PlugZap className="w-4 h-4 mr-2" />}
+            Validar agora
+          </Button>
+        </div>
+
 
         <div className="space-y-3 p-4 rounded-xl border border-border/40 bg-background">
           <div className="flex items-center gap-2">
