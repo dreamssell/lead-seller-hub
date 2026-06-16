@@ -53,6 +53,7 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
   const [extra, setExtra] = useState<string>(conn.metadata?.phone_number_id ?? '');
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [showEvolutionWizard, setShowEvolutionWizard] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const [debugInfo, setDebugInfo] = useState<{ url: string; headers: string[]; error: any } | null>(null);
 
