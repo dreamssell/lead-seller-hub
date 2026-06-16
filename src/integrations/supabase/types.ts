@@ -1244,6 +1244,42 @@ export type Database = {
           },
         ]
       }
+      notification_preferences: {
+        Row: {
+          channel: string | null
+          created_at: string
+          id: string
+          notify_new_lead: boolean
+          notify_stage_change: boolean
+          owner_id: string
+          sub_company_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          channel?: string | null
+          created_at?: string
+          id?: string
+          notify_new_lead?: boolean
+          notify_stage_change?: boolean
+          owner_id: string
+          sub_company_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          channel?: string | null
+          created_at?: string
+          id?: string
+          notify_new_lead?: boolean
+          notify_stage_change?: boolean
+          owner_id?: string
+          sub_company_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           body: string | null
@@ -3247,6 +3283,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      user_wants_notification: {
+        Args: {
+          p_channel: string
+          p_owner_id: string
+          p_sub_company_id: string
+          p_type: string
+          p_user_id: string
+        }
+        Returns: boolean
       }
       validate_sub_login_token: {
         Args: { p_token: string }
