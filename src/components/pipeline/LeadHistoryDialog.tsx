@@ -324,6 +324,38 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
   const clearFilters = () => { setChannelFilter('all'); setDateFrom(''); setDateTo(''); };
   const hasFilters = channelFilter !== 'all' || dateFrom || dateTo;
 
+  // Reset cursor: drop saved cursor/offset/scroll, clear deduplication,
+  // reload the first (newest) page and persist the cleared state to DB.
+  const resetCursor = useCallback(async () => {
+    seenIdsRef.current = new Set();
+    setCursor(null);
+    setRestoredLoadedCount(null);
+    setRestoredScrollTop(null);
+    scrollTopRef.current = 0;
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    await loadFirstPage();
+    // Persist cleared cursor immediately so other devices also reset
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id;
+      const ownerId = ownerIdRef.current;
+      if (uid && ownerId && scope) {
+        await (supabase as any).from('user_ui_state').upsert({
+          user_id: uid,
+          owner_id: ownerId,
+          scope,
+          state: {
+            channelFilter, dateFrom, dateTo,
+            loadedCount: 0, cursor: null, scrollTop: 0,
+          },
+        }, { onConflict: 'user_id,owner_id,scope' });
+      }
+    } catch { /* best-effort */ }
+    toast.success('Cursor resetado — mostrando os eventos mais recentes');
+  }, [loadFirstPage, scope, channelFilter, dateFrom, dateTo]);
+
+
+
 
   const [exporting, setExporting] = useState<null | 'csv' | 'pdf'>(null);
   const [exportProgress, setExportProgress] = useState(0);
