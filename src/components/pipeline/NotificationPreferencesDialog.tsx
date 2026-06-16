@@ -49,6 +49,7 @@ export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: P
   const [newChannel, setNewChannel] = useState<string>('__all__');
   const [newLead, setNewLead] = useState(true);
   const [newStage, setNewStage] = useState(true);
+  const [newFunnel, setNewFunnel] = useState(true);
 
   const load = async () => {
     if (!user || !ownerId) return;
