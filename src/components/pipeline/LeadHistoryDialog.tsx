@@ -558,7 +558,7 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
           `Total: ${rows.length}`,
         ].filter(Boolean).join('  ·  ');
         doc.text(filtersTxt, margin, y); y += 14;
-        doc.text(`Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`, margin, y); y += 16;
+        doc.text(`Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })} · Fuso: ${userTz}`, margin, y); y += 16;
         doc.setDrawColor(200); doc.line(margin, y, 559, y); y += 14;
         doc.setTextColor(20); doc.setFontSize(9);
         // Distribute columns evenly across usable width
