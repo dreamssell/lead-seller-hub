@@ -28,6 +28,14 @@ type Pref = {
   notify_new_lead: boolean;
   notify_stage_change: boolean;
   notify_funnel_change: boolean;
+  notify_pipeline_create: boolean;
+  notify_pipeline_update: boolean;
+  notify_pipeline_delete: boolean;
+  notify_pipeline_reorder: boolean;
+  notify_stage_create: boolean;
+  notify_stage_update: boolean;
+  notify_stage_delete: boolean;
+  notify_stage_reorder: boolean;
 };
 
 type SubCompany = { id: string; name: string };
@@ -37,6 +45,8 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   ownerId: string;
 }
+
+const PREF_COLS = 'id,sub_company_id,channel,notify_new_lead,notify_stage_change,notify_funnel_change,notify_pipeline_create,notify_pipeline_update,notify_pipeline_delete,notify_pipeline_reorder,notify_stage_create,notify_stage_update,notify_stage_delete,notify_stage_reorder';
 
 export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: Props) {
   const { user } = useAuth();
@@ -50,13 +60,22 @@ export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: P
   const [newLead, setNewLead] = useState(true);
   const [newStage, setNewStage] = useState(true);
   const [newFunnel, setNewFunnel] = useState(true);
+  // structure events (default true)
+  const [newPC, setNewPC] = useState(true);
+  const [newPU, setNewPU] = useState(true);
+  const [newPD, setNewPD] = useState(true);
+  const [newPR, setNewPR] = useState(true);
+  const [newSC, setNewSC] = useState(true);
+  const [newSU, setNewSU] = useState(true);
+  const [newSD, setNewSD] = useState(true);
+  const [newSR, setNewSR] = useState(true);
 
   const load = async () => {
     if (!user || !ownerId) return;
     setLoading(true);
     const [p, s] = await Promise.all([
       (supabase as any).from('notification_preferences')
-        .select('id,sub_company_id,channel,notify_new_lead,notify_stage_change,notify_funnel_change')
+        .select(PREF_COLS)
         .eq('user_id', user.id).eq('owner_id', ownerId),
       supabase.from('sub_companies').select('id,name').eq('owner_id', ownerId).order('name'),
     ]);
@@ -90,13 +109,22 @@ export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: P
       notify_new_lead: newLead,
       notify_stage_change: newStage,
       notify_funnel_change: newFunnel,
+      notify_pipeline_create: newPC,
+      notify_pipeline_update: newPU,
+      notify_pipeline_delete: newPD,
+      notify_pipeline_reorder: newPR,
+      notify_stage_create: newSC,
+      notify_stage_update: newSU,
+      notify_stage_delete: newSD,
+      notify_stage_reorder: newSR,
     };
     const { data, error } = await (supabase as any).from('notification_preferences')
-      .insert(payload).select('id,sub_company_id,channel,notify_new_lead,notify_stage_change,notify_funnel_change').single();
+      .insert(payload).select(PREF_COLS).single();
     if (error) return toast.error(error.message);
     setPrefs(prev => [...prev, data as Pref]);
     toast.success('Regra adicionada');
   };
+
 
   const subName = (id: string | null) =>
     id ? (subs.find(s => s.id === id)?.name || '—') : 'Todas as sub-empresas';
