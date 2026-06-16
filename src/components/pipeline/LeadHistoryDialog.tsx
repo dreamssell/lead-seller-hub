@@ -247,36 +247,47 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
           <div className="p-8 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div>
         ) : filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-6">
-            {events.length === 0 ? 'Sem eventos registrados ainda.' : 'Nenhum evento corresponde aos filtros.'}
+            {total === 0 ? 'Sem eventos registrados ainda.' : 'Nenhum evento corresponde aos filtros.'}
           </p>
         ) : (
-          <ol className="relative border-l border-border pl-5 space-y-4">
-            {filtered.map(ev => (
-              <li key={ev.id} className="relative">
-                <span className="absolute -left-[27px] top-1 w-3 h-3 rounded-full bg-primary ring-4 ring-background" />
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium">{TYPE_LABEL[ev.type] || ev.type}</span>
-                  {ev.channel && <Badge variant="secondary" className="text-[10px]">{CHANNEL_LABEL[ev.channel] || ev.channel}</Badge>}
-                  {ev.source && <Badge variant="outline" className="text-[10px]">{ev.source}</Badge>}
-                  <span className="text-xs text-muted-foreground ml-auto">
-                    {formatDistanceToNow(new Date(ev.created_at), { addSuffix: true, locale: ptBR })}
-                  </span>
-                </div>
-                {ev.type === 'stage_changed' && (
-                  <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
-                    <span>{ev.from_stage_name || '—'}</span>
-                    <ArrowRight className="w-3 h-3" />
-                    <span className="text-foreground font-medium">{ev.to_stage_name || '—'}</span>
+          <div ref={scrollRef} className="max-h-[50vh] overflow-y-auto pr-2">
+            <ol className="relative border-l border-border pl-5 space-y-4">
+              {filtered.map(ev => (
+                <li key={ev.id} className="relative">
+                  <span className="absolute -left-[27px] top-1 w-3 h-3 rounded-full bg-primary ring-4 ring-background" />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium">{TYPE_LABEL[ev.type] || ev.type}</span>
+                    {ev.channel && <Badge variant="secondary" className="text-[10px]">{CHANNEL_LABEL[ev.channel] || ev.channel}</Badge>}
+                    {ev.source && <Badge variant="outline" className="text-[10px]">{ev.source}</Badge>}
+                    <span className="text-xs text-muted-foreground ml-auto">
+                      {formatDistanceToNow(new Date(ev.created_at), { addSuffix: true, locale: ptBR })}
+                    </span>
                   </div>
-                )}
-                {ev.type === 'created' && (
-                  <div className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Entrou em {ev.to_stage_name || 'sem etapa'}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ol>
+                  {ev.type === 'stage_changed' && (
+                    <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
+                      <span>{ev.from_stage_name || '—'}</span>
+                      <ArrowRight className="w-3 h-3" />
+                      <span className="text-foreground font-medium">{ev.to_stage_name || '—'}</span>
+                    </div>
+                  )}
+                  {ev.type === 'created' && (
+                    <div className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3" /> Entrou em {ev.to_stage_name || 'sem etapa'}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ol>
+            <div className="flex items-center justify-center py-3">
+              {loadingMore ? (
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              ) : hasMore ? (
+                <Button size="sm" variant="ghost" onClick={loadMore}>Carregar mais</Button>
+              ) : (
+                <span className="text-[11px] text-muted-foreground">Fim do histórico</span>
+              )}
+            </div>
+          </div>
         )}
       </DialogContent>
     </Dialog>
