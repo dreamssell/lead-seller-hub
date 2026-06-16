@@ -454,7 +454,7 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <QrCode className="w-5 h-5 text-violet-500" />
@@ -467,16 +467,32 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
 
         <Separator />
 
-        {step === 'credentials' && renderCredentials()}
-        {step === 'qr' && renderQr()}
-        {step === 'connected' && renderConnected()}
-        {step === 'failed' && renderFailed()}
+        <Tabs defaultValue="setup">
+          <TabsList className="grid grid-cols-2 w-full">
+            <TabsTrigger value="setup">Configuração</TabsTrigger>
+            <TabsTrigger value="history">
+              <History className="w-3.5 h-3.5 mr-1.5" /> Histórico
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="setup" className="space-y-4 pt-3">
+            {step === 'credentials' && renderCredentials()}
+            {step === 'qr' && renderQr()}
+            {step === 'connected' && renderConnected()}
+            {step === 'failed' && renderFailed()}
+          </TabsContent>
+          <TabsContent value="history" className="pt-3">
+            <EvolutionAttemptsHistory connectionId={conn.id} />
+            <p className="text-[11px] text-muted-foreground mt-2">
+              Registros visíveis para a empresa proprietária e para a sub-empresa associada à instância.
+            </p>
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter className="gap-2">
           {step === 'credentials' && (
-            <Button onClick={startInstance} disabled={busy}>
+            <Button onClick={startInstance} disabled={busy || !canSubmit}>
               {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Smartphone className="w-4 h-4 mr-2" />}
-              Gerar QR Code
+              {canSubmit ? 'Gerar QR Code' : 'Corrija os campos'}
             </Button>
           )}
           {step === 'qr' && (
