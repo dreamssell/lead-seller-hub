@@ -188,8 +188,8 @@ export default function PipelinePage() {
         </div>
         <div className="ml-auto flex gap-2">
           <Button variant="outline" size="sm" onClick={load}>Atualizar</Button>
-          <Button size="sm" onClick={() => setManagerOpen(true)}>
-            <Settings2 className="w-4 h-4 mr-1" /> Gerenciar funis
+          <Button size="sm" onClick={() => setManagerOpen(true)} title={canManagePipelines ? '' : 'Modo somente leitura'}>
+            <Settings2 className="w-4 h-4 mr-1" /> Gerenciar funis {!canManagePipelines && <Lock className="w-3 h-3 ml-1 opacity-70" />}
           </Button>
         </div>
       </div>
