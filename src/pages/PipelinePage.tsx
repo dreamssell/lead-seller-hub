@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { Plus, MoreVertical, User, Loader2, GitBranch } from 'lucide-react';
+import { Plus, MoreVertical, User, Loader2, GitBranch, Settings2 } from 'lucide-react';
+import { PipelineManagerDialog } from '@/components/pipeline/PipelineManagerDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
