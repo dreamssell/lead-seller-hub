@@ -702,13 +702,25 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
           const channelTxt = capturedFilters.channel !== 'all'
             ? (CHANNEL_LABEL[capturedFilters.channel] || capturedFilters.channel)
             : 'Todos';
+          const channelDescTxt = capturedFilters.channel !== 'all'
+            ? (CHANNEL_DESC[capturedFilters.channel] || CHANNEL_LABEL[capturedFilters.channel] || capturedFilters.channel)
+            : 'Todos os canais disponíveis para este lead';
+          const dropdownOptions = ['Todos', ...capturedAvailableChannels.map(c => CHANNEL_LABEL[c] || c)];
+          const channelDetailLines = capturedAvailableChannels.map(c => {
+            const label = CHANNEL_LABEL[c] || c;
+            const desc = CHANNEL_DESC[c] || label;
+            const mark = c === capturedFilters.channel ? '[x]' : '[ ]';
+            return escape(`#   ${mark} ${label} — ${desc}`);
+          });
           const generatedAt = format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR });
           const metaHeader = [
             escape(`# Histórico do Lead`),
             escape(`# Lead: ${capturedLeadName || '—'}`),
             escape(`# Fuso horário: ${capturedTz}`),
             escape(`# Intervalo: ${capturedFilters.from || '—'} até ${capturedFilters.to || '—'}`),
-            escape(`# Canal: ${channelTxt}`),
+            escape(`# Canal selecionado: ${channelTxt} — ${channelDescTxt}`),
+            escape(`# Opções de canal no diálogo: ${dropdownOptions.join(', ')}`),
+            ...(channelDetailLines.length ? [escape(`# Detalhes dos canais (conforme o diálogo):`), ...channelDetailLines] : []),
             escape(`# Gerado em: ${generatedAt}`),
             escape(`# Total de eventos: ${rows.length}`),
             '',
