@@ -134,6 +134,10 @@ export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: P
                     <Switch checked={p.notify_stage_change} onCheckedChange={(v) => updatePref(p.id, { notify_stage_change: v })} />
                     Etapa
                   </label>
+                  <label className="flex items-center gap-1 text-xs">
+                    <Switch checked={p.notify_funnel_change} onCheckedChange={(v) => updatePref(p.id, { notify_funnel_change: v })} />
+                    Funil
+                  </label>
                   <Button size="icon" variant="ghost" onClick={() => removePref(p.id)}>
                     <Trash2 className="w-3.5 h-3.5 text-destructive" />
                   </Button>
