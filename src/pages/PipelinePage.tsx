@@ -81,16 +81,14 @@ export default function PipelinePage() {
   const load = useCallback(async () => {
     if (!ownerId) return;
     setLoading(true);
-    const [s, p, l, r] = await Promise.all([
+    const [s, p, r] = await Promise.all([
       supabase.from('sub_companies').select('id,name').eq('owner_id', ownerId).order('name'),
       supabase.from('pipelines').select('id,name,sub_company_id,is_default').eq('owner_id', ownerId).order('created_at'),
-      supabase.from('leads').select('id,name,estimated_value,stage_id,pipeline_id,channel,sub_company_id,source').order('updated_at', { ascending: false }).limit(500),
       supabase.from('channel_routing').select('channel,pipeline_id,sub_company_id').eq('owner_id', ownerId),
     ]);
     setSubs((s.data as SubCompany[]) || []);
     const pl = (p.data as Pipeline[]) || [];
     setPipelines(pl);
-    setLeads((l.data as Lead[]) || []);
     setRoutings((r.data as Routing[]) || []);
     if (pl.length) {
       const ids = pl.map(x => x.id);
@@ -102,29 +100,77 @@ export default function PipelinePage() {
     setLoading(false);
   }, [ownerId]);
 
+  // Sub-company scope helper
+  const subScope = selectedSub === 'all' ? undefined : selectedSub === 'global' ? null : selectedSub;
+
+  // Scoped + paginated lead loader
+  const loadLeads = useCallback(async () => {
+    if (!ownerId || !selectedPipeline) { setLeads([]); setTotalLeads(0); return; }
+    let q = supabase.from('leads')
+      .select('id,name,estimated_value,stage_id,pipeline_id,channel,sub_company_id,source', { count: 'exact' })
+      .eq('pipeline_id', selectedPipeline);
+    if (subScope !== undefined) {
+      if (subScope === null) q = q.is('sub_company_id', null);
+      else q = q.eq('sub_company_id', subScope);
+    }
+    if (selectedChannel !== 'all') q = q.eq('channel', selectedChannel);
+    if (search.trim()) q = q.ilike('name', `%${search.trim()}%`);
+    q = q.order('updated_at', { ascending: false }).range(page * pageSize, page * pageSize + pageSize - 1);
+    const { data, count } = await q;
+    setLeads((data as Lead[]) || []);
+    setTotalLeads(count || 0);
+  }, [ownerId, selectedPipeline, subScope, selectedChannel, search, page, pageSize]);
+
   useEffect(() => { load(); }, [load]);
 
-  // Realtime: live updates of pipelines, stages, leads, routing & channel routing
+  // debounce search reload
+  useEffect(() => {
+    const t = setTimeout(() => loadLeads(), search ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [loadLeads, search]);
+
+  // reset page when filters change
+  useEffect(() => { setPage(0); }, [selectedPipeline, selectedSub, selectedChannel, search]);
+
+  // Realtime: live updates with visual feedback + toast for structure changes
   useEffect(() => {
     if (!ownerId) return;
     let timer: any = null;
-    const debouncedReload = () => {
+    let leadsTimer: any = null;
+    const flashRefreshing = () => {
+      setAutoRefreshing(true);
+      setTimeout(() => setAutoRefreshing(false), 800);
+    };
+    const debouncedStructureReload = (label: string) => () => {
       clearTimeout(timer);
-      timer = setTimeout(() => load(), 350);
+      flashRefreshing();
+      timer = setTimeout(() => {
+        load();
+        loadLeads();
+        if (!isFirstLoad.current) toast.info(`${label} atualizado(a)`, { duration: 2000 });
+      }, 350);
+    };
+    const debouncedLeadsReload = () => {
+      clearTimeout(leadsTimer);
+      flashRefreshing();
+      leadsTimer = setTimeout(() => loadLeads(), 350);
     };
     const channel = supabase
       .channel(`pipeline-rt-${ownerId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pipelines' }, debouncedReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pipeline_stages' }, debouncedReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, debouncedReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'channel_routing' }, debouncedReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pipelines' }, debouncedStructureReload('Funil'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pipeline_stages' }, debouncedStructureReload('Etapas do funil'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, debouncedLeadsReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'channel_routing' }, debouncedStructureReload('Roteamento'))
       .subscribe((status) => setRealtimeActive(status === 'SUBSCRIBED'));
+    isFirstLoad.current = false;
     return () => {
       clearTimeout(timer);
+      clearTimeout(leadsTimer);
       supabase.removeChannel(channel);
       setRealtimeActive(false);
     };
-  }, [ownerId, load]);
+  }, [ownerId, load, loadLeads]);
+
 
   // Permission: can the current user move leads / manage pipelines in this scope?
   useEffect(() => {
