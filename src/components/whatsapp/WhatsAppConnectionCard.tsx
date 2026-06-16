@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { 
   CheckCircle2, Loader2, Plug, RefreshCw, XCircle, 
   Activity, AlertCircle, FileSpreadsheet, Eye, History,
-  Bug, Terminal, AlertOctagon, Phone, ShieldCheck
+  Bug, Terminal, AlertOctagon, Phone, ShieldCheck, QrCode
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
