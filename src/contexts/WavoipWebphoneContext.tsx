@@ -301,16 +301,34 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
       result.missing = config.devices.filter(d => !registeredTokensList.includes(d.token)).map(d => d.token);
 
       const now = new Date().toISOString();
+      const logRows: any[] = [];
       for (const d of config.devices) {
         const found = registered.find(r => r.token === d.token);
         const isOk = !!found && (found.enabled !== false);
+        const errMsg = isOk ? null : (found ? 'Device desabilitado pela Wavoip' : 'Device não registrado no SDK');
         await supabase.from('wavoip_devices').update({
           last_validated_at: now,
           last_validation_status: isOk ? 'ok' : 'fail',
-          last_validation_error: isOk ? null : (found ? 'Device desabilitado pela Wavoip' : 'Device não registrado no SDK'),
+          last_validation_error: errMsg,
         }).eq('id', d.id);
+
+        logRows.push({
+          owner_id,
+          sub_company_id,
+          device_id: d.id,
+          device_label: d.label,
+          device_token: d.token,
+          status: isOk ? 'ok' : 'fail',
+          message: isOk ? 'Device ativo no tronco Wavoip' : errMsg,
+          raw: found || null,
+          validated_at: now,
+        });
+      }
+      if (logRows.length > 0) {
+        await supabase.from('wavoip_validation_logs').insert(logRows);
       }
       await loadFromDb();
+
 
       if (result.missing.length === 0) {
         result.ok = true;
