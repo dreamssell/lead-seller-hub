@@ -135,6 +135,27 @@ Deno.serve(async (req) => {
     return json({ error: "missing_instance", hint: "Defina o nome da instância." }, 400);
   }
 
+  const logEvent = async (
+    event_type: string,
+    status: "success" | "error" | "info",
+    detail?: string,
+    payload?: Record<string, unknown>,
+  ) => {
+    try {
+      await admin.from("connection_events").insert({
+        connection_id,
+        event_type,
+        status,
+        status_detail: detail ?? null,
+        error_message: status === "error" ? detail ?? null : null,
+        payload: payload ?? null,
+        metadata_json: { actor_user_id: userId, action, instance },
+      });
+    } catch (e) {
+      console.error("[evolution-instance] log failed", e);
+    }
+  };
+
   try {
     if (action === "create") {
       // Idempotent: if it already exists Evolution returns 403/409 — we then just connect.
