@@ -351,7 +351,7 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
 
   const runExport = async (kind: 'csv' | 'pdf') => {
     if (exporting) return;
-    if (total === 0) return toast.error('Nada a exportar com os filtros atuais.');
+    if (exportCols.length === 0) return toast.error('Selecione ao menos uma coluna.');
     setExporting(kind);
     setExportProgress(0);
     exportCancelRef.current = false;
@@ -360,11 +360,16 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
         setExportProgress(t ? Math.round((loaded / t) * 100) : 100);
       });
       if (exportCancelRef.current) { toast.info('Exportação cancelada'); return; }
+      if (all.length === 0) { toast.error('Nada a exportar com os filtros atuais.'); return; }
       const rows = buildRowsFrom(all);
+      const selected = ALL_COLS.filter(c => exportCols.includes(c.key));
       if (kind === 'csv') {
-        const headers = ['Data', 'Tipo', 'Canal', 'Origem', 'De', 'Para'];
+        const headers = selected.map(c => c.label);
         const escape = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-        const csv = [headers.join(','), ...rows.map(r => [r.data, r.tipo, r.canal, r.origem, r.de, r.para].map(escape).join(','))].join('\n');
+        const csv = [
+          headers.join(','),
+          ...rows.map(r => selected.map(c => escape((r as any)[c.key])).join(','))
+        ].join('\n');
         const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -378,30 +383,33 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
         doc.setFontSize(14); doc.text('Histórico do Lead', margin, y); y += 18;
         doc.setFontSize(10); doc.setTextColor(90);
         doc.text(`Lead: ${leadName || '—'}`, margin, y); y += 14;
+        const efrom = useCustomRange ? exportFrom : dateFrom;
+        const eto = useCustomRange ? exportTo : dateTo;
         const filtersTxt = [
           channelFilter !== 'all' ? `Canal: ${CHANNEL_LABEL[channelFilter] || channelFilter}` : 'Canal: Todos',
-          dateFrom ? `De: ${dateFrom}` : null,
-          dateTo ? `Até: ${dateTo}` : null,
+          efrom ? `De: ${efrom}` : null,
+          eto ? `Até: ${eto}` : null,
           `Total: ${rows.length}`,
         ].filter(Boolean).join('  ·  ');
         doc.text(filtersTxt, margin, y); y += 14;
         doc.text(`Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`, margin, y); y += 16;
         doc.setDrawColor(200); doc.line(margin, y, 559, y); y += 14;
         doc.setTextColor(20); doc.setFontSize(9);
-        const colX = [margin, margin + 95, margin + 200, margin + 270, margin + 340, margin + 430];
-        const header = ['Data', 'Tipo', 'Canal', 'Origem', 'De', 'Para'];
-        doc.setFont(undefined, 'bold'); header.forEach((h, i) => doc.text(h, colX[i], y)); doc.setFont(undefined, 'normal');
+        // Distribute columns evenly across usable width
+        const usable = 559 - margin;
+        const colW = Math.floor(usable / selected.length);
+        const colX = selected.map((_, i) => margin + i * colW);
+        doc.setFont(undefined, 'bold');
+        selected.forEach((c, i) => doc.text(c.label, colX[i], y));
+        doc.setFont(undefined, 'normal');
         y += 12;
         for (let idx = 0; idx < rows.length; idx++) {
           if (y > 800) { doc.addPage(); y = margin; }
           const r = rows[idx];
-          const cells = [r.data, r.tipo, r.canal, r.origem, r.de, r.para];
-          cells.forEach((c, i) => {
-            const max = i === 0 ? 95 : i === 1 ? 100 : i === 2 ? 65 : i === 3 ? 65 : i === 4 ? 85 : 125;
-            doc.text(doc.splitTextToSize(String(c), max), colX[i], y);
+          selected.forEach((c, i) => {
+            doc.text(doc.splitTextToSize(String((r as any)[c.key] ?? ''), colW - 4), colX[i], y);
           });
           y += 14;
-          // Yield every 200 rows so very large PDFs don't freeze the UI
           if (idx % 200 === 0) await new Promise(r => setTimeout(r, 0));
         }
         doc.save(`${filenameBase()}.pdf`);
