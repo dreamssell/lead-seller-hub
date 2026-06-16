@@ -292,6 +292,14 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
           </motion.div>
         )}
       </CardContent>
+      {conn.provider === 'evolution' && (
+        <EvolutionWizardDialog
+          open={showEvolutionWizard}
+          onOpenChange={setShowEvolutionWizard}
+          conn={conn}
+          onConnected={onSaved}
+        />
+      )}
     </Card>
   );
 }
