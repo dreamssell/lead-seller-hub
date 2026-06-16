@@ -211,8 +211,20 @@ export default function PipelinePage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex gap-2 items-center">
+          <span
+            className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-full border ${
+              realtimeActive ? 'border-success/40 text-success' : 'border-muted text-muted-foreground'
+            }`}
+            title={realtimeActive ? 'Atualização em tempo real ativa' : 'Realtime desconectado'}
+          >
+            <Radio className={`w-3 h-3 ${realtimeActive ? 'animate-pulse' : ''}`} />
+            {realtimeActive ? 'Tempo real' : 'Offline'}
+          </span>
           <Button variant="outline" size="sm" onClick={load}>Atualizar</Button>
+          <Button variant="outline" size="sm" onClick={() => setTemplatesOpen(true)}>
+            <LayoutTemplate className="w-4 h-4 mr-1" /> Templates
+          </Button>
           <Button size="sm" onClick={() => setManagerOpen(true)} title={canManagePipelines ? '' : 'Modo somente leitura'}>
             <Settings2 className="w-4 h-4 mr-1" /> Gerenciar funis {!canManagePipelines && <Lock className="w-3 h-3 ml-1 opacity-70" />}
           </Button>
@@ -220,15 +232,28 @@ export default function PipelinePage() {
       </div>
 
       {ownerId && (
-        <PipelineManagerDialog
-          open={managerOpen}
-          onOpenChange={setManagerOpen}
-          ownerId={ownerId}
-          subScope={subScope}
-          channel={selectedChannel}
-          initialPipelineId={selectedPipeline}
-          onChanged={load}
-        />
+        <>
+          <PipelineManagerDialog
+            open={managerOpen}
+            onOpenChange={setManagerOpen}
+            ownerId={ownerId}
+            subScope={subScope}
+            channel={selectedChannel}
+            initialPipelineId={selectedPipeline}
+            onChanged={load}
+          />
+          <PipelineTemplatesDialog
+            open={templatesOpen}
+            onOpenChange={setTemplatesOpen}
+            ownerId={ownerId}
+            subScope={subScope}
+            channel={selectedChannel}
+            canManage={canManagePipelines}
+            currentPipeline={activePipeline ? { id: activePipeline.id, name: activePipeline.name } : null}
+            currentStages={activeStages.map(s => ({ name: s.name, color: s.color }))}
+            onApplied={(id) => { setSelectedPipeline(id); load(); }}
+          />
+        </>
       )}
 
       <LeadHistoryDialog
