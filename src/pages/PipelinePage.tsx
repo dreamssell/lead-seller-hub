@@ -86,15 +86,46 @@ export default function PipelinePage() {
   const isFirstLoad = useRef(true);
   const didRestorePage = useRef(false);
 
-  // Persist filters whenever they change
+  // Hydrate from remote DB (cross-device) once on mount; DB wins over localStorage
+  const didHydrateRemote = useRef(false);
+  useEffect(() => {
+    if (!ownerId || !user?.id || didHydrateRemote.current) return;
+    didHydrateRemote.current = true;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('user_ui_state')
+        .select('state')
+        .eq('user_id', user.id)
+        .eq('owner_id', ownerId)
+        .eq('scope', 'pipeline_page')
+        .maybeSingle();
+      const s = (data as any)?.state;
+      if (!s) return;
+      if (typeof s.selectedSub === 'string') setSelectedSub(s.selectedSub);
+      if (typeof s.selectedPipeline === 'string') setSelectedPipeline(s.selectedPipeline);
+      if (typeof s.selectedChannel === 'string') setSelectedChannel(s.selectedChannel);
+      if (typeof s.search === 'string') setSearch(s.search);
+      if (typeof s.page === 'number') setPage(s.page);
+      didRestorePage.current = false; // allow next filter change to reset page normally
+    })();
+  }, [ownerId, user?.id]);
+
+  // Persist filters (localStorage immediate + DB debounced) whenever they change
   useEffect(() => {
     if (!ownerId) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        selectedSub, selectedPipeline, selectedChannel, search, page,
-      }));
-    } catch {}
-  }, [STORAGE_KEY, ownerId, selectedSub, selectedPipeline, selectedChannel, search, page]);
+    const payload = { selectedSub, selectedPipeline, selectedChannel, search, page };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch {}
+    if (!user?.id || !didHydrateRemote.current) return;
+    const t = setTimeout(() => {
+      (supabase as any).from('user_ui_state').upsert({
+        user_id: user.id,
+        owner_id: ownerId,
+        scope: 'pipeline_page',
+        state: payload,
+      }, { onConflict: 'user_id,owner_id,scope' }).then(() => {});
+    }, 600);
+    return () => clearTimeout(t);
+  }, [STORAGE_KEY, ownerId, user?.id, selectedSub, selectedPipeline, selectedChannel, search, page]);
 
   const load = useCallback(async () => {
     if (!ownerId) return;
