@@ -50,7 +50,11 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
   const config = PROVIDER_CONFIGS[conn.provider] || PROVIDER_CONFIGS.uaz;
   const [url, setUrl] = useState<string>(conn.metadata?.url ?? config.url);
   const [token, setToken] = useState<string>(conn.metadata?.token ?? '');
-  const [extra, setExtra] = useState<string>(conn.metadata?.phone_number_id ?? '');
+  const [extra, setExtra] = useState<string>(
+    conn.provider === 'evolution'
+      ? (conn.metadata?.instance ?? '')
+      : (conn.metadata?.phone_number_id ?? '')
+  );
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [showEvolutionWizard, setShowEvolutionWizard] = useState(false);
