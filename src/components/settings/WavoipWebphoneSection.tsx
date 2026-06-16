@@ -1,13 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
-import { Phone, Trash2, Star, PhoneCall, RefreshCw, ShieldCheck, Loader2, PlugZap, CheckCircle2, XCircle, Building2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import {
+  Phone, Trash2, Star, PhoneCall, RefreshCw, ShieldCheck, Loader2, PlugZap,
+  CheckCircle2, XCircle, Building2, History, AlertTriangle, ListChecks, TestTube2
+} from 'lucide-react';
 import { toast } from 'sonner';
+
+type ValidationLog = {
+  id: string;
+  device_label: string | null;
+  device_token: string | null;
+  status: 'ok' | 'fail' | 'sdk_error';
+  message: string | null;
+  validated_at: string;
+};
 
 export default function WavoipWebphoneSection() {
   const {
@@ -20,10 +34,58 @@ export default function WavoipWebphoneSection() {
   const [label, setLabel] = useState('');
   const [phone, setPhone] = useState('');
   const [testNumber, setTestNumber] = useState('');
+  const [autoRevalidate, setAutoRevalidate] = useState<boolean>(() => {
+    return localStorage.getItem('wavoip.autoRevalidate') !== '0';
+  });
+  const [history, setHistory] = useState<ValidationLog[]>([]);
+  const [isTestingCall, setIsTestingCall] = useState(false);
+
+  const loadHistory = useCallback(async () => {
+    if (!scope.owner_id) return;
+    let q = supabase
+      .from('wavoip_validation_logs')
+      .select('id, device_label, device_token, status, message, validated_at')
+      .eq('owner_id', scope.owner_id)
+      .order('validated_at', { ascending: false })
+      .limit(15);
+    if (scope.sub_company_id) q = q.eq('sub_company_id', scope.sub_company_id);
+    else q = q.is('sub_company_id', null);
+    const { data } = await q;
+    if (data) setHistory(data as ValidationLog[]);
+  }, [scope.owner_id, scope.sub_company_id]);
+
+  useEffect(() => { loadHistory(); }, [loadHistory, lastValidation]);
+
+  // Auto-revalidar ao montar a seção / ao trocar de sub-empresa
+  useEffect(() => {
+    if (!autoRevalidate) return;
+    if (config.devices.length === 0) return;
+    const t = setTimeout(() => { validateConnection().catch(() => {}); }, 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope.sub_company_id, scope.owner_id, autoRevalidate, config.devices.length]);
+
+  useEffect(() => {
+    localStorage.setItem('wavoip.autoRevalidate', autoRevalidate ? '1' : '0');
+  }, [autoRevalidate]);
 
   const handleAdd = async () => {
     const dev = await addDevice(token, label, phone);
     if (dev) { setToken(''); setLabel(''); setPhone(''); }
+  };
+
+  const handleTestCall = async () => {
+    if (!testNumber.trim()) { toast.error('Informe um número WhatsApp válido para o teste.'); return; }
+    setIsTestingCall(true);
+    toast.info('Iniciando chamada de teste...', { description: 'Atenda no número informado para confirmar o áudio.' });
+    try {
+      const ok = await callWhatsApp(testNumber);
+      if (ok) {
+        toast.success('Chamada disparada. Confirme se o áudio chegou nos dois lados.', { duration: 8000 });
+      }
+    } finally {
+      setIsTestingCall(false);
+    }
   };
 
   const statusBadge = () => {
@@ -34,6 +96,9 @@ export default function WavoipWebphoneSection() {
       default: return <Badge variant="outline">Inativo</Badge>;
     }
   };
+
+  const hasFailures = config.devices.some(d => d.last_validation_status === 'fail') || (lastValidation && !lastValidation.ok);
+
 
   return (
     <Card className="glass-card">
