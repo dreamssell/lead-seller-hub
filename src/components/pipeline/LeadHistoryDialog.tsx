@@ -661,6 +661,7 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
     };
     const capturedCols = ALL_COLS.filter(c => exportCols.includes(c.key));
     const capturedTz = userTz;
+    const capturedAvailableChannels = [...availableChannels];
     const capturedLeadId = leadId;
     const capturedLeadName = leadName;
     const fileBase = filenameBase();
