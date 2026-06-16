@@ -354,8 +354,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
     if (channelFilter !== 'all') q = q.eq('channel', channelFilter);
     const from = useCustomRange ? exportFrom : dateFrom;
     const to = useCustomRange ? exportTo : dateTo;
-    if (from) q = q.gte('created_at', `${from}T00:00:00`);
-    if (to)   q = q.lte('created_at', `${to}T23:59:59`);
+    if (from) q = q.gte('created_at', localDayStartISO(from));
+    if (to)   q = q.lte('created_at', localDayEndISO(to));
     return q.order('created_at', { ascending: false }).order('id', { ascending: false });
   }, [leadId, channelFilter, dateFrom, dateTo, useCustomRange, exportFrom, exportTo]);
 
