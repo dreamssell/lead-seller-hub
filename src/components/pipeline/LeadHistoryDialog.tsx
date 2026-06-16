@@ -179,6 +179,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
   // -------- Cross-device filter & scroll persistence (user_ui_state) --------
   const [hydrated, setHydrated] = useState(false);
   const [restoredLoadedCount, setRestoredLoadedCount] = useState<number | null>(null);
+  const [restoredScrollTop, setRestoredScrollTop] = useState<number | null>(null);
+  const scrollTopRef = useRef(0);
   const ownerIdRef = useRef<string | null>(null);
   const scope = leadId ? `lead_history:${leadId}` : null;
 
@@ -203,6 +205,7 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
       if (typeof s.dateFrom === 'string') setDateFrom(s.dateFrom);
       if (typeof s.dateTo === 'string') setDateTo(s.dateTo);
       if (typeof s.loadedCount === 'number' && s.loadedCount > PAGE_SIZE) setRestoredLoadedCount(s.loadedCount);
+      if (typeof s.scrollTop === 'number' && s.scrollTop > 0) setRestoredScrollTop(s.scrollTop);
       setHydrated(true);
     })();
     return () => { cancelled = true; };
@@ -215,7 +218,23 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
     loadMore();
   }, [restoredLoadedCount, events.length, hasMore, loading, loadMore]);
 
-  // Debounced upsert of current filters + loaded count + cursor
+  // Restore scroll position once the catch-up has finished
+  useEffect(() => {
+    if (restoredScrollTop == null) return;
+    if (loading || restoredLoadedCount != null) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    // Wait a frame for layout to settle
+    const id = requestAnimationFrame(() => {
+      const target = Math.min(restoredScrollTop, el.scrollHeight - el.clientHeight);
+      el.scrollTop = Math.max(0, target);
+      scrollTopRef.current = el.scrollTop;
+      setRestoredScrollTop(null);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [restoredScrollTop, restoredLoadedCount, loading, events.length]);
+
+  // Debounced upsert of current filters + loaded count + cursor + scroll position
   useEffect(() => {
     if (!open || !hydrated || !leadId || !scope) return;
     const t = window.setTimeout(async () => {
@@ -233,6 +252,7 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
           dateTo,
           loadedCount: events.length,
           cursor,
+          scrollTop: scrollTopRef.current,
         },
       }, { onConflict: 'user_id,owner_id,scope' });
     }, 600);
@@ -241,15 +261,36 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
 
 
   // Infinite scroll with debounce + prefetch (triggers earlier and coalesces rapid scroll events)
+  // Also tracks scroll position for cross-device restore.
+  const scrollPersistTimerRef = useRef<number | null>(null);
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     let timer: number | null = null;
     const onScroll = () => {
+      // Track position for persistence (debounced via the upsert effect)
+      scrollTopRef.current = el.scrollTop;
+      if (scrollPersistTimerRef.current !== null) window.clearTimeout(scrollPersistTimerRef.current);
+      scrollPersistTimerRef.current = window.setTimeout(async () => {
+        if (!hydrated || !leadId || !scope || !ownerIdRef.current) return;
+        const { data: userRes } = await supabase.auth.getUser();
+        const uid = userRes.user?.id;
+        if (!uid) return;
+        await (supabase as any).from('user_ui_state').upsert({
+          user_id: uid,
+          owner_id: ownerIdRef.current,
+          scope,
+          state: {
+            channelFilter, dateFrom, dateTo,
+            loadedCount: events.length, cursor,
+            scrollTop: scrollTopRef.current,
+          },
+        }, { onConflict: 'user_id,owner_id,scope' });
+      }, 800);
+
       if (timer !== null) return;
       timer = window.setTimeout(() => {
         timer = null;
-        // Prefetch: trigger when within ~600px of the bottom (one viewport ahead)
         if (el.scrollTop + el.clientHeight >= el.scrollHeight - 600) loadMore();
       }, 120);
     };
@@ -258,7 +299,7 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
       el.removeEventListener('scroll', onScroll);
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [loadMore]);
+  }, [loadMore, hydrated, leadId, scope, channelFilter, dateFrom, dateTo, events.length, cursor]);
 
   // Prefetch next page proactively after first load completes (warm cache for fast scroll)
   useEffect(() => {
@@ -267,6 +308,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
       return () => window.clearTimeout(t);
     }
   }, [loading, hasMore, events.length, loadMore]);
+
+
 
   const filtered = events; // server-filtered already
 
