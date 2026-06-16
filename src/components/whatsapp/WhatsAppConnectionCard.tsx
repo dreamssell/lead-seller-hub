@@ -67,7 +67,8 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
       ...(conn.metadata ?? {}), 
       url, 
       token, 
-      ...(conn.provider === 'meta' && { phone_number_id: extra }) 
+      ...(conn.provider === 'meta' && { phone_number_id: extra }),
+      ...(conn.provider === 'evolution' && { instance: extra }) 
     };
     const { error } = await supabase
       .from('whatsapp_connections')
