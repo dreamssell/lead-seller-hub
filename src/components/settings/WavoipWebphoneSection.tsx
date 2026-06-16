@@ -152,15 +152,32 @@ export default function WavoipWebphoneSection() {
                       <Phone className="w-4 h-4" />
                     </div>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-semibold truncate">{d.label}</p>
                         {config.defaultDeviceId === d.id && (
                           <Badge variant="outline" className="gap-1 text-[10px]"><Star className="w-3 h-3" /> padrão</Badge>
                         )}
+                        {d.last_validation_status === 'ok' && (
+                          <Badge className="gap-1 text-[10px] bg-emerald-500/15 text-emerald-600 border-emerald-500/30">
+                            <CheckCircle2 className="w-3 h-3" /> validado
+                          </Badge>
+                        )}
+                        {d.last_validation_status === 'fail' && (
+                          <Badge variant="destructive" className="gap-1 text-[10px]">
+                            <XCircle className="w-3 h-3" /> falhou
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-[11px] text-muted-foreground font-mono truncate">{d.token}</p>
                       {d.phone && <p className="text-[11px] text-muted-foreground">📱 {d.phone}</p>}
+                      {d.last_validation_error && (
+                        <p className="text-[11px] text-red-500 mt-0.5">⚠ {d.last_validation_error}</p>
+                      )}
+                      {d.last_validated_at && (
+                        <p className="text-[10px] text-muted-foreground">Última validação: {new Date(d.last_validated_at).toLocaleString('pt-BR')}</p>
+                      )}
                     </div>
+
                   </div>
                   <div className="flex items-center gap-1">
                     {config.defaultDeviceId !== d.id && (
