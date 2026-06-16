@@ -244,34 +244,75 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
     onConnected();
   };
 
+  const copyInstance = () => {
+    navigator.clipboard.writeText(instance);
+    toast.success('Identificador da instância copiado', { description: instance });
+  };
+
+  const downloadQr = () => {
+    if (!qr) return;
+    const src = qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`;
+    const a = document.createElement('a');
+    a.href = src;
+    a.download = `evolution-qr-${instance || conn.id.slice(0, 6)}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    toast.success('QR Code baixado');
+  };
+
+  const fieldError = (msg: string | null) =>
+    msg ? <p className="text-[11px] text-destructive">{msg}</p> : null;
+
   const renderCredentials = () => (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Informe os dados do seu servidor Evolution API. Você só precisa fazer isso uma vez por instância.
+        Informe os dados do seu servidor Evolution API. Os campos são validados em tempo real — o QR só pode ser gerado quando tudo estiver correto.
       </p>
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <Label>URL do Servidor</Label>
-        <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://evolution.seu-dominio.com" />
+        <Input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://evolution.seu-dominio.com"
+          aria-invalid={!!urlError}
+          className={urlError ? 'border-destructive/60' : ''}
+        />
+        {fieldError(urlError)}
       </div>
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <Label>API Key (Global)</Label>
         <Input
           type="password"
           value={token}
           onChange={(e) => setToken(e.target.value)}
           placeholder="cole sua AUTHENTICATION_API_KEY"
+          aria-invalid={!!tokenError}
+          className={tokenError ? 'border-destructive/60' : ''}
         />
+        {fieldError(tokenError)}
       </div>
-      <div className="space-y-2">
-        <Label>Nome da Instância</Label>
+      <div className="space-y-1.5">
+        <Label className="flex items-center justify-between">
+          <span>Nome da Instância</span>
+          {instance && !instanceError && (
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={copyInstance}>
+              <Copy className="w-3 h-3 mr-1" /> copiar
+            </Button>
+          )}
+        </Label>
         <Input
           value={instance}
           onChange={(e) => setInstance(e.target.value.replace(/[^a-zA-Z0-9-_]/g, ''))}
           placeholder="ex: vendas-01"
+          aria-invalid={!!instanceError}
+          className={instanceError ? 'border-destructive/60' : ''}
         />
-        <p className="text-xs text-muted-foreground">
-          Apenas letras, números, hífen e underline. Será o identificador no Evolution.
-        </p>
+        {fieldError(instanceError) ?? (
+          <p className="text-xs text-muted-foreground">
+            Apenas letras, números, hífen e underline. Será o identificador no Evolution.
+          </p>
+        )}
       </div>
       <div className="space-y-2">
         <Label className="flex items-center gap-2">
