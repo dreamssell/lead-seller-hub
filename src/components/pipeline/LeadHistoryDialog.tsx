@@ -49,6 +49,22 @@ const TYPE_LABEL: Record<string, string> = {
 const CHANNEL_LABEL: Record<string, string> = {
   whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Facebook',
   telegram: 'Telegram', widget: 'Widget', linkedin: 'LinkedIn', tiktok: 'TikTok', youtube: 'YouTube',
+  voip: 'VoIP', video: 'Vídeo', email: 'E-mail', sms: 'SMS',
+};
+
+const CHANNEL_DESC: Record<string, string> = {
+  whatsapp: 'Mensagens via WhatsApp Business',
+  instagram: 'Mensagens diretas do Instagram',
+  facebook: 'Mensagens do Facebook Messenger',
+  telegram: 'Mensagens via Telegram',
+  widget: 'Widget de chat do site',
+  linkedin: 'Mensagens via LinkedIn',
+  tiktok: 'Mensagens via TikTok',
+  youtube: 'Comentários/mensagens do YouTube',
+  voip: 'Chamadas de voz (VoIP)',
+  video: 'Chamadas de vídeo',
+  email: 'Mensagens por e-mail',
+  sms: 'Mensagens por SMS',
 };
 
 const PAGE_SIZE = 100;
