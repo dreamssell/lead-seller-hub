@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { Plus, User, Loader2, GitBranch, Settings2, History, Lock, LayoutTemplate, Radio, Search, ChevronLeft, ChevronRight, Bell, ClipboardList, RefreshCw } from 'lucide-react';
+import { Plus, User, Loader2, GitBranch, Settings2, History, Lock, LayoutTemplate, Radio, Search, ChevronLeft, ChevronRight, Bell, ClipboardList, RefreshCw, RotateCcw } from 'lucide-react';
 import { PipelineManagerDialog } from '@/components/pipeline/PipelineManagerDialog';
 import { PipelineTemplatesDialog } from '@/components/pipeline/PipelineTemplatesDialog';
 import { LeadHistoryDialog } from '@/components/pipeline/LeadHistoryDialog';
