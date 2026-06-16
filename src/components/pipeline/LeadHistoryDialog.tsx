@@ -192,6 +192,18 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
   const ownerIdRef = useRef<string | null>(null);
   const scope = leadId ? `lead_history:${leadId}` : null;
 
+  // TTL for saved cursor/offset/scroll. 0 = never expires.
+  // Persisted in the same state row so it survives across devices.
+  const TTL_OPTIONS = [
+    { value: 1, label: '1 hora' },
+    { value: 24, label: '1 dia' },
+    { value: 168, label: '7 dias' },
+    { value: 720, label: '30 dias' },
+    { value: 0, label: 'Sempre' },
+  ];
+  const [cursorTtlHours, setCursorTtlHours] = useState<number>(168);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+
   // Hydrate filters from DB on open
   useEffect(() => {
     if (!open || !leadId || !scope) return;
@@ -212,8 +224,27 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
       if (typeof s.channelFilter === 'string') setChannelFilter(s.channelFilter);
       if (typeof s.dateFrom === 'string') setDateFrom(s.dateFrom);
       if (typeof s.dateTo === 'string') setDateTo(s.dateTo);
-      if (typeof s.loadedCount === 'number' && s.loadedCount > PAGE_SIZE) setRestoredLoadedCount(s.loadedCount);
-      if (typeof s.scrollTop === 'number' && s.scrollTop > 0) setRestoredScrollTop(s.scrollTop);
+      if (typeof s.cursorTtlHours === 'number') setCursorTtlHours(s.cursorTtlHours);
+      const ttl = typeof s.cursorTtlHours === 'number' ? s.cursorTtlHours : 168;
+      const savedAtStr = typeof s.savedAt === 'string' ? s.savedAt : null;
+      // Determine whether the saved cursor/offset/scroll is still valid
+      const isExpired = ttl > 0 && savedAtStr
+        ? (Date.now() - new Date(savedAtStr).getTime()) > ttl * 3600_000
+        : false;
+      if (!isExpired) {
+        if (typeof s.loadedCount === 'number' && s.loadedCount > PAGE_SIZE) setRestoredLoadedCount(s.loadedCount);
+        if (typeof s.scrollTop === 'number' && s.scrollTop > 0) setRestoredScrollTop(s.scrollTop);
+        if (savedAtStr) setSavedAt(savedAtStr);
+      } else {
+        // Expired — purge stale cursor fields so they don't get re-restored.
+        try {
+          await (supabase as any).from('user_ui_state').upsert({
+            user_id: uid, owner_id: ownerId, scope,
+            state: { channelFilter: s.channelFilter, dateFrom: s.dateFrom, dateTo: s.dateTo,
+                     cursorTtlHours: ttl, loadedCount: 0, cursor: null, scrollTop: 0, savedAt: null },
+          }, { onConflict: 'user_id,owner_id,scope' });
+        } catch { /* best-effort */ }
+      }
       setHydrated(true);
     })();
     return () => { cancelled = true; };
