@@ -176,12 +176,34 @@ export default function PipelinePage() {
       flashRefreshing();
       leadsTimer = setTimeout(() => loadLeads(), 350);
     };
+
+    // Descriptive toasts scoped to current sub-company / channel via audit log
+    const auditScopeId = selectedSub === 'all' || selectedSub === 'global' ? null : selectedSub;
+    const onAuditInsert = (payload: any) => {
+      const row = payload?.new;
+      if (!row || isFirstLoad.current) return;
+      // Sub-company filter (allow exact match OR global rows when viewing "all")
+      if (selectedSub !== 'all') {
+        if ((row.sub_company_id ?? null) !== auditScopeId) return;
+      }
+      const ACTION_LBL: Record<string, string> = {
+        create: 'criou', update: 'editou', delete: 'excluiu', reorder: 'reordenou', link_channel: 'vinculou ao canal',
+      };
+      const ENTITY_LBL: Record<string, string> = { pipeline: 'o funil', stage: 'a etapa' };
+      const who = row.actor_email || 'Alguém';
+      const action = ACTION_LBL[row.action] || row.action;
+      const entity = ENTITY_LBL[row.entity] || row.entity;
+      const label = row.label ? ` "${row.label}"` : '';
+      toast.message(`${who} ${action} ${entity}${label}`, { duration: 3500 });
+    };
+
     const channel = supabase
       .channel(`pipeline-rt-${ownerId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pipelines' }, debouncedStructureReload('Funil'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pipeline_stages' }, debouncedStructureReload('Etapas do funil'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, debouncedLeadsReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'channel_routing' }, debouncedStructureReload('Roteamento'))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pipeline_audit_logs', filter: `owner_id=eq.${ownerId}` }, onAuditInsert)
       .subscribe((status) => setRealtimeActive(status === 'SUBSCRIBED'));
     isFirstLoad.current = false;
     return () => {
@@ -190,7 +212,7 @@ export default function PipelinePage() {
       supabase.removeChannel(channel);
       setRealtimeActive(false);
     };
-  }, [ownerId, load, loadLeads]);
+  }, [ownerId, load, loadLeads, selectedSub, selectedChannel]);
 
 
   // Permission: can the current user move leads / manage pipelines in this scope?
