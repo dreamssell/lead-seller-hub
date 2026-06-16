@@ -532,9 +532,29 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
       if (kind === 'csv') {
         const headers = selected.map(c => c.label);
         const escape = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+        const efrom = useCustomRange ? exportFrom : dateFrom;
+        const eto = useCustomRange ? exportTo : dateTo;
+        const channelTxt = channelFilter !== 'all' ? (CHANNEL_LABEL[channelFilter] || channelFilter) : 'Todos';
+        const generatedAt = format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR });
+        const metaHeader = [
+          escape(`# Histórico do Lead`),
+          escape(`# Lead: ${leadName || '—'}`),
+          escape(`# Fuso horário: ${userTz}`),
+          escape(`# Intervalo: ${efrom || '—'} até ${eto || '—'}`),
+          escape(`# Canal: ${channelTxt}`),
+          escape(`# Gerado em: ${generatedAt}`),
+          escape(`# Total de eventos: ${rows.length}`),
+          '',
+        ];
+        const metaFooter = [
+          '',
+          escape(`# Fim do relatório — ${rows.length} eventos · Fuso ${userTz} · ${efrom || '—'} até ${eto || '—'}`),
+        ];
         const csv = [
+          ...metaHeader,
           headers.join(','),
-          ...rows.map(r => selected.map(c => escape((r as any)[c.key])).join(','))
+          ...rows.map(r => selected.map(c => escape((r as any)[c.key])).join(',')),
+          ...metaFooter,
         ].join('\n');
         const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
