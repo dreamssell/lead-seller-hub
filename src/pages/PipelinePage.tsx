@@ -203,6 +203,20 @@ export default function PipelinePage() {
         />
       )}
 
+      <LeadHistoryDialog
+        open={!!historyLead}
+        onOpenChange={(v) => !v && setHistoryLead(null)}
+        leadId={historyLead?.id || null}
+        leadName={historyLead?.name}
+      />
+
+      {!loading && activePipeline && !canMove && (
+        <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground rounded-md border border-dashed px-3 py-2">
+          <Lock className="w-3.5 h-3.5" />
+          Você está em modo leitura. Somente usuários com permissão podem mover leads entre etapas neste escopo.
+        </div>
+      )}
+
       {loading ? (
         <div className="p-12 text-center text-muted-foreground">
           <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
@@ -249,15 +263,21 @@ export default function PipelinePage() {
                   {cards.map((card) => (
                     <div
                       key={card.id}
-                      draggable
-                      onDragStart={(e) => e.dataTransfer.setData('text/lead-id', card.id)}
-                      className="glass-card p-4 cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors group"
-                      onClick={() => { window.location.href = `/cadastros?entity=leads&id=${card.id}`; }}
+                      draggable={canMove}
+                      onDragStart={(e) => canMove && e.dataTransfer.setData('text/lead-id', card.id)}
+                      className={`glass-card p-4 hover:border-primary/50 transition-colors group ${canMove ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}
                     >
                       <div className="flex items-start justify-between mb-2">
-                        <p className="text-sm font-medium text-foreground">{card.name}</p>
-                        <button className="p-1 rounded hover:bg-secondary opacity-0 group-hover:opacity-100 transition-opacity">
-                          <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
+                        <p
+                          className="text-sm font-medium text-foreground cursor-pointer hover:underline"
+                          onClick={() => { window.location.href = `/cadastros?entity=leads&id=${card.id}`; }}
+                        >{card.name}</p>
+                        <button
+                          className="p-1 rounded hover:bg-secondary opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Histórico"
+                          onClick={(e) => { e.stopPropagation(); setHistoryLead({ id: card.id, name: card.name }); }}
+                        >
+                          <History className="w-3.5 h-3.5 text-muted-foreground" />
                         </button>
                       </div>
                       <div className="flex items-center gap-1.5 flex-wrap mb-2">
