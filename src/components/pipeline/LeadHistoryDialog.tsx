@@ -599,8 +599,19 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
   const scheduleExport = async (kind: 'csv' | 'pdf') => {
     if (!leadId) return;
     if (total === 0) { toast.error('Nada a exportar com os filtros atuais.'); return; }
+    const range = resolveExportRange();
+    if (range.error) { toast.error(range.error); return; }
     setScheduling(true);
-    const capturedFilters = { channel: channelFilter, from: dateFrom, to: dateTo };
+    // Capture the EXACT resolved interval (TZ-aware ISO instants) and the
+    // selected columns at click time, so the background task uses the same
+    // window the user sees in the dialog — even after filters change.
+    const capturedFilters = {
+      channel: channelFilter,
+      from: range.from, to: range.to,
+      fromIso: range.fromIso, toIso: range.toIso,
+    };
+    const capturedCols = ALL_COLS.filter(c => exportCols.includes(c.key));
+    const capturedTz = userTz;
     const capturedLeadId = leadId;
     const capturedLeadName = leadName;
     const fileBase = filenameBase();
@@ -618,9 +629,9 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
             .select('id,type,from_stage_name,to_stage_name,channel,source,created_at,metadata', { count: 'exact' })
             .eq('lead_id', capturedLeadId);
           if (capturedFilters.channel !== 'all') q = q.eq('channel', capturedFilters.channel);
-          if (capturedFilters.from) q = q.gte('created_at', new Date(`${capturedFilters.from}T00:00:00`).toISOString());
-          if (capturedFilters.to)   q = q.lte('created_at', new Date(`${capturedFilters.to}T23:59:59.999`).toISOString());
-          return q.order('created_at', { ascending: false });
+          if (capturedFilters.fromIso) q = q.gte('created_at', capturedFilters.fromIso);
+          if (capturedFilters.toIso)   q = q.lte('created_at', capturedFilters.toIso);
+          return q.order('created_at', { ascending: false }).order('id', { ascending: false });
         };
         const first = await baseQuery().range(0, BATCH - 1);
         const totalCount = first.count || 0;
