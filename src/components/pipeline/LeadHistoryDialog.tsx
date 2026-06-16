@@ -503,8 +503,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
             .select('id,type,from_stage_name,to_stage_name,channel,source,created_at,metadata', { count: 'exact' })
             .eq('lead_id', capturedLeadId);
           if (capturedFilters.channel !== 'all') q = q.eq('channel', capturedFilters.channel);
-          if (capturedFilters.from) q = q.gte('created_at', `${capturedFilters.from}T00:00:00`);
-          if (capturedFilters.to)   q = q.lte('created_at', `${capturedFilters.to}T23:59:59`);
+          if (capturedFilters.from) q = q.gte('created_at', new Date(`${capturedFilters.from}T00:00:00`).toISOString());
+          if (capturedFilters.to)   q = q.lte('created_at', new Date(`${capturedFilters.to}T23:59:59.999`).toISOString());
           return q.order('created_at', { ascending: false });
         };
         const first = await baseQuery().range(0, BATCH - 1);
