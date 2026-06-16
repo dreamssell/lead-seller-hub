@@ -59,9 +59,11 @@ export default function PipelinePage() {
   const [selectedPipeline, setSelectedPipeline] = useState<string>('');
   const [selectedChannel, setSelectedChannel] = useState<string>('all');
   const [managerOpen, setManagerOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [historyLead, setHistoryLead] = useState<{ id: string; name: string } | null>(null);
   const [canMove, setCanMove] = useState(false);
   const [canManagePipelines, setCanManagePipelines] = useState(false);
+  const [realtimeActive, setRealtimeActive] = useState(false);
 
   const load = useCallback(async () => {
     if (!ownerId) return;
