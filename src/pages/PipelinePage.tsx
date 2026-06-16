@@ -63,10 +63,20 @@ export default function PipelinePage() {
   const [selectedChannel, setSelectedChannel] = useState<string>('all');
   const [managerOpen, setManagerOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [notifPrefsOpen, setNotifPrefsOpen] = useState(false);
+  const [stageAuditOpen, setStageAuditOpen] = useState(false);
   const [historyLead, setHistoryLead] = useState<{ id: string; name: string } | null>(null);
   const [canMove, setCanMove] = useState(false);
   const [canManagePipelines, setCanManagePipelines] = useState(false);
   const [realtimeActive, setRealtimeActive] = useState(false);
+  const [autoRefreshing, setAutoRefreshing] = useState(false);
+
+  // search & pagination
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const [pageSize] = useState(200);
+  const [totalLeads, setTotalLeads] = useState(0);
+  const isFirstLoad = useRef(true);
 
   const load = useCallback(async () => {
     if (!ownerId) return;
