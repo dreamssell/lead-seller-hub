@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { Plus, User, Loader2, GitBranch, Settings2, History, Lock, LayoutTemplate, Radio, Search, ChevronLeft, ChevronRight, Bell, ClipboardList, RefreshCw } from 'lucide-react';
+import { Plus, User, Loader2, GitBranch, Settings2, History, Lock, LayoutTemplate, Radio, Search, ChevronLeft, ChevronRight, Bell, ClipboardList, RefreshCw, RotateCcw } from 'lucide-react';
 import { PipelineManagerDialog } from '@/components/pipeline/PipelineManagerDialog';
 import { PipelineTemplatesDialog } from '@/components/pipeline/PipelineTemplatesDialog';
 import { LeadHistoryDialog } from '@/components/pipeline/LeadHistoryDialog';
@@ -405,6 +405,22 @@ export default function PipelinePage() {
             className="pl-8 h-9"
           />
         </div>
+        {(selectedSub !== 'all' || selectedChannel !== 'all' || search.trim() !== '' || page !== 0) && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-9"
+            onClick={() => {
+              setSelectedSub('all');
+              setSelectedChannel('all');
+              setSearch('');
+              setPage(0);
+            }}
+            title="Limpar sub-empresa, canal, busca e voltar à primeira página"
+          >
+            <RotateCcw className="w-4 h-4 mr-1" /> Resetar filtros
+          </Button>
+        )}
         <div className="flex items-center gap-1 text-xs text-muted-foreground ml-auto">
           <span>
             {totalLeads === 0
