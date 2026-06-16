@@ -1300,6 +1300,54 @@ export type Database = {
           },
         ]
       }
+      pipeline_audit_logs: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_id: string | null
+          after: Json | null
+          before: Json | null
+          created_at: string
+          entity: string
+          id: string
+          label: string | null
+          owner_id: string
+          pipeline_id: string | null
+          stage_id: string | null
+          sub_company_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          entity: string
+          id?: string
+          label?: string | null
+          owner_id: string
+          pipeline_id?: string | null
+          stage_id?: string | null
+          sub_company_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          entity?: string
+          id?: string
+          label?: string | null
+          owner_id?: string
+          pipeline_id?: string | null
+          stage_id?: string | null
+          sub_company_id?: string | null
+        }
+        Relationships: []
+      }
       pipeline_stages: {
         Row: {
           color: string | null
@@ -2135,6 +2183,7 @@ export type Database = {
       user_account_access: {
         Row: {
           allowed_pages: string[]
+          can_manage_pipelines: boolean
           can_move_leads: boolean
           created_at: string
           created_by: string | null
@@ -2147,6 +2196,7 @@ export type Database = {
         }
         Insert: {
           allowed_pages?: string[]
+          can_manage_pipelines?: boolean
           can_move_leads?: boolean
           created_at?: string
           created_by?: string | null
@@ -2159,6 +2209,7 @@ export type Database = {
         }
         Update: {
           allowed_pages?: string[]
+          can_manage_pipelines?: boolean
           can_move_leads?: boolean
           created_at?: string
           created_by?: string | null
@@ -3015,6 +3066,10 @@ export type Database = {
     }
     Functions: {
       calculate_next_retry: { Args: { retry_count: number }; Returns: string }
+      can_user_manage_pipelines: {
+        Args: { p_owner_id: string; p_sub_company_id: string }
+        Returns: boolean
+      }
       can_user_move_leads: {
         Args: { p_owner_id: string; p_sub_company_id: string }
         Returns: boolean
@@ -3133,6 +3188,7 @@ export type Database = {
         }
         Returns: {
           allowed_pages: string[]
+          can_manage_pipelines: boolean
           can_move_leads: boolean
           created_at: string
           created_by: string | null

@@ -60,6 +60,7 @@ export default function PipelinePage() {
   const [managerOpen, setManagerOpen] = useState(false);
   const [historyLead, setHistoryLead] = useState<{ id: string; name: string } | null>(null);
   const [canMove, setCanMove] = useState(false);
+  const [canManagePipelines, setCanManagePipelines] = useState(false);
 
   const load = useCallback(async () => {
     if (!ownerId) return;
@@ -87,12 +88,14 @@ export default function PipelinePage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Permission: can the current user move leads in this scope?
+  // Permission: can the current user move leads / manage pipelines in this scope?
   useEffect(() => {
-    if (!ownerId) { setCanMove(false); return; }
+    if (!ownerId) { setCanMove(false); setCanManagePipelines(false); return; }
     const scopeId = selectedSub === 'all' || selectedSub === 'global' ? null : selectedSub;
     (supabase.rpc as any)('can_user_move_leads', { p_owner_id: ownerId, p_sub_company_id: scopeId })
       .then(({ data }: { data: boolean | null }) => setCanMove(!!data));
+    (supabase.rpc as any)('can_user_manage_pipelines', { p_owner_id: ownerId, p_sub_company_id: scopeId })
+      .then(({ data }: { data: boolean | null }) => setCanManagePipelines(!!data));
   }, [ownerId, selectedSub, user?.id]);
 
   // Sub-company scoped pipelines
@@ -185,8 +188,8 @@ export default function PipelinePage() {
         </div>
         <div className="ml-auto flex gap-2">
           <Button variant="outline" size="sm" onClick={load}>Atualizar</Button>
-          <Button size="sm" onClick={() => setManagerOpen(true)}>
-            <Settings2 className="w-4 h-4 mr-1" /> Gerenciar funis
+          <Button size="sm" onClick={() => setManagerOpen(true)} title={canManagePipelines ? '' : 'Modo somente leitura'}>
+            <Settings2 className="w-4 h-4 mr-1" /> Gerenciar funis {!canManagePipelines && <Lock className="w-3 h-3 ml-1 opacity-70" />}
           </Button>
         </div>
       </div>
