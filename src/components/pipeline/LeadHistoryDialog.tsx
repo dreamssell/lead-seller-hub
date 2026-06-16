@@ -490,9 +490,34 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
     return parts.join('_');
   };
 
+  // Resolve the EXACT date interval used by the export.
+  // - When "custom range" is OFF, mirrors the dialog filters 1:1.
+  // - Returns ISO instants computed in the user's local timezone so the
+  //   server-side filter matches what the user sees in the dialog.
+  // - Returns a validation error if the range is invalid.
+  const resolveExportRange = (): { from: string; to: string; fromIso: string | null; toIso: string | null; error: string | null } => {
+    const from = useCustomRange ? exportFrom : dateFrom;
+    const to = useCustomRange ? exportTo : dateTo;
+    if (from && to && from > to) {
+      return { from, to, fromIso: null, toIso: null, error: 'Data "De" é posterior a "Até".' };
+    }
+    try {
+      return {
+        from, to,
+        fromIso: from ? localDayStartISO(from) : null,
+        toIso: to ? localDayEndISO(to) : null,
+        error: null,
+      };
+    } catch {
+      return { from, to, fromIso: null, toIso: null, error: 'Data inválida no intervalo.' };
+    }
+  };
+
   const runExport = async (kind: 'csv' | 'pdf') => {
     if (exporting) return;
     if (exportCols.length === 0) return toast.error('Selecione ao menos uma coluna.');
+    const range = resolveExportRange();
+    if (range.error) return toast.error(range.error);
     setExporting(kind);
     setExportProgress(0);
     exportCancelRef.current = false;
