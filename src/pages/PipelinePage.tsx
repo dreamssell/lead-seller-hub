@@ -281,9 +281,14 @@ export default function PipelinePage() {
           <p className="text-sm text-muted-foreground mb-3">
             Nenhum funil cadastrado para este escopo.
           </p>
-          <p className="text-xs text-muted-foreground">
-            Acesse <b>Developer Center → Roteamento Omnichannel</b> para criar funis e mapear canais.
-          </p>
+          <div className="flex items-center justify-center gap-2">
+            <Button size="sm" onClick={() => setTemplatesOpen(true)} disabled={!canManagePipelines}>
+              <LayoutTemplate className="w-4 h-4 mr-1" /> Aplicar template
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setManagerOpen(true)} disabled={!canManagePipelines}>
+              <Plus className="w-4 h-4 mr-1" /> Criar do zero
+            </Button>
+          </div>
         </div>
       ) : activeStages.length === 0 ? (
         <div className="p-8 text-center text-sm text-muted-foreground">
