@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, ArrowRight, Sparkles, History, X } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { Loader2, ArrowRight, Sparkles, History, X, Download, FileText } from 'lucide-react';
+import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import jsPDF from 'jspdf';
+import { toast } from 'sonner';
 
 type Event = {
   id: string;
