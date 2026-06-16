@@ -281,14 +281,29 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
           )}
           <div className="ml-auto flex items-center gap-2">
             <span className="text-xs text-muted-foreground">{events.length} de {total}</span>
-            <Button size="sm" variant="outline" className="h-8" onClick={exportCSV} disabled={!filtered.length}>
-              <Download className="w-3.5 h-3.5 mr-1" /> CSV
+            <Button size="sm" variant="outline" className="h-8" onClick={() => runExport('csv')} disabled={!!exporting || total === 0}>
+              {exporting === 'csv' ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
+              CSV
             </Button>
-            <Button size="sm" variant="outline" className="h-8" onClick={exportPDF} disabled={!filtered.length}>
-              <FileText className="w-3.5 h-3.5 mr-1" /> PDF
+            <Button size="sm" variant="outline" className="h-8" onClick={() => runExport('pdf')} disabled={!!exporting || total === 0}>
+              {exporting === 'pdf' ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <FileText className="w-3.5 h-3.5 mr-1" />}
+              PDF
             </Button>
           </div>
         </div>
+
+        {exporting && (
+          <div className="flex items-center gap-3 rounded-md border bg-muted/30 px-3 py-2 mb-2">
+            <Loader2 className="w-4 h-4 animate-spin text-primary" />
+            <div className="flex-1">
+              <div className="text-xs text-muted-foreground mb-1">
+                Exportando {exporting.toUpperCase()}… {exportProgress}%
+              </div>
+              <Progress value={exportProgress} className="h-1.5" />
+            </div>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={cancelExport}>Cancelar</Button>
+          </div>
+        )}
 
         {loading ? (
           <div className="p-8 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div>
