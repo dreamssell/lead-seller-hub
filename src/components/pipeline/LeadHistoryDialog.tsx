@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -192,6 +196,18 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
   const ownerIdRef = useRef<string | null>(null);
   const scope = leadId ? `lead_history:${leadId}` : null;
 
+  // TTL for saved cursor/offset/scroll. 0 = never expires.
+  // Persisted in the same state row so it survives across devices.
+  const TTL_OPTIONS = [
+    { value: 1, label: '1 hora' },
+    { value: 24, label: '1 dia' },
+    { value: 168, label: '7 dias' },
+    { value: 720, label: '30 dias' },
+    { value: 0, label: 'Sempre' },
+  ];
+  const [cursorTtlHours, setCursorTtlHours] = useState<number>(168);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+
   // Hydrate filters from DB on open
   useEffect(() => {
     if (!open || !leadId || !scope) return;
@@ -212,8 +228,27 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
       if (typeof s.channelFilter === 'string') setChannelFilter(s.channelFilter);
       if (typeof s.dateFrom === 'string') setDateFrom(s.dateFrom);
       if (typeof s.dateTo === 'string') setDateTo(s.dateTo);
-      if (typeof s.loadedCount === 'number' && s.loadedCount > PAGE_SIZE) setRestoredLoadedCount(s.loadedCount);
-      if (typeof s.scrollTop === 'number' && s.scrollTop > 0) setRestoredScrollTop(s.scrollTop);
+      if (typeof s.cursorTtlHours === 'number') setCursorTtlHours(s.cursorTtlHours);
+      const ttl = typeof s.cursorTtlHours === 'number' ? s.cursorTtlHours : 168;
+      const savedAtStr = typeof s.savedAt === 'string' ? s.savedAt : null;
+      // Determine whether the saved cursor/offset/scroll is still valid
+      const isExpired = ttl > 0 && savedAtStr
+        ? (Date.now() - new Date(savedAtStr).getTime()) > ttl * 3600_000
+        : false;
+      if (!isExpired) {
+        if (typeof s.loadedCount === 'number' && s.loadedCount > PAGE_SIZE) setRestoredLoadedCount(s.loadedCount);
+        if (typeof s.scrollTop === 'number' && s.scrollTop > 0) setRestoredScrollTop(s.scrollTop);
+        if (savedAtStr) setSavedAt(savedAtStr);
+      } else {
+        // Expired — purge stale cursor fields so they don't get re-restored.
+        try {
+          await (supabase as any).from('user_ui_state').upsert({
+            user_id: uid, owner_id: ownerId, scope,
+            state: { channelFilter: s.channelFilter, dateFrom: s.dateFrom, dateTo: s.dateTo,
+                     cursorTtlHours: ttl, loadedCount: 0, cursor: null, scrollTop: 0, savedAt: null },
+          }, { onConflict: 'user_id,owner_id,scope' });
+        } catch { /* best-effort */ }
+      }
       setHydrated(true);
     })();
     return () => { cancelled = true; };
@@ -250,6 +285,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
       const uid = userRes.user?.id;
       const ownerId = ownerIdRef.current;
       if (!uid || !ownerId) return;
+      const nowIso = new Date().toISOString();
+      setSavedAt(nowIso);
       await (supabase as any).from('user_ui_state').upsert({
         user_id: uid,
         owner_id: ownerId,
@@ -261,11 +298,13 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
           loadedCount: events.length,
           cursor,
           scrollTop: scrollTopRef.current,
+          cursorTtlHours,
+          savedAt: nowIso,
         },
       }, { onConflict: 'user_id,owner_id,scope' });
     }, 600);
     return () => window.clearTimeout(t);
-  }, [open, hydrated, leadId, scope, channelFilter, dateFrom, dateTo, events.length, cursor]);
+  }, [open, hydrated, leadId, scope, channelFilter, dateFrom, dateTo, events.length, cursor, cursorTtlHours]);
 
 
   // Infinite scroll with debounce + prefetch (triggers earlier and coalesces rapid scroll events)
@@ -284,6 +323,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
         const { data: userRes } = await supabase.auth.getUser();
         const uid = userRes.user?.id;
         if (!uid) return;
+        const nowIso = new Date().toISOString();
+        setSavedAt(nowIso);
         await (supabase as any).from('user_ui_state').upsert({
           user_id: uid,
           owner_id: ownerIdRef.current,
@@ -292,6 +333,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
             channelFilter, dateFrom, dateTo,
             loadedCount: events.length, cursor,
             scrollTop: scrollTopRef.current,
+            cursorTtlHours,
+            savedAt: nowIso,
           },
         }, { onConflict: 'user_id,owner_id,scope' });
       }, 800);
@@ -324,6 +367,29 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
   const clearFilters = () => { setChannelFilter('all'); setDateFrom(''); setDateTo(''); };
   const hasFilters = channelFilter !== 'all' || dateFrom || dateTo;
 
+  // Persist a cleared cursor/offset/scroll snapshot (without reloading the list).
+  // Used by the manual "Limpar cursor salvo" action.
+  const clearSavedCursor = useCallback(async () => {
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id;
+      const ownerId = ownerIdRef.current;
+      if (!uid || !ownerId || !scope) return;
+      await (supabase as any).from('user_ui_state').upsert({
+        user_id: uid, owner_id: ownerId, scope,
+        state: {
+          channelFilter, dateFrom, dateTo,
+          loadedCount: 0, cursor: null, scrollTop: 0,
+          cursorTtlHours, savedAt: null,
+        },
+      }, { onConflict: 'user_id,owner_id,scope' });
+      setSavedAt(null);
+      toast.success('Cursor salvo limpo');
+    } catch (e: any) {
+      toast.error('Falha ao limpar cursor: ' + (e?.message || 'erro'));
+    }
+  }, [scope, channelFilter, dateFrom, dateTo, cursorTtlHours]);
+
   // Reset cursor: drop saved cursor/offset/scroll, clear deduplication,
   // reload the first (newest) page and persist the cleared state to DB.
   const resetCursor = useCallback(async () => {
@@ -334,25 +400,9 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
     scrollTopRef.current = 0;
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
     await loadFirstPage();
-    // Persist cleared cursor immediately so other devices also reset
-    try {
-      const { data: userRes } = await supabase.auth.getUser();
-      const uid = userRes.user?.id;
-      const ownerId = ownerIdRef.current;
-      if (uid && ownerId && scope) {
-        await (supabase as any).from('user_ui_state').upsert({
-          user_id: uid,
-          owner_id: ownerId,
-          scope,
-          state: {
-            channelFilter, dateFrom, dateTo,
-            loadedCount: 0, cursor: null, scrollTop: 0,
-          },
-        }, { onConflict: 'user_id,owner_id,scope' });
-      }
-    } catch { /* best-effort */ }
+    await clearSavedCursor();
     toast.success('Cursor resetado — mostrando os eventos mais recentes');
-  }, [loadFirstPage, scope, channelFilter, dateFrom, dateTo]);
+  }, [loadFirstPage, clearSavedCursor]);
 
 
 
@@ -660,16 +710,67 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
           </Button>
           <div className="ml-auto flex items-center gap-2">
             <span className="text-xs text-muted-foreground" title={`Fuso: ${userTz}`}>{events.length} de {total}</span>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8"
-              onClick={resetCursor}
-              disabled={loading || loadingMore}
-              title="Voltar ao início e limpar o cursor salvo"
-            >
-              <RotateCcw className="w-3.5 h-3.5 mr-1" /> Voltar ao início
-            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button size="sm" variant="ghost" className="h-8" title="Validade do cursor salvo">
+                  <Clock className="w-3.5 h-3.5 mr-1" /> Cursor
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-64 p-3 space-y-3 z-50 bg-popover">
+                <div>
+                  <Label className="text-xs font-semibold mb-1 block">Manter cursor salvo por</Label>
+                  <Select value={String(cursorTtlHours)} onValueChange={v => setCursorTtlHours(Number(v))}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {TTL_OPTIONS.map(o => (
+                        <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {savedAt
+                      ? `Salvo em ${format(new Date(savedAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`
+                      : 'Nenhum cursor salvo no momento.'}
+                  </p>
+                </div>
+                <Separator />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full h-8 text-xs"
+                  onClick={clearSavedCursor}
+                  disabled={!savedAt}
+                >
+                  <X className="w-3.5 h-3.5 mr-1" /> Limpar cursor salvo agora
+                </Button>
+              </PopoverContent>
+            </Popover>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8"
+                  disabled={loading || loadingMore}
+                  title="Voltar ao início e limpar o cursor salvo"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 mr-1" /> Voltar ao início
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Voltar ao início?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Isso vai limpar o cursor/offset salvo e recarregar os eventos mais recentes.
+                    Sua posição de leitura atual será perdida em todos os dispositivos.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => resetCursor()}>Confirmar</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             <Popover>
               <PopoverTrigger asChild>
                 <Button size="sm" variant="outline" className="h-8" title="Opções de exportação">
