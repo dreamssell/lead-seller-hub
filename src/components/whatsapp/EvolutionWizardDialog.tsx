@@ -26,6 +26,9 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { WhatsAppConnection } from './types';
+import { EvolutionAttemptsHistory } from './EvolutionAttemptsHistory';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Download } from 'lucide-react';
 
 interface Props {
   open: boolean;
