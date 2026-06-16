@@ -56,7 +56,7 @@ export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: P
     setLoading(true);
     const [p, s] = await Promise.all([
       (supabase as any).from('notification_preferences')
-        .select('id,sub_company_id,channel,notify_new_lead,notify_stage_change')
+        .select('id,sub_company_id,channel,notify_new_lead,notify_stage_change,notify_funnel_change')
         .eq('user_id', user.id).eq('owner_id', ownerId),
       supabase.from('sub_companies').select('id,name').eq('owner_id', ownerId).order('name'),
     ]);
