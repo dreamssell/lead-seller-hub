@@ -620,6 +620,55 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
           </Button>
           <div className="ml-auto flex items-center gap-2">
             <span className="text-xs text-muted-foreground">{events.length} de {total}</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button size="sm" variant="outline" className="h-8" title="Opções de exportação">
+                  <Settings2 className="w-3.5 h-3.5 mr-1" /> Opções
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72 p-3 space-y-3 z-50 bg-popover">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-xs font-semibold">Intervalo personalizado</Label>
+                    <Checkbox
+                      checked={useCustomRange}
+                      onCheckedChange={(v) => setUseCustomRange(!!v)}
+                    />
+                  </div>
+                  <div className={`grid grid-cols-2 gap-2 ${useCustomRange ? '' : 'opacity-50 pointer-events-none'}`}>
+                    <div>
+                      <Label className="text-[10px] uppercase text-muted-foreground">De</Label>
+                      <Input type="date" value={exportFrom} onChange={e => setExportFrom(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] uppercase text-muted-foreground">Até</Label>
+                      <Input type="date" value={exportTo} onChange={e => setExportTo(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {useCustomRange ? 'Usa o intervalo acima na exportação.' : 'Usa o intervalo dos filtros do diálogo.'}
+                  </p>
+                </div>
+                <Separator />
+                <div>
+                  <Label className="text-xs font-semibold mb-2 block">Colunas</Label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {ALL_COLS.map(c => (
+                      <label key={c.key} className="flex items-center gap-2 text-xs cursor-pointer">
+                        <Checkbox
+                          checked={exportCols.includes(c.key)}
+                          onCheckedChange={() => toggleCol(c.key)}
+                        />
+                        {c.label}
+                      </label>
+                    ))}
+                  </div>
+                  {exportCols.length === 0 && (
+                    <p className="text-[10px] text-destructive mt-1">Selecione ao menos uma coluna.</p>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
             <Button size="sm" variant="outline" className="h-8" onClick={() => runExport('csv')} disabled={!!exporting || total === 0}>
               {exporting === 'csv' ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
               CSV
