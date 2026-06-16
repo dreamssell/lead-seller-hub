@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { Plus, User, Loader2, GitBranch, Settings2, History, Lock } from 'lucide-react';
+import { Plus, User, Loader2, GitBranch, Settings2, History, Lock, LayoutTemplate, Radio } from 'lucide-react';
 import { PipelineManagerDialog } from '@/components/pipeline/PipelineManagerDialog';
+import { PipelineTemplatesDialog } from '@/components/pipeline/PipelineTemplatesDialog';
 import { LeadHistoryDialog } from '@/components/pipeline/LeadHistoryDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -58,9 +59,11 @@ export default function PipelinePage() {
   const [selectedPipeline, setSelectedPipeline] = useState<string>('');
   const [selectedChannel, setSelectedChannel] = useState<string>('all');
   const [managerOpen, setManagerOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [historyLead, setHistoryLead] = useState<{ id: string; name: string } | null>(null);
   const [canMove, setCanMove] = useState(false);
   const [canManagePipelines, setCanManagePipelines] = useState(false);
+  const [realtimeActive, setRealtimeActive] = useState(false);
 
   const load = useCallback(async () => {
     if (!ownerId) return;
@@ -87,6 +90,28 @@ export default function PipelinePage() {
   }, [ownerId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Realtime: live updates of pipelines, stages, leads, routing & channel routing
+  useEffect(() => {
+    if (!ownerId) return;
+    let timer: any = null;
+    const debouncedReload = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => load(), 350);
+    };
+    const channel = supabase
+      .channel(`pipeline-rt-${ownerId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pipelines' }, debouncedReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pipeline_stages' }, debouncedReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, debouncedReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'channel_routing' }, debouncedReload)
+      .subscribe((status) => setRealtimeActive(status === 'SUBSCRIBED'));
+    return () => {
+      clearTimeout(timer);
+      supabase.removeChannel(channel);
+      setRealtimeActive(false);
+    };
+  }, [ownerId, load]);
 
   // Permission: can the current user move leads / manage pipelines in this scope?
   useEffect(() => {
@@ -186,8 +211,20 @@ export default function PipelinePage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex gap-2 items-center">
+          <span
+            className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-full border ${
+              realtimeActive ? 'border-success/40 text-success' : 'border-muted text-muted-foreground'
+            }`}
+            title={realtimeActive ? 'Atualização em tempo real ativa' : 'Realtime desconectado'}
+          >
+            <Radio className={`w-3 h-3 ${realtimeActive ? 'animate-pulse' : ''}`} />
+            {realtimeActive ? 'Tempo real' : 'Offline'}
+          </span>
           <Button variant="outline" size="sm" onClick={load}>Atualizar</Button>
+          <Button variant="outline" size="sm" onClick={() => setTemplatesOpen(true)}>
+            <LayoutTemplate className="w-4 h-4 mr-1" /> Templates
+          </Button>
           <Button size="sm" onClick={() => setManagerOpen(true)} title={canManagePipelines ? '' : 'Modo somente leitura'}>
             <Settings2 className="w-4 h-4 mr-1" /> Gerenciar funis {!canManagePipelines && <Lock className="w-3 h-3 ml-1 opacity-70" />}
           </Button>
@@ -195,15 +232,28 @@ export default function PipelinePage() {
       </div>
 
       {ownerId && (
-        <PipelineManagerDialog
-          open={managerOpen}
-          onOpenChange={setManagerOpen}
-          ownerId={ownerId}
-          subScope={subScope}
-          channel={selectedChannel}
-          initialPipelineId={selectedPipeline}
-          onChanged={load}
-        />
+        <>
+          <PipelineManagerDialog
+            open={managerOpen}
+            onOpenChange={setManagerOpen}
+            ownerId={ownerId}
+            subScope={subScope}
+            channel={selectedChannel}
+            initialPipelineId={selectedPipeline}
+            onChanged={load}
+          />
+          <PipelineTemplatesDialog
+            open={templatesOpen}
+            onOpenChange={setTemplatesOpen}
+            ownerId={ownerId}
+            subScope={subScope}
+            channel={selectedChannel}
+            canManage={canManagePipelines}
+            currentPipeline={activePipeline ? { id: activePipeline.id, name: activePipeline.name } : null}
+            currentStages={activeStages.map(s => ({ name: s.name, color: s.color }))}
+            onApplied={(id) => { setSelectedPipeline(id); load(); }}
+          />
+        </>
       )}
 
       <LeadHistoryDialog
@@ -231,9 +281,14 @@ export default function PipelinePage() {
           <p className="text-sm text-muted-foreground mb-3">
             Nenhum funil cadastrado para este escopo.
           </p>
-          <p className="text-xs text-muted-foreground">
-            Acesse <b>Developer Center → Roteamento Omnichannel</b> para criar funis e mapear canais.
-          </p>
+          <div className="flex items-center justify-center gap-2">
+            <Button size="sm" onClick={() => setTemplatesOpen(true)} disabled={!canManagePipelines}>
+              <LayoutTemplate className="w-4 h-4 mr-1" /> Aplicar template
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setManagerOpen(true)} disabled={!canManagePipelines}>
+              <Plus className="w-4 h-4 mr-1" /> Criar do zero
+            </Button>
+          </div>
         </div>
       ) : activeStages.length === 0 ? (
         <div className="p-8 text-center text-sm text-muted-foreground">
