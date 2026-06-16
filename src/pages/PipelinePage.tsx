@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { Plus, User, Loader2, GitBranch, Settings2, History, Lock, LayoutTemplate, Radio } from 'lucide-react';
+import { Plus, User, Loader2, GitBranch, Settings2, History, Lock, LayoutTemplate, Radio, Search, ChevronLeft, ChevronRight, Bell, ClipboardList, RefreshCw } from 'lucide-react';
 import { PipelineManagerDialog } from '@/components/pipeline/PipelineManagerDialog';
 import { PipelineTemplatesDialog } from '@/components/pipeline/PipelineTemplatesDialog';
 import { LeadHistoryDialog } from '@/components/pipeline/LeadHistoryDialog';
+import { NotificationPreferencesDialog } from '@/components/pipeline/NotificationPreferencesDialog';
+import { StageAuditDialog } from '@/components/pipeline/StageAuditDialog';
+import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
