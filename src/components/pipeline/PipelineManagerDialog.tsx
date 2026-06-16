@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -6,13 +6,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
-import { Plus, Trash2, ChevronUp, ChevronDown, Loader2, Pencil, Check, X, Link2 } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Plus, Trash2, ChevronUp, ChevronDown, Loader2, Pencil, Check, X, Link2, Lock, History } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Pipeline = { id: string; name: string; is_default: boolean; sub_company_id: string | null };
 type Stage = { id: string; pipeline_id: string; name: string; position: number; color: string | null };
 type Routing = { id: string; sub_company_id: string | null; channel: string; pipeline_id: string | null; stage_id: string | null; enabled: boolean };
+type AuditRow = {
+  id: string; created_at: string; entity: string; action: string; label: string | null;
+  actor_email: string | null; before: any; after: any; pipeline_id: string | null; stage_id: string | null;
+};
 
 const COLORS = [
   { v: 'bg-muted-foreground', l: 'Cinza' },
@@ -28,15 +32,16 @@ const CHANNEL_LABEL: Record<string, string> = {
   telegram: 'Telegram', widget: 'Widget', linkedin: 'LinkedIn', tiktok: 'TikTok', youtube: 'YouTube',
 };
 
+const ACTION_LABEL: Record<string, string> = {
+  create: 'Criou', update: 'Editou', delete: 'Excluiu', reorder: 'Reordenou', link_channel: 'Vinculou canal',
+};
+
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   ownerId: string;
-  /** undefined = all (treat as global), null = global, string = sub id */
   subScope: string | null | undefined;
-  /** channel filter ('all' or value) */
   channel: string;
-  /** focused pipeline id, optional */
   initialPipelineId?: string;
   onChanged: () => void;
 }
@@ -45,6 +50,7 @@ export function PipelineManagerDialog({ open, onOpenChange, ownerId, subScope, c
   const scope = subScope === undefined ? null : subScope;
 
   const [loading, setLoading] = useState(false);
+  const [canManage, setCanManage] = useState(false);
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [stages, setStages] = useState<Stage[]>([]);
   const [routings, setRoutings] = useState<Routing[]>([]);
@@ -55,6 +61,41 @@ export function PipelineManagerDialog({ open, onOpenChange, ownerId, subScope, c
   const [pipelineDraft, setPipelineDraft] = useState('');
   const [editingStage, setEditingStage] = useState<string | null>(null);
   const [stageDraft, setStageDraft] = useState('');
+  const [savingReorder, setSavingReorder] = useState(false);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [audit, setAudit] = useState<AuditRow[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+
+  // Permission check
+  useEffect(() => {
+    if (!open || !ownerId) return;
+    (supabase.rpc as any)('can_user_manage_pipelines', { p_owner_id: ownerId, p_sub_company_id: scope })
+      .then(({ data }: { data: boolean | null }) => setCanManage(!!data));
+  }, [open, ownerId, scope]);
+
+  const logAuditEntry = useCallback(async (params: {
+    entity: 'pipeline' | 'stage';
+    action: 'create' | 'update' | 'delete' | 'reorder' | 'link_channel';
+    pipeline_id?: string | null;
+    stage_id?: string | null;
+    label?: string | null;
+    before?: any; after?: any;
+  }) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    await (supabase as any).from('pipeline_audit_logs').insert({
+      owner_id: ownerId,
+      sub_company_id: scope,
+      pipeline_id: params.pipeline_id ?? null,
+      stage_id: params.stage_id ?? null,
+      entity: params.entity,
+      action: params.action,
+      label: params.label ?? null,
+      before: params.before ?? null,
+      after: params.after ?? null,
+      actor_id: user?.id ?? null,
+      actor_email: user?.email ?? null,
+    });
+  }, [ownerId, scope]);
 
   const load = useCallback(async () => {
     if (!ownerId) return;
@@ -85,23 +126,52 @@ export function PipelineManagerDialog({ open, onOpenChange, ownerId, subScope, c
 
   useEffect(() => { if (open) load(); }, [open, load]);
 
+  const loadAudit = useCallback(async () => {
+    setAuditLoading(true);
+    const q = supabase.from('pipeline_audit_logs').select('*')
+      .eq('owner_id', ownerId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (scope === null) q.is('sub_company_id', null); else q.eq('sub_company_id', scope as any);
+    const { data } = await q;
+    setAudit((data as AuditRow[]) || []);
+    setAuditLoading(false);
+  }, [ownerId, scope]);
+
+  useEffect(() => { if (auditOpen) loadAudit(); }, [auditOpen, loadAudit]);
+
   const current = pipelines.find(p => p.id === selectedPipeline) || null;
-  const currentStages = stages.filter(s => s.pipeline_id === selectedPipeline).sort((a, b) => a.position - b.position);
+  const currentStages = useMemo(
+    () => stages.filter(s => s.pipeline_id === selectedPipeline).sort((a, b) => a.position - b.position),
+    [stages, selectedPipeline]
+  );
 
   const refresh = async () => { await load(); onChanged(); };
 
+  const guard = () => {
+    if (!canManage) { toast.error('Você não tem permissão para gerenciar funis neste escopo.'); return false; }
+    return true;
+  };
+
   const createPipeline = async () => {
-    if (!newPipelineName.trim()) return;
+    if (!guard()) return;
+    const name = newPipelineName.trim();
+    if (!name) return toast.error('Informe um nome para o funil.');
+    if (pipelines.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+      return toast.error('Já existe um funil com esse nome neste escopo.');
+    }
     const { data, error } = await supabase.from('pipelines').insert({
-      owner_id: ownerId, sub_company_id: scope, name: newPipelineName.trim(), is_default: pipelines.length === 0,
+      owner_id: ownerId, sub_company_id: scope, name, is_default: pipelines.length === 0,
     }).select().single();
     if (error) return toast.error(error.message);
-    await supabase.from('pipeline_stages').insert([
+    const defaults = [
       { pipeline_id: data.id, name: 'Novo Lead', position: 0, color: 'bg-muted-foreground' },
       { pipeline_id: data.id, name: 'Qualificação', position: 1, color: 'bg-primary' },
       { pipeline_id: data.id, name: 'Proposta', position: 2, color: 'bg-warning' },
       { pipeline_id: data.id, name: 'Fechamento', position: 3, color: 'bg-success' },
-    ]);
+    ];
+    await supabase.from('pipeline_stages').insert(defaults);
+    await logAuditEntry({ entity: 'pipeline', action: 'create', pipeline_id: data.id, label: name, after: { name, stages: defaults.map(d => d.name) } });
     setNewPipelineName('');
     setSelectedPipeline(data.id);
     toast.success('Funil criado');
@@ -109,80 +179,155 @@ export function PipelineManagerDialog({ open, onOpenChange, ownerId, subScope, c
   };
 
   const renamePipeline = async () => {
-    if (!current || !pipelineDraft.trim()) return;
-    const { error } = await supabase.from('pipelines').update({ name: pipelineDraft.trim() }).eq('id', current.id);
+    if (!guard() || !current) return;
+    const name = pipelineDraft.trim();
+    if (!name) return toast.error('Nome obrigatório.');
+    if (pipelines.some(p => p.id !== current.id && p.name.toLowerCase() === name.toLowerCase())) {
+      return toast.error('Já existe outro funil com esse nome.');
+    }
+    const before = { name: current.name };
+    const { error } = await supabase.from('pipelines').update({ name }).eq('id', current.id);
     if (error) return toast.error(error.message);
+    await logAuditEntry({ entity: 'pipeline', action: 'update', pipeline_id: current.id, label: name, before, after: { name } });
     setEditingPipeline(false);
     refresh();
   };
 
   const setDefault = async () => {
-    if (!current) return;
+    if (!guard() || !current) return;
     await supabase.from('pipelines').update({ is_default: false }).eq('owner_id', ownerId).eq('sub_company_id', scope as any);
     const { error } = await supabase.from('pipelines').update({ is_default: true }).eq('id', current.id);
     if (error) return toast.error(error.message);
+    await logAuditEntry({ entity: 'pipeline', action: 'update', pipeline_id: current.id, label: current.name, after: { is_default: true } });
     toast.success('Definido como padrão');
     refresh();
   };
 
   const deletePipeline = async () => {
-    if (!current) return;
+    if (!guard() || !current) return;
     if (!confirm(`Excluir funil "${current.name}" e todas as suas etapas?`)) return;
+    const before = { name: current.name, stages: currentStages.map(s => s.name) };
     const { error } = await supabase.from('pipelines').delete().eq('id', current.id);
     if (error) return toast.error(error.message);
+    await logAuditEntry({ entity: 'pipeline', action: 'delete', pipeline_id: current.id, label: current.name, before });
     toast.success('Funil excluído');
     setSelectedPipeline('');
     refresh();
   };
 
   const addStage = async () => {
-    if (!current || !newStageName.trim()) return;
+    if (!guard() || !current) return;
+    const name = newStageName.trim();
+    if (!name) return toast.error('Informe um nome para a etapa.');
+    if (currentStages.some(s => s.name.toLowerCase() === name.toLowerCase())) {
+      return toast.error('Já existe uma etapa com esse nome.');
+    }
     const pos = currentStages.length;
-    const { error } = await supabase.from('pipeline_stages').insert({
-      pipeline_id: current.id, name: newStageName.trim(), position: pos, color: 'bg-primary',
-    });
+    const { data, error } = await supabase.from('pipeline_stages').insert({
+      pipeline_id: current.id, name, position: pos, color: 'bg-primary',
+    }).select().single();
     if (error) return toast.error(error.message);
+    await logAuditEntry({ entity: 'stage', action: 'create', pipeline_id: current.id, stage_id: data.id, label: name, after: { name, position: pos } });
     setNewStageName('');
     refresh();
   };
 
   const renameStage = async (id: string) => {
-    if (!stageDraft.trim()) return;
-    const { error } = await supabase.from('pipeline_stages').update({ name: stageDraft.trim() }).eq('id', id);
+    if (!guard()) return;
+    const name = stageDraft.trim();
+    if (!name) return toast.error('Nome da etapa não pode ficar vazio.');
+    if (currentStages.some(s => s.id !== id && s.name.toLowerCase() === name.toLowerCase())) {
+      return toast.error('Já existe uma etapa com esse nome.');
+    }
+    const before = currentStages.find(s => s.id === id);
+    const { error } = await supabase.from('pipeline_stages').update({ name }).eq('id', id);
     if (error) return toast.error(error.message);
+    await logAuditEntry({ entity: 'stage', action: 'update', pipeline_id: current?.id, stage_id: id, label: name, before: { name: before?.name }, after: { name } });
     setEditingStage(null);
     refresh();
   };
 
   const changeStageColor = async (id: string, color: string) => {
+    if (!guard()) return;
+    const before = currentStages.find(s => s.id === id);
     await supabase.from('pipeline_stages').update({ color }).eq('id', id);
+    await logAuditEntry({ entity: 'stage', action: 'update', pipeline_id: current?.id, stage_id: id, label: before?.name ?? null, before: { color: before?.color }, after: { color } });
     refresh();
   };
 
+  /**
+   * Robust reorder with autosave: swaps two adjacent positions atomically by
+   * first parking the moved stage at a negative offset, then renumbering ALL
+   * stages in the pipeline 0..n to guarantee no duplicate or sparse positions.
+   */
   const moveStage = async (id: string, dir: -1 | 1) => {
+    if (!guard()) return;
     const idx = currentStages.findIndex(s => s.id === id);
     const swap = currentStages[idx + dir];
-    if (!swap) return;
-    await Promise.all([
-      supabase.from('pipeline_stages').update({ position: swap.position }).eq('id', id),
-      supabase.from('pipeline_stages').update({ position: currentStages[idx].position }).eq('id', swap.id),
-    ]);
-    refresh();
+    if (!swap || !current) return;
+
+    setSavingReorder(true);
+    const reordered = [...currentStages];
+    [reordered[idx], reordered[idx + dir]] = [reordered[idx + dir], reordered[idx]];
+
+    // Optimistic UI
+    setStages(prev => prev.map(s => {
+      const found = reordered.find(r => r.id === s.id);
+      if (!found) return s;
+      return { ...s, position: reordered.indexOf(found) };
+    }));
+
+    try {
+      // Park all involved positions in negative space to avoid uniqueness/race issues
+      await Promise.all(reordered.map((s, i) =>
+        supabase.from('pipeline_stages').update({ position: -1000 - i }).eq('id', s.id)
+      ));
+      // Validate names — abort if anything is empty
+      const empties = reordered.filter(s => !s.name?.trim());
+      if (empties.length) {
+        toast.error('Há etapas sem nome. Corrija antes de reordenar.');
+        await load();
+        return;
+      }
+      // Final renumber 0..n
+      await Promise.all(reordered.map((s, i) =>
+        supabase.from('pipeline_stages').update({ position: i }).eq('id', s.id)
+      ));
+      await logAuditEntry({
+        entity: 'stage', action: 'reorder', pipeline_id: current.id,
+        label: current.name,
+        before: { order: currentStages.map(s => s.name) },
+        after: { order: reordered.map(s => s.name) },
+      });
+      refresh();
+    } catch (e: any) {
+      toast.error('Falha ao reordenar. Recarregando ordem original.');
+      await load();
+    } finally {
+      setSavingReorder(false);
+    }
   };
 
   const deleteStage = async (id: string) => {
+    if (!guard()) return;
     if (!confirm('Excluir esta etapa? Leads vinculados ficarão sem etapa.')) return;
+    const before = currentStages.find(s => s.id === id);
     await supabase.from('pipeline_stages').delete().eq('id', id);
+    await logAuditEntry({ entity: 'stage', action: 'delete', pipeline_id: current?.id, stage_id: id, label: before?.name ?? null, before: { name: before?.name, position: before?.position } });
+    // After deletion, compact positions 0..n
+    const remaining = currentStages.filter(s => s.id !== id);
+    await Promise.all(remaining.map((s, i) =>
+      s.position !== i ? supabase.from('pipeline_stages').update({ position: i }).eq('id', s.id) : Promise.resolve()
+    ));
     refresh();
   };
 
-  // Channel routing link
   const channelRouting = channel !== 'all'
     ? routings.find(r => r.channel === channel && (r.sub_company_id ?? null) === scope)
     : null;
 
   const linkChannel = async () => {
-    if (!current || channel === 'all') return;
+    if (!guard() || !current || channel === 'all') return;
     if (channelRouting) {
       await supabase.from('channel_routing').update({ pipeline_id: current.id, stage_id: null, enabled: true }).eq('id', channelRouting.id);
     } else {
@@ -192,25 +337,43 @@ export function PipelineManagerDialog({ open, onOpenChange, ownerId, subScope, c
         pipeline_id: current.id, enabled: true,
       });
     }
+    await logAuditEntry({ entity: 'pipeline', action: 'link_channel', pipeline_id: current.id, label: current.name, after: { channel } });
     toast.success(`Canal ${CHANNEL_LABEL[channel] || channel} vinculado a "${current.name}"`);
     refresh();
   };
+
+  const readOnly = !canManage;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Gerenciar funis e etapas</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            Gerenciar funis e etapas
+            {readOnly && <Badge variant="secondary" className="gap-1"><Lock className="w-3 h-3" /> Somente leitura</Badge>}
+          </DialogTitle>
           <DialogDescription>
             Escopo: <b>{scope ? 'Sub-empresa selecionada' : 'Conta principal (global)'}</b>
             {channel !== 'all' && <> · Canal foco: <b>{CHANNEL_LABEL[channel] || channel}</b></>}
           </DialogDescription>
         </DialogHeader>
 
+        {readOnly && !loading && (
+          <div className="text-xs rounded-md border border-dashed px-3 py-2 text-muted-foreground flex items-center gap-2">
+            <Lock className="w-3.5 h-3.5" /> Você não tem permissão para criar, editar ou excluir funis neste escopo. Solicite ao administrador a permissão <b>can_manage_pipelines</b>.
+          </div>
+        )}
+
         {loading ? (
           <div className="p-8 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>
         ) : (
           <div className="space-y-5">
+            <div className="flex items-center justify-end">
+              <Button size="sm" variant="ghost" onClick={() => setAuditOpen(true)}>
+                <History className="w-4 h-4 mr-1" /> Ver histórico de alterações
+              </Button>
+            </div>
+
             {/* Pipelines list + create */}
             <div className="space-y-2">
               <Label className="text-xs uppercase tracking-wide text-muted-foreground">Funis deste escopo</Label>
@@ -234,8 +397,9 @@ export function PipelineManagerDialog({ open, onOpenChange, ownerId, subScope, c
                   value={newPipelineName}
                   onChange={e => setNewPipelineName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && createPipeline()}
+                  disabled={readOnly}
                 />
-                <Button onClick={createPipeline}><Plus className="w-4 h-4 mr-1" /> Criar funil</Button>
+                <Button onClick={createPipeline} disabled={readOnly}><Plus className="w-4 h-4 mr-1" /> Criar funil</Button>
               </div>
             </div>
 
@@ -253,21 +417,21 @@ export function PipelineManagerDialog({ open, onOpenChange, ownerId, subScope, c
                     <>
                       <h3 className="font-semibold">{current.name}</h3>
                       {current.is_default && <Badge variant="secondary">Padrão</Badge>}
-                      <Button size="sm" variant="ghost" onClick={() => { setEditingPipeline(true); setPipelineDraft(current.name); }}>
+                      <Button size="sm" variant="ghost" disabled={readOnly} onClick={() => { setEditingPipeline(true); setPipelineDraft(current.name); }}>
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
                     </>
                   )}
                   <div className="ml-auto flex items-center gap-2">
                     {!current.is_default && (
-                      <Button size="sm" variant="outline" onClick={setDefault}>Definir como padrão</Button>
+                      <Button size="sm" variant="outline" disabled={readOnly} onClick={setDefault}>Definir como padrão</Button>
                     )}
                     {channel !== 'all' && (
-                      <Button size="sm" variant="outline" onClick={linkChannel}>
+                      <Button size="sm" variant="outline" disabled={readOnly} onClick={linkChannel}>
                         <Link2 className="w-3.5 h-3.5 mr-1" /> Vincular canal {CHANNEL_LABEL[channel] || channel}
                       </Button>
                     )}
-                    <Button size="sm" variant="ghost" onClick={deletePipeline}>
+                    <Button size="sm" variant="ghost" disabled={readOnly} onClick={deletePipeline}>
                       <Trash2 className="w-4 h-4 text-destructive" />
                     </Button>
                   </div>
@@ -281,10 +445,14 @@ export function PipelineManagerDialog({ open, onOpenChange, ownerId, subScope, c
 
                 {/* Stages */}
                 <div className="space-y-2">
-                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">Etapas</Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">Etapas</Label>
+                    {savingReorder && <span className="text-[10px] text-muted-foreground flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Salvando ordem…</span>}
+                  </div>
                   {currentStages.length === 0 && <p className="text-sm text-muted-foreground">Sem etapas. Adicione abaixo.</p>}
                   {currentStages.map((s, i) => (
                     <div key={s.id} className="flex items-center gap-2 rounded-md border p-2">
+                      <span className="text-[10px] text-muted-foreground w-5 text-center">{i + 1}</span>
                       <div className={`w-3 h-3 rounded-full ${s.color || 'bg-muted-foreground'}`} />
                       {editingStage === s.id ? (
                         <>
@@ -295,7 +463,7 @@ export function PipelineManagerDialog({ open, onOpenChange, ownerId, subScope, c
                       ) : (
                         <>
                           <span className="flex-1 text-sm">{s.name}</span>
-                          <Select value={s.color || 'bg-muted-foreground'} onValueChange={(v) => changeStageColor(s.id, v)}>
+                          <Select value={s.color || 'bg-muted-foreground'} onValueChange={(v) => changeStageColor(s.id, v)} disabled={readOnly}>
                             <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {COLORS.map(c => (
@@ -305,16 +473,16 @@ export function PipelineManagerDialog({ open, onOpenChange, ownerId, subScope, c
                               ))}
                             </SelectContent>
                           </Select>
-                          <Button size="icon" variant="ghost" disabled={i === 0} onClick={() => moveStage(s.id, -1)}>
+                          <Button size="icon" variant="ghost" disabled={readOnly || savingReorder || i === 0} onClick={() => moveStage(s.id, -1)}>
                             <ChevronUp className="w-4 h-4" />
                           </Button>
-                          <Button size="icon" variant="ghost" disabled={i === currentStages.length - 1} onClick={() => moveStage(s.id, 1)}>
+                          <Button size="icon" variant="ghost" disabled={readOnly || savingReorder || i === currentStages.length - 1} onClick={() => moveStage(s.id, 1)}>
                             <ChevronDown className="w-4 h-4" />
                           </Button>
-                          <Button size="icon" variant="ghost" onClick={() => { setEditingStage(s.id); setStageDraft(s.name); }}>
+                          <Button size="icon" variant="ghost" disabled={readOnly} onClick={() => { setEditingStage(s.id); setStageDraft(s.name); }}>
                             <Pencil className="w-3.5 h-3.5" />
                           </Button>
-                          <Button size="icon" variant="ghost" onClick={() => deleteStage(s.id)}>
+                          <Button size="icon" variant="ghost" disabled={readOnly} onClick={() => deleteStage(s.id)}>
                             <Trash2 className="w-4 h-4 text-destructive" />
                           </Button>
                         </>
@@ -327,8 +495,9 @@ export function PipelineManagerDialog({ open, onOpenChange, ownerId, subScope, c
                       value={newStageName}
                       onChange={e => setNewStageName(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && addStage()}
+                      disabled={readOnly}
                     />
-                    <Button onClick={addStage}><Plus className="w-4 h-4 mr-1" /> Adicionar etapa</Button>
+                    <Button onClick={addStage} disabled={readOnly}><Plus className="w-4 h-4 mr-1" /> Adicionar etapa</Button>
                   </div>
                 </div>
               </div>
@@ -339,6 +508,53 @@ export function PipelineManagerDialog({ open, onOpenChange, ownerId, subScope, c
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
         </DialogFooter>
+
+        {/* Audit log dialog */}
+        <Dialog open={auditOpen} onOpenChange={setAuditOpen}>
+          <DialogContent className="max-w-2xl max-h-[80vh]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <History className="w-4 h-4" /> Histórico de alterações
+              </DialogTitle>
+              <DialogDescription>
+                Últimas 100 ações em funis/etapas deste escopo.
+              </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="h-[55vh] pr-3">
+              {auditLoading ? (
+                <div className="p-6 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div>
+              ) : audit.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">Nenhuma alteração registrada ainda.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {audit.map(a => (
+                    <li key={a.id} className="rounded-md border p-2.5 text-xs">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="outline" className="text-[10px]">{a.entity === 'pipeline' ? 'Funil' : 'Etapa'}</Badge>
+                        <span className="font-medium">{ACTION_LABEL[a.action] || a.action}</span>
+                        {a.label && <span className="text-foreground">"{a.label}"</span>}
+                        <span className="ml-auto text-muted-foreground">{new Date(a.created_at).toLocaleString('pt-BR')}</span>
+                      </div>
+                      <div className="text-muted-foreground mt-1">
+                        por {a.actor_email || 'usuário desconhecido'}
+                      </div>
+                      {(a.before || a.after) && (
+                        <details className="mt-1">
+                          <summary className="cursor-pointer text-muted-foreground">detalhes</summary>
+                          <pre className="text-[10px] mt-1 bg-muted/50 rounded p-2 overflow-x-auto">{JSON.stringify({ before: a.before, after: a.after }, null, 2)}</pre>
+                        </details>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </ScrollArea>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={loadAudit}>Atualizar</Button>
+              <Button size="sm" onClick={() => setAuditOpen(false)}>Fechar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );
