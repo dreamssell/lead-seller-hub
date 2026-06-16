@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Sun, Moon, Bell, Search, Menu, Globe, LogIn, CalendarPlus, Settings } from 'lucide-react';
+import { NotificationsBell } from '@/components/notifications/NotificationsBell';
 import { useThemeContext } from '@/contexts/ThemeContext';
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
@@ -81,10 +82,7 @@ export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
         <button className="hidden md:inline-flex p-2.5 rounded-xl hover:bg-secondary transition-colors">
           <Search className="w-4 h-4 text-muted-foreground" />
         </button>
-        <button className="hidden md:inline-flex p-2.5 rounded-xl hover:bg-secondary transition-colors relative">
-          <Bell className="w-4 h-4 text-muted-foreground" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-primary rounded-full" />
-        </button>
+        <NotificationsBell />
         <motion.button
           onClick={toggleTheme}
           className="hidden md:inline-flex p-2.5 rounded-xl hover:bg-secondary transition-colors"

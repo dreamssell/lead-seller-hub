@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { Plus, MoreVertical, User, Loader2, GitBranch, Settings2 } from 'lucide-react';
+import { Plus, User, Loader2, GitBranch, Settings2, History, Lock } from 'lucide-react';
 import { PipelineManagerDialog } from '@/components/pipeline/PipelineManagerDialog';
+import { LeadHistoryDialog } from '@/components/pipeline/LeadHistoryDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -57,6 +58,8 @@ export default function PipelinePage() {
   const [selectedPipeline, setSelectedPipeline] = useState<string>('');
   const [selectedChannel, setSelectedChannel] = useState<string>('all');
   const [managerOpen, setManagerOpen] = useState(false);
+  const [historyLead, setHistoryLead] = useState<{ id: string; name: string } | null>(null);
+  const [canMove, setCanMove] = useState(false);
 
   const load = useCallback(async () => {
     if (!ownerId) return;
@@ -83,6 +86,14 @@ export default function PipelinePage() {
   }, [ownerId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Permission: can the current user move leads in this scope?
+  useEffect(() => {
+    if (!ownerId) { setCanMove(false); return; }
+    const scopeId = selectedSub === 'all' || selectedSub === 'global' ? null : selectedSub;
+    (supabase.rpc as any)('can_user_move_leads', { p_owner_id: ownerId, p_sub_company_id: scopeId })
+      .then(({ data }: { data: boolean | null }) => setCanMove(!!data));
+  }, [ownerId, selectedSub, user?.id]);
 
   // Sub-company scoped pipelines
   const subScope = selectedSub === 'all' ? undefined : selectedSub === 'global' ? null : selectedSub;
@@ -122,6 +133,10 @@ export default function PipelinePage() {
   });
 
   const moveLead = async (leadId: string, stageId: string) => {
+    if (!canMove) {
+      toast.error('Você não tem permissão para mover leads neste escopo.');
+      return;
+    }
     const { error } = await supabase.from('leads').update({ stage_id: stageId }).eq('id', leadId);
     if (error) return toast.error(error.message);
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, stage_id: stageId } : l));
@@ -188,6 +203,20 @@ export default function PipelinePage() {
         />
       )}
 
+      <LeadHistoryDialog
+        open={!!historyLead}
+        onOpenChange={(v) => !v && setHistoryLead(null)}
+        leadId={historyLead?.id || null}
+        leadName={historyLead?.name}
+      />
+
+      {!loading && activePipeline && !canMove && (
+        <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground rounded-md border border-dashed px-3 py-2">
+          <Lock className="w-3.5 h-3.5" />
+          Você está em modo leitura. Somente usuários com permissão podem mover leads entre etapas neste escopo.
+        </div>
+      )}
+
       {loading ? (
         <div className="p-12 text-center text-muted-foreground">
           <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
@@ -234,15 +263,21 @@ export default function PipelinePage() {
                   {cards.map((card) => (
                     <div
                       key={card.id}
-                      draggable
-                      onDragStart={(e) => e.dataTransfer.setData('text/lead-id', card.id)}
-                      className="glass-card p-4 cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors group"
-                      onClick={() => { window.location.href = `/cadastros?entity=leads&id=${card.id}`; }}
+                      draggable={canMove}
+                      onDragStart={(e) => canMove && e.dataTransfer.setData('text/lead-id', card.id)}
+                      className={`glass-card p-4 hover:border-primary/50 transition-colors group ${canMove ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}
                     >
                       <div className="flex items-start justify-between mb-2">
-                        <p className="text-sm font-medium text-foreground">{card.name}</p>
-                        <button className="p-1 rounded hover:bg-secondary opacity-0 group-hover:opacity-100 transition-opacity">
-                          <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
+                        <p
+                          className="text-sm font-medium text-foreground cursor-pointer hover:underline"
+                          onClick={() => { window.location.href = `/cadastros?entity=leads&id=${card.id}`; }}
+                        >{card.name}</p>
+                        <button
+                          className="p-1 rounded hover:bg-secondary opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Histórico"
+                          onClick={(e) => { e.stopPropagation(); setHistoryLead({ id: card.id, name: card.name }); }}
+                        >
+                          <History className="w-3.5 h-3.5 text-muted-foreground" />
                         </button>
                       </div>
                       <div className="flex items-center gap-1.5 flex-wrap mb-2">
