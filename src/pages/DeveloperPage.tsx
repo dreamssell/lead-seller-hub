@@ -30,6 +30,7 @@ import QuickstartTab from '@/components/settings/QuickstartTab';
 import MCPServerTab from '@/components/settings/MCPServerTab';
 import InboundWebhooksTab from '@/components/settings/InboundWebhooksTab';
 import WavoipConfigPage from '@/components/settings/WavoipConfigTab';
+import ChannelRoutingTab from '@/components/settings/ChannelRoutingTab';
 import { Card } from '@/components/ui/card';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -41,6 +42,7 @@ const TABS = [
   { value: 'wh-out',      label: 'Webhooks de saída', subtitle: 'Disparar em eventos', icon: Webhook,      Comp: OutboundWebhooksTab, advanced: true },
   { value: 'general',     label: 'Geral',        subtitle: 'Configurações base', icon: SettingsIcon, Comp: GeneralTab, advanced: false },
   { value: 'connections', label: 'Conexões',     subtitle: 'Apps terceiros', icon: Plug,         Comp: ConnectionsTab, advanced: false },
+  { value: 'routing',     label: 'Roteamento Omnichannel', subtitle: 'Chat + Voz + Funil por canal', icon: ArrowRightLeft, Comp: ChannelRoutingTab, advanced: false },
   { value: 'fields',      label: 'Campos',       subtitle: 'Dados personalizados', icon: ListChecks,   Comp: CustomFieldsTab, advanced: true },
   { value: 'smtp',        label: 'SMTP',         subtitle: 'Envio de e-mail', icon: Mail,         Comp: SmtpTab, advanced: true },
   { value: 'ai',          label: 'IA',           subtitle: 'Modelos e prompt', icon: Sparkles,     Comp: AiTab, advanced: true },

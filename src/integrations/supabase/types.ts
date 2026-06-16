@@ -269,43 +269,130 @@ export type Database = {
         }
         Relationships: []
       }
+      channel_routing: {
+        Row: {
+          channel: string
+          chat_provider: string
+          created_at: string
+          enabled: boolean
+          id: string
+          owner_id: string
+          pipeline_id: string | null
+          stage_id: string | null
+          sub_company_id: string | null
+          updated_at: string
+          voice_provider: string | null
+        }
+        Insert: {
+          channel: string
+          chat_provider?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          owner_id: string
+          pipeline_id?: string | null
+          stage_id?: string | null
+          sub_company_id?: string | null
+          updated_at?: string
+          voice_provider?: string | null
+        }
+        Update: {
+          channel?: string
+          chat_provider?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          owner_id?: string
+          pipeline_id?: string | null
+          stage_id?: string | null
+          sub_company_id?: string | null
+          updated_at?: string
+          voice_provider?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_routing_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_routing_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_routing_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_messages: {
         Row: {
+          channel: string | null
           client_msg_id: string | null
+          connection_id: string | null
           content: string
           created_at: string
           customer_id: string | null
           id: string
           metadata: Json | null
           sender_type: string
+          sub_company_id: string | null
           uaz_msg_id: string | null
         }
         Insert: {
+          channel?: string | null
           client_msg_id?: string | null
+          connection_id?: string | null
           content: string
           created_at?: string
           customer_id?: string | null
           id?: string
           metadata?: Json | null
           sender_type: string
+          sub_company_id?: string | null
           uaz_msg_id?: string | null
         }
         Update: {
+          channel?: string | null
           client_msg_id?: string | null
+          connection_id?: string | null
           content?: string
           created_at?: string
           customer_id?: string | null
           id?: string
           metadata?: Json | null
           sender_type?: string
+          sub_company_id?: string | null
           uaz_msg_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "chat_messages_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_connections"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "chat_messages_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
             referencedColumns: ["id"]
           },
         ]
@@ -757,7 +844,10 @@ export type Database = {
           id: string
           name: string
           notes: string | null
+          origin_connection_id: string | null
+          owner_id: string | null
           phone: string | null
+          sub_company_id: string | null
           updated_at: string
         }
         Insert: {
@@ -771,7 +861,10 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
+          origin_connection_id?: string | null
+          owner_id?: string | null
           phone?: string | null
+          sub_company_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -785,10 +878,28 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
+          origin_connection_id?: string | null
+          owner_id?: string | null
           phone?: string | null
+          sub_company_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "customers_origin_connection_id_fkey"
+            columns: ["origin_connection_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       idempotency_cleanup_logs: {
         Row: {
@@ -858,47 +969,104 @@ export type Database = {
       leads: {
         Row: {
           assigned_to: string | null
+          channel: string | null
           created_at: string
           created_by: string
+          customer_id: string | null
           email: string | null
           estimated_value: number | null
           id: string
           name: string
           notes: string | null
+          origin_connection_id: string | null
+          owner_id: string | null
           phone: string | null
+          pipeline_id: string | null
           source: string | null
+          stage_id: string | null
           status: string
+          sub_company_id: string | null
           updated_at: string
         }
         Insert: {
           assigned_to?: string | null
+          channel?: string | null
           created_at?: string
           created_by: string
+          customer_id?: string | null
           email?: string | null
           estimated_value?: number | null
           id?: string
           name: string
           notes?: string | null
+          origin_connection_id?: string | null
+          owner_id?: string | null
           phone?: string | null
+          pipeline_id?: string | null
           source?: string | null
+          stage_id?: string | null
           status?: string
+          sub_company_id?: string | null
           updated_at?: string
         }
         Update: {
           assigned_to?: string | null
+          channel?: string | null
           created_at?: string
           created_by?: string
+          customer_id?: string | null
           email?: string | null
           estimated_value?: number | null
           id?: string
           name?: string
           notes?: string | null
+          origin_connection_id?: string | null
+          owner_id?: string | null
           phone?: string | null
+          pipeline_id?: string | null
           source?: string | null
+          stage_id?: string | null
           status?: string
+          sub_company_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "leads_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_origin_connection_id_fkey"
+            columns: ["origin_connection_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       log_cleanup_history: {
         Row: {
@@ -1010,6 +1178,85 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "mcp_servers_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pipeline_stages: {
+        Row: {
+          color: string | null
+          created_at: string
+          id: string
+          name: string
+          pipeline_id: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          pipeline_id: string
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          pipeline_id?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pipeline_stages_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pipelines: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_default: boolean
+          name: string
+          owner_id: string
+          sub_company_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name: string
+          owner_id: string
+          sub_company_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          owner_id?: string
+          sub_company_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pipelines_sub_company_id_fkey"
             columns: ["sub_company_id"]
             isOneToOne: false
             referencedRelation: "sub_companies"
@@ -2505,9 +2752,12 @@ export type Database = {
           log_retention_days: number | null
           metadata: Json
           next_cleanup_at: string | null
+          owner_id: string | null
           phone_number: string | null
           provider: Database["public"]["Enums"]["whatsapp_provider"]
+          role: string
           status: Database["public"]["Enums"]["whatsapp_status"]
+          sub_company_id: string | null
           updated_at: string
         }
         Insert: {
@@ -2523,9 +2773,12 @@ export type Database = {
           log_retention_days?: number | null
           metadata?: Json
           next_cleanup_at?: string | null
+          owner_id?: string | null
           phone_number?: string | null
           provider: Database["public"]["Enums"]["whatsapp_provider"]
+          role?: string
           status?: Database["public"]["Enums"]["whatsapp_status"]
+          sub_company_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -2541,12 +2794,23 @@ export type Database = {
           log_retention_days?: number | null
           metadata?: Json
           next_cleanup_at?: string | null
+          owner_id?: string | null
           phone_number?: string | null
           provider?: Database["public"]["Enums"]["whatsapp_provider"]
+          role?: string
           status?: Database["public"]["Enums"]["whatsapp_status"]
+          sub_company_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_connections_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       white_label_settings: {
         Row: {
