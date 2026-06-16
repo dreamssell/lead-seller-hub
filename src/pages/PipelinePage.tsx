@@ -183,7 +183,6 @@ export default function PipelinePage() {
   }, [ownerId, selectedSub, user?.id]);
 
   // Sub-company scoped pipelines
-  const subScope = selectedSub === 'all' ? undefined : selectedSub === 'global' ? null : selectedSub;
   const visiblePipelines = useMemo(() => {
     if (subScope === undefined) return pipelines;
     return pipelines.filter(p => (p.sub_company_id ?? null) === subScope);
@@ -212,12 +211,8 @@ export default function PipelinePage() {
   const activePipeline = pipelines.find(p => p.id === selectedPipeline) || null;
   const activeStages = stages.filter(s => s.pipeline_id === selectedPipeline).sort((a, b) => a.position - b.position);
 
-  const filteredLeads = leads.filter(l => {
-    if (l.pipeline_id !== selectedPipeline) return false;
-    if (subScope !== undefined && (l.sub_company_id ?? null) !== subScope) return false;
-    if (selectedChannel !== 'all' && l.channel !== selectedChannel) return false;
-    return true;
-  });
+  // leads are already server-scoped/paginated; expose directly
+  const filteredLeads = leads;
 
   const moveLead = async (leadId: string, stageId: string) => {
     if (!canMove) {
