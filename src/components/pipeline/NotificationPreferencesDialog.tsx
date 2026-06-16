@@ -218,6 +218,18 @@ export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: P
                   <Plus className="w-4 h-4 mr-1" /> Adicionar
                 </Button>
               </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-3 pt-3 border-t text-[11px] text-muted-foreground">
+                <div className="font-medium text-foreground/80">Funis em tempo real</div>
+                <div className="font-medium text-foreground/80">Etapas em tempo real</div>
+                <label className="flex items-center gap-2"><Switch checked={newPC} onCheckedChange={setNewPC} /> Criar</label>
+                <label className="flex items-center gap-2"><Switch checked={newSC} onCheckedChange={setNewSC} /> Criar</label>
+                <label className="flex items-center gap-2"><Switch checked={newPU} onCheckedChange={setNewPU} /> Editar</label>
+                <label className="flex items-center gap-2"><Switch checked={newSU} onCheckedChange={setNewSU} /> Editar</label>
+                <label className="flex items-center gap-2"><Switch checked={newPD} onCheckedChange={setNewPD} /> Excluir</label>
+                <label className="flex items-center gap-2"><Switch checked={newSD} onCheckedChange={setNewSD} /> Excluir</label>
+                <label className="flex items-center gap-2"><Switch checked={newPR} onCheckedChange={setNewPR} /> Reordenar</label>
+                <label className="flex items-center gap-2"><Switch checked={newSR} onCheckedChange={setNewSR} /> Reordenar</label>
+              </div>
             </div>
           </>
         )}
