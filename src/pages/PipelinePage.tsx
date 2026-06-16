@@ -91,6 +91,28 @@ export default function PipelinePage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Realtime: live updates of pipelines, stages, leads, routing & channel routing
+  useEffect(() => {
+    if (!ownerId) return;
+    let timer: any = null;
+    const debouncedReload = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => load(), 350);
+    };
+    const channel = supabase
+      .channel(`pipeline-rt-${ownerId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pipelines' }, debouncedReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pipeline_stages' }, debouncedReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, debouncedReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'channel_routing' }, debouncedReload)
+      .subscribe((status) => setRealtimeActive(status === 'SUBSCRIBED'));
+    return () => {
+      clearTimeout(timer);
+      supabase.removeChannel(channel);
+      setRealtimeActive(false);
+    };
+  }, [ownerId, load]);
+
   // Permission: can the current user move leads / manage pipelines in this scope?
   useEffect(() => {
     if (!ownerId) { setCanMove(false); setCanManagePipelines(false); return; }
