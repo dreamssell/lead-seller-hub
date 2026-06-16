@@ -242,6 +242,17 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
                   {testing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} 
                   Testar Conexão
                 </Button>
+                {conn.provider === 'evolution' && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setShowEvolutionWizard(true)}
+                    className="gap-2"
+                  >
+                    <QrCode className="w-4 h-4" />
+                    {conn.status === 'connected' ? 'Gerenciar QR' : 'Conectar via QR Code'}
+                  </Button>
+                )}
               </>
             )}
           </div>
