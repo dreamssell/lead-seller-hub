@@ -147,8 +147,11 @@ export default function PipelinePage() {
     return () => clearTimeout(t);
   }, [loadLeads, search]);
 
-  // reset page when filters change
-  useEffect(() => { setPage(0); }, [selectedPipeline, selectedSub, selectedChannel, search]);
+  // reset page when filters change (but keep restored page on first mount)
+  useEffect(() => {
+    if (!didRestorePage.current) { didRestorePage.current = true; return; }
+    setPage(0);
+  }, [selectedPipeline, selectedSub, selectedChannel, search]);
 
   // Realtime: live updates with visual feedback + toast for structure changes
   useEffect(() => {
