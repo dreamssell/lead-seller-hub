@@ -260,22 +260,145 @@ export default function WavoipWebphoneSection() {
           )}
         </div>
 
-        <div className="space-y-2 p-4 rounded-xl border border-border/40">
-          <p className="text-sm font-semibold">Testar chamada</p>
+        {/* Teste de chamada real */}
+        <div className="space-y-3 p-4 rounded-xl border border-border/40">
+          <div className="flex items-center gap-2">
+            <TestTube2 className="w-4 h-4 text-primary" />
+            <p className="text-sm font-semibold">Teste de chamada WhatsApp</p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Dispara uma chamada real via Wavoip para o número informado usando o device padrão.
+            Confirma que: (1) o token foi aceito pelo tronco, (2) o WhatsApp pareado está online, (3) o áudio está fluindo nos dois lados.
+          </p>
           <div className="flex gap-2">
             <Input
               value={testNumber}
               onChange={e => setTestNumber(e.target.value)}
-              placeholder="+55 11 99999-9999"
+              placeholder="+55 11 99999-9999 (com DDI)"
               className="font-mono"
+              disabled={isTestingCall}
             />
-            <Button onClick={() => testNumber ? callWhatsApp(testNumber) : toast.error('Informe um número')}>
-              <PhoneCall className="w-4 h-4 mr-2" /> Ligar
+            <Button onClick={handleTestCall} disabled={isTestingCall || config.devices.length === 0}>
+              {isTestingCall ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PhoneCall className="w-4 h-4 mr-2" />}
+              Ligar teste
             </Button>
             <Button variant="outline" onClick={openDialer}>Abrir discador</Button>
           </div>
         </div>
+
+        {/* Auto-revalidar */}
+        <div className="flex items-center justify-between p-3 rounded-lg border border-border/40 bg-secondary/20">
+          <div>
+            <p className="text-sm font-semibold">Revalidar automaticamente</p>
+            <p className="text-xs text-muted-foreground">
+              Roda a validação assim que esta seção abre e sempre que a sub-empresa ativa mudar.
+            </p>
+          </div>
+          <Switch checked={autoRevalidate} onCheckedChange={setAutoRevalidate} />
+        </div>
+
+        {/* Checklist de troubleshooting — só aparece se há falha */}
+        {hasFailures && (
+          <div className="space-y-3 p-4 rounded-xl border border-amber-500/40 bg-amber-500/5">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+                Checklist — "No device available" / device não habilitado
+              </p>
+            </div>
+            <ol className="text-xs space-y-2 list-decimal pl-5 text-foreground/80">
+              <li>
+                <strong>Confira o WhatsApp pareado:</strong> abra <code>app.wavoip.com</code> → Devices.
+                O número precisa estar com status <em>Online</em>. Se aparecer <em>Disconnected</em>, reescaneie o QR Code.
+              </li>
+              <li>
+                <strong>Token correto:</strong> o Device Token (UUID) deve ser copiado <em>exatamente</em> do painel da Wavoip
+                (Settings → Devices → ícone de chave). Tokens com espaço extra ou de outra conta retornam "device not registered".
+              </li>
+              <li>
+                <strong>Plano ativo:</strong> a conta Wavoip precisa ter saldo/plano vigente. Em caso de débito o tronco recusa novas chamadas.
+              </li>
+              <li>
+                <strong>Permissão de microfone:</strong> o navegador precisa ter permissão de microfone para este domínio (cadeado → Microfone → Permitir).
+              </li>
+              <li>
+                <strong>Bloqueio de rede:</strong> firewall/VPN corporativa pode bloquear o WebSocket da Wavoip (porta 443 → <code>*.wavoip.com</code>).
+                Teste em rede aberta para confirmar.
+              </li>
+              <li>
+                <strong>Outro dispositivo conectado:</strong> o WhatsApp Web só permite um dispositivo "primário" por número.
+                Desconecte sessões antigas em WhatsApp → Aparelhos conectados.
+              </li>
+              <li>
+                Depois das correções, clique em <strong>Validar agora</strong> de novo.
+                Se um device específico continuar como ❌, abra o painel da Wavoip e refaça o pareamento desse número.
+              </li>
+            </ol>
+          </div>
+        )}
+
+        {/* Histórico de validações */}
+        <div className="space-y-2 p-4 rounded-xl border border-border/40">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <History className="w-4 h-4 text-primary" />
+              <p className="text-sm font-semibold">Histórico de validações</p>
+              <Badge variant="outline" className="text-[10px]">{history.length}</Badge>
+            </div>
+            <Button size="sm" variant="ghost" onClick={loadHistory} title="Atualizar">
+              <RefreshCw className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+          {history.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-3 text-center">
+              Nenhuma validação registrada para esta sub-empresa. Clique em <strong>Validar agora</strong>.
+            </p>
+          ) : (
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-[11px]">Data/Hora</TableHead>
+                    <TableHead className="text-[11px]">Device</TableHead>
+                    <TableHead className="text-[11px]">Status</TableHead>
+                    <TableHead className="text-[11px]">Mensagem</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {history.map(h => (
+                    <TableRow key={h.id}>
+                      <TableCell className="text-[11px] whitespace-nowrap">
+                        {new Date(h.validated_at).toLocaleString('pt-BR')}
+                      </TableCell>
+                      <TableCell className="text-[11px]">
+                        <div className="font-semibold">{h.device_label || '—'}</div>
+                        <div className="text-muted-foreground font-mono">
+                          {h.device_token ? `${h.device_token.slice(0, 8)}…${h.device_token.slice(-4)}` : '—'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {h.status === 'ok' ? (
+                          <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30 gap-1 text-[10px]">
+                            <CheckCircle2 className="w-3 h-3" /> ok
+                          </Badge>
+                        ) : (
+                          <Badge variant="destructive" className="gap-1 text-[10px]">
+                            <XCircle className="w-3 h-3" /> {h.status}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-[11px] text-muted-foreground max-w-[280px] truncate" title={h.message || ''}>
+                        {h.message || '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
+
   );
 }
