@@ -27,6 +27,7 @@ type Pref = {
   channel: string | null;
   notify_new_lead: boolean;
   notify_stage_change: boolean;
+  notify_funnel_change: boolean;
 };
 
 type SubCompany = { id: string; name: string };
@@ -48,13 +49,14 @@ export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: P
   const [newChannel, setNewChannel] = useState<string>('__all__');
   const [newLead, setNewLead] = useState(true);
   const [newStage, setNewStage] = useState(true);
+  const [newFunnel, setNewFunnel] = useState(true);
 
   const load = async () => {
     if (!user || !ownerId) return;
     setLoading(true);
     const [p, s] = await Promise.all([
       (supabase as any).from('notification_preferences')
-        .select('id,sub_company_id,channel,notify_new_lead,notify_stage_change')
+        .select('id,sub_company_id,channel,notify_new_lead,notify_stage_change,notify_funnel_change')
         .eq('user_id', user.id).eq('owner_id', ownerId),
       supabase.from('sub_companies').select('id,name').eq('owner_id', ownerId).order('name'),
     ]);
@@ -87,9 +89,10 @@ export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: P
       channel: newChannel === '__all__' ? null : newChannel,
       notify_new_lead: newLead,
       notify_stage_change: newStage,
+      notify_funnel_change: newFunnel,
     };
     const { data, error } = await (supabase as any).from('notification_preferences')
-      .insert(payload).select('id,sub_company_id,channel,notify_new_lead,notify_stage_change').single();
+      .insert(payload).select('id,sub_company_id,channel,notify_new_lead,notify_stage_change,notify_funnel_change').single();
     if (error) return toast.error(error.message);
     setPrefs(prev => [...prev, data as Pref]);
     toast.success('Regra adicionada');
@@ -131,6 +134,10 @@ export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: P
                     <Switch checked={p.notify_stage_change} onCheckedChange={(v) => updatePref(p.id, { notify_stage_change: v })} />
                     Etapa
                   </label>
+                  <label className="flex items-center gap-1 text-xs">
+                    <Switch checked={p.notify_funnel_change} onCheckedChange={(v) => updatePref(p.id, { notify_funnel_change: v })} />
+                    Funil
+                  </label>
                   <Button size="icon" variant="ghost" onClick={() => removePref(p.id)}>
                     <Trash2 className="w-3.5 h-3.5 text-destructive" />
                   </Button>
@@ -155,12 +162,15 @@ export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: P
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center gap-4 mt-3">
+              <div className="flex flex-wrap items-center gap-4 mt-3">
                 <label className="flex items-center gap-2 text-sm">
                   <Switch checked={newLead} onCheckedChange={setNewLead} /> Novo lead
                 </label>
                 <label className="flex items-center gap-2 text-sm">
                   <Switch checked={newStage} onCheckedChange={setNewStage} /> Mudança de etapa
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch checked={newFunnel} onCheckedChange={setNewFunnel} /> Troca de funil
                 </label>
                 <Button size="sm" className="ml-auto" onClick={addPref}>
                   <Plus className="w-4 h-4 mr-1" /> Adicionar

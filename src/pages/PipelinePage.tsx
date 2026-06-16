@@ -58,9 +58,16 @@ export default function PipelinePage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [routings, setRoutings] = useState<Routing[]>([]);
 
-  const [selectedSub, setSelectedSub] = useState<string>('all');
-  const [selectedPipeline, setSelectedPipeline] = useState<string>('');
-  const [selectedChannel, setSelectedChannel] = useState<string>('all');
+  // Persisted UI filters (per owner) so reloading the page restores the same view
+  const STORAGE_KEY = `pipeline_filters_v1:${ownerId || 'anon'}`;
+  const persisted = (() => {
+    if (typeof window === 'undefined') return {} as any;
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; }
+  })();
+
+  const [selectedSub, setSelectedSub] = useState<string>(persisted.selectedSub ?? 'all');
+  const [selectedPipeline, setSelectedPipeline] = useState<string>(persisted.selectedPipeline ?? '');
+  const [selectedChannel, setSelectedChannel] = useState<string>(persisted.selectedChannel ?? 'all');
   const [managerOpen, setManagerOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [notifPrefsOpen, setNotifPrefsOpen] = useState(false);
@@ -72,11 +79,22 @@ export default function PipelinePage() {
   const [autoRefreshing, setAutoRefreshing] = useState(false);
 
   // search & pagination
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState<string>(persisted.search ?? '');
+  const [page, setPage] = useState<number>(typeof persisted.page === 'number' ? persisted.page : 0);
   const [pageSize] = useState(200);
   const [totalLeads, setTotalLeads] = useState(0);
   const isFirstLoad = useRef(true);
+  const didRestorePage = useRef(false);
+
+  // Persist filters whenever they change
+  useEffect(() => {
+    if (!ownerId) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        selectedSub, selectedPipeline, selectedChannel, search, page,
+      }));
+    } catch {}
+  }, [STORAGE_KEY, ownerId, selectedSub, selectedPipeline, selectedChannel, search, page]);
 
   const load = useCallback(async () => {
     if (!ownerId) return;
@@ -129,8 +147,11 @@ export default function PipelinePage() {
     return () => clearTimeout(t);
   }, [loadLeads, search]);
 
-  // reset page when filters change
-  useEffect(() => { setPage(0); }, [selectedPipeline, selectedSub, selectedChannel, search]);
+  // reset page when filters change (but keep restored page on first mount)
+  useEffect(() => {
+    if (!didRestorePage.current) { didRestorePage.current = true; return; }
+    setPage(0);
+  }, [selectedPipeline, selectedSub, selectedChannel, search]);
 
   // Realtime: live updates with visual feedback + toast for structure changes
   useEffect(() => {
