@@ -168,8 +168,25 @@ export default function PipelinePage() {
             </SelectContent>
           </Select>
         </div>
-        <Button variant="outline" size="sm" onClick={load} className="ml-auto">Atualizar</Button>
+        <div className="ml-auto flex gap-2">
+          <Button variant="outline" size="sm" onClick={load}>Atualizar</Button>
+          <Button size="sm" onClick={() => setManagerOpen(true)}>
+            <Settings2 className="w-4 h-4 mr-1" /> Gerenciar funis
+          </Button>
+        </div>
       </div>
+
+      {ownerId && (
+        <PipelineManagerDialog
+          open={managerOpen}
+          onOpenChange={setManagerOpen}
+          ownerId={ownerId}
+          subScope={subScope}
+          channel={selectedChannel}
+          initialPipelineId={selectedPipeline}
+          onChanged={load}
+        />
+      )}
 
       {loading ? (
         <div className="p-12 text-center text-muted-foreground">
