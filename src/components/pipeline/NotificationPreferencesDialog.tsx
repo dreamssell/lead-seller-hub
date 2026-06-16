@@ -27,6 +27,7 @@ type Pref = {
   channel: string | null;
   notify_new_lead: boolean;
   notify_stage_change: boolean;
+  notify_funnel_change: boolean;
 };
 
 type SubCompany = { id: string; name: string };
