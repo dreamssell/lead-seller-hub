@@ -88,12 +88,14 @@ export default function PipelinePage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Permission: can the current user move leads in this scope?
+  // Permission: can the current user move leads / manage pipelines in this scope?
   useEffect(() => {
-    if (!ownerId) { setCanMove(false); return; }
+    if (!ownerId) { setCanMove(false); setCanManagePipelines(false); return; }
     const scopeId = selectedSub === 'all' || selectedSub === 'global' ? null : selectedSub;
     (supabase.rpc as any)('can_user_move_leads', { p_owner_id: ownerId, p_sub_company_id: scopeId })
       .then(({ data }: { data: boolean | null }) => setCanMove(!!data));
+    (supabase.rpc as any)('can_user_manage_pipelines', { p_owner_id: ownerId, p_sub_company_id: scopeId })
+      .then(({ data }: { data: boolean | null }) => setCanManagePipelines(!!data));
   }, [ownerId, selectedSub, user?.id]);
 
   // Sub-company scoped pipelines
