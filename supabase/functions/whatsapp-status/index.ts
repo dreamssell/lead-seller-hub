@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!provider || !["uaz", "meta", "wavoip"].includes(provider)) {
+    if (!provider || !["uaz", "meta", "wavoip", "evolution"].includes(provider)) {
       throw new Error("Provedor inválido ou ausente");
     }
 
