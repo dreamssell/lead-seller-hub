@@ -319,6 +319,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
         const { data: userRes } = await supabase.auth.getUser();
         const uid = userRes.user?.id;
         if (!uid) return;
+        const nowIso = new Date().toISOString();
+        setSavedAt(nowIso);
         await (supabase as any).from('user_ui_state').upsert({
           user_id: uid,
           owner_id: ownerIdRef.current,
@@ -327,6 +329,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
             channelFilter, dateFrom, dateTo,
             loadedCount: events.length, cursor,
             scrollTop: scrollTopRef.current,
+            cursorTtlHours,
+            savedAt: nowIso,
           },
         }, { onConflict: 'user_id,owner_id,scope' });
       }, 800);
