@@ -6,18 +6,23 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
-import { Phone, Trash2, Star, PhoneCall, RefreshCw, ShieldCheck, Loader2 } from 'lucide-react';
+import { Phone, Trash2, Star, PhoneCall, RefreshCw, ShieldCheck, Loader2, PlugZap, CheckCircle2, XCircle, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function WavoipWebphoneSection() {
-  const { config, status, error, addDevice, removeDevice, setDefaultDevice, saveConfig, reload, callWhatsApp, openDialer } = useWavoipWebphone();
+  const {
+    config, status, error, scope,
+    addDevice, removeDevice, setDefaultDevice, setEnabled,
+    reload, callWhatsApp, openDialer,
+    validateConnection, isValidating, lastValidation,
+  } = useWavoipWebphone();
   const [token, setToken] = useState('');
   const [label, setLabel] = useState('');
   const [phone, setPhone] = useState('');
   const [testNumber, setTestNumber] = useState('');
 
-  const handleAdd = () => {
-    const dev = addDevice(token, label, phone);
+  const handleAdd = async () => {
+    const dev = await addDevice(token, label, phone);
     if (dev) { setToken(''); setLabel(''); setPhone(''); }
   };
 
