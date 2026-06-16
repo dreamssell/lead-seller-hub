@@ -966,6 +966,65 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_events: {
+        Row: {
+          actor_id: string | null
+          channel: string | null
+          created_at: string
+          from_stage_id: string | null
+          from_stage_name: string | null
+          id: string
+          lead_id: string
+          metadata: Json
+          owner_id: string
+          source: string | null
+          sub_company_id: string | null
+          to_stage_id: string | null
+          to_stage_name: string | null
+          type: string
+        }
+        Insert: {
+          actor_id?: string | null
+          channel?: string | null
+          created_at?: string
+          from_stage_id?: string | null
+          from_stage_name?: string | null
+          id?: string
+          lead_id: string
+          metadata?: Json
+          owner_id: string
+          source?: string | null
+          sub_company_id?: string | null
+          to_stage_id?: string | null
+          to_stage_name?: string | null
+          type: string
+        }
+        Update: {
+          actor_id?: string | null
+          channel?: string | null
+          created_at?: string
+          from_stage_id?: string | null
+          from_stage_name?: string | null
+          id?: string
+          lead_id?: string
+          metadata?: Json
+          owner_id?: string
+          source?: string | null
+          sub_company_id?: string | null
+          to_stage_id?: string | null
+          to_stage_name?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_events_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           assigned_to: string | null
@@ -1181,6 +1240,62 @@ export type Database = {
             columns: ["sub_company_id"]
             isOneToOne: false
             referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          channel: string | null
+          created_at: string
+          id: string
+          lead_id: string | null
+          metadata: Json
+          owner_id: string
+          read_at: string | null
+          source: string | null
+          sub_company_id: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          channel?: string | null
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          metadata?: Json
+          owner_id: string
+          read_at?: string | null
+          source?: string | null
+          sub_company_id?: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          channel?: string | null
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          metadata?: Json
+          owner_id?: string
+          read_at?: string | null
+          source?: string | null
+          sub_company_id?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
         ]
@@ -2020,6 +2135,7 @@ export type Database = {
       user_account_access: {
         Row: {
           allowed_pages: string[]
+          can_move_leads: boolean
           created_at: string
           created_by: string | null
           id: string
@@ -2031,6 +2147,7 @@ export type Database = {
         }
         Insert: {
           allowed_pages?: string[]
+          can_move_leads?: boolean
           created_at?: string
           created_by?: string | null
           id?: string
@@ -2042,6 +2159,7 @@ export type Database = {
         }
         Update: {
           allowed_pages?: string[]
+          can_move_leads?: boolean
           created_at?: string
           created_by?: string | null
           id?: string
@@ -2897,6 +3015,10 @@ export type Database = {
     }
     Functions: {
       calculate_next_retry: { Args: { retry_count: number }; Returns: string }
+      can_user_move_leads: {
+        Args: { p_owner_id: string; p_sub_company_id: string }
+        Returns: boolean
+      }
       cleanup_connection_events: { Args: never; Returns: undefined }
       cleanup_expired_idempotency_keys: {
         Args: { ttl_hours?: number }
@@ -3011,6 +3133,7 @@ export type Database = {
         }
         Returns: {
           allowed_pages: string[]
+          can_move_leads: boolean
           created_at: string
           created_by: string | null
           id: string
