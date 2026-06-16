@@ -162,12 +162,15 @@ export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: P
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center gap-4 mt-3">
+              <div className="flex flex-wrap items-center gap-4 mt-3">
                 <label className="flex items-center gap-2 text-sm">
                   <Switch checked={newLead} onCheckedChange={setNewLead} /> Novo lead
                 </label>
                 <label className="flex items-center gap-2 text-sm">
                   <Switch checked={newStage} onCheckedChange={setNewStage} /> Mudança de etapa
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch checked={newFunnel} onCheckedChange={setNewFunnel} /> Troca de funil
                 </label>
                 <Button size="sm" className="ml-auto" onClick={addPref}>
                   <Plus className="w-4 h-4 mr-1" /> Adicionar
