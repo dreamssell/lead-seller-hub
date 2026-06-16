@@ -1251,7 +1251,15 @@ export type Database = {
           id: string
           notify_funnel_change: boolean
           notify_new_lead: boolean
+          notify_pipeline_create: boolean
+          notify_pipeline_delete: boolean
+          notify_pipeline_reorder: boolean
+          notify_pipeline_update: boolean
           notify_stage_change: boolean
+          notify_stage_create: boolean
+          notify_stage_delete: boolean
+          notify_stage_reorder: boolean
+          notify_stage_update: boolean
           owner_id: string
           sub_company_id: string | null
           updated_at: string
@@ -1263,7 +1271,15 @@ export type Database = {
           id?: string
           notify_funnel_change?: boolean
           notify_new_lead?: boolean
+          notify_pipeline_create?: boolean
+          notify_pipeline_delete?: boolean
+          notify_pipeline_reorder?: boolean
+          notify_pipeline_update?: boolean
           notify_stage_change?: boolean
+          notify_stage_create?: boolean
+          notify_stage_delete?: boolean
+          notify_stage_reorder?: boolean
+          notify_stage_update?: boolean
           owner_id: string
           sub_company_id?: string | null
           updated_at?: string
@@ -1275,7 +1291,15 @@ export type Database = {
           id?: string
           notify_funnel_change?: boolean
           notify_new_lead?: boolean
+          notify_pipeline_create?: boolean
+          notify_pipeline_delete?: boolean
+          notify_pipeline_reorder?: boolean
+          notify_pipeline_update?: boolean
           notify_stage_change?: boolean
+          notify_stage_create?: boolean
+          notify_stage_delete?: boolean
+          notify_stage_reorder?: boolean
+          notify_stage_update?: boolean
           owner_id?: string
           sub_company_id?: string | null
           updated_at?: string
