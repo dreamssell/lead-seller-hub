@@ -44,6 +44,35 @@ const MIN_POLL_MS = 3000;
 const MAX_POLL_MS = 15000;
 const POLL_BACKOFF = 1.4;
 
+const INSTANCE_RE = /^[a-zA-Z0-9][a-zA-Z0-9-_]{2,49}$/;
+
+function validateUrl(v: string): string | null {
+  const t = v.trim();
+  if (!t) return 'Informe a URL do servidor Evolution.';
+  try {
+    const u = new URL(t);
+    if (!/^https?:$/.test(u.protocol)) return 'A URL deve começar com http:// ou https://.';
+    if (!u.hostname) return 'URL sem host válido.';
+    return null;
+  } catch {
+    return 'URL inválida.';
+  }
+}
+function validateToken(v: string): string | null {
+  const t = v.trim();
+  if (!t) return 'Informe a API Key.';
+  if (t.length < 8) return 'API Key parece curta demais (mín. 8 caracteres).';
+  if (/\s/.test(t)) return 'A API Key não pode conter espaços.';
+  return null;
+}
+function validateInstance(v: string): string | null {
+  const t = v.trim();
+  if (!t) return 'Informe o nome da instância.';
+  if (!INSTANCE_RE.test(t))
+    return 'Use 3–50 caracteres: letras, números, hífen ou underline; comece com letra/número.';
+  return null;
+}
+
 export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }: Props) {
   const initialMeta = (conn.metadata ?? {}) as Record<string, any>;
   const [step, setStep] = useState<Step>('credentials');
