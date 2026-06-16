@@ -2329,6 +2329,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_ui_state: {
+        Row: {
+          created_at: string
+          id: string
+          owner_id: string
+          scope: string
+          state: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          owner_id: string
+          scope: string
+          state?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          owner_id?: string
+          scope?: string
+          state?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       video_alerts: {
         Row: {
           alert_type: string

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
@@ -43,55 +43,91 @@ const CHANNEL_LABEL: Record<string, string> = {
   telegram: 'Telegram', widget: 'Widget', linkedin: 'LinkedIn', tiktok: 'TikTok', youtube: 'YouTube',
 };
 
+const PAGE_SIZE = 100;
+
 export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Props) {
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [channelFilter, setChannelFilter] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
+  const [availableChannels, setAvailableChannels] = useState<string[]>([]);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  const buildQuery = useCallback(() => {
+    let q = supabase.from('lead_events')
+      .select('id,type,from_stage_name,to_stage_name,channel,source,created_at,metadata', { count: 'exact' })
+      .eq('lead_id', leadId as string);
+    if (channelFilter !== 'all') q = q.eq('channel', channelFilter);
+    if (dateFrom) q = q.gte('created_at', `${dateFrom}T00:00:00`);
+    if (dateTo)   q = q.lte('created_at', `${dateTo}T23:59:59`);
+    return q.order('created_at', { ascending: false });
+  }, [leadId, channelFilter, dateFrom, dateTo]);
+
+  const loadFirstPage = useCallback(async () => {
+    if (!leadId) return;
+    setLoading(true);
+    const { data, count } = await buildQuery().range(0, PAGE_SIZE - 1);
+    const rows = (data as Event[]) || [];
+    setEvents(rows);
+    setTotal(count || 0);
+    setHasMore((count || 0) > rows.length);
+    setLoading(false);
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [leadId, buildQuery]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore || !leadId) return;
+    setLoadingMore(true);
+    const from = events.length;
+    const { data } = await buildQuery().range(from, from + PAGE_SIZE - 1);
+    const rows = (data as Event[]) || [];
+    setEvents(prev => [...prev, ...rows]);
+    setHasMore(from + rows.length < total);
+    setLoadingMore(false);
+  }, [loadingMore, hasMore, leadId, events.length, total, buildQuery]);
+
+  // First load + reload whenever filters change
   useEffect(() => {
     if (!open || !leadId) return;
-    setLoading(true);
-    supabase.from('lead_events')
-      .select('id,type,from_stage_name,to_stage_name,channel,source,created_at,metadata')
-      .eq('lead_id', leadId)
-      .order('created_at', { ascending: false })
-      .limit(500)
+    loadFirstPage();
+  }, [open, leadId, channelFilter, dateFrom, dateTo, loadFirstPage]);
+
+  // Load full list of distinct channels for the dropdown (independent of filters)
+  useEffect(() => {
+    if (!open || !leadId) return;
+    supabase.from('lead_events').select('channel').eq('lead_id', leadId).not('channel', 'is', null).limit(1000)
       .then(({ data }) => {
-        setEvents((data as Event[]) || []);
-        setLoading(false);
+        const set = new Set<string>();
+        (data as { channel: string | null }[] | null)?.forEach(r => r.channel && set.add(r.channel));
+        setAvailableChannels(Array.from(set));
       });
   }, [open, leadId]);
 
   // Reset filters when reopening
   useEffect(() => {
-    if (!open) { setChannelFilter('all'); setDateFrom(''); setDateTo(''); }
+    if (!open) { setChannelFilter('all'); setDateFrom(''); setDateTo(''); setEvents([]); setTotal(0); setHasMore(false); }
   }, [open]);
 
-  const availableChannels = useMemo(
-    () => Array.from(new Set(events.map(e => e.channel).filter(Boolean))) as string[],
-    [events]
-  );
+  // Infinite scroll
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) loadMore();
+    };
+    el.addEventListener('scroll', onScroll);
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [loadMore]);
 
-  const filtered = useMemo(() => {
-    return events.filter(ev => {
-      if (channelFilter !== 'all' && ev.channel !== channelFilter) return false;
-      const ts = new Date(ev.created_at).getTime();
-      if (dateFrom) {
-        const from = new Date(dateFrom + 'T00:00:00').getTime();
-        if (ts < from) return false;
-      }
-      if (dateTo) {
-        const to = new Date(dateTo + 'T23:59:59').getTime();
-        if (ts > to) return false;
-      }
-      return true;
-    });
-  }, [events, channelFilter, dateFrom, dateTo]);
+  const filtered = events; // server-filtered already
 
   const clearFilters = () => { setChannelFilter('all'); setDateFrom(''); setDateTo(''); };
   const hasFilters = channelFilter !== 'all' || dateFrom || dateTo;
+
 
   const buildRows = () => filtered.map(ev => ({
     data: format(new Date(ev.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR }),
@@ -197,7 +233,7 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
             </Button>
           )}
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">{filtered.length} de {events.length}</span>
+            <span className="text-xs text-muted-foreground">{events.length} de {total}</span>
             <Button size="sm" variant="outline" className="h-8" onClick={exportCSV} disabled={!filtered.length}>
               <Download className="w-3.5 h-3.5 mr-1" /> CSV
             </Button>
@@ -211,36 +247,47 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
           <div className="p-8 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div>
         ) : filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-6">
-            {events.length === 0 ? 'Sem eventos registrados ainda.' : 'Nenhum evento corresponde aos filtros.'}
+            {total === 0 ? 'Sem eventos registrados ainda.' : 'Nenhum evento corresponde aos filtros.'}
           </p>
         ) : (
-          <ol className="relative border-l border-border pl-5 space-y-4">
-            {filtered.map(ev => (
-              <li key={ev.id} className="relative">
-                <span className="absolute -left-[27px] top-1 w-3 h-3 rounded-full bg-primary ring-4 ring-background" />
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium">{TYPE_LABEL[ev.type] || ev.type}</span>
-                  {ev.channel && <Badge variant="secondary" className="text-[10px]">{CHANNEL_LABEL[ev.channel] || ev.channel}</Badge>}
-                  {ev.source && <Badge variant="outline" className="text-[10px]">{ev.source}</Badge>}
-                  <span className="text-xs text-muted-foreground ml-auto">
-                    {formatDistanceToNow(new Date(ev.created_at), { addSuffix: true, locale: ptBR })}
-                  </span>
-                </div>
-                {ev.type === 'stage_changed' && (
-                  <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
-                    <span>{ev.from_stage_name || '—'}</span>
-                    <ArrowRight className="w-3 h-3" />
-                    <span className="text-foreground font-medium">{ev.to_stage_name || '—'}</span>
+          <div ref={scrollRef} className="max-h-[50vh] overflow-y-auto pr-2">
+            <ol className="relative border-l border-border pl-5 space-y-4">
+              {filtered.map(ev => (
+                <li key={ev.id} className="relative">
+                  <span className="absolute -left-[27px] top-1 w-3 h-3 rounded-full bg-primary ring-4 ring-background" />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium">{TYPE_LABEL[ev.type] || ev.type}</span>
+                    {ev.channel && <Badge variant="secondary" className="text-[10px]">{CHANNEL_LABEL[ev.channel] || ev.channel}</Badge>}
+                    {ev.source && <Badge variant="outline" className="text-[10px]">{ev.source}</Badge>}
+                    <span className="text-xs text-muted-foreground ml-auto">
+                      {formatDistanceToNow(new Date(ev.created_at), { addSuffix: true, locale: ptBR })}
+                    </span>
                   </div>
-                )}
-                {ev.type === 'created' && (
-                  <div className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Entrou em {ev.to_stage_name || 'sem etapa'}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ol>
+                  {ev.type === 'stage_changed' && (
+                    <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
+                      <span>{ev.from_stage_name || '—'}</span>
+                      <ArrowRight className="w-3 h-3" />
+                      <span className="text-foreground font-medium">{ev.to_stage_name || '—'}</span>
+                    </div>
+                  )}
+                  {ev.type === 'created' && (
+                    <div className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3" /> Entrou em {ev.to_stage_name || 'sem etapa'}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ol>
+            <div className="flex items-center justify-center py-3">
+              {loadingMore ? (
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              ) : hasMore ? (
+                <Button size="sm" variant="ghost" onClick={loadMore}>Carregar mais</Button>
+              ) : (
+                <span className="text-[11px] text-muted-foreground">Fim do histórico</span>
+              )}
+            </div>
+          </div>
         )}
       </DialogContent>
     </Dialog>
