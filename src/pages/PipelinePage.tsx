@@ -208,15 +208,41 @@ export default function PipelinePage() {
       leadsTimer = setTimeout(() => loadLeads(), 350);
     };
 
-    // Descriptive toasts scoped to current sub-company / channel via audit log
+    // Descriptive toasts scoped to current sub-company / channel via audit log,
+    // honoring per-action notification preferences for pipelines and stages.
     const auditScopeId = selectedSub === 'all' || selectedSub === 'global' ? null : selectedSub;
-    const onAuditInsert = (payload: any) => {
+    const onAuditInsert = async (payload: any) => {
       const row = payload?.new;
       if (!row || isFirstLoad.current) return;
-      // Sub-company filter (allow exact match OR global rows when viewing "all")
       if (selectedSub !== 'all') {
         if ((row.sub_company_id ?? null) !== auditScopeId) return;
       }
+      // Check user preference for this entity+action+sub+channel
+      try {
+        const { data: { user: u } } = await supabase.auth.getUser();
+        if (u) {
+          const { data: prefRows } = await (supabase as any).from('notification_preferences')
+            .select('sub_company_id,channel,notify_pipeline_create,notify_pipeline_update,notify_pipeline_delete,notify_pipeline_reorder,notify_stage_create,notify_stage_update,notify_stage_delete,notify_stage_reorder')
+            .eq('user_id', u.id).eq('owner_id', ownerId);
+          const rows = (prefRows as any[]) || [];
+          if (rows.length) {
+            const subForMatch = auditScopeId;
+            const chForMatch = selectedChannel === 'all' ? null : selectedChannel;
+            const best = rows
+              .map(r => ({
+                r,
+                score: (r.sub_company_id === subForMatch || r.sub_company_id === null ? (r.sub_company_id === subForMatch ? 2 : 0) : -1)
+                     + (r.channel === chForMatch || r.channel === null ? (r.channel === chForMatch ? 1 : 0) : -1),
+              }))
+              .filter(x => x.score >= 0)
+              .sort((a, b) => b.score - a.score)[0]?.r;
+            if (best) {
+              const key = `notify_${row.entity}_${row.action}`;
+              if (best[key] === false) return;
+            }
+          }
+        }
+      } catch {}
       const ACTION_LBL: Record<string, string> = {
         create: 'criou', update: 'editou', delete: 'excluiu', reorder: 'reordenou', link_channel: 'vinculou ao canal',
       };
@@ -227,6 +253,7 @@ export default function PipelinePage() {
       const label = row.label ? ` "${row.label}"` : '';
       toast.message(`${who} ${action} ${entity}${label}`, { duration: 3500 });
     };
+
 
     const channel = supabase
       .channel(`pipeline-rt-${ownerId}`)

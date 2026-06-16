@@ -28,6 +28,14 @@ type Pref = {
   notify_new_lead: boolean;
   notify_stage_change: boolean;
   notify_funnel_change: boolean;
+  notify_pipeline_create: boolean;
+  notify_pipeline_update: boolean;
+  notify_pipeline_delete: boolean;
+  notify_pipeline_reorder: boolean;
+  notify_stage_create: boolean;
+  notify_stage_update: boolean;
+  notify_stage_delete: boolean;
+  notify_stage_reorder: boolean;
 };
 
 type SubCompany = { id: string; name: string };
@@ -37,6 +45,8 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   ownerId: string;
 }
+
+const PREF_COLS = 'id,sub_company_id,channel,notify_new_lead,notify_stage_change,notify_funnel_change,notify_pipeline_create,notify_pipeline_update,notify_pipeline_delete,notify_pipeline_reorder,notify_stage_create,notify_stage_update,notify_stage_delete,notify_stage_reorder';
 
 export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: Props) {
   const { user } = useAuth();
@@ -50,13 +60,22 @@ export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: P
   const [newLead, setNewLead] = useState(true);
   const [newStage, setNewStage] = useState(true);
   const [newFunnel, setNewFunnel] = useState(true);
+  // structure events (default true)
+  const [newPC, setNewPC] = useState(true);
+  const [newPU, setNewPU] = useState(true);
+  const [newPD, setNewPD] = useState(true);
+  const [newPR, setNewPR] = useState(true);
+  const [newSC, setNewSC] = useState(true);
+  const [newSU, setNewSU] = useState(true);
+  const [newSD, setNewSD] = useState(true);
+  const [newSR, setNewSR] = useState(true);
 
   const load = async () => {
     if (!user || !ownerId) return;
     setLoading(true);
     const [p, s] = await Promise.all([
       (supabase as any).from('notification_preferences')
-        .select('id,sub_company_id,channel,notify_new_lead,notify_stage_change,notify_funnel_change')
+        .select(PREF_COLS)
         .eq('user_id', user.id).eq('owner_id', ownerId),
       supabase.from('sub_companies').select('id,name').eq('owner_id', ownerId).order('name'),
     ]);
@@ -90,13 +109,22 @@ export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: P
       notify_new_lead: newLead,
       notify_stage_change: newStage,
       notify_funnel_change: newFunnel,
+      notify_pipeline_create: newPC,
+      notify_pipeline_update: newPU,
+      notify_pipeline_delete: newPD,
+      notify_pipeline_reorder: newPR,
+      notify_stage_create: newSC,
+      notify_stage_update: newSU,
+      notify_stage_delete: newSD,
+      notify_stage_reorder: newSR,
     };
     const { data, error } = await (supabase as any).from('notification_preferences')
-      .insert(payload).select('id,sub_company_id,channel,notify_new_lead,notify_stage_change,notify_funnel_change').single();
+      .insert(payload).select(PREF_COLS).single();
     if (error) return toast.error(error.message);
     setPrefs(prev => [...prev, data as Pref]);
     toast.success('Regra adicionada');
   };
+
 
   const subName = (id: string | null) =>
     id ? (subs.find(s => s.id === id)?.name || '—') : 'Todas as sub-empresas';
@@ -121,26 +149,40 @@ export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: P
                 <p className="text-xs text-muted-foreground italic">Nenhuma regra. Você está recebendo todas as notificações.</p>
               )}
               {prefs.map(p => (
-                <div key={p.id} className="flex items-center gap-3 p-2 border rounded-md text-sm">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{subName(p.sub_company_id)}</div>
-                    <div className="text-xs text-muted-foreground">{channelName(p.channel)}</div>
+                <div key={p.id} className="p-2 border rounded-md text-sm space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{subName(p.sub_company_id)}</div>
+                      <div className="text-xs text-muted-foreground">{channelName(p.channel)}</div>
+                    </div>
+                    <label className="flex items-center gap-1 text-xs">
+                      <Switch checked={p.notify_new_lead} onCheckedChange={(v) => updatePref(p.id, { notify_new_lead: v })} />
+                      Novo
+                    </label>
+                    <label className="flex items-center gap-1 text-xs">
+                      <Switch checked={p.notify_stage_change} onCheckedChange={(v) => updatePref(p.id, { notify_stage_change: v })} />
+                      Etapa
+                    </label>
+                    <label className="flex items-center gap-1 text-xs">
+                      <Switch checked={p.notify_funnel_change} onCheckedChange={(v) => updatePref(p.id, { notify_funnel_change: v })} />
+                      Funil
+                    </label>
+                    <Button size="icon" variant="ghost" onClick={() => removePref(p.id)}>
+                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                    </Button>
                   </div>
-                  <label className="flex items-center gap-1 text-xs">
-                    <Switch checked={p.notify_new_lead} onCheckedChange={(v) => updatePref(p.id, { notify_new_lead: v })} />
-                    Novo
-                  </label>
-                  <label className="flex items-center gap-1 text-xs">
-                    <Switch checked={p.notify_stage_change} onCheckedChange={(v) => updatePref(p.id, { notify_stage_change: v })} />
-                    Etapa
-                  </label>
-                  <label className="flex items-center gap-1 text-xs">
-                    <Switch checked={p.notify_funnel_change} onCheckedChange={(v) => updatePref(p.id, { notify_funnel_change: v })} />
-                    Funil
-                  </label>
-                  <Button size="icon" variant="ghost" onClick={() => removePref(p.id)}>
-                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                  </Button>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1 border-t text-[11px] text-muted-foreground">
+                    <div className="font-medium text-foreground/80 mt-1">Funis em tempo real</div>
+                    <div className="font-medium text-foreground/80 mt-1">Etapas em tempo real</div>
+                    <label className="flex items-center gap-2"><Switch checked={p.notify_pipeline_create} onCheckedChange={(v) => updatePref(p.id, { notify_pipeline_create: v })} /> Criar</label>
+                    <label className="flex items-center gap-2"><Switch checked={p.notify_stage_create} onCheckedChange={(v) => updatePref(p.id, { notify_stage_create: v })} /> Criar</label>
+                    <label className="flex items-center gap-2"><Switch checked={p.notify_pipeline_update} onCheckedChange={(v) => updatePref(p.id, { notify_pipeline_update: v })} /> Editar</label>
+                    <label className="flex items-center gap-2"><Switch checked={p.notify_stage_update} onCheckedChange={(v) => updatePref(p.id, { notify_stage_update: v })} /> Editar</label>
+                    <label className="flex items-center gap-2"><Switch checked={p.notify_pipeline_delete} onCheckedChange={(v) => updatePref(p.id, { notify_pipeline_delete: v })} /> Excluir</label>
+                    <label className="flex items-center gap-2"><Switch checked={p.notify_stage_delete} onCheckedChange={(v) => updatePref(p.id, { notify_stage_delete: v })} /> Excluir</label>
+                    <label className="flex items-center gap-2"><Switch checked={p.notify_pipeline_reorder} onCheckedChange={(v) => updatePref(p.id, { notify_pipeline_reorder: v })} /> Reordenar</label>
+                    <label className="flex items-center gap-2"><Switch checked={p.notify_stage_reorder} onCheckedChange={(v) => updatePref(p.id, { notify_stage_reorder: v })} /> Reordenar</label>
+                  </div>
                 </div>
               ))}
             </div>
@@ -175,6 +217,18 @@ export function NotificationPreferencesDialog({ open, onOpenChange, ownerId }: P
                 <Button size="sm" className="ml-auto" onClick={addPref}>
                   <Plus className="w-4 h-4 mr-1" /> Adicionar
                 </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-3 pt-3 border-t text-[11px] text-muted-foreground">
+                <div className="font-medium text-foreground/80">Funis em tempo real</div>
+                <div className="font-medium text-foreground/80">Etapas em tempo real</div>
+                <label className="flex items-center gap-2"><Switch checked={newPC} onCheckedChange={setNewPC} /> Criar</label>
+                <label className="flex items-center gap-2"><Switch checked={newSC} onCheckedChange={setNewSC} /> Criar</label>
+                <label className="flex items-center gap-2"><Switch checked={newPU} onCheckedChange={setNewPU} /> Editar</label>
+                <label className="flex items-center gap-2"><Switch checked={newSU} onCheckedChange={setNewSU} /> Editar</label>
+                <label className="flex items-center gap-2"><Switch checked={newPD} onCheckedChange={setNewPD} /> Excluir</label>
+                <label className="flex items-center gap-2"><Switch checked={newSD} onCheckedChange={setNewSD} /> Excluir</label>
+                <label className="flex items-center gap-2"><Switch checked={newPR} onCheckedChange={setNewPR} /> Reordenar</label>
+                <label className="flex items-center gap-2"><Switch checked={newSR} onCheckedChange={setNewSR} /> Reordenar</label>
               </div>
             </div>
           </>
