@@ -241,6 +241,15 @@ Deno.serve(async (req) => {
       await admin.from("whatsapp_connections").update(update).eq("id", connection_id);
 
       const authError = r.status === 401 || r.status === 403;
+      if (authError) {
+        await logEvent("evolution.auth_error", "error", `HTTP ${r.status}`, { state });
+      } else if (connected && conn.status !== "connected") {
+        await logEvent("evolution.connected", "success", "Instância conectada", {
+          phone: update.phone_number ?? null,
+        });
+      } else if (!r.ok) {
+        await logEvent("evolution.state_error", "error", `HTTP ${r.status}`, { state });
+      }
       return json({
         ok: r.ok,
         connected,
@@ -264,6 +273,7 @@ Deno.serve(async (req) => {
         .from("whatsapp_connections")
         .update({ status: "disconnected", phone_number: null })
         .eq("id", connection_id);
+      await logEvent("evolution.logout", r.ok ? "success" : "error", r.ok ? "Sessão encerrada" : `HTTP ${r.status}`);
       return json({ ok: r.ok, raw: r.data });
     }
 
