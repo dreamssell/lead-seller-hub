@@ -129,7 +129,34 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
   const hasFilters = channelFilter !== 'all' || dateFrom || dateTo;
 
 
-  const buildRows = () => filtered.map(ev => ({
+  const [exporting, setExporting] = useState<null | 'csv' | 'pdf'>(null);
+  const [exportProgress, setExportProgress] = useState(0);
+  const exportCancelRef = useRef(false);
+
+  // Fetch ALL events that match the current filters, in batches, with progress.
+  const fetchAllFiltered = async (onProgress: (loaded: number, total: number) => void): Promise<Event[]> => {
+    if (!leadId) return [];
+    const BATCH = 500;
+    // First request to know the total
+    const first = await buildQuery().range(0, BATCH - 1);
+    const totalCount = first.count || 0;
+    let all: Event[] = (first.data as Event[]) || [];
+    onProgress(all.length, totalCount);
+    while (all.length < totalCount) {
+      if (exportCancelRef.current) break;
+      const from = all.length;
+      const { data } = await buildQuery().range(from, from + BATCH - 1);
+      const chunk = (data as Event[]) || [];
+      if (!chunk.length) break;
+      all = all.concat(chunk);
+      onProgress(all.length, totalCount);
+      // yield to UI
+      await new Promise(r => setTimeout(r, 0));
+    }
+    return all;
+  };
+
+  const buildRowsFrom = (list: Event[]) => list.map(ev => ({
     data: format(new Date(ev.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR }),
     tipo: TYPE_LABEL[ev.type] || ev.type,
     canal: ev.channel ? (CHANNEL_LABEL[ev.channel] || ev.channel) : '',
@@ -147,55 +174,75 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
     return parts.join('_');
   };
 
-  const exportCSV = () => {
-    if (!filtered.length) return toast.error('Nada a exportar com os filtros atuais.');
-    const rows = buildRows();
-    const headers = ['Data', 'Tipo', 'Canal', 'Origem', 'De', 'Para'];
-    const escape = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csv = [headers.join(','), ...rows.map(r => [r.data, r.tipo, r.canal, r.origem, r.de, r.para].map(escape).join(','))].join('\n');
-    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `${filenameBase()}.csv`; a.click();
-    URL.revokeObjectURL(url);
-    toast.success('CSV exportado');
+  const runExport = async (kind: 'csv' | 'pdf') => {
+    if (exporting) return;
+    if (total === 0) return toast.error('Nada a exportar com os filtros atuais.');
+    setExporting(kind);
+    setExportProgress(0);
+    exportCancelRef.current = false;
+    try {
+      const all = await fetchAllFiltered((loaded, t) => {
+        setExportProgress(t ? Math.round((loaded / t) * 100) : 100);
+      });
+      if (exportCancelRef.current) { toast.info('Exportação cancelada'); return; }
+      const rows = buildRowsFrom(all);
+      if (kind === 'csv') {
+        const headers = ['Data', 'Tipo', 'Canal', 'Origem', 'De', 'Para'];
+        const escape = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+        const csv = [headers.join(','), ...rows.map(r => [r.data, r.tipo, r.canal, r.origem, r.de, r.para].map(escape).join(','))].join('\n');
+        const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${filenameBase()}.csv`; a.click();
+        URL.revokeObjectURL(url);
+        toast.success(`CSV exportado (${rows.length} eventos)`);
+      } else {
+        const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+        const margin = 36;
+        let y = margin;
+        doc.setFontSize(14); doc.text('Histórico do Lead', margin, y); y += 18;
+        doc.setFontSize(10); doc.setTextColor(90);
+        doc.text(`Lead: ${leadName || '—'}`, margin, y); y += 14;
+        const filtersTxt = [
+          channelFilter !== 'all' ? `Canal: ${CHANNEL_LABEL[channelFilter] || channelFilter}` : 'Canal: Todos',
+          dateFrom ? `De: ${dateFrom}` : null,
+          dateTo ? `Até: ${dateTo}` : null,
+          `Total: ${rows.length}`,
+        ].filter(Boolean).join('  ·  ');
+        doc.text(filtersTxt, margin, y); y += 14;
+        doc.text(`Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`, margin, y); y += 16;
+        doc.setDrawColor(200); doc.line(margin, y, 559, y); y += 14;
+        doc.setTextColor(20); doc.setFontSize(9);
+        const colX = [margin, margin + 95, margin + 200, margin + 270, margin + 340, margin + 430];
+        const header = ['Data', 'Tipo', 'Canal', 'Origem', 'De', 'Para'];
+        doc.setFont(undefined, 'bold'); header.forEach((h, i) => doc.text(h, colX[i], y)); doc.setFont(undefined, 'normal');
+        y += 12;
+        for (let idx = 0; idx < rows.length; idx++) {
+          if (y > 800) { doc.addPage(); y = margin; }
+          const r = rows[idx];
+          const cells = [r.data, r.tipo, r.canal, r.origem, r.de, r.para];
+          cells.forEach((c, i) => {
+            const max = i === 0 ? 95 : i === 1 ? 100 : i === 2 ? 65 : i === 3 ? 65 : i === 4 ? 85 : 125;
+            doc.text(doc.splitTextToSize(String(c), max), colX[i], y);
+          });
+          y += 14;
+          // Yield every 200 rows so very large PDFs don't freeze the UI
+          if (idx % 200 === 0) await new Promise(r => setTimeout(r, 0));
+        }
+        doc.save(`${filenameBase()}.pdf`);
+        toast.success(`PDF exportado (${rows.length} eventos)`);
+      }
+    } catch (e: any) {
+      toast.error('Falha ao exportar: ' + (e?.message || 'erro desconhecido'));
+    } finally {
+      setExporting(null);
+      setExportProgress(0);
+      exportCancelRef.current = false;
+    }
   };
 
-  const exportPDF = () => {
-    if (!filtered.length) return toast.error('Nada a exportar com os filtros atuais.');
-    const rows = buildRows();
-    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    const margin = 36;
-    let y = margin;
-    doc.setFontSize(14); doc.text('Histórico do Lead', margin, y); y += 18;
-    doc.setFontSize(10); doc.setTextColor(90);
-    doc.text(`Lead: ${leadName || '—'}`, margin, y); y += 14;
-    const filtersTxt = [
-      channelFilter !== 'all' ? `Canal: ${CHANNEL_LABEL[channelFilter] || channelFilter}` : 'Canal: Todos',
-      dateFrom ? `De: ${dateFrom}` : null,
-      dateTo ? `Até: ${dateTo}` : null,
-      `Total: ${rows.length}`,
-    ].filter(Boolean).join('  ·  ');
-    doc.text(filtersTxt, margin, y); y += 14;
-    doc.text(`Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`, margin, y); y += 16;
-    doc.setDrawColor(200); doc.line(margin, y, 559, y); y += 14;
-    doc.setTextColor(20); doc.setFontSize(9);
-    const colX = [margin, margin + 95, margin + 200, margin + 270, margin + 340, margin + 430];
-    const header = ['Data', 'Tipo', 'Canal', 'Origem', 'De', 'Para'];
-    doc.setFont(undefined, 'bold'); header.forEach((h, i) => doc.text(h, colX[i], y)); doc.setFont(undefined, 'normal');
-    y += 12;
-    rows.forEach(r => {
-      if (y > 800) { doc.addPage(); y = margin; }
-      const cells = [r.data, r.tipo, r.canal, r.origem, r.de, r.para];
-      cells.forEach((c, i) => {
-        const max = i === 0 ? 95 : i === 1 ? 100 : i === 2 ? 65 : i === 3 ? 65 : i === 4 ? 85 : 125;
-        doc.text(doc.splitTextToSize(String(c), max), colX[i], y);
-      });
-      y += 14;
-    });
-    doc.save(`${filenameBase()}.pdf`);
-    toast.success('PDF exportado');
-  };
+  const cancelExport = () => { exportCancelRef.current = true; };
+
 
 
   return (
