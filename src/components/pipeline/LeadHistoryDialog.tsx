@@ -241,6 +241,7 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
         if (savedAtStr) setSavedAt(savedAtStr);
       } else {
         // Expired — purge stale cursor fields so they don't get re-restored.
+        // Filters de data e opções de exportação são preservados.
         try {
           await (supabase as any).from('user_ui_state').upsert({
             user_id: uid, owner_id: ownerId, scope,
@@ -248,6 +249,13 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
                      cursorTtlHours: ttl, loadedCount: 0, cursor: null, scrollTop: 0, savedAt: null },
           }, { onConflict: 'user_id,owner_id,scope' });
         } catch { /* best-effort */ }
+        setSavedAt(null);
+        // Garantir visualização do início: limpa cursor/scroll locais
+        seenIdsRef.current = new Set();
+        setCursor(null);
+        scrollTopRef.current = 0;
+        if (scrollRef.current) scrollRef.current.scrollTop = 0;
+        toast.info('Cursor salvo expirou — voltando ao início. Filtros mantidos.');
       }
       setHydrated(true);
     })();
