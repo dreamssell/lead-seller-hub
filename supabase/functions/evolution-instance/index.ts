@@ -135,6 +135,27 @@ Deno.serve(async (req) => {
     return json({ error: "missing_instance", hint: "Defina o nome da instância." }, 400);
   }
 
+  const logEvent = async (
+    event_type: string,
+    status: "success" | "error" | "info",
+    detail?: string,
+    payload?: Record<string, unknown>,
+  ) => {
+    try {
+      await admin.from("connection_events").insert({
+        connection_id,
+        event_type,
+        status,
+        status_detail: detail ?? null,
+        error_message: status === "error" ? detail ?? null : null,
+        payload: payload ?? null,
+        metadata_json: { actor_user_id: userId, action, instance },
+      });
+    } catch (e) {
+      console.error("[evolution-instance] log failed", e);
+    }
+  };
+
   try {
     if (action === "create") {
       // Idempotent: if it already exists Evolution returns 403/409 — we then just connect.
@@ -158,6 +179,17 @@ Deno.serve(async (req) => {
 
       const qrPayload =
         created.data?.qrcode || created.data?.instance?.qrcode || created.data || {};
+      const qrOk = !!(qrPayload?.base64 || qrPayload?.qr);
+      await logEvent(
+        "evolution.create",
+        created.ok || created.status === 403 || created.status === 409 ? "success" : "error",
+        created.ok
+          ? "Instância criada"
+          : created.status === 403 || created.status === 409
+            ? "Instância já existia — reconectando"
+            : `Evolution respondeu ${created.status}`,
+        { http_status: created.status, has_qr: qrOk },
+      );
       return json({
         ok: true,
         already_existed: !created.ok && (created.status === 403 || created.status === 409),
@@ -209,6 +241,15 @@ Deno.serve(async (req) => {
       await admin.from("whatsapp_connections").update(update).eq("id", connection_id);
 
       const authError = r.status === 401 || r.status === 403;
+      if (authError) {
+        await logEvent("evolution.auth_error", "error", `HTTP ${r.status}`, { state });
+      } else if (connected && conn.status !== "connected") {
+        await logEvent("evolution.connected", "success", "Instância conectada", {
+          phone: update.phone_number ?? null,
+        });
+      } else if (!r.ok) {
+        await logEvent("evolution.state_error", "error", `HTTP ${r.status}`, { state });
+      }
       return json({
         ok: r.ok,
         connected,
@@ -232,6 +273,7 @@ Deno.serve(async (req) => {
         .from("whatsapp_connections")
         .update({ status: "disconnected", phone_number: null })
         .eq("id", connection_id);
+      await logEvent("evolution.logout", r.ok ? "success" : "error", r.ok ? "Sessão encerrada" : `HTTP ${r.status}`);
       return json({ ok: r.ok, raw: r.data });
     }
 

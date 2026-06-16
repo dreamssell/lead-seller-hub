@@ -22,10 +22,14 @@ import {
   Copy,
   TimerReset,
   ShieldAlert,
+  Download,
+  History,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { WhatsAppConnection } from './types';
+import { EvolutionAttemptsHistory } from './EvolutionAttemptsHistory';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 interface Props {
   open: boolean;
@@ -40,6 +44,35 @@ type FailureReason = 'timeout' | 'auth' | 'forbidden' | 'unknown';
 const MIN_POLL_MS = 3000;
 const MAX_POLL_MS = 15000;
 const POLL_BACKOFF = 1.4;
+
+const INSTANCE_RE = /^[a-zA-Z0-9][a-zA-Z0-9-_]{2,49}$/;
+
+function validateUrl(v: string): string | null {
+  const t = v.trim();
+  if (!t) return 'Informe a URL do servidor Evolution.';
+  try {
+    const u = new URL(t);
+    if (!/^https?:$/.test(u.protocol)) return 'A URL deve começar com http:// ou https://.';
+    if (!u.hostname) return 'URL sem host válido.';
+    return null;
+  } catch {
+    return 'URL inválida.';
+  }
+}
+function validateToken(v: string): string | null {
+  const t = v.trim();
+  if (!t) return 'Informe a API Key.';
+  if (t.length < 8) return 'API Key parece curta demais (mín. 8 caracteres).';
+  if (/\s/.test(t)) return 'A API Key não pode conter espaços.';
+  return null;
+}
+function validateInstance(v: string): string | null {
+  const t = v.trim();
+  if (!t) return 'Informe o nome da instância.';
+  if (!INSTANCE_RE.test(t))
+    return 'Use 3–50 caracteres: letras, números, hífen ou underline; comece com letra/número.';
+  return null;
+}
 
 export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }: Props) {
   const initialMeta = (conn.metadata ?? {}) as Record<string, any>;
@@ -111,9 +144,14 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
       .eq('id', conn.id);
   };
 
+  const urlError = validateUrl(url);
+  const tokenError = validateToken(token);
+  const instanceError = validateInstance(instance);
+  const canSubmit = !urlError && !tokenError && !instanceError;
+
   const startInstance = async () => {
-    if (!url.trim() || !token.trim() || !instance.trim()) {
-      toast.error('Preencha URL, API Key e nome da instância.');
+    if (!canSubmit) {
+      toast.error('Corrija os campos destacados antes de gerar o QR Code.');
       return;
     }
     setBusy(true);
@@ -207,34 +245,75 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
     onConnected();
   };
 
+  const copyInstance = () => {
+    navigator.clipboard.writeText(instance);
+    toast.success('Identificador da instância copiado', { description: instance });
+  };
+
+  const downloadQr = () => {
+    if (!qr) return;
+    const src = qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`;
+    const a = document.createElement('a');
+    a.href = src;
+    a.download = `evolution-qr-${instance || conn.id.slice(0, 6)}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    toast.success('QR Code baixado');
+  };
+
+  const fieldError = (msg: string | null) =>
+    msg ? <p className="text-[11px] text-destructive">{msg}</p> : null;
+
   const renderCredentials = () => (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Informe os dados do seu servidor Evolution API. Você só precisa fazer isso uma vez por instância.
+        Informe os dados do seu servidor Evolution API. Os campos são validados em tempo real — o QR só pode ser gerado quando tudo estiver correto.
       </p>
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <Label>URL do Servidor</Label>
-        <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://evolution.seu-dominio.com" />
+        <Input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://evolution.seu-dominio.com"
+          aria-invalid={!!urlError}
+          className={urlError ? 'border-destructive/60' : ''}
+        />
+        {fieldError(urlError)}
       </div>
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <Label>API Key (Global)</Label>
         <Input
           type="password"
           value={token}
           onChange={(e) => setToken(e.target.value)}
           placeholder="cole sua AUTHENTICATION_API_KEY"
+          aria-invalid={!!tokenError}
+          className={tokenError ? 'border-destructive/60' : ''}
         />
+        {fieldError(tokenError)}
       </div>
-      <div className="space-y-2">
-        <Label>Nome da Instância</Label>
+      <div className="space-y-1.5">
+        <Label className="flex items-center justify-between">
+          <span>Nome da Instância</span>
+          {instance && !instanceError && (
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={copyInstance}>
+              <Copy className="w-3 h-3 mr-1" /> copiar
+            </Button>
+          )}
+        </Label>
         <Input
           value={instance}
           onChange={(e) => setInstance(e.target.value.replace(/[^a-zA-Z0-9-_]/g, ''))}
           placeholder="ex: vendas-01"
+          aria-invalid={!!instanceError}
+          className={instanceError ? 'border-destructive/60' : ''}
         />
-        <p className="text-xs text-muted-foreground">
-          Apenas letras, números, hífen e underline. Será o identificador no Evolution.
-        </p>
+        {fieldError(instanceError) ?? (
+          <p className="text-xs text-muted-foreground">
+            Apenas letras, números, hífen e underline. Será o identificador no Evolution.
+          </p>
+        )}
       </div>
       <div className="space-y-2">
         <Label className="flex items-center gap-2">
@@ -288,6 +367,20 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
             <p className="text-xs">Gerando QR Code...</p>
           </div>
         )}
+      </div>
+      <div className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-2 pl-3">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Instância</p>
+          <p className="font-mono text-xs truncate">{instance}</p>
+        </div>
+        <div className="flex gap-1 shrink-0">
+          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={copyInstance}>
+            <Copy className="w-3.5 h-3.5 mr-1" /> ID
+          </Button>
+          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={downloadQr} disabled={!qr}>
+            <Download className="w-3.5 h-3.5 mr-1" /> QR
+          </Button>
+        </div>
       </div>
       {pairingCode && (
         <div className="flex items-center justify-between rounded-lg border border-border/60 p-3">
@@ -362,7 +455,7 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <QrCode className="w-5 h-5 text-violet-500" />
@@ -375,16 +468,32 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
 
         <Separator />
 
-        {step === 'credentials' && renderCredentials()}
-        {step === 'qr' && renderQr()}
-        {step === 'connected' && renderConnected()}
-        {step === 'failed' && renderFailed()}
+        <Tabs defaultValue="setup">
+          <TabsList className="grid grid-cols-2 w-full">
+            <TabsTrigger value="setup">Configuração</TabsTrigger>
+            <TabsTrigger value="history">
+              <History className="w-3.5 h-3.5 mr-1.5" /> Histórico
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="setup" className="space-y-4 pt-3">
+            {step === 'credentials' && renderCredentials()}
+            {step === 'qr' && renderQr()}
+            {step === 'connected' && renderConnected()}
+            {step === 'failed' && renderFailed()}
+          </TabsContent>
+          <TabsContent value="history" className="pt-3">
+            <EvolutionAttemptsHistory connectionId={conn.id} />
+            <p className="text-[11px] text-muted-foreground mt-2">
+              Registros visíveis para a empresa proprietária e para a sub-empresa associada à instância.
+            </p>
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter className="gap-2">
           {step === 'credentials' && (
-            <Button onClick={startInstance} disabled={busy}>
+            <Button onClick={startInstance} disabled={busy || !canSubmit}>
               {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Smartphone className="w-4 h-4 mr-2" />}
-              Gerar QR Code
+              {canSubmit ? 'Gerar QR Code' : 'Corrija os campos'}
             </Button>
           )}
           {step === 'qr' && (
