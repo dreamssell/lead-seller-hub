@@ -60,6 +60,7 @@ export default function PipelinePage() {
   const [managerOpen, setManagerOpen] = useState(false);
   const [historyLead, setHistoryLead] = useState<{ id: string; name: string } | null>(null);
   const [canMove, setCanMove] = useState(false);
+  const [canManagePipelines, setCanManagePipelines] = useState(false);
 
   const load = useCallback(async () => {
     if (!ownerId) return;
