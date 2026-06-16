@@ -328,7 +328,7 @@ export default function PipelinePage() {
             subScope={subScope}
             channel={selectedChannel}
             initialPipelineId={selectedPipeline}
-            onChanged={load}
+            onChanged={() => { load(); loadLeads(); }}
           />
           <PipelineTemplatesDialog
             open={templatesOpen}
@@ -339,7 +339,19 @@ export default function PipelinePage() {
             canManage={canManagePipelines}
             currentPipeline={activePipeline ? { id: activePipeline.id, name: activePipeline.name } : null}
             currentStages={activeStages.map(s => ({ name: s.name, color: s.color }))}
-            onApplied={(id) => { setSelectedPipeline(id); load(); }}
+            onApplied={(id) => { setSelectedPipeline(id); load(); loadLeads(); }}
+          />
+          <NotificationPreferencesDialog
+            open={notifPrefsOpen}
+            onOpenChange={setNotifPrefsOpen}
+            ownerId={ownerId}
+          />
+          <StageAuditDialog
+            open={stageAuditOpen}
+            onOpenChange={setStageAuditOpen}
+            ownerId={ownerId}
+            subScope={subScope}
+            channel={selectedChannel}
           />
         </>
       )}
