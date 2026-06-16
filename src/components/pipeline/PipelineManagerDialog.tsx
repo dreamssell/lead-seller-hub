@@ -278,17 +278,40 @@ export function PipelineManagerDialog({ open, onOpenChange, ownerId, subScope, c
     }));
 
     try {
-      // Park all involved positions in negative space to avoid uniqueness/race issues
-      await Promise.all(reordered.map((s, i) =>
-        supabase.from('pipeline_stages').update({ position: -1000 - i }).eq('id', s.id)
-      ));
-      // Validate names — abort if anything is empty
+      // Pre-save validations: no empty names, no duplicate ids, no duplicate target positions
       const empties = reordered.filter(s => !s.name?.trim());
       if (empties.length) {
         toast.error('Há etapas sem nome. Corrija antes de reordenar.');
         await load();
         return;
       }
+      const idSet = new Set(reordered.map(s => s.id));
+      if (idSet.size !== reordered.length) {
+        toast.error('Conflito: stage_id duplicado detectado. Reordenação cancelada.');
+        await load();
+        return;
+      }
+      const targetPositions = reordered.map((_, i) => i);
+      if (new Set(targetPositions).size !== targetPositions.length) {
+        toast.error('Conflito de ordem: posições duplicadas. Reordenação cancelada.');
+        await load();
+        return;
+      }
+      // Confirm DB still matches the current ordering we based the swap on
+      const { data: fresh } = await supabase.from('pipeline_stages')
+        .select('id,position').eq('pipeline_id', current.id).order('position');
+      const freshIds = (fresh || []).map((s: any) => s.id);
+      const expected = currentStages.map(s => s.id);
+      if (freshIds.length !== expected.length || freshIds.some((id, i) => id !== expected[i])) {
+        toast.error('A ordem foi alterada por outro usuário. Recarregando…');
+        await load();
+        return;
+      }
+
+      // Park all involved positions in negative space to avoid uniqueness/race issues
+      await Promise.all(reordered.map((s, i) =>
+        supabase.from('pipeline_stages').update({ position: -1000 - i }).eq('id', s.id)
+      ));
       // Final renumber 0..n
       await Promise.all(reordered.map((s, i) =>
         supabase.from('pipeline_stages').update({ position: i }).eq('id', s.id)
