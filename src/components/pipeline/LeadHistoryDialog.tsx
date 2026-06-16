@@ -196,9 +196,15 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
               <X className="w-3.5 h-3.5 mr-1" /> Limpar
             </Button>
           )}
-          <span className="ml-auto text-xs text-muted-foreground">
-            {filtered.length} de {events.length}
-          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{filtered.length} de {events.length}</span>
+            <Button size="sm" variant="outline" className="h-8" onClick={exportCSV} disabled={!filtered.length}>
+              <Download className="w-3.5 h-3.5 mr-1" /> CSV
+            </Button>
+            <Button size="sm" variant="outline" className="h-8" onClick={exportPDF} disabled={!filtered.length}>
+              <FileText className="w-3.5 h-3.5 mr-1" /> PDF
+            </Button>
+          </div>
         </div>
 
         {loading ? (
