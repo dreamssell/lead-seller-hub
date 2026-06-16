@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { Plus, MoreVertical, User, Loader2, GitBranch } from 'lucide-react';
+import { Plus, MoreVertical, User, Loader2, GitBranch, Settings2 } from 'lucide-react';
+import { PipelineManagerDialog } from '@/components/pipeline/PipelineManagerDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -55,6 +56,7 @@ export default function PipelinePage() {
   const [selectedSub, setSelectedSub] = useState<string>('all');
   const [selectedPipeline, setSelectedPipeline] = useState<string>('');
   const [selectedChannel, setSelectedChannel] = useState<string>('all');
+  const [managerOpen, setManagerOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!ownerId) return;
@@ -166,8 +168,25 @@ export default function PipelinePage() {
             </SelectContent>
           </Select>
         </div>
-        <Button variant="outline" size="sm" onClick={load} className="ml-auto">Atualizar</Button>
+        <div className="ml-auto flex gap-2">
+          <Button variant="outline" size="sm" onClick={load}>Atualizar</Button>
+          <Button size="sm" onClick={() => setManagerOpen(true)}>
+            <Settings2 className="w-4 h-4 mr-1" /> Gerenciar funis
+          </Button>
+        </div>
       </div>
+
+      {ownerId && (
+        <PipelineManagerDialog
+          open={managerOpen}
+          onOpenChange={setManagerOpen}
+          ownerId={ownerId}
+          subScope={subScope}
+          channel={selectedChannel}
+          initialPipelineId={selectedPipeline}
+          onChanged={load}
+        />
+      )}
 
       {loading ? (
         <div className="p-12 text-center text-muted-foreground">
