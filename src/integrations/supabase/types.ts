@@ -2254,6 +2254,45 @@ export type Database = {
         }
         Relationships: []
       }
+      wavoip_validation_logs: {
+        Row: {
+          device_id: string | null
+          device_label: string | null
+          device_token: string | null
+          id: string
+          message: string | null
+          owner_id: string
+          raw: Json | null
+          status: string
+          sub_company_id: string | null
+          validated_at: string
+        }
+        Insert: {
+          device_id?: string | null
+          device_label?: string | null
+          device_token?: string | null
+          id?: string
+          message?: string | null
+          owner_id: string
+          raw?: Json | null
+          status: string
+          sub_company_id?: string | null
+          validated_at?: string
+        }
+        Update: {
+          device_id?: string | null
+          device_label?: string | null
+          device_token?: string | null
+          id?: string
+          message?: string | null
+          owner_id?: string
+          raw?: Json | null
+          status?: string
+          sub_company_id?: string | null
+          validated_at?: string
+        }
+        Relationships: []
+      }
       webhook_idempotency_keys: {
         Row: {
           created_at: string | null
