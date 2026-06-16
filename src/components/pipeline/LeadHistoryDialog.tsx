@@ -113,16 +113,33 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
     if (!open) { setChannelFilter('all'); setDateFrom(''); setDateTo(''); setEvents([]); setTotal(0); setHasMore(false); }
   }, [open]);
 
-  // Infinite scroll
+  // Infinite scroll with debounce + prefetch (triggers earlier and coalesces rapid scroll events)
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    let timer: number | null = null;
     const onScroll = () => {
-      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) loadMore();
+      if (timer !== null) return;
+      timer = window.setTimeout(() => {
+        timer = null;
+        // Prefetch: trigger when within ~600px of the bottom (one viewport ahead)
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 600) loadMore();
+      }, 120);
     };
-    el.addEventListener('scroll', onScroll);
-    return () => el.removeEventListener('scroll', onScroll);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      if (timer !== null) window.clearTimeout(timer);
+    };
   }, [loadMore]);
+
+  // Prefetch next page proactively after first load completes (warm cache for fast scroll)
+  useEffect(() => {
+    if (!loading && hasMore && events.length === PAGE_SIZE) {
+      const t = window.setTimeout(() => loadMore(), 250);
+      return () => window.clearTimeout(t);
+    }
+  }, [loading, hasMore, events.length, loadMore]);
 
   const filtered = events; // server-filtered already
 
