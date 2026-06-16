@@ -87,6 +87,14 @@ export default function PipelinePage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Permission: can the current user move leads in this scope?
+  useEffect(() => {
+    if (!ownerId) { setCanMove(false); return; }
+    const scopeId = selectedSub === 'all' || selectedSub === 'global' ? null : selectedSub;
+    (supabase.rpc as any)('can_user_move_leads', { p_owner_id: ownerId, p_sub_company_id: scopeId })
+      .then(({ data }: { data: boolean | null }) => setCanMove(!!data));
+  }, [ownerId, selectedSub, user?.id]);
+
   // Sub-company scoped pipelines
   const subScope = selectedSub === 'all' ? undefined : selectedSub === 'global' ? null : selectedSub;
   const visiblePipelines = useMemo(() => {
@@ -125,6 +133,10 @@ export default function PipelinePage() {
   });
 
   const moveLead = async (leadId: string, stageId: string) => {
+    if (!canMove) {
+      toast.error('Você não tem permissão para mover leads neste escopo.');
+      return;
+    }
     const { error } = await supabase.from('leads').update({ stage_id: stageId }).eq('id', leadId);
     if (error) return toast.error(error.message);
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, stage_id: stageId } : l));
