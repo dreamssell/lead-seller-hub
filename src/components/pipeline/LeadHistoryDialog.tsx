@@ -710,16 +710,67 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
           </Button>
           <div className="ml-auto flex items-center gap-2">
             <span className="text-xs text-muted-foreground" title={`Fuso: ${userTz}`}>{events.length} de {total}</span>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8"
-              onClick={resetCursor}
-              disabled={loading || loadingMore}
-              title="Voltar ao início e limpar o cursor salvo"
-            >
-              <RotateCcw className="w-3.5 h-3.5 mr-1" /> Voltar ao início
-            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button size="sm" variant="ghost" className="h-8" title="Validade do cursor salvo">
+                  <Clock className="w-3.5 h-3.5 mr-1" /> Cursor
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-64 p-3 space-y-3 z-50 bg-popover">
+                <div>
+                  <Label className="text-xs font-semibold mb-1 block">Manter cursor salvo por</Label>
+                  <Select value={String(cursorTtlHours)} onValueChange={v => setCursorTtlHours(Number(v))}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {TTL_OPTIONS.map(o => (
+                        <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {savedAt
+                      ? `Salvo em ${format(new Date(savedAt), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`
+                      : 'Nenhum cursor salvo no momento.'}
+                  </p>
+                </div>
+                <Separator />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full h-8 text-xs"
+                  onClick={clearSavedCursor}
+                  disabled={!savedAt}
+                >
+                  <X className="w-3.5 h-3.5 mr-1" /> Limpar cursor salvo agora
+                </Button>
+              </PopoverContent>
+            </Popover>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8"
+                  disabled={loading || loadingMore}
+                  title="Voltar ao início e limpar o cursor salvo"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 mr-1" /> Voltar ao início
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Voltar ao início?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Isso vai limpar o cursor/offset salvo e recarregar os eventos mais recentes.
+                    Sua posição de leitura atual será perdida em todos os dispositivos.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => resetCursor()}>Confirmar</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             <Popover>
               <PopoverTrigger asChild>
                 <Button size="sm" variant="outline" className="h-8" title="Opções de exportação">
