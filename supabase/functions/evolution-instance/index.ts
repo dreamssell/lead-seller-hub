@@ -87,20 +87,40 @@ Deno.serve(async (req) => {
 
   if (connErr || !conn) return json({ error: "connection_not_found" }, 404);
 
-  // Authorization: allow the owner, the sub-company login user, or anyone with shared account access.
+  // Authorization: a sub-company user may ONLY touch connections that belong to
+  // their own sub_company_id. The master owner sees everything they own.
   let allowed = conn.owner_id === userId;
   if (!allowed && conn.owner_id) {
-    const { data: access } = await admin
+    const { data: accessRows } = await admin
       .from("user_account_access")
-      .select("user_id")
+      .select("user_id, sub_company_id, is_account_admin")
       .eq("user_id", userId)
-      .eq("owner_id", conn.owner_id)
-      .maybeSingle();
-    allowed = !!access;
+      .eq("owner_id", conn.owner_id);
+
+    const rows = accessRows ?? [];
+    if (rows.length > 0) {
+      // Account admin (no sub-company scope) sees all of the owner's connections.
+      const isAdmin = rows.some((r) => r.is_account_admin && !r.sub_company_id);
+      if (isAdmin) {
+        allowed = true;
+      } else if (conn.sub_company_id) {
+        // Sub-company user: must have an access row for this exact sub_company_id.
+        allowed = rows.some((r) => r.sub_company_id === conn.sub_company_id);
+      } else {
+        // Master-level (no sub_company_id) connection — only account admins above could see it.
+        allowed = false;
+      }
+    }
   }
-  // Also allow if connection has no owner yet (legacy rows) — let any authed user act.
-  if (!allowed && !conn.owner_id) allowed = true;
-  if (!allowed) return json({ error: "forbidden" }, 403);
+  if (!allowed) {
+    return json(
+      {
+        error: "forbidden",
+        hint: "Esta instância pertence a outra sub-empresa.",
+      },
+      403,
+    );
+  }
 
   const meta = (conn.metadata as Record<string, any>) ?? {};
   const baseUrl = (body.url ?? meta.url ?? "").trim();
