@@ -2113,6 +2113,54 @@ export type Database = {
         }
         Relationships: []
       }
+      wavoip_devices: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          is_default: boolean
+          label: string
+          last_validated_at: string | null
+          last_validation_error: string | null
+          last_validation_status: string | null
+          owner_id: string
+          phone: string | null
+          sub_company_id: string | null
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          is_default?: boolean
+          label?: string
+          last_validated_at?: string | null
+          last_validation_error?: string | null
+          last_validation_status?: string | null
+          owner_id: string
+          phone?: string | null
+          sub_company_id?: string | null
+          token: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          is_default?: boolean
+          label?: string
+          last_validated_at?: string | null
+          last_validation_error?: string | null
+          last_validation_status?: string | null
+          owner_id?: string
+          phone?: string | null
+          sub_company_id?: string | null
+          token?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       wavoip_filter_presets: {
         Row: {
           created_at: string | null

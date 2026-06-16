@@ -6,18 +6,23 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
-import { Phone, Trash2, Star, PhoneCall, RefreshCw, ShieldCheck, Loader2 } from 'lucide-react';
+import { Phone, Trash2, Star, PhoneCall, RefreshCw, ShieldCheck, Loader2, PlugZap, CheckCircle2, XCircle, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function WavoipWebphoneSection() {
-  const { config, status, error, addDevice, removeDevice, setDefaultDevice, saveConfig, reload, callWhatsApp, openDialer } = useWavoipWebphone();
+  const {
+    config, status, error, scope,
+    addDevice, removeDevice, setDefaultDevice, setEnabled,
+    reload, callWhatsApp, openDialer,
+    validateConnection, isValidating, lastValidation,
+  } = useWavoipWebphone();
   const [token, setToken] = useState('');
   const [label, setLabel] = useState('');
   const [phone, setPhone] = useState('');
   const [testNumber, setTestNumber] = useState('');
 
-  const handleAdd = () => {
-    const dev = addDevice(token, label, phone);
+  const handleAdd = async () => {
+    const dev = await addDevice(token, label, phone);
     if (dev) { setToken(''); setLabel(''); setPhone(''); }
   };
 
@@ -60,15 +65,45 @@ export default function WavoipWebphoneSection() {
         )}
 
         <div className="flex items-center justify-between p-3 rounded-lg border border-border/40 bg-secondary/30">
-          <div>
-            <p className="text-sm font-semibold">Tronco habilitado</p>
-            <p className="text-xs text-muted-foreground">Quando ativo, o botão "WhatsApp (Wavoip)" no chat usa esses devices.</p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-semibold">Tronco habilitado</p>
+              <Badge variant="outline" className="gap-1 text-[10px]">
+                <Building2 className="w-3 h-3" />
+                {scope.sub_company_id ? `Sub-empresa ${scope.sub_company_id.slice(0,8)}…` : 'Conta principal'}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Devices abaixo valem apenas para esta conta/sub-empresa. Cada nova sub-empresa precisa cadastrar seus próprios tokens.
+            </p>
           </div>
-          <Switch
-            checked={config.enabled}
-            onCheckedChange={(v) => saveConfig({ ...config, enabled: v })}
-          />
+          <Switch checked={config.enabled} onCheckedChange={setEnabled} />
         </div>
+
+        {/* Validar conexão real com a Wavoip */}
+        <div className="flex items-start justify-between gap-4 p-4 rounded-xl border border-primary/30 bg-primary/5">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <PlugZap className="w-4 h-4 text-primary" />
+              <p className="text-sm font-semibold">Validar conexão real Wavoip</p>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Carrega o SDK, registra e habilita cada device, e confirma com o backend da Wavoip se o WhatsApp pareado está online.
+              Use este teste se a chamada retorna <code className="text-[11px]">No device available</code>.
+            </p>
+            {lastValidation && (
+              <div className={`mt-2 flex items-start gap-2 text-xs ${lastValidation.ok ? 'text-emerald-600' : 'text-red-600'}`}>
+                {lastValidation.ok ? <CheckCircle2 className="w-4 h-4 mt-0.5" /> : <XCircle className="w-4 h-4 mt-0.5" />}
+                <span>{lastValidation.message}</span>
+              </div>
+            )}
+          </div>
+          <Button onClick={validateConnection} disabled={isValidating || config.devices.length === 0} size="sm">
+            {isValidating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PlugZap className="w-4 h-4 mr-2" />}
+            Validar agora
+          </Button>
+        </div>
+
 
         <div className="space-y-3 p-4 rounded-xl border border-border/40 bg-background">
           <div className="flex items-center gap-2">
@@ -117,15 +152,32 @@ export default function WavoipWebphoneSection() {
                       <Phone className="w-4 h-4" />
                     </div>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-semibold truncate">{d.label}</p>
                         {config.defaultDeviceId === d.id && (
                           <Badge variant="outline" className="gap-1 text-[10px]"><Star className="w-3 h-3" /> padrão</Badge>
                         )}
+                        {d.last_validation_status === 'ok' && (
+                          <Badge className="gap-1 text-[10px] bg-emerald-500/15 text-emerald-600 border-emerald-500/30">
+                            <CheckCircle2 className="w-3 h-3" /> validado
+                          </Badge>
+                        )}
+                        {d.last_validation_status === 'fail' && (
+                          <Badge variant="destructive" className="gap-1 text-[10px]">
+                            <XCircle className="w-3 h-3" /> falhou
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-[11px] text-muted-foreground font-mono truncate">{d.token}</p>
                       {d.phone && <p className="text-[11px] text-muted-foreground">📱 {d.phone}</p>}
+                      {d.last_validation_error && (
+                        <p className="text-[11px] text-red-500 mt-0.5">⚠ {d.last_validation_error}</p>
+                      )}
+                      {d.last_validated_at && (
+                        <p className="text-[10px] text-muted-foreground">Última validação: {new Date(d.last_validated_at).toLocaleString('pt-BR')}</p>
+                      )}
                     </div>
+
                   </div>
                   <div className="flex items-center gap-1">
                     {config.defaultDeviceId !== d.id && (
