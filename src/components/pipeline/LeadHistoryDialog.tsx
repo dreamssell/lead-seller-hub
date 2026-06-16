@@ -67,6 +67,14 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
   const [cursor, setCursor] = useState<{ created_at: string; id: string } | null>(null);
   const seenIdsRef = useRef<Set<string>>(new Set());
 
+  // Convert a local YYYY-MM-DD picker value to an absolute ISO instant
+  // anchored in the user's local timezone. This guarantees the export/list
+  // interval matches exactly what the user sees in the dialog filters,
+  // regardless of where the DB/server is.
+  const localDayStartISO = (d: string) => new Date(`${d}T00:00:00`).toISOString();
+  const localDayEndISO = (d: string) => new Date(`${d}T23:59:59.999`).toISOString();
+  const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
   // Base query factory (used by exports — count + offset is fine there since
   // exports snapshot the full filtered set in one pass).
   const buildQuery = useCallback(() => {
@@ -74,8 +82,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
       .select('id,type,from_stage_name,to_stage_name,channel,source,created_at,metadata', { count: 'exact' })
       .eq('lead_id', leadId as string);
     if (channelFilter !== 'all') q = q.eq('channel', channelFilter);
-    if (dateFrom) q = q.gte('created_at', `${dateFrom}T00:00:00`);
-    if (dateTo)   q = q.lte('created_at', `${dateTo}T23:59:59`);
+    if (dateFrom) q = q.gte('created_at', localDayStartISO(dateFrom));
+    if (dateTo)   q = q.lte('created_at', localDayEndISO(dateTo));
     return q.order('created_at', { ascending: false }).order('id', { ascending: false });
   }, [leadId, channelFilter, dateFrom, dateTo]);
 
@@ -85,8 +93,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
       .select('id,type,from_stage_name,to_stage_name,channel,source,created_at,metadata')
       .eq('lead_id', leadId as string);
     if (channelFilter !== 'all') q = q.eq('channel', channelFilter);
-    if (dateFrom) q = q.gte('created_at', `${dateFrom}T00:00:00`);
-    if (dateTo)   q = q.lte('created_at', `${dateTo}T23:59:59`);
+    if (dateFrom) q = q.gte('created_at', localDayStartISO(dateFrom));
+    if (dateTo)   q = q.lte('created_at', localDayEndISO(dateTo));
     if (after) {
       // (created_at, id) < (cursor.created_at, cursor.id) in DESC order
       q = q.or(
@@ -105,8 +113,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
     if (!leadId) return;
     let q = supabase.from('lead_events').select('id', { count: 'exact', head: true }).eq('lead_id', leadId);
     if (channelFilter !== 'all') q = q.eq('channel', channelFilter);
-    if (dateFrom) q = q.gte('created_at', `${dateFrom}T00:00:00`);
-    if (dateTo)   q = q.lte('created_at', `${dateTo}T23:59:59`);
+    if (dateFrom) q = q.gte('created_at', localDayStartISO(dateFrom));
+    if (dateTo)   q = q.lte('created_at', localDayEndISO(dateTo));
     const { count } = await q;
     setTotal(count || 0);
   }, [leadId, channelFilter, dateFrom, dateTo]);
