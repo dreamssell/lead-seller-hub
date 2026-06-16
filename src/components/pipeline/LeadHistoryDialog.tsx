@@ -281,6 +281,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
       const uid = userRes.user?.id;
       const ownerId = ownerIdRef.current;
       if (!uid || !ownerId) return;
+      const nowIso = new Date().toISOString();
+      setSavedAt(nowIso);
       await (supabase as any).from('user_ui_state').upsert({
         user_id: uid,
         owner_id: ownerId,
@@ -292,11 +294,13 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
           loadedCount: events.length,
           cursor,
           scrollTop: scrollTopRef.current,
+          cursorTtlHours,
+          savedAt: nowIso,
         },
       }, { onConflict: 'user_id,owner_id,scope' });
     }, 600);
     return () => window.clearTimeout(t);
-  }, [open, hydrated, leadId, scope, channelFilter, dateFrom, dateTo, events.length, cursor]);
+  }, [open, hydrated, leadId, scope, channelFilter, dateFrom, dateTo, events.length, cursor, cursorTtlHours]);
 
 
   // Infinite scroll with debounce + prefetch (triggers earlier and coalesces rapid scroll events)
