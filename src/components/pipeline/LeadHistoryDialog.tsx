@@ -58,6 +58,14 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
   const [availableChannels, setAvailableChannels] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  // Cursor pagination state — stable order: created_at desc, id desc.
+  // Using a cursor (instead of offset) avoids duplicating or skipping rows
+  // when new events arrive between page loads.
+  const [cursor, setCursor] = useState<{ created_at: string; id: string } | null>(null);
+  const seenIdsRef = useRef<Set<string>>(new Set());
+
+  // Base query factory (used by exports — count + offset is fine there since
+  // exports snapshot the full filtered set in one pass).
   const buildQuery = useCallback(() => {
     let q = supabase.from('lead_events')
       .select('id,type,from_stage_name,to_stage_name,channel,source,created_at,metadata', { count: 'exact' })
@@ -65,31 +73,80 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
     if (channelFilter !== 'all') q = q.eq('channel', channelFilter);
     if (dateFrom) q = q.gte('created_at', `${dateFrom}T00:00:00`);
     if (dateTo)   q = q.lte('created_at', `${dateTo}T23:59:59`);
-    return q.order('created_at', { ascending: false });
+    return q.order('created_at', { ascending: false }).order('id', { ascending: false });
+  }, [leadId, channelFilter, dateFrom, dateTo]);
+
+  // Cursor-based fetcher used by the dialog list itself.
+  const fetchPage = useCallback(async (after: { created_at: string; id: string } | null) => {
+    let q = supabase.from('lead_events')
+      .select('id,type,from_stage_name,to_stage_name,channel,source,created_at,metadata')
+      .eq('lead_id', leadId as string);
+    if (channelFilter !== 'all') q = q.eq('channel', channelFilter);
+    if (dateFrom) q = q.gte('created_at', `${dateFrom}T00:00:00`);
+    if (dateTo)   q = q.lte('created_at', `${dateTo}T23:59:59`);
+    if (after) {
+      // (created_at, id) < (cursor.created_at, cursor.id) in DESC order
+      q = q.or(
+        `created_at.lt.${after.created_at},and(created_at.eq.${after.created_at},id.lt.${after.id})`
+      );
+    }
+    const { data, error } = await q
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(PAGE_SIZE);
+    if (error) throw error;
+    return (data as Event[]) || [];
+  }, [leadId, channelFilter, dateFrom, dateTo]);
+
+  const refreshTotal = useCallback(async () => {
+    if (!leadId) return;
+    let q = supabase.from('lead_events').select('id', { count: 'exact', head: true }).eq('lead_id', leadId);
+    if (channelFilter !== 'all') q = q.eq('channel', channelFilter);
+    if (dateFrom) q = q.gte('created_at', `${dateFrom}T00:00:00`);
+    if (dateTo)   q = q.lte('created_at', `${dateTo}T23:59:59`);
+    const { count } = await q;
+    setTotal(count || 0);
   }, [leadId, channelFilter, dateFrom, dateTo]);
 
   const loadFirstPage = useCallback(async () => {
     if (!leadId) return;
     setLoading(true);
-    const { data, count } = await buildQuery().range(0, PAGE_SIZE - 1);
-    const rows = (data as Event[]) || [];
-    setEvents(rows);
-    setTotal(count || 0);
-    setHasMore((count || 0) > rows.length);
-    setLoading(false);
-    if (scrollRef.current) scrollRef.current.scrollTop = 0;
-  }, [leadId, buildQuery]);
+    seenIdsRef.current = new Set();
+    try {
+      const [rows] = await Promise.all([fetchPage(null), refreshTotal()]);
+      const deduped: Event[] = [];
+      for (const r of rows) {
+        if (!seenIdsRef.current.has(r.id)) { seenIdsRef.current.add(r.id); deduped.push(r); }
+      }
+      setEvents(deduped);
+      const last = deduped[deduped.length - 1];
+      setCursor(last ? { created_at: last.created_at, id: last.id } : null);
+      setHasMore(rows.length === PAGE_SIZE);
+    } finally {
+      setLoading(false);
+      if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    }
+  }, [leadId, fetchPage, refreshTotal]);
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore || !leadId) return;
+    if (loadingMore || !hasMore || !leadId || !cursor) return;
     setLoadingMore(true);
-    const from = events.length;
-    const { data } = await buildQuery().range(from, from + PAGE_SIZE - 1);
-    const rows = (data as Event[]) || [];
-    setEvents(prev => [...prev, ...rows]);
-    setHasMore(from + rows.length < total);
-    setLoadingMore(false);
-  }, [loadingMore, hasMore, leadId, events.length, total, buildQuery]);
+    try {
+      const rows = await fetchPage(cursor);
+      const fresh: Event[] = [];
+      for (const r of rows) {
+        if (!seenIdsRef.current.has(r.id)) { seenIdsRef.current.add(r.id); fresh.push(r); }
+      }
+      if (fresh.length) {
+        setEvents(prev => [...prev, ...fresh]);
+        const last = fresh[fresh.length - 1];
+        setCursor({ created_at: last.created_at, id: last.id });
+      }
+      setHasMore(rows.length === PAGE_SIZE);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, leadId, cursor, fetchPage]);
 
   // First load + reload whenever filters change
   useEffect(() => {
@@ -110,7 +167,10 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
 
   // Reset transient state when the dialog closes (filters are restored from DB on next open)
   useEffect(() => {
-    if (!open) { setEvents([]); setTotal(0); setHasMore(false); setHydrated(false); }
+    if (!open) {
+      setEvents([]); setTotal(0); setHasMore(false); setHydrated(false);
+      setCursor(null); seenIdsRef.current = new Set();
+    }
   }, [open]);
 
   // -------- Cross-device filter & scroll persistence (user_ui_state) --------
@@ -145,14 +205,14 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
     return () => { cancelled = true; };
   }, [open, leadId, scope]);
 
-  // After first page loads, if we had a restored offset, keep loading until we reach it
+  // After first page loads, if we had a restored offset, keep paging (via cursor) until we reach it
   useEffect(() => {
     if (!restoredLoadedCount || loading) return;
     if (events.length >= restoredLoadedCount || !hasMore) { setRestoredLoadedCount(null); return; }
     loadMore();
   }, [restoredLoadedCount, events.length, hasMore, loading, loadMore]);
 
-  // Debounced upsert of current filters + loaded count
+  // Debounced upsert of current filters + loaded count + cursor
   useEffect(() => {
     if (!open || !hydrated || !leadId || !scope) return;
     const t = window.setTimeout(async () => {
@@ -164,11 +224,17 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
         user_id: uid,
         owner_id: ownerId,
         scope,
-        state: { channelFilter, dateFrom, dateTo, loadedCount: events.length },
+        state: {
+          channelFilter,
+          dateFrom,
+          dateTo,
+          loadedCount: events.length,
+          cursor,
+        },
       }, { onConflict: 'user_id,owner_id,scope' });
     }, 600);
     return () => window.clearTimeout(t);
-  }, [open, hydrated, leadId, scope, channelFilter, dateFrom, dateTo, events.length]);
+  }, [open, hydrated, leadId, scope, channelFilter, dateFrom, dateTo, events.length, cursor]);
 
 
   // Infinite scroll with debounce + prefetch (triggers earlier and coalesces rapid scroll events)
