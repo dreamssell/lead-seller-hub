@@ -37,6 +37,7 @@ import PublicStatusPage from "./pages/PublicStatusPage";
 import NotFound from "./pages/NotFound";
 import VideoJoinPage from "./pages/VideoJoinPage";
 import SignaturePortalPage from "./pages/SignaturePortalPage";
+import SignaturesPage from "./pages/SignaturesPage";
 
 
 
@@ -77,6 +78,7 @@ const App = () => (
               <Route path="/ai-agents/:id/editar" element={<ProtectedRoute><EditAgentPage /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
               <Route path="/pipeline" element={<ProtectedRoute><PipelinePage /></ProtectedRoute>} />
+              <Route path="/signatures" element={<ProtectedRoute pageKey="signatures"><SignaturesPage /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><AccountSettingsPage /></ProtectedRoute>} />
               <Route path="/developer" element={<ProtectedRoute><DeveloperPage /></ProtectedRoute>} />
               <Route path="/api-keys" element={<ProtectedRoute><APIKeysPage /></ProtectedRoute>} />
