@@ -286,7 +286,87 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
-    return json({ error: "invalid_action" }, 400);
+    if (action === "test") {
+      // Pre-flight: reachability + auth + instance existence.
+      const checks: Record<string, {
+        ok: boolean;
+        status?: number;
+        message: string;
+      }> = {};
+
+      // 1) Reachability — does the URL respond at all?
+      let reach: { ok: boolean; status: number; data: any } | null = null;
+      try {
+        reach = await evoFetch(baseUrl, token, "/");
+        checks.reachability = {
+          ok: reach.status > 0 && reach.status < 600,
+          status: reach.status,
+          message:
+            reach.status === 0
+              ? "Servidor não respondeu."
+              : `Servidor respondeu HTTP ${reach.status}.`,
+        };
+      } catch (e) {
+        checks.reachability = {
+          ok: false,
+          message: `Não foi possível alcançar a URL: ${(e as Error).message}. Verifique protocolo (https://), domínio e firewall.`,
+        };
+      }
+
+      // 2) Auth — list instances (requires apikey).
+      try {
+        const a = await evoFetch(baseUrl, token, "/instance/fetchInstances");
+        const isAuthOk = a.status !== 401 && a.status !== 403;
+        checks.auth = {
+          ok: isAuthOk,
+          status: a.status,
+          message: isAuthOk
+            ? "API Key aceita pelo servidor."
+            : `API Key recusada (HTTP ${a.status}). Verifique se copiou a AUTHENTICATION_API_KEY correta e se não há espaços extras.`,
+        };
+      } catch (e) {
+        checks.auth = {
+          ok: false,
+          message: `Falha ao validar API Key: ${(e as Error).message}.`,
+        };
+      }
+
+      // 3) Instance existence
+      try {
+        const s = await evoFetch(
+          baseUrl,
+          token,
+          `/instance/connectionState/${encodeURIComponent(instance)}`,
+        );
+        const exists = s.status === 200;
+        const state = s.data?.instance?.state || s.data?.state || null;
+        checks.instance = {
+          ok: exists || s.status === 404,
+          status: s.status,
+          message: exists
+            ? `Instância "${instance}" encontrada (estado: ${state ?? "desconhecido"}).`
+            : s.status === 404
+              ? `Instância "${instance}" ainda não existe — será criada ao gerar o QR.`
+              : `Servidor respondeu HTTP ${s.status} ao consultar a instância.`,
+        };
+      } catch (e) {
+        checks.instance = {
+          ok: false,
+          message: `Erro ao consultar a instância: ${(e as Error).message}.`,
+        };
+      }
+
+      const overallOk = checks.reachability.ok && checks.auth.ok && checks.instance.ok;
+      await logEvent(
+        "evolution.test",
+        overallOk ? "success" : "error",
+        overallOk ? "Pré-validação bem-sucedida" : "Pré-validação falhou",
+        { checks },
+      );
+      return json({ ok: overallOk, checks });
+    }
+
+
   } catch (err) {
     console.error("[evolution-instance] error", err);
     return json({ error: (err as Error).message }, 500);
