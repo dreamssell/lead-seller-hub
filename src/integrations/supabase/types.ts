@@ -2844,6 +2844,87 @@ export type Database = {
         }
         Relationships: []
       }
+      webauthn_challenges: {
+        Row: {
+          challenge: string
+          consumed_at: string | null
+          created_at: string
+          email: string | null
+          expires_at: string
+          id: string
+          purpose: string
+          rp_id: string
+          user_id: string | null
+        }
+        Insert: {
+          challenge: string
+          consumed_at?: string | null
+          created_at?: string
+          email?: string | null
+          expires_at?: string
+          id?: string
+          purpose: string
+          rp_id: string
+          user_id?: string | null
+        }
+        Update: {
+          challenge?: string
+          consumed_at?: string | null
+          created_at?: string
+          email?: string | null
+          expires_at?: string
+          id?: string
+          purpose?: string
+          rp_id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      webauthn_credentials: {
+        Row: {
+          backed_up: boolean
+          counter: number
+          created_at: string
+          credential_id: string
+          device_type: string | null
+          friendly_name: string
+          id: string
+          last_used_at: string | null
+          public_key: string
+          transports: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          backed_up?: boolean
+          counter?: number
+          created_at?: string
+          credential_id: string
+          device_type?: string | null
+          friendly_name?: string
+          id?: string
+          last_used_at?: string | null
+          public_key: string
+          transports?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          backed_up?: boolean
+          counter?: number
+          created_at?: string
+          credential_id?: string
+          device_type?: string | null
+          friendly_name?: string
+          id?: string
+          last_used_at?: string | null
+          public_key?: string
+          transports?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       webhook_idempotency_keys: {
         Row: {
           created_at: string | null
