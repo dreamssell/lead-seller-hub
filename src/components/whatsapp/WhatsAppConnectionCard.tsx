@@ -184,6 +184,10 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
       </CardHeader>
       
       <CardContent className="space-y-4">
+        {conn.provider === 'evolution' && (
+          <EvolutionStatusBanner conn={conn} onOpenWizard={() => setShowEvolutionWizard(true)} />
+        )}
+
         {/* Provider Specific Stats/Metrics */}
         {conn.provider === 'uaz' && conn.status === 'connected' && (
           <UazStats 
