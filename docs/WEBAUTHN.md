@@ -1,14 +1,26 @@
 # Credenciamento biométrico (WebAuthn / Passkeys)
 
-> Status: **STUB**. O fluxo client-side está pronto; os endpoints do servidor
-> recebem e devolvem payloads no formato correto mas **não verificam**
-> assinaturas e **não persistem** credenciais. Antes de habilitar para
-> usuários reais, finalize a parte do servidor com uma biblioteca WebAuthn
+> Status: **PARCIAL**. Persistência de credenciais e desafios está pronta no
+> backend (tabelas `webauthn_credentials` e `webauthn_challenges` com RLS).
+> A verificação criptográfica de assinatura ainda é **stub** — antes de
+> liberar para produção, ligue o endpoint a uma biblioteca WebAuthn
 > (recomendado: [`@simplewebauthn/server`](https://simplewebauthn.dev)).
 
-Existem hoje **0 endpoints biométricos prontos** no projeto Lead Seller —
-nada de Face ID, Touch ID, Windows Hello ou hardware keys. Para suprir isso
-foi adicionado:
+O que já funciona:
+
+- Cadastro e listagem de passkeys no perfil do usuário (tela Meu Perfil →
+  "Acesso biométrico").
+- RLS garantindo que cada usuário só veja/edite/remova as próprias
+  credenciais. `webauthn_challenges` é server-only (sem policies para
+  `authenticated`).
+- Helpers cliente em `src/lib/webauthn.ts`:
+  `registerBiometric`, `authenticateBiometric`, `listMyBiometricCredentials`,
+  `renameBiometricCredential`, `deleteBiometricCredential`,
+  `isPlatformAuthenticatorAvailable`, `describeWebAuthnError`.
+- Edge function `webauthn` (Lovable Cloud) com 7 ações:
+  `register/begin`, `register/complete`, `auth/begin`, `auth/complete`,
+  `list`, `rename`, `delete`.
+
 
 - Edge function `webauthn` (Lovable Cloud) com os 4 endpoints exigidos pelo
   navegador.
@@ -151,25 +163,51 @@ fluxo de redirecionamento já existente.
 
 ## Exemplo de uso (helpers prontos)
 
+### Cadastro (Meu Perfil → Acesso biométrico)
+Já implementado em `src/components/settings/BiometricCredentialsCard.tsx`.
+
+### Login com fallback automático para senha
+Use este snippet na página externa `auth.leadseller.com.br`:
+
 ```ts
 import {
+  isWebAuthnAvailable,
   isPlatformAuthenticatorAvailable,
-  registerBiometric,
   authenticateBiometric,
 } from '@/lib/webauthn';
 
-if (await isPlatformAuthenticatorAvailable()) {
-  // Cadastro (usuário já autenticado por outro meio)
-  const r = await registerBiometric({
-    user_id: currentUser.id,
-    user_name: currentUser.email,
-    user_display_name: currentUser.name,
-  });
-
-  // Login subsequente
-  const a = await authenticateBiometric(email);
-  if (a.ok && a.session_token) {
-    // redirecionar com o token, como já é feito hoje
+async function loginWithBiometricFallback(email: string, passwordPrompt: () => Promise<string>) {
+  // 1) Tenta biometria primeiro se houver suporte.
+  if (isWebAuthnAvailable() && (await isPlatformAuthenticatorAvailable())) {
+    const r = await authenticateBiometric(email);
+    if (r.ok && r.session_token) {
+      return { method: 'biometric', token: r.session_token };
+    }
+    if (!r.fallback_to_password) {
+      throw new Error(r.error || 'Falha na biometria');
+    }
+    // Mostra ao usuário a razão antes de pedir a senha:
+    toast.info('Biometria indisponível', { description: r.error });
   }
+
+  // 2) Fallback: pede a senha como já é feito hoje.
+  const password = await passwordPrompt();
+  const { data, error } = await supabase.functions.invoke('authenticate', {
+    body: { email, password },
+  });
+  if (error) throw error;
+  return { method: 'password', token: data.session_token };
 }
 ```
+
+Mensagens de erro padronizadas (em PT-BR) são geradas por
+`describeWebAuthnError(err)` — use-as ao montar toasts no front-end externo.
+
+### Razões comuns para cair no fallback de senha
+| Sinal                         | Significado                          |
+| ----------------------------- | ------------------------------------ |
+| `fallback_to_password: true` + `no_credentials` | E-mail não tem passkey cadastrada |
+| `NotAllowed` / `AbortError`   | Usuário cancelou ou expirou          |
+| `SecurityError`               | RP ID/origin não autorizado          |
+| `NotSupported`                | Dispositivo sem leitor compatível    |
+
