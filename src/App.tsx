@@ -36,6 +36,10 @@ import DocumentationPage from "./pages/DocumentationPage";
 import PublicStatusPage from "./pages/PublicStatusPage";
 import NotFound from "./pages/NotFound";
 import VideoJoinPage from "./pages/VideoJoinPage";
+import SignaturePortalPage from "./pages/SignaturePortalPage";
+
+
+
 
 
 const queryClient = new QueryClient();
@@ -58,6 +62,8 @@ const App = () => (
               <Route path="/s/:subId/login" element={<SubLoginPage />} />
               <Route path="/status-view" element={<PublicStatusPage />} />
               <Route path="/video/join/:roomId" element={<VideoJoinPage />} />
+              <Route path="/sign/:token" element={<SignaturePortalPage />} />
+
 
 
 

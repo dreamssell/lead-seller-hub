@@ -31,8 +31,9 @@ import { WhatsAppConnection, PROVIDER_CONFIGS } from '@/components/whatsapp/type
 import { useVoip } from '@/contexts/VoipContext';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
 import { ChatRightPanel } from '@/components/chat/ChatRightPanel';
+import { SignatureDocumentModal } from '@/components/signature/SignatureDocumentModal';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { StickyNote, Zap, PhoneCall, Headphones } from 'lucide-react';
+import { StickyNote, Zap, PhoneCall, Headphones, PenLine } from 'lucide-react';
 
 
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -132,6 +133,7 @@ export default function ChatPage() {
     sort: 'desc'
   });
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const voip = useVoip();
   const wavoip = useWavoipWebphone();
 
@@ -1065,6 +1067,13 @@ export default function ChatPage() {
                   </DropdownMenu>
                   <button className="p-2 rounded-lg hover:bg-secondary" title="Vídeo chamada"><Video className="w-4 h-4 text-muted-foreground" /></button>
                   <button
+                    onClick={() => setSignatureModalOpen(true)}
+                    className="p-2 rounded-lg hover:bg-secondary text-muted-foreground"
+                    title="Enviar documento para assinatura"
+                  >
+                    <PenLine className="w-4 h-4" />
+                  </button>
+                  <button
                     onClick={() => setRightPanelOpen((v) => !v)}
                     className={`p-2 rounded-lg hover:bg-secondary ${rightPanelOpen ? 'bg-secondary text-primary' : 'text-muted-foreground'}`}
                     title="Notas internas e respostas rápidas"
@@ -1309,6 +1318,17 @@ export default function ChatPage() {
           />
         )}
       </div>
+
+      <SignatureDocumentModal
+        open={signatureModalOpen}
+        onOpenChange={setSignatureModalOpen}
+        leadId={(selectedConv as any)?.lead_id || null}
+        subCompanyId={(selectedConv as any)?.sub_company_id || null}
+        ownerId={(selectedConv as any)?.owner_id || null}
+        signerNameDefault={selectedConv?.name}
+        signerPhoneDefault={(selectedConv as any)?.phone || (selectedConv as any)?.whatsapp}
+      />
+
 
       <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
         <DialogContent>

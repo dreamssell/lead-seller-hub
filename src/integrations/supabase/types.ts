@@ -1709,6 +1709,190 @@ export type Database = {
         }
         Relationships: []
       }
+      signature_documents: {
+        Row: {
+          contact_id: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          expires_at: string | null
+          id: string
+          lead_id: string | null
+          metadata: Json
+          method: Database["public"]["Enums"]["signature_method"]
+          original_file_path: string
+          owner_id: string
+          signed_at: string | null
+          signed_file_path: string | null
+          signed_ip: string | null
+          signed_user_agent: string | null
+          signer_email: string | null
+          signer_name: string | null
+          signer_phone: string | null
+          status: Database["public"]["Enums"]["signature_status"]
+          sub_company_id: string | null
+          title: string
+          updated_at: string
+          validation_hash: string | null
+          viewed_at: string | null
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          expires_at?: string | null
+          id?: string
+          lead_id?: string | null
+          metadata?: Json
+          method?: Database["public"]["Enums"]["signature_method"]
+          original_file_path: string
+          owner_id: string
+          signed_at?: string | null
+          signed_file_path?: string | null
+          signed_ip?: string | null
+          signed_user_agent?: string | null
+          signer_email?: string | null
+          signer_name?: string | null
+          signer_phone?: string | null
+          status?: Database["public"]["Enums"]["signature_status"]
+          sub_company_id?: string | null
+          title: string
+          updated_at?: string
+          validation_hash?: string | null
+          viewed_at?: string | null
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          expires_at?: string | null
+          id?: string
+          lead_id?: string | null
+          metadata?: Json
+          method?: Database["public"]["Enums"]["signature_method"]
+          original_file_path?: string
+          owner_id?: string
+          signed_at?: string | null
+          signed_file_path?: string | null
+          signed_ip?: string | null
+          signed_user_agent?: string | null
+          signer_email?: string | null
+          signer_name?: string | null
+          signer_phone?: string | null
+          status?: Database["public"]["Enums"]["signature_status"]
+          sub_company_id?: string | null
+          title?: string
+          updated_at?: string
+          validation_hash?: string | null
+          viewed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_documents_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_documents_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signature_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          document_id: string
+          event_type: string
+          id: string
+          ip: string | null
+          metadata: Json
+          status: Database["public"]["Enums"]["signature_status"] | null
+          user_agent: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          document_id: string
+          event_type: string
+          id?: string
+          ip?: string | null
+          metadata?: Json
+          status?: Database["public"]["Enums"]["signature_status"] | null
+          user_agent?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          document_id?: string
+          event_type?: string
+          id?: string
+          ip?: string | null
+          metadata?: Json
+          status?: Database["public"]["Enums"]["signature_status"] | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_events_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "signature_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signature_tokens: {
+        Row: {
+          created_at: string
+          document_id: string
+          email_verified_at: string | null
+          expires_at: string
+          id: string
+          sms_pin: string | null
+          sms_verified_at: string | null
+          token: string
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          email_verified_at?: string | null
+          expires_at: string
+          id?: string
+          sms_pin?: string | null
+          sms_verified_at?: string | null
+          token: string
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          email_verified_at?: string | null
+          expires_at?: string
+          id?: string
+          sms_pin?: string | null
+          sms_verified_at?: string | null
+          token?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_tokens_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "signature_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       smtp_settings: {
         Row: {
           created_at: string
@@ -2352,6 +2536,44 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      user_signature_roles: {
+        Row: {
+          created_at: string
+          id: string
+          owner_id: string
+          role: Database["public"]["Enums"]["signature_role"]
+          sub_company_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          owner_id: string
+          role?: Database["public"]["Enums"]["signature_role"]
+          sub_company_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          owner_id?: string
+          role?: Database["public"]["Enums"]["signature_role"]
+          sub_company_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_signature_roles_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_ui_state: {
         Row: {
@@ -3339,6 +3561,10 @@ export type Database = {
           sub_company_name: string
         }[]
       }
+      get_my_signature_role: {
+        Args: { p_sub_company_id: string }
+        Returns: Database["public"]["Enums"]["signature_role"]
+      }
       get_room_invite_token: { Args: { p_room_id: string }; Returns: string }
       get_webhook_idempotency_stats: {
         Args: { p_end_date: string; p_start_date: string; p_webhook_id: string }
@@ -3354,6 +3580,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      is_signature_leader: {
+        Args: { p_sub_company_id: string }
         Returns: boolean
       }
       log_video_action: {
@@ -3445,6 +3675,16 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "atendente" | "closer"
+      signature_method: "canvas" | "email" | "sms"
+      signature_role: "agente" | "supervisor" | "coordenador" | "diretor"
+      signature_status:
+        | "draft"
+        | "pending"
+        | "viewed"
+        | "authenticating"
+        | "signed"
+        | "expired"
+        | "cancelled"
       whatsapp_provider:
         | "uaz"
         | "meta"
@@ -3586,6 +3826,17 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "atendente", "closer"],
+      signature_method: ["canvas", "email", "sms"],
+      signature_role: ["agente", "supervisor", "coordenador", "diretor"],
+      signature_status: [
+        "draft",
+        "pending",
+        "viewed",
+        "authenticating",
+        "signed",
+        "expired",
+        "cancelled",
+      ],
       whatsapp_provider: [
         "uaz",
         "meta",
