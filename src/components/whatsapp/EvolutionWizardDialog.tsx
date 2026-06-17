@@ -30,6 +30,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { WhatsAppConnection } from './types';
 import { EvolutionAttemptsHistory } from './EvolutionAttemptsHistory';
+import { EvolutionDiagnosticsPanel } from './EvolutionDiagnosticsPanel';
+import { EvolutionRetentionControl } from './EvolutionRetentionControl';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 interface Props {
@@ -600,11 +602,13 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
         <Separator />
 
         <Tabs defaultValue="setup">
-          <TabsList className="grid grid-cols-2 w-full">
-            <TabsTrigger value="setup">Configuração</TabsTrigger>
-            <TabsTrigger value="history">
-              <History className="w-3.5 h-3.5 mr-1.5" /> Histórico
+          <TabsList className="grid grid-cols-4 w-full">
+            <TabsTrigger value="setup" className="text-xs">Configuração</TabsTrigger>
+            <TabsTrigger value="history" className="text-xs">
+              <History className="w-3.5 h-3.5 mr-1" /> Histórico
             </TabsTrigger>
+            <TabsTrigger value="diagnostics" className="text-xs">Diagnóstico</TabsTrigger>
+            <TabsTrigger value="retention" className="text-xs">Retenção</TabsTrigger>
           </TabsList>
           <TabsContent value="setup" className="space-y-4 pt-3">
             {step === 'credentials' && renderCredentials()}
@@ -617,6 +621,12 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
             <p className="text-[11px] text-muted-foreground mt-2">
               Registros visíveis para a empresa proprietária e para a sub-empresa associada à instância.
             </p>
+          </TabsContent>
+          <TabsContent value="diagnostics" className="pt-3">
+            <EvolutionDiagnosticsPanel conn={conn} />
+          </TabsContent>
+          <TabsContent value="retention" className="pt-3">
+            <EvolutionRetentionControl conn={conn} onSaved={onConnected} />
           </TabsContent>
         </Tabs>
 
