@@ -133,6 +133,7 @@ export default function ChatPage() {
     sort: 'desc'
   });
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const voip = useVoip();
   const wavoip = useWavoipWebphone();
 
