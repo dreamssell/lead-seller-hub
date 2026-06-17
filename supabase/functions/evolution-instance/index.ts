@@ -16,7 +16,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-type Action = "create" | "qr" | "state" | "logout" | "delete";
+type Action = "create" | "qr" | "state" | "logout" | "delete" | "test";
 
 interface Body {
   action: Action;
