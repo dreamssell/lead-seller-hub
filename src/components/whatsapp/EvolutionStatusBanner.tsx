@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { ShieldAlert, PlugZap, QrCode, X } from 'lucide-react';
+import { ShieldAlert, PlugZap, QrCode, X, RefreshCw, Loader2 } from 'lucide-react';
 import { WhatsAppConnection, ConnectionStatus } from './types';
 
 interface Props {
