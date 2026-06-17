@@ -1067,6 +1067,13 @@ export default function ChatPage() {
                   </DropdownMenu>
                   <button className="p-2 rounded-lg hover:bg-secondary" title="Vídeo chamada"><Video className="w-4 h-4 text-muted-foreground" /></button>
                   <button
+                    onClick={() => setSignatureModalOpen(true)}
+                    className="p-2 rounded-lg hover:bg-secondary text-muted-foreground"
+                    title="Enviar documento para assinatura"
+                  >
+                    <PenLine className="w-4 h-4" />
+                  </button>
+                  <button
                     onClick={() => setRightPanelOpen((v) => !v)}
                     className={`p-2 rounded-lg hover:bg-secondary ${rightPanelOpen ? 'bg-secondary text-primary' : 'text-muted-foreground'}`}
                     title="Notas internas e respostas rápidas"
