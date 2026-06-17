@@ -116,6 +116,8 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
       setPairingCode(null);
       setStateText('');
       setFailure(null);
+      setTestResult(null);
+      setAutoReconnect(meta.auto_reconnect ?? true);
       setStep(conn.status === 'connected' ? 'connected' : 'credentials');
     } else {
       stopAll();
