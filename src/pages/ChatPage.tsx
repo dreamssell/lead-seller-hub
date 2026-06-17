@@ -31,8 +31,9 @@ import { WhatsAppConnection, PROVIDER_CONFIGS } from '@/components/whatsapp/type
 import { useVoip } from '@/contexts/VoipContext';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
 import { ChatRightPanel } from '@/components/chat/ChatRightPanel';
+import { SignatureDocumentModal } from '@/components/signature/SignatureDocumentModal';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { StickyNote, Zap, PhoneCall, Headphones } from 'lucide-react';
+import { StickyNote, Zap, PhoneCall, Headphones, PenLine } from 'lucide-react';
 
 
 import { ScrollArea } from '@/components/ui/scroll-area';
