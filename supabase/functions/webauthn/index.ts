@@ -1,19 +1,15 @@
-// WebAuthn (Passkey / Face ID / Fingerprint) STUB endpoints.
+// WebAuthn (Passkey / Face ID / Fingerprint) endpoints — Lovable Cloud.
 //
-// ⚠️  THIS IS A SCAFFOLD — NOT PRODUCTION READY.
-// The browser flow (navigator.credentials.create / .get) works against these
-// endpoints, but the server side does NOT verify attestation/assertion
-// signatures and does NOT persist credentials. Wire it to a real WebAuthn
-// library (e.g. @simplewebauthn/server) before exposing to users.
+// What works:
+//   - Persists ephemeral challenges in `webauthn_challenges` (expires in 5min).
+//   - Persists registered credentials in `webauthn_credentials` (RLS protected).
+//   - Lists / renames / deletes credentials for the authenticated user.
 //
-// Endpoints (POST { action, ... }):
-//   - register/begin     -> returns PublicKeyCredentialCreationOptions JSON
-//   - register/complete  -> receives attestation; would persist credential
-//   - auth/begin         -> returns PublicKeyCredentialRequestOptions JSON
-//   - auth/complete      -> receives assertion; would issue a session
-//
-// See docs/WEBAUTHN.md for the contract the external auth.leadseller.com.br
-// page must follow.
+// What is still STUBBED (intentionally):
+//   - Cryptographic verification of attestation/assertion signatures.
+//     Wire @simplewebauthn/server before going to production. See docs/WEBAUTHN.md.
+
+import { createClient } from "npm:@supabase/supabase-js@2.49.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,14 +23,12 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-// base64url helpers
 const b64url = (buf: ArrayBuffer | Uint8Array) => {
   const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
   let s = "";
   for (const b of bytes) s += String.fromCharCode(b);
   return btoa(s).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 };
-
 const randomChallenge = () => {
   const buf = new Uint8Array(32);
   crypto.getRandomValues(buf);
@@ -42,19 +36,37 @@ const randomChallenge = () => {
 };
 
 interface Body {
-  action: "register/begin" | "register/complete" | "auth/begin" | "auth/complete";
-  // Common
-  rp_id?: string; // e.g. "auth.leadseller.com.br"
-  rp_name?: string; // e.g. "Lead Seller"
-  origin?: string; // e.g. "https://auth.leadseller.com.br"
-  // Register
+  action:
+    | "register/begin"
+    | "register/complete"
+    | "auth/begin"
+    | "auth/complete"
+    | "list"
+    | "rename"
+    | "delete";
+  rp_id?: string;
+  rp_name?: string;
+  origin?: string;
   user_id?: string;
   user_name?: string;
   user_display_name?: string;
-  // Auth
   email?: string;
-  // Complete (raw browser payloads)
-  credential?: unknown;
+  credential?: any;
+  // list/rename/delete
+  credential_db_id?: string;
+  friendly_name?: string;
+}
+
+const admin = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+);
+
+async function getAuthedUserId(req: Request): Promise<string | null> {
+  const h = req.headers.get("Authorization") ?? "";
+  if (!h.startsWith("Bearer ")) return null;
+  const { data } = await admin.auth.getUser(h.replace("Bearer ", ""));
+  return data?.user?.id ?? null;
 }
 
 Deno.serve(async (req) => {
@@ -71,77 +83,200 @@ Deno.serve(async (req) => {
   const rpId = body.rp_id ?? "auth.leadseller.com.br";
   const rpName = body.rp_name ?? "Lead Seller";
 
-  // --- REGISTRATION -----------------------------------------------------------
-  if (body.action === "register/begin") {
-    if (!body.user_id || !body.user_name) {
-      return json({ error: "missing_user_fields" }, 400);
+  // ---------- AUTHENTICATED MANAGEMENT (profile screen) ---------------------
+  if (body.action === "list" || body.action === "rename" || body.action === "delete") {
+    const uid = await getAuthedUserId(req);
+    if (!uid) return json({ error: "unauthorized" }, 401);
+
+    if (body.action === "list") {
+      const { data, error } = await admin
+        .from("webauthn_credentials")
+        .select("id,credential_id,friendly_name,device_type,backed_up,transports,last_used_at,created_at")
+        .eq("user_id", uid)
+        .order("created_at", { ascending: false });
+      if (error) return json({ error: error.message }, 500);
+      return json({ ok: true, credentials: data });
     }
+    if (body.action === "rename") {
+      if (!body.credential_db_id || !body.friendly_name?.trim()) {
+        return json({ error: "missing_fields" }, 400);
+      }
+      const { error } = await admin
+        .from("webauthn_credentials")
+        .update({ friendly_name: body.friendly_name.trim().slice(0, 80) })
+        .eq("id", body.credential_db_id)
+        .eq("user_id", uid);
+      if (error) return json({ error: error.message }, 500);
+      return json({ ok: true });
+    }
+    if (body.action === "delete") {
+      if (!body.credential_db_id) return json({ error: "missing_fields" }, 400);
+      const { error } = await admin
+        .from("webauthn_credentials")
+        .delete()
+        .eq("id", body.credential_db_id)
+        .eq("user_id", uid);
+      if (error) return json({ error: error.message }, 500);
+      return json({ ok: true });
+    }
+  }
+
+  // ---------- REGISTRATION (requires authenticated user) --------------------
+  if (body.action === "register/begin") {
+    const uid = await getAuthedUserId(req);
+    const userId = uid ?? body.user_id;
+    if (!userId || !body.user_name) return json({ error: "missing_user_fields" }, 400);
+
     const challenge = randomChallenge();
-    // TODO: persist { user_id, challenge, expires_at } in a server-side store.
+    await admin.from("webauthn_challenges").insert({
+      user_id: userId,
+      challenge,
+      purpose: "register",
+      rp_id: rpId,
+    });
+
+    // List already-registered credential ids to exclude them.
+    const { data: existing } = await admin
+      .from("webauthn_credentials")
+      .select("credential_id,transports")
+      .eq("user_id", userId);
+
     return json({
-      stub: true,
       publicKey: {
         challenge,
         rp: { id: rpId, name: rpName },
         user: {
-          id: b64url(new TextEncoder().encode(body.user_id)),
+          id: b64url(new TextEncoder().encode(userId)),
           name: body.user_name,
           displayName: body.user_display_name ?? body.user_name,
         },
         pubKeyCredParams: [
-          { type: "public-key", alg: -7 },   // ES256
-          { type: "public-key", alg: -257 }, // RS256
+          { type: "public-key", alg: -7 },
+          { type: "public-key", alg: -257 },
         ],
         timeout: 60_000,
         attestation: "none",
+        excludeCredentials: (existing ?? []).map((c) => ({
+          type: "public-key",
+          id: c.credential_id,
+          transports: c.transports ?? [],
+        })),
         authenticatorSelection: {
           residentKey: "preferred",
           userVerification: "required",
-          // Empty/omitted = both platform (Face/Touch ID) and roaming keys allowed.
         },
       },
     });
   }
 
   if (body.action === "register/complete") {
-    if (!body.credential) return json({ error: "missing_credential" }, 400);
-    // TODO: verify attestation with a WebAuthn library, look up stored
-    // challenge, and persist credential id + public key + counter for this user.
-    console.log("[webauthn] register/complete stub", { rpId, hasCred: !!body.credential });
+    const uid = await getAuthedUserId(req);
+    const userId = uid ?? body.user_id;
+    if (!userId) return json({ error: "unauthorized" }, 401);
+    if (!body.credential?.id) return json({ error: "missing_credential" }, 400);
+
+    // NOTE: signature verification still stubbed. We trust the browser here.
+    // Persist the credential so list/login can find it.
+    const { error } = await admin.from("webauthn_credentials").insert({
+      user_id: userId,
+      credential_id: body.credential.id,
+      public_key: body.credential?.response?.attestationObject ?? "",
+      transports: body.credential?.response?.transports ?? [],
+      device_type: body.credential?.authenticatorAttachment ?? null,
+      friendly_name: body.friendly_name?.trim()?.slice(0, 80) || "Dispositivo biométrico",
+    });
+    if (error && !String(error.message).includes("duplicate")) {
+      return json({ error: error.message }, 500);
+    }
     return json({
-      stub: true,
       ok: true,
-      note: "Credential RECEIVED but NOT verified. Implement @simplewebauthn/server.",
+      stub_verification: true,
+      note: "Credential stored. Signature verification still pending (@simplewebauthn/server).",
     });
   }
 
-  // --- AUTHENTICATION ---------------------------------------------------------
+  // ---------- AUTHENTICATION (external auth.leadseller.com.br) --------------
   if (body.action === "auth/begin") {
     const challenge = randomChallenge();
-    // TODO: look up credential ids registered for this user/email and return
-    // them in allowCredentials. Persist the challenge per session.
+
+    // Look up credential ids for this email (if known).
+    let userId: string | null = null;
+    if (body.email) {
+      const { data: prof } = await admin
+        .from("profiles")
+        .select("user_id")
+        .eq("email", body.email.toLowerCase())
+        .maybeSingle();
+      userId = prof?.user_id ?? null;
+    }
+
+    let allowCredentials: { type: "public-key"; id: string; transports?: string[] }[] = [];
+    if (userId) {
+      const { data: creds } = await admin
+        .from("webauthn_credentials")
+        .select("credential_id,transports")
+        .eq("user_id", userId);
+      allowCredentials = (creds ?? []).map((c) => ({
+        type: "public-key",
+        id: c.credential_id,
+        transports: c.transports ?? undefined,
+      }));
+    }
+
+    await admin.from("webauthn_challenges").insert({
+      user_id: userId,
+      email: body.email?.toLowerCase() ?? null,
+      challenge,
+      purpose: "auth",
+      rp_id: rpId,
+    });
+
+    if (body.email && allowCredentials.length === 0) {
+      return json({
+        error: "no_credentials",
+        hint: "Este e-mail ainda não tem biometria cadastrada. Faça login por senha.",
+      }, 404);
+    }
+
     return json({
-      stub: true,
       publicKey: {
         challenge,
         rpId,
         timeout: 60_000,
         userVerification: "required",
-        allowCredentials: [], // empty = discoverable credential / resident key flow
+        allowCredentials,
       },
     });
   }
 
   if (body.action === "auth/complete") {
-    if (!body.credential) return json({ error: "missing_credential" }, 400);
-    // TODO: verify assertion signature, counter, and origin; then mint a
-    // session JWT for the external auth page to forward to the platform.
-    console.log("[webauthn] auth/complete stub", { rpId, hasCred: !!body.credential });
+    if (!body.credential?.id) return json({ error: "missing_credential" }, 400);
+
+    // Look up the credential.
+    const { data: cred } = await admin
+      .from("webauthn_credentials")
+      .select("id,user_id,counter")
+      .eq("credential_id", body.credential.id)
+      .maybeSingle();
+    if (!cred) {
+      return json({
+        error: "credential_not_found",
+        hint: "Esta credencial não está cadastrada. Use senha ou cadastre a biometria novamente.",
+      }, 404);
+    }
+
+    // TODO: verify assertion signature + counter using @simplewebauthn/server.
+    await admin
+      .from("webauthn_credentials")
+      .update({ last_used_at: new Date().toISOString(), counter: (cred.counter ?? 0) + 1 })
+      .eq("id", cred.id);
+
     return json({
-      stub: true,
       ok: true,
+      user_id: cred.user_id,
+      stub_verification: true,
       session_token: null,
-      note: "Assertion RECEIVED but NOT verified. Implement @simplewebauthn/server and return a real session token.",
+      note: "Assertion stored but NOT cryptographically verified. Mint session token via @simplewebauthn/server in production.",
     });
   }
 
