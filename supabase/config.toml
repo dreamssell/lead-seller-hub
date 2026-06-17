@@ -1,1 +1,4 @@
 project_id = "gcjaeoxjhcfeispehmga"
+
+[functions.signature-portal]
+verify_jwt = false
