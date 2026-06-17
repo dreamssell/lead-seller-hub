@@ -24,6 +24,7 @@ import {
   ShieldAlert,
   Download,
   History,
+  PlugZap,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -91,6 +92,12 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
   const [stateText, setStateText] = useState<string>('');
   const [remaining, setRemaining] = useState<number>(0);
   const [failure, setFailure] = useState<{ reason: FailureReason; message: string } | null>(null);
+  const [autoReconnect, setAutoReconnect] = useState<boolean>(initialMeta.auto_reconnect ?? true);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    ok: boolean;
+    checks: Record<string, { ok: boolean; status?: number; message: string }>;
+  } | null>(null);
 
   const pollTimeoutRef = useRef<number | null>(null);
   const qrRefreshRef = useRef<number | null>(null);
@@ -110,6 +117,8 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
       setPairingCode(null);
       setStateText('');
       setFailure(null);
+      setTestResult(null);
+      setAutoReconnect(meta.auto_reconnect ?? true);
       setStep(conn.status === 'connected' ? 'connected' : 'credentials');
     } else {
       stopAll();
@@ -140,8 +149,62 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
   const persistTimeout = async (sec: number) => {
     await supabase
       .from('whatsapp_connections')
-      .update({ metadata: { ...(conn.metadata ?? {}), qr_timeout_sec: sec } })
+      .update({
+        metadata: {
+          ...(conn.metadata ?? {}),
+          qr_timeout_sec: sec,
+          auto_reconnect: autoReconnect,
+        },
+      })
       .eq('id', conn.id);
+  };
+
+  const runTest = async () => {
+    if (!canSubmit) {
+      toast.error('Corrija os campos antes de testar.');
+      return;
+    }
+    setTesting(true);
+    setTestResult(null);
+    const { data, error } = await invoke('test');
+    setTesting(false);
+    if (error) {
+      toast.error('Falha ao testar', { description: error.message });
+      return;
+    }
+    if (data?.error === 'forbidden') {
+      failWith('forbidden', data.hint || 'Você não tem permissão para esta instância.');
+      return;
+    }
+    setTestResult({ ok: !!data?.ok, checks: data?.checks ?? {} });
+    if (data?.ok) {
+      toast.success('Tudo certo! Você já pode gerar o QR Code.');
+    } else {
+      toast.warning('Alguns testes falharam — confira o resumo.');
+    }
+  };
+
+  const reconnectSameInstance = async () => {
+    // Reuse credentials + instance, regenerate QR, polling honors timeoutSec/backoff.
+    setFailure(null);
+    setQr(null);
+    setPairingCode(null);
+    setStep('qr');
+    setBusy(true);
+    const { data, error } = await invoke('create');
+    setBusy(false);
+    if (error || data?.error) {
+      failWith(
+        data?.error === 'forbidden' ? 'forbidden' : 'unknown',
+        error?.message || data?.hint || data?.error || 'Falha ao reconectar.',
+      );
+      return;
+    }
+    setQr(data?.qr ?? null);
+    setPairingCode(data?.pairing_code ?? null);
+    beginPolling();
+    if (!data?.qr) refreshQr();
+    toast.info('Reconectando com a mesma instância…');
   };
 
   const urlError = validateUrl(url);
@@ -332,6 +395,74 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
           Entre 30 e 600 segundos. Após esse tempo sem leitura, o wizard cancela o polling.
         </p>
       </div>
+
+      <label className="flex items-start gap-2 rounded-lg border border-border/60 p-3 cursor-pointer">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={autoReconnect}
+          onChange={(e) => setAutoReconnect(e.target.checked)}
+        />
+        <div>
+          <p className="text-sm font-medium">Reconectar automaticamente</p>
+          <p className="text-xs text-muted-foreground">
+            Quando a sessão cair, o wizard recria a mesma instância respeitando o tempo e o backoff configurados.
+          </p>
+        </div>
+      </label>
+
+      <div className="space-y-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={runTest}
+          disabled={testing || !canSubmit}
+        >
+          {testing ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <PlugZap className="w-4 h-4 mr-2" />
+          )}
+          Testar URL, API Key e Instance Name
+        </Button>
+        {testResult && (
+          <div
+            className={`rounded-lg border p-3 space-y-2 ${
+              testResult.ok
+                ? 'border-emerald-500/40 bg-emerald-500/10'
+                : 'border-amber-500/40 bg-amber-500/10'
+            }`}
+          >
+            <p className="text-xs font-semibold">
+              {testResult.ok ? 'Todos os checks passaram' : 'Alguns checks falharam'}
+            </p>
+            <ul className="space-y-1.5">
+              {(['reachability', 'auth', 'instance'] as const).map((k) => {
+                const c = testResult.checks[k];
+                if (!c) return null;
+                const Icon = c.ok ? CheckCircle2 : AlertCircle;
+                const label = k === 'reachability' ? 'URL' : k === 'auth' ? 'API Key' : 'Instance';
+                return (
+                  <li key={k} className="flex items-start gap-2 text-[11px]">
+                    <Icon
+                      className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${
+                        c.ok ? 'text-emerald-500' : 'text-amber-600'
+                      }`}
+                    />
+                    <span>
+                      <span className="font-semibold">{label}:</span> {c.message}
+                      {c.status ? (
+                        <span className="ml-1 opacity-60">[HTTP {c.status}]</span>
+                      ) : null}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -518,6 +649,10 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
               <Button variant="outline" onClick={handleLogout} disabled={busy}>
                 Desconectar
               </Button>
+              <Button variant="secondary" onClick={reconnectSameInstance} disabled={busy}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Reconectar
+              </Button>
               <Button onClick={() => onOpenChange(false)}>Concluir</Button>
             </>
           )}
@@ -525,6 +660,10 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
             <>
               <Button variant="outline" onClick={() => setStep('credentials')}>
                 Revisar credenciais
+              </Button>
+              <Button variant="secondary" onClick={reconnectSameInstance} disabled={busy}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Reconectar (mesma instância)
               </Button>
               <Button onClick={startInstance} disabled={busy}>
                 <RefreshCw className="w-4 h-4 mr-2" />
