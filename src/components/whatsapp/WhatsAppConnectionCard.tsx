@@ -23,6 +23,7 @@ import { UazStats } from './UazStats';
 import { FacebookDiagnostics } from './FacebookDiagnostics';
 import { WidgetSettings } from './WidgetSettings';
 import { EvolutionWizardDialog } from './EvolutionWizardDialog';
+import { EvolutionStatusBanner } from './EvolutionStatusBanner';
 
 interface ConnectionCardProps {
   conn: WhatsAppConnection;
@@ -183,6 +184,10 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
       </CardHeader>
       
       <CardContent className="space-y-4">
+        {conn.provider === 'evolution' && (
+          <EvolutionStatusBanner conn={conn} onOpenWizard={() => setShowEvolutionWizard(true)} />
+        )}
+
         {/* Provider Specific Stats/Metrics */}
         {conn.provider === 'uaz' && conn.status === 'connected' && (
           <UazStats 

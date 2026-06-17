@@ -49,6 +49,24 @@ export function EvolutionAttemptsHistory({ connectionId, evolutionOnly = true, l
 
   useEffect(() => {
     load();
+    const channel = supabase
+      .channel(`conn-events-${connectionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'connection_events',
+          filter: `connection_id=eq.${connectionId}`,
+        },
+        (payload) => {
+          setRows((prev) => [payload.new as AttemptRow, ...prev].slice(0, limit));
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectionId]);
 
