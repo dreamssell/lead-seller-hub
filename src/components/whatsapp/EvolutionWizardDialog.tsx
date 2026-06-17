@@ -649,6 +649,10 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
               <Button variant="outline" onClick={handleLogout} disabled={busy}>
                 Desconectar
               </Button>
+              <Button variant="secondary" onClick={reconnectSameInstance} disabled={busy}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Reconectar
+              </Button>
               <Button onClick={() => onOpenChange(false)}>Concluir</Button>
             </>
           )}
@@ -656,6 +660,10 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
             <>
               <Button variant="outline" onClick={() => setStep('credentials')}>
                 Revisar credenciais
+              </Button>
+              <Button variant="secondary" onClick={reconnectSameInstance} disabled={busy}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Reconectar (mesma instância)
               </Button>
               <Button onClick={startInstance} disabled={busy}>
                 <RefreshCw className="w-4 h-4 mr-2" />
