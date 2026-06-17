@@ -1849,6 +1849,51 @@ export type Database = {
           },
         ]
       }
+      signature_role_audit: {
+        Row: {
+          action: string
+          changed_by: string | null
+          changed_by_email: string | null
+          created_at: string
+          id: string
+          new_role: string | null
+          old_role: string | null
+          owner_id: string
+          sub_company_id: string | null
+          sub_company_name: string | null
+          target_email: string | null
+          target_user_id: string
+        }
+        Insert: {
+          action: string
+          changed_by?: string | null
+          changed_by_email?: string | null
+          created_at?: string
+          id?: string
+          new_role?: string | null
+          old_role?: string | null
+          owner_id: string
+          sub_company_id?: string | null
+          sub_company_name?: string | null
+          target_email?: string | null
+          target_user_id: string
+        }
+        Update: {
+          action?: string
+          changed_by?: string | null
+          changed_by_email?: string | null
+          created_at?: string
+          id?: string
+          new_role?: string | null
+          old_role?: string | null
+          owner_id?: string
+          sub_company_id?: string | null
+          sub_company_name?: string | null
+          target_email?: string | null
+          target_user_id?: string
+        }
+        Relationships: []
+      }
       signature_tokens: {
         Row: {
           created_at: string
