@@ -14,7 +14,11 @@ import {
   ShieldCheck,
   Zap,
   Globe,
+  PenLine,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 const stats = [
   { icon: MessageSquare, label: 'Conversas Ativas', value: 128, change: '+12%', positive: true },
