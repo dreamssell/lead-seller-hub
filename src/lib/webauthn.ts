@@ -60,6 +60,21 @@ export interface BiometricUser {
   user_id: string;
   user_name: string;
   user_display_name?: string;
+  friendly_name?: string;
+}
+
+/** Translate a browser/server error into a friendly Portuguese message. */
+export function describeWebAuthnError(err: unknown): string {
+  const msg = (err as any)?.message ?? String(err ?? '');
+  if (/NotAllowed/i.test(msg)) return 'Autenticação cancelada ou tempo esgotado.';
+  if (/SecurityError/i.test(msg))
+    return 'Erro de segurança: o domínio não está autorizado a usar biometria aqui.';
+  if (/InvalidState/i.test(msg))
+    return 'Esta biometria já está cadastrada para sua conta.';
+  if (/NotSupported/i.test(msg))
+    return 'Este dispositivo não tem leitor biométrico compatível.';
+  if (/AbortError/i.test(msg)) return 'Operação cancelada.';
+  return msg || 'Falha desconhecida na biometria.';
 }
 
 export async function registerBiometric(user: BiometricUser): Promise<{
@@ -67,14 +82,17 @@ export async function registerBiometric(user: BiometricUser): Promise<{
   stub?: boolean;
   error?: string;
 }> {
-  if (!isWebAuthnAvailable()) return { ok: false, error: 'WebAuthn não suportado neste navegador.' };
+  if (!isWebAuthnAvailable())
+    return { ok: false, error: 'WebAuthn não suportado neste navegador.' };
 
   const begin = await supabase.functions.invoke('webauthn', {
     body: {
       action: 'register/begin',
       rp_id: window.location.hostname,
       origin: window.location.origin,
-      ...user,
+      user_id: user.user_id,
+      user_name: user.user_name,
+      user_display_name: user.user_display_name,
     },
   });
   if (begin.error || !begin.data?.publicKey) {
@@ -85,13 +103,17 @@ export async function registerBiometric(user: BiometricUser): Promise<{
     ...pk,
     challenge: b64urlToBuf(pk.challenge),
     user: { ...pk.user, id: b64urlToBuf(pk.user.id) },
+    excludeCredentials: (pk.excludeCredentials ?? []).map((c: any) => ({
+      ...c,
+      id: b64urlToBuf(c.id),
+    })),
   };
 
   let cred: PublicKeyCredential;
   try {
     cred = (await navigator.credentials.create({ publicKey: options })) as PublicKeyCredential;
-  } catch (e: any) {
-    return { ok: false, error: e?.message || 'Usuário cancelou o registro biométrico.' };
+  } catch (e) {
+    return { ok: false, error: describeWebAuthnError(e) };
   }
 
   const complete = await supabase.functions.invoke('webauthn', {
@@ -100,20 +122,29 @@ export async function registerBiometric(user: BiometricUser): Promise<{
       rp_id: window.location.hostname,
       origin: window.location.origin,
       user_id: user.user_id,
+      friendly_name: user.friendly_name,
       credential: decodeCredentialResponse(cred),
     },
   });
   if (complete.error) return { ok: false, error: complete.error.message };
-  return { ok: !!complete.data?.ok, stub: !!complete.data?.stub };
+  return { ok: !!complete.data?.ok, stub: !!complete.data?.stub_verification };
 }
 
 export async function authenticateBiometric(email?: string): Promise<{
   ok: boolean;
   stub?: boolean;
   session_token?: string | null;
+  user_id?: string;
   error?: string;
+  /** True when the user should fall back to password (no creds, unsupported, etc.). */
+  fallback_to_password?: boolean;
 }> {
-  if (!isWebAuthnAvailable()) return { ok: false, error: 'WebAuthn não suportado neste navegador.' };
+  if (!isWebAuthnAvailable())
+    return {
+      ok: false,
+      fallback_to_password: true,
+      error: 'WebAuthn não suportado neste navegador. Use senha.',
+    };
 
   const begin = await supabase.functions.invoke('webauthn', {
     body: {
@@ -123,8 +154,21 @@ export async function authenticateBiometric(email?: string): Promise<{
       email,
     },
   });
+  // Edge function returns 404 + { error: 'no_credentials' } when the email has
+  // no passkeys — surface that as a fallback rather than a hard error.
+  if (begin.data?.error === 'no_credentials') {
+    return {
+      ok: false,
+      fallback_to_password: true,
+      error: begin.data?.hint || 'Nenhuma biometria cadastrada para este e-mail.',
+    };
+  }
   if (begin.error || !begin.data?.publicKey) {
-    return { ok: false, error: begin.error?.message || 'Falha ao iniciar autenticação.' };
+    return {
+      ok: false,
+      fallback_to_password: true,
+      error: begin.error?.message || 'Falha ao iniciar autenticação biométrica.',
+    };
   }
   const pk = begin.data.publicKey;
   const options: PublicKeyCredentialRequestOptions = {
@@ -139,8 +183,12 @@ export async function authenticateBiometric(email?: string): Promise<{
   let cred: PublicKeyCredential;
   try {
     cred = (await navigator.credentials.get({ publicKey: options })) as PublicKeyCredential;
-  } catch (e: any) {
-    return { ok: false, error: e?.message || 'Autenticação biométrica cancelada.' };
+  } catch (e) {
+    return {
+      ok: false,
+      fallback_to_password: true,
+      error: describeWebAuthnError(e),
+    };
   }
 
   const complete = await supabase.functions.invoke('webauthn', {
@@ -152,10 +200,50 @@ export async function authenticateBiometric(email?: string): Promise<{
       credential: decodeCredentialResponse(cred),
     },
   });
-  if (complete.error) return { ok: false, error: complete.error.message };
+  if (complete.error)
+    return { ok: false, fallback_to_password: true, error: complete.error.message };
+  if (complete.data?.error)
+    return {
+      ok: false,
+      fallback_to_password: true,
+      error: complete.data?.hint || complete.data?.error,
+    };
   return {
     ok: !!complete.data?.ok,
-    stub: !!complete.data?.stub,
+    stub: !!complete.data?.stub_verification,
     session_token: complete.data?.session_token ?? null,
+    user_id: complete.data?.user_id,
   };
 }
+
+export interface StoredCredential {
+  id: string;
+  credential_id: string;
+  friendly_name: string;
+  device_type: string | null;
+  backed_up: boolean;
+  transports: string[];
+  last_used_at: string | null;
+  created_at: string;
+}
+
+export async function listMyBiometricCredentials(): Promise<StoredCredential[]> {
+  const { data, error } = await supabase.functions.invoke('webauthn', {
+    body: { action: 'list' },
+  });
+  if (error || !data?.ok) return [];
+  return (data.credentials ?? []) as StoredCredential[];
+}
+
+export async function renameBiometricCredential(id: string, name: string) {
+  return supabase.functions.invoke('webauthn', {
+    body: { action: 'rename', credential_db_id: id, friendly_name: name },
+  });
+}
+
+export async function deleteBiometricCredential(id: string) {
+  return supabase.functions.invoke('webauthn', {
+    body: { action: 'delete', credential_db_id: id },
+  });
+}
+
