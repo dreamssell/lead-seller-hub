@@ -36,6 +36,10 @@ import DocumentationPage from "./pages/DocumentationPage";
 import PublicStatusPage from "./pages/PublicStatusPage";
 import NotFound from "./pages/NotFound";
 import VideoJoinPage from "./pages/VideoJoinPage";
+import SignaturePortalPage from "./pages/SignaturePortalPage";
+
+
+
 
 
 const queryClient = new QueryClient();
