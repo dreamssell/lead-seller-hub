@@ -1319,6 +1319,17 @@ export default function ChatPage() {
         )}
       </div>
 
+      <SignatureDocumentModal
+        open={signatureModalOpen}
+        onOpenChange={setSignatureModalOpen}
+        leadId={(selectedConv as any)?.lead_id || null}
+        subCompanyId={(selectedConv as any)?.sub_company_id || null}
+        ownerId={(selectedConv as any)?.owner_id || null}
+        signerNameDefault={selectedConv?.name}
+        signerPhoneDefault={(selectedConv as any)?.phone || (selectedConv as any)?.whatsapp}
+      />
+
+
       <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
         <DialogContent>
           <DialogHeader>
