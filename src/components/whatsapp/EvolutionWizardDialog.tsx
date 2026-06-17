@@ -394,6 +394,74 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
           Entre 30 e 600 segundos. Após esse tempo sem leitura, o wizard cancela o polling.
         </p>
       </div>
+
+      <label className="flex items-start gap-2 rounded-lg border border-border/60 p-3 cursor-pointer">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={autoReconnect}
+          onChange={(e) => setAutoReconnect(e.target.checked)}
+        />
+        <div>
+          <p className="text-sm font-medium">Reconectar automaticamente</p>
+          <p className="text-xs text-muted-foreground">
+            Quando a sessão cair, o wizard recria a mesma instância respeitando o tempo e o backoff configurados.
+          </p>
+        </div>
+      </label>
+
+      <div className="space-y-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={runTest}
+          disabled={testing || !canSubmit}
+        >
+          {testing ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <PlugZap className="w-4 h-4 mr-2" />
+          )}
+          Testar URL, API Key e Instance Name
+        </Button>
+        {testResult && (
+          <div
+            className={`rounded-lg border p-3 space-y-2 ${
+              testResult.ok
+                ? 'border-emerald-500/40 bg-emerald-500/10'
+                : 'border-amber-500/40 bg-amber-500/10'
+            }`}
+          >
+            <p className="text-xs font-semibold">
+              {testResult.ok ? 'Todos os checks passaram' : 'Alguns checks falharam'}
+            </p>
+            <ul className="space-y-1.5">
+              {(['reachability', 'auth', 'instance'] as const).map((k) => {
+                const c = testResult.checks[k];
+                if (!c) return null;
+                const Icon = c.ok ? CheckCircle2 : AlertCircle;
+                const label = k === 'reachability' ? 'URL' : k === 'auth' ? 'API Key' : 'Instance';
+                return (
+                  <li key={k} className="flex items-start gap-2 text-[11px]">
+                    <Icon
+                      className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${
+                        c.ok ? 'text-emerald-500' : 'text-amber-600'
+                      }`}
+                    />
+                    <span>
+                      <span className="font-semibold">{label}:</span> {c.message}
+                      {c.status ? (
+                        <span className="ml-1 opacity-60">[HTTP {c.status}]</span>
+                      ) : null}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+      </div>
     </div>
   );
 
