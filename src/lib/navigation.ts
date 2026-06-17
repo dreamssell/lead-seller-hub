@@ -36,6 +36,7 @@ export type SidebarPageKey =
   | 'status'
   | 'profile'
   | 'documentation'
+  | 'signatures'
   | 'white-label';
 
 export type SidebarNavItem = {
