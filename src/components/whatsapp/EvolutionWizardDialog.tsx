@@ -91,6 +91,12 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
   const [stateText, setStateText] = useState<string>('');
   const [remaining, setRemaining] = useState<number>(0);
   const [failure, setFailure] = useState<{ reason: FailureReason; message: string } | null>(null);
+  const [autoReconnect, setAutoReconnect] = useState<boolean>(initialMeta.auto_reconnect ?? true);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    ok: boolean;
+    checks: Record<string, { ok: boolean; status?: number; message: string }>;
+  } | null>(null);
 
   const pollTimeoutRef = useRef<number | null>(null);
   const qrRefreshRef = useRef<number | null>(null);
