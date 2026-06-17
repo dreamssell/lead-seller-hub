@@ -366,6 +366,9 @@ Deno.serve(async (req) => {
       return json({ ok: overallOk, checks });
     }
 
+    return json({ error: "invalid_action" }, 400);
+
+
 
   } catch (err) {
     console.error("[evolution-instance] error", err);
