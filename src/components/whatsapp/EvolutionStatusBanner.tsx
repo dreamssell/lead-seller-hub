@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { ShieldAlert, PlugZap, QrCode, X } from 'lucide-react';
+import { ShieldAlert, PlugZap, QrCode, X, RefreshCw, Loader2 } from 'lucide-react';
 import { WhatsAppConnection, ConnectionStatus } from './types';
 
 interface Props {
@@ -88,9 +88,47 @@ export function EvolutionStatusBanner({ conn, onOpenWizard }: Props) {
   }, [conn.id]);
 
   const reason = detectReason(status, lastError);
+  const [retrying, setRetrying] = useState(false);
+
   if (!reason || dismissed === reason) return null;
   const c = COPY[reason];
   const Icon = c.Icon;
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('evolution-instance', {
+        body: { action: 'create', connection_id: conn.id },
+      });
+      // Log retry attempt in connection_events so it shows in history.
+      await supabase.from('connection_events').insert({
+        connection_id: conn.id,
+        event_type: 'evolution.retry',
+        status: error || data?.error ? 'error' : 'success',
+        status_detail: error
+          ? error.message
+          : data?.error
+            ? data.hint || data.error
+            : data?.already_existed
+              ? 'Reconexão automática iniciada (instância já existia)'
+              : 'Reconexão automática iniciada',
+        error_message: error?.message ?? data?.error ?? null,
+        payload: { reason },
+        metadata_json: { source: 'banner_retry' },
+      });
+      if (error || data?.error) {
+        toast.error('Re-tentativa falhou', {
+          description: error?.message || data?.hint || data?.error,
+        });
+      } else {
+        toast.success('Re-tentativa iniciada', {
+          description: 'Abra o wizard para escanear o QR Code se necessário.',
+        });
+      }
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   return (
     <div className={`rounded-xl border p-3 flex items-start gap-3 ${c.cls}`}>
@@ -103,10 +141,24 @@ export function EvolutionStatusBanner({ conn, onOpenWizard }: Props) {
             detalhe: {lastError}
           </p>
         )}
-        <div className="flex gap-2 mt-2">
+        <div className="flex gap-2 mt-2 flex-wrap">
           <Button size="sm" variant="secondary" onClick={onOpenWizard} className="h-7">
             <QrCode className="w-3.5 h-3.5 mr-1.5" />
             {c.cta}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleRetry}
+            disabled={retrying}
+            className="h-7"
+          >
+            {retrying ? (
+              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+            )}
+            Re-tentar conexão
           </Button>
         </div>
       </div>
