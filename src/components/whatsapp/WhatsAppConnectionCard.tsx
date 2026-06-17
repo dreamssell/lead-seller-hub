@@ -23,6 +23,7 @@ import { UazStats } from './UazStats';
 import { FacebookDiagnostics } from './FacebookDiagnostics';
 import { WidgetSettings } from './WidgetSettings';
 import { EvolutionWizardDialog } from './EvolutionWizardDialog';
+import { EvolutionStatusBanner } from './EvolutionStatusBanner';
 
 interface ConnectionCardProps {
   conn: WhatsAppConnection;
