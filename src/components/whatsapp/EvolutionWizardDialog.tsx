@@ -148,8 +148,62 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
   const persistTimeout = async (sec: number) => {
     await supabase
       .from('whatsapp_connections')
-      .update({ metadata: { ...(conn.metadata ?? {}), qr_timeout_sec: sec } })
+      .update({
+        metadata: {
+          ...(conn.metadata ?? {}),
+          qr_timeout_sec: sec,
+          auto_reconnect: autoReconnect,
+        },
+      })
       .eq('id', conn.id);
+  };
+
+  const runTest = async () => {
+    if (!canSubmit) {
+      toast.error('Corrija os campos antes de testar.');
+      return;
+    }
+    setTesting(true);
+    setTestResult(null);
+    const { data, error } = await invoke('test');
+    setTesting(false);
+    if (error) {
+      toast.error('Falha ao testar', { description: error.message });
+      return;
+    }
+    if (data?.error === 'forbidden') {
+      failWith('forbidden', data.hint || 'Você não tem permissão para esta instância.');
+      return;
+    }
+    setTestResult({ ok: !!data?.ok, checks: data?.checks ?? {} });
+    if (data?.ok) {
+      toast.success('Tudo certo! Você já pode gerar o QR Code.');
+    } else {
+      toast.warning('Alguns testes falharam — confira o resumo.');
+    }
+  };
+
+  const reconnectSameInstance = async () => {
+    // Reuse credentials + instance, regenerate QR, polling honors timeoutSec/backoff.
+    setFailure(null);
+    setQr(null);
+    setPairingCode(null);
+    setStep('qr');
+    setBusy(true);
+    const { data, error } = await invoke('create');
+    setBusy(false);
+    if (error || data?.error) {
+      failWith(
+        data?.error === 'forbidden' ? 'forbidden' : 'unknown',
+        error?.message || data?.hint || data?.error || 'Falha ao reconectar.',
+      );
+      return;
+    }
+    setQr(data?.qr ?? null);
+    setPairingCode(data?.pairing_code ?? null);
+    beginPolling();
+    if (!data?.qr) refreshQr();
+    toast.info('Reconectando com a mesma instância…');
   };
 
   const urlError = validateUrl(url);
