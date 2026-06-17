@@ -62,6 +62,8 @@ const App = () => (
               <Route path="/s/:subId/login" element={<SubLoginPage />} />
               <Route path="/status-view" element={<PublicStatusPage />} />
               <Route path="/video/join/:roomId" element={<VideoJoinPage />} />
+              <Route path="/sign/:token" element={<SignaturePortalPage />} />
+
 
 
 
