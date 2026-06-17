@@ -10,6 +10,7 @@ import {
   Key,
   LayoutDashboard,
   MessageSquare,
+  PenLine,
   Phone,
   Settings,
   Sparkles,
