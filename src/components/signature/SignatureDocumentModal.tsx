@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, FileText, Copy, ExternalLink, Loader2, Trash2 } from "lucide-react";
+import { buildStoragePath } from "@/lib/sanitizeFilename";
 
 interface Props {
   open: boolean;
@@ -95,16 +96,20 @@ export function SignatureDocumentModal({ open, onOpenChange, leadId, subCompanyI
     setSubmitting(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const safeName = file.name
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-zA-Z0-9._-]+/g, "_")
-        .replace(/_+/g, "_")
-        .replace(/^_+|_+$/g, "")
-        .slice(-120);
-      const path = `${user!.id}/${Date.now()}_${safeName}`;
-      const up = await supabase.storage.from("signed-documents").upload(path, file, { contentType: file.type });
-      if (up.error) throw up.error;
+      const path = buildStoragePath(user!.id, file.name);
+      const up = await supabase.storage.from("signed-documents").upload(path, file, { contentType: file.type || "application/octet-stream" });
+      if (up.error) {
+        await (supabase as any).from("signature_error_logs").insert({
+          user_id: user!.id,
+          context: "storage_upload",
+          route: typeof window !== "undefined" ? window.location.pathname : null,
+          message: up.error.message || "Falha no upload",
+          details: { path, file_type: file.type, file_size: file.size },
+          original_filename: file.name,
+          user_email: user!.email,
+        });
+        throw up.error;
+      }
 
       const { data, error } = await supabase.functions.invoke("signature-document", {
         body: {
