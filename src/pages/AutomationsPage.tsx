@@ -16,7 +16,10 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from '@/hooks/use-toast';
 import {
   Zap, Webhook, GitBranch, Plus, Phone, Building2, Car, Copy, ExternalLink, Settings2,
+  PlugZap, Loader2, CheckCircle2, XCircle,
 } from 'lucide-react';
+
+type TestState = { status: 'idle' | 'running' | 'ok' | 'fail'; message?: string; at?: number };
 
 type Flow = { id: string; name: string; trigger: string; status: 'Ativo' | 'Pausado'; description?: string };
 
@@ -120,6 +123,62 @@ export default function AutomationsPage() {
   const [draft, setDraft] = useState<Flow>({ id: '', name: '', trigger: 'Nova conversa', status: 'Ativo', description: '' });
 
   const [configOpen, setConfigOpen] = useState<IntegrationId | null>(null);
+  const [tests, setTests] = useState<Record<IntegrationId, TestState>>({
+    holmes: { status: 'idle' }, dealerspace: { status: 'idle' }, '3cx': { status: 'idle' },
+  });
+
+  const runConnectionTest = async (id: IntegrationId) => {
+    const it = INTEGRATIONS.find((x) => x.id === id)!;
+    const cfg = integrations[id];
+    setTests((p) => ({ ...p, [id]: { status: 'running' } }));
+
+    const missing: string[] = [];
+    if (id === '3cx') {
+      if (!cfg.pbxUrl) missing.push('URL do PBX');
+      if (!cfg.username) missing.push('Usuário API');
+      if (!cfg.password) missing.push('Senha API');
+    } else {
+      if (!cfg.apiKey) missing.push('API Key');
+    }
+    if (missing.length) {
+      const msg = `Faltando: ${missing.join(', ')}`;
+      setTests((p) => ({ ...p, [id]: { status: 'fail', message: msg, at: Date.now() } }));
+      toast({ title: `${it.name} — credenciais incompletas`, description: msg, variant: 'destructive' });
+      return;
+    }
+
+    try {
+      if (it.webhookPath) {
+        const url = `${INBOUND_BASE}${it.webhookPath}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Test-Connection': '1', 'X-Provider': it.id },
+          body: JSON.stringify({ test: true, provider: it.id, ts: Date.now() }),
+        });
+        const ok = res.status < 500;
+        const msg = ok
+          ? `Webhook respondeu (HTTP ${res.status}). Credenciais aceitas localmente.`
+          : `Webhook falhou (HTTP ${res.status}).`;
+        setTests((p) => ({ ...p, [id]: { status: ok ? 'ok' : 'fail', message: msg, at: Date.now() } }));
+        toast({ title: `${it.name} — ${ok ? 'Conexão OK' : 'Falha'}`, description: msg, variant: ok ? 'default' : 'destructive' });
+      } else {
+        try {
+          await fetch(cfg.pbxUrl!, { method: 'HEAD', mode: 'no-cors' });
+          const msg = 'PBX alcançável e credenciais preenchidas.';
+          setTests((p) => ({ ...p, [id]: { status: 'ok', message: msg, at: Date.now() } }));
+          toast({ title: `${it.name} — Conexão OK`, description: msg });
+        } catch (e: any) {
+          const msg = `Não foi possível alcançar o PBX: ${e?.message ?? 'erro de rede'}`;
+          setTests((p) => ({ ...p, [id]: { status: 'fail', message: msg, at: Date.now() } }));
+          toast({ title: `${it.name} — Falha`, description: msg, variant: 'destructive' });
+        }
+      }
+    } catch (e: any) {
+      const msg = e?.message ?? 'Erro desconhecido';
+      setTests((p) => ({ ...p, [id]: { status: 'fail', message: msg, at: Date.now() } }));
+      toast({ title: `${it.name} — Falha`, description: msg, variant: 'destructive' });
+    }
+  };
 
   useEffect(() => { localStorage.setItem(FLOWS_KEY, JSON.stringify(flows)); }, [flows]);
   useEffect(() => { localStorage.setItem(INTEG_KEY, JSON.stringify(integrations)); }, [integrations]);
@@ -236,9 +295,32 @@ export default function AutomationsPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-xs text-muted-foreground">{it.desc}</p>
-                <div className="flex gap-2">
+                {(() => {
+                  const t = tests[it.id];
+                  if (t.status === 'idle') return null;
+                  const Icon = t.status === 'running' ? Loader2 : t.status === 'ok' ? CheckCircle2 : XCircle;
+                  const cls = t.status === 'ok' ? 'text-emerald-500' : t.status === 'fail' ? 'text-destructive' : 'text-muted-foreground';
+                  return (
+                    <div className={`flex items-center gap-2 text-[11px] ${cls}`}>
+                      <Icon className={`w-3.5 h-3.5 ${t.status === 'running' ? 'animate-spin' : ''}`} />
+                      <span className="truncate">{t.status === 'running' ? 'Testando conexão…' : t.message}</span>
+                    </div>
+                  );
+                })()}
+                <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={() => setConfigOpen(it.id)}>
                     <Settings2 className="w-4 h-4 mr-2" /> Configurar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={tests[it.id].status === 'running'}
+                    onClick={() => runConnectionTest(it.id)}
+                  >
+                    {tests[it.id].status === 'running'
+                      ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      : <PlugZap className="w-4 h-4 mr-2" />}
+                    Testar conexão
                   </Button>
                   <Button
                     size="sm"
@@ -360,7 +442,40 @@ export default function AutomationsPage() {
                 ))}
               </div>
 
-              <DialogFooter>
+              {(() => {
+                const t = tests[current.id];
+                if (t.status === 'idle') return null;
+                const Icon = t.status === 'running' ? Loader2 : t.status === 'ok' ? CheckCircle2 : XCircle;
+                const cls = t.status === 'ok'
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  : t.status === 'fail'
+                  ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                  : 'border-border bg-muted/40 text-muted-foreground';
+                return (
+                  <div className={`flex items-start gap-2 rounded-lg border p-2.5 text-xs ${cls}`}>
+                    <Icon className={`w-4 h-4 mt-0.5 ${t.status === 'running' ? 'animate-spin' : ''}`} />
+                    <div className="flex-1">
+                      <p className="font-medium">
+                        {t.status === 'running' ? 'Testando conexão…' : t.status === 'ok' ? 'Conexão validada' : 'Falha no teste'}
+                      </p>
+                      {t.message && <p className="opacity-80">{t.message}</p>}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <DialogFooter className="gap-2 sm:gap-2">
+                <Button
+                  variant="outline"
+                  disabled={tests[current.id].status === 'running'}
+                  onClick={() => runConnectionTest(current.id)}
+                  className="mr-auto"
+                >
+                  {tests[current.id].status === 'running'
+                    ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    : <PlugZap className="w-4 h-4 mr-2" />}
+                  Testar conexão
+                </Button>
                 <Button variant="ghost" onClick={() => setConfigOpen(null)}>Fechar</Button>
                 <Button onClick={() => { setConfigOpen(null); toast({ title: `${current.name} salvo` }); }}>Salvar</Button>
               </DialogFooter>
