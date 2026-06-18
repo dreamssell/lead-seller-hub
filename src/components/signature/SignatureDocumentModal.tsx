@@ -127,6 +127,18 @@ export function SignatureDocumentModal({ open, onOpenChange, leadId, subCompanyI
       setFile(null); setTitle(""); setDescription(""); setSignerEmail("");
       loadDocs();
     } catch (e: any) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        await (supabase as any).from("signature_error_logs").insert({
+          user_id: user?.id ?? null,
+          context: "signature_create",
+          route: typeof window !== "undefined" ? window.location.pathname : null,
+          message: e?.message || String(e),
+          details: { method, lead_id: leadId, sub_company_id: subCompanyId },
+          original_filename: file?.name ?? null,
+          user_email: user?.email ?? null,
+        });
+      } catch {}
       toast({ title: "Erro", description: e.message, variant: "destructive" });
     } finally {
       setSubmitting(false);
