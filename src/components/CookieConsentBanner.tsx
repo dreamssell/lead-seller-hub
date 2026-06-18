@@ -38,11 +38,36 @@ export function CookieConsentBanner() {
   }, []);
 
   const save = (consent: Consent) => {
+    let persisted = false;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(consent));
+      const check = localStorage.getItem(STORAGE_KEY);
+      persisted = !!check && JSON.parse(check).ts === consent.ts;
     } catch {}
     setOpen(false);
     setCustomize(false);
+
+    // Apply consent immediately to the app
+    window.dispatchEvent(new CustomEvent(CONSENT_EVENT, { detail: consent }));
+
+    const active = [
+      'Essenciais',
+      consent.analytics && 'Analytics',
+      consent.marketing && 'Marketing',
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
+    if (persisted) {
+      toast.success('Preferências de privacidade salvas', {
+        description: `Aplicado agora: ${active}`,
+        icon: <CheckCircle2 className="h-4 w-4" />,
+      });
+    } else {
+      toast.error('Não foi possível salvar suas preferências', {
+        description: 'Verifique se o navegador permite armazenamento local.',
+      });
+    }
   };
 
   const acceptAll = () =>
