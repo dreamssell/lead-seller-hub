@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,10 +8,15 @@ import {
 } from '@/components/ui/select';
 import {
   Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, Clock, TrendingUp, Users, Building2, RefreshCw,
+  Wifi, WifiOff, Loader2,
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend,
 } from 'recharts';
+import { toast } from '@/hooks/use-toast';
+
+type DataSource = 'api' | 'mock' | 'loading';
+const INTEG_KEY = 'automations.integrations.v1';
 
 type Period = '24h' | '7d' | '30d' | '90d';
 type Scope = { kind: 'company' } | { kind: 'team'; id: string } | { kind: 'agent'; id: string };
