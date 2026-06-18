@@ -345,6 +345,9 @@ export default function AutomationsPage() {
                   >
                     {cfg.enabled ? 'Desativar' : 'Ativar'}
                   </Button>
+                  <Button size="sm" variant="ghost" onClick={() => openLogs(it.id, `Logs — ${it.name}`)}>
+                    <ScrollText className="w-4 h-4 mr-2" /> Logs
+                  </Button>
                   {it.id === '3cx' && (
                     <Button size="sm" variant="secondary" asChild>
                       <a href="/3cx"><Phone className="w-4 h-4 mr-2" /> Abrir painel</a>
