@@ -16,8 +16,9 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from '@/hooks/use-toast';
 import {
   Zap, Webhook, GitBranch, Plus, Phone, Building2, Car, Copy, ExternalLink, Settings2,
-  PlugZap, Loader2, CheckCircle2, XCircle,
+  PlugZap, Loader2, CheckCircle2, XCircle, ScrollText,
 } from 'lucide-react';
+import { AutomationLogsDialog } from '@/components/automations/AutomationLogsDialog';
 
 type TestState = { status: 'idle' | 'running' | 'ok' | 'fail'; message?: string; at?: number };
 
