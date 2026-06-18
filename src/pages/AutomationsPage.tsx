@@ -16,7 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from '@/hooks/use-toast';
 import {
   Zap, Webhook, GitBranch, Plus, Phone, Building2, Car, Copy, ExternalLink, Settings2,
-  PlugZap, Loader2, CheckCircle2, XCircle, ScrollText, ArrowLeftRight, AlertCircle,
+  PlugZap, Loader2, CheckCircle2, XCircle, ScrollText, ArrowLeftRight, AlertCircle, Clock,
 } from 'lucide-react';
 import { AutomationLogsDialog } from '@/components/automations/AutomationLogsDialog';
 import { FieldMappingDialog } from '@/components/automations/FieldMappingDialog';
