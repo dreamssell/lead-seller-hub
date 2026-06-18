@@ -542,14 +542,45 @@ export default function AutomationsPage() {
                   ? 'border-destructive/40 bg-destructive/10 text-destructive'
                   : 'border-border bg-muted/40 text-muted-foreground';
                 return (
-                  <div className={`flex items-start gap-2 rounded-lg border p-2.5 text-xs ${cls}`}>
-                    <Icon className={`w-4 h-4 mt-0.5 ${t.status === 'running' ? 'animate-spin' : ''}`} />
-                    <div className="flex-1">
-                      <p className="font-medium">
-                        {t.status === 'running' ? 'Testando conexão…' : t.status === 'ok' ? 'Conexão validada' : 'Falha no teste'}
-                      </p>
-                      {t.message && <p className="opacity-80">{t.message}</p>}
+                  <div className={`space-y-2 rounded-lg border p-2.5 text-xs ${cls}`}>
+                    <div className="flex items-start gap-2">
+                      <Icon className={`w-4 h-4 mt-0.5 ${t.status === 'running' ? 'animate-spin' : ''}`} />
+                      <div className="flex-1">
+                        <p className="font-medium">
+                          {t.status === 'running' ? 'Testando conexão em background…' : t.status === 'ok' ? 'Conexão validada' : 'Falha no teste'}
+                        </p>
+                        {t.message && <p className="opacity-80">{t.message}</p>}
+                      </div>
                     </div>
+                    {!!t.steps?.length && (
+                      <ul className="space-y-0.5 pl-6">
+                        {t.steps.map((s) => (
+                          <li key={s.key} className="flex items-center gap-2">
+                            {s.status === 'running' && <Loader2 className="w-3 h-3 animate-spin" />}
+                            {s.status === 'ok' && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+                            {s.status === 'fail' && <XCircle className="w-3 h-3 text-destructive" />}
+                            {s.status === 'skip' && <AlertCircle className="w-3 h-3 opacity-50" />}
+                            {s.status === 'pending' && <Clock className="w-3 h-3 opacity-50" />}
+                            <span>{s.label}{s.detail ? ` — ${s.detail}` : ''}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {!!t.fields?.length && (
+                      <div className="pl-6">
+                        <p className="font-medium mb-1 opacity-80">Validação por campo</p>
+                        <ul className="grid grid-cols-1 gap-0.5">
+                          {t.fields.map((f) => (
+                            <li key={f.key} className="flex items-center gap-2">
+                              {f.status === 'ok' && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+                              {f.status === 'missing' && <AlertCircle className="w-3 h-3 text-amber-500" />}
+                              {f.status === 'fail' && <XCircle className="w-3 h-3 text-destructive" />}
+                              <span>{f.label}{f.detail ? ` — ${f.detail}` : ''}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
