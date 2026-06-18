@@ -177,10 +177,24 @@ export default function ThreeCxDashboardPage() {
   return (
     <AppLayout title="3CX — KPIs & Métricas" subtitle="Painel de ligações da empresa, equipes e agentes">
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Phone className="w-4 h-4 text-primary" />
           <Badge variant="secondary">3CX</Badge>
           <Badge>{scopeLabel}</Badge>
+          {source === 'loading' && (
+            <Badge variant="outline" className="gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Sincronizando…</Badge>
+          )}
+          {source === 'api' && (
+            <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"><Wifi className="w-3 h-3" /> API conectada</Badge>
+          )}
+          {source === 'mock' && (
+            <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-600 dark:text-amber-400" title="Configure 3CX em Automações para usar dados reais">
+              <WifiOff className="w-3 h-3" /> Dados simulados
+            </Badge>
+          )}
+          {lastSync && (
+            <span className="text-[11px] text-muted-foreground">Atualizado {lastSync.toLocaleTimeString('pt-BR')}</span>
+          )}
         </div>
         <div className="ml-auto flex flex-wrap gap-2">
           <Select value={scopeKey} onValueChange={setScopeKey}>
@@ -204,8 +218,16 @@ export default function ThreeCxDashboardPage() {
               <SelectItem value="90d">Últimos 90 dias</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="icon" onClick={() => setScopeKey((k) => k)} title="Atualizar">
-            <RefreshCw className="w-4 h-4" />
+          <Button
+            variant={autoRefresh ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setAutoRefresh((v) => !v)}
+            title="Atualização automática a cada 30s"
+          >
+            Auto {autoRefresh ? 'ON' : 'OFF'}
+          </Button>
+          <Button variant="outline" size="icon" onClick={refreshNow} title="Atualizar agora">
+            <RefreshCw className={`w-4 h-4 ${source === 'loading' ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </div>
