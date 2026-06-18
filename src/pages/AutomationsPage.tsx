@@ -16,8 +16,9 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from '@/hooks/use-toast';
 import {
   Zap, Webhook, GitBranch, Plus, Phone, Building2, Car, Copy, ExternalLink, Settings2,
-  PlugZap, Loader2, CheckCircle2, XCircle,
+  PlugZap, Loader2, CheckCircle2, XCircle, ScrollText,
 } from 'lucide-react';
+import { AutomationLogsDialog } from '@/components/automations/AutomationLogsDialog';
 
 type TestState = { status: 'idle' | 'running' | 'ok' | 'fail'; message?: string; at?: number };
 
@@ -123,6 +124,14 @@ export default function AutomationsPage() {
   const [draft, setDraft] = useState<Flow>({ id: '', name: '', trigger: 'Nova conversa', status: 'Ativo', description: '' });
 
   const [configOpen, setConfigOpen] = useState<IntegrationId | null>(null);
+  const [logsOpen, setLogsOpen] = useState(false);
+  const [logsSource, setLogsSource] = useState<string | undefined>(undefined);
+  const [logsTitle, setLogsTitle] = useState('Logs de execução');
+  const openLogs = (source?: string, title?: string) => {
+    setLogsSource(source);
+    setLogsTitle(title ?? 'Logs de execução');
+    setLogsOpen(true);
+  };
   const [tests, setTests] = useState<Record<IntegrationId, TestState>>({
     holmes: { status: 'idle' }, dealerspace: { status: 'idle' }, '3cx': { status: 'idle' },
   });
@@ -244,7 +253,9 @@ export default function AutomationsPage() {
             </CardHeader>
             <CardContent className="flex gap-2">
               <Button size="sm" variant="outline" onClick={() => openEdit(f)}>Editar</Button>
-              <Button size="sm" variant="ghost">Logs</Button>
+              <Button size="sm" variant="ghost" onClick={() => openLogs(f.name, `Logs — ${f.name}`)}>
+                <ScrollText className="w-4 h-4 mr-2" /> Logs
+              </Button>
             </CardContent>
           </Card>
         ))}
@@ -257,7 +268,9 @@ export default function AutomationsPage() {
         </CardHeader>
         <CardContent className="flex gap-2">
           <Button variant="outline"><Webhook className="w-4 h-4 mr-2" /> Novo Webhook</Button>
-          <Button variant="outline"><GitBranch className="w-4 h-4 mr-2" /> Ver Logs</Button>
+          <Button variant="outline" onClick={() => openLogs(undefined, 'Logs — Webhooks & Integrações')}>
+            <GitBranch className="w-4 h-4 mr-2" /> Ver Logs
+          </Button>
         </CardContent>
       </Card>
 
@@ -331,6 +344,9 @@ export default function AutomationsPage() {
                     }}
                   >
                     {cfg.enabled ? 'Desativar' : 'Ativar'}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => openLogs(it.id, `Logs — ${it.name}`)}>
+                    <ScrollText className="w-4 h-4 mr-2" /> Logs
                   </Button>
                   {it.id === '3cx' && (
                     <Button size="sm" variant="secondary" asChild>
@@ -483,6 +499,12 @@ export default function AutomationsPage() {
           )}
         </DialogContent>
       </Dialog>
+      <AutomationLogsDialog
+        open={logsOpen}
+        onOpenChange={setLogsOpen}
+        sourceFilter={logsSource}
+        title={logsTitle}
+      />
     </AppLayout>
   );
 }
