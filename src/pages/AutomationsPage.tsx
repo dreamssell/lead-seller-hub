@@ -579,6 +579,12 @@ export default function AutomationsPage() {
         sourceFilter={logsSource}
         title={logsTitle}
       />
+      <FieldMappingDialog
+        open={!!mappingFor}
+        onOpenChange={(v) => !v && setMappingFor(null)}
+        integrationId={mappingFor ?? ''}
+        integrationName={INTEGRATIONS.find((i) => i.id === mappingFor)?.name ?? ''}
+      />
     </AppLayout>
   );
 }
