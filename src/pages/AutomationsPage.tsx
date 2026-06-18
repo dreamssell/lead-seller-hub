@@ -250,6 +250,11 @@ export default function AutomationsPage() {
                   >
                     {cfg.enabled ? 'Desativar' : 'Ativar'}
                   </Button>
+                  {it.id === '3cx' && (
+                    <Button size="sm" variant="secondary" asChild>
+                      <a href="/3cx"><Phone className="w-4 h-4 mr-2" /> Abrir painel</a>
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
