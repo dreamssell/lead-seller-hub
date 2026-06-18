@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Cookie, X, Settings2, Shield, BarChart3 } from 'lucide-react';
+import { Cookie, X, Settings2, Shield, BarChart3, Megaphone, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -12,6 +13,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 
 const STORAGE_KEY = 'lgpd:consent:v1';
+const CONSENT_EVENT = 'lgpd:consent-changed';
 
 type Consent = {
   essential: true;
