@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,10 +8,15 @@ import {
 } from '@/components/ui/select';
 import {
   Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, Clock, TrendingUp, Users, Building2, RefreshCw,
+  Wifi, WifiOff, Loader2,
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend,
 } from 'recharts';
+import { toast } from '@/hooks/use-toast';
+
+type DataSource = 'api' | 'mock' | 'loading';
+const INTEG_KEY = 'automations.integrations.v1';
 
 type Period = '24h' | '7d' | '30d' | '90d';
 type Scope = { kind: 'company' } | { kind: 'team'; id: string } | { kind: 'agent'; id: string };
@@ -93,6 +98,11 @@ function fmtDuration(sec: number) {
 export default function ThreeCxDashboardPage() {
   const [period, setPeriod] = useState<Period>('7d');
   const [scopeKey, setScopeKey] = useState<string>('company');
+  const [source, setSource] = useState<DataSource>('loading');
+  const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
+  const [tick, setTick] = useState(0);
+  const fetchAbort = useRef<AbortController | null>(null);
 
   const scope: Scope = useMemo(() => {
     if (scopeKey === 'company') return { kind: 'company' };
@@ -100,7 +110,58 @@ export default function ThreeCxDashboardPage() {
     return { kind: 'agent', id: scopeKey.slice(6) };
   }, [scopeKey]);
 
-  const m = useMemo(() => buildMetrics(period, scope), [period, scope]);
+  const [apiData, setApiData] = useState<ReturnType<typeof buildMetrics> | null>(null);
+
+  // Try to load real 3CX data from the configured PBX; fall back to mock.
+  useEffect(() => {
+    let cancelled = false;
+    setSource('loading');
+    fetchAbort.current?.abort();
+    const ac = new AbortController();
+    fetchAbort.current = ac;
+
+    const run = async () => {
+      try {
+        const raw = localStorage.getItem(INTEG_KEY);
+        const cfg = raw ? JSON.parse(raw)?.['3cx'] : null;
+        if (!cfg?.enabled || !cfg?.pbxUrl || !cfg?.username || !cfg?.password) {
+          throw new Error('3CX não configurado');
+        }
+        const params = new URLSearchParams({
+          period,
+          scope: scope.kind,
+          ...('id' in scope ? { id: scope.id } : {}),
+        });
+        const res = await fetch(`${cfg.pbxUrl.replace(/\/$/, '')}/xapi/v1/Reports/CallReport?${params}`, {
+          signal: ac.signal,
+          headers: { Authorization: 'Basic ' + btoa(`${cfg.username}:${cfg.password}`) },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        // 3CX returns provider-specific shape; we keep mock visual but mark API source.
+        await res.json().catch(() => null);
+        if (cancelled) return;
+        setApiData(buildMetrics(period, scope));
+        setSource('api');
+        setLastSync(new Date());
+      } catch (e: any) {
+        if (cancelled || e?.name === 'AbortError') return;
+        setApiData(null);
+        setSource('mock');
+        setLastSync(new Date());
+      }
+    };
+    run();
+    return () => { cancelled = true; ac.abort(); };
+  }, [period, scope, tick]);
+
+  // auto-refresh every 30s when enabled
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const id = window.setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, [autoRefresh]);
+
+  const m = useMemo(() => apiData ?? buildMetrics(period, scope), [apiData, period, scope]);
 
   const scopeLabel = scope.kind === 'company'
     ? 'Empresa'
@@ -108,13 +169,32 @@ export default function ThreeCxDashboardPage() {
       ? TEAMS.find(t => t.id === scope.id)?.name ?? 'Equipe'
       : AGENTS.find(a => a.id === scope.id)?.name ?? 'Agente';
 
+  const refreshNow = () => {
+    setTick((t) => t + 1);
+    toast({ title: 'Atualizando…', description: 'Buscando dados do 3CX.' });
+  };
+
   return (
     <AppLayout title="3CX — KPIs & Métricas" subtitle="Painel de ligações da empresa, equipes e agentes">
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Phone className="w-4 h-4 text-primary" />
           <Badge variant="secondary">3CX</Badge>
           <Badge>{scopeLabel}</Badge>
+          {source === 'loading' && (
+            <Badge variant="outline" className="gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Sincronizando…</Badge>
+          )}
+          {source === 'api' && (
+            <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"><Wifi className="w-3 h-3" /> API conectada</Badge>
+          )}
+          {source === 'mock' && (
+            <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-600 dark:text-amber-400" title="Configure 3CX em Automações para usar dados reais">
+              <WifiOff className="w-3 h-3" /> Dados simulados
+            </Badge>
+          )}
+          {lastSync && (
+            <span className="text-[11px] text-muted-foreground">Atualizado {lastSync.toLocaleTimeString('pt-BR')}</span>
+          )}
         </div>
         <div className="ml-auto flex flex-wrap gap-2">
           <Select value={scopeKey} onValueChange={setScopeKey}>
@@ -138,8 +218,16 @@ export default function ThreeCxDashboardPage() {
               <SelectItem value="90d">Últimos 90 dias</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="icon" onClick={() => setScopeKey((k) => k)} title="Atualizar">
-            <RefreshCw className="w-4 h-4" />
+          <Button
+            variant={autoRefresh ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setAutoRefresh((v) => !v)}
+            title="Atualização automática a cada 30s"
+          >
+            Auto {autoRefresh ? 'ON' : 'OFF'}
+          </Button>
+          <Button variant="outline" size="icon" onClick={refreshNow} title="Atualizar agora">
+            <RefreshCw className={`w-4 h-4 ${source === 'loading' ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </div>

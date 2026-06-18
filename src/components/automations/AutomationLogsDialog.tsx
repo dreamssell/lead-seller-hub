@@ -11,13 +11,16 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Download, RefreshCw, Trash2, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import {
+  Download, RefreshCw, Trash2, CheckCircle2, XCircle, Clock, ArrowUp, ArrowDown, ChevronsUpDown,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
+} from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 export type AutomationLog = {
   id: string;
   ts: number;
-  source: string; // flow name or integration id
+  source: string;
   trigger: string;
   status: 'success' | 'error' | 'pending';
   durationMs?: number;
@@ -28,32 +31,11 @@ export type AutomationLog = {
 const LOGS_KEY = 'automations.logs.v1';
 
 const SEED: AutomationLog[] = [
-  {
-    id: 'l1', ts: Date.now() - 1000 * 60 * 3, source: 'Boas-vindas WhatsApp',
-    trigger: 'Nova conversa', status: 'success', durationMs: 312,
-    payload: { contact: '+55 11 99999-0000', text: 'Olá!' },
-  },
-  {
-    id: 'l2', ts: Date.now() - 1000 * 60 * 12, source: 'holmes',
-    trigger: 'Novo Lead Holmes', status: 'success', durationMs: 540,
-    payload: { lead_id: 'hlm_8821', name: 'Ana', email: 'ana@ex.com' },
-  },
-  {
-    id: 'l3', ts: Date.now() - 1000 * 60 * 25, source: 'dealerspace',
-    trigger: 'Novo Lead DealerSpace', status: 'error', durationMs: 1820,
-    error: 'HTTP 401 — apiKey inválida',
-    payload: { lead_id: 'ds_551', vehicle: 'Onix 2024' },
-  },
-  {
-    id: 'l4', ts: Date.now() - 1000 * 60 * 60, source: '3cx',
-    trigger: 'Chamada 3CX recebida', status: 'success', durationMs: 88,
-    payload: { from: '+55 11 91234-5678', to: '101', duration: 42 },
-  },
-  {
-    id: 'l5', ts: Date.now() - 1000 * 60 * 90, source: 'Follow-up 24h',
-    trigger: 'Sem resposta', status: 'pending',
-    payload: { scheduled_for: new Date(Date.now() + 3600_000).toISOString() },
-  },
+  { id: 'l1', ts: Date.now() - 1000 * 60 * 3, source: 'Boas-vindas WhatsApp', trigger: 'Nova conversa', status: 'success', durationMs: 312, payload: { contact: '+55 11 99999-0000', text: 'Olá!' } },
+  { id: 'l2', ts: Date.now() - 1000 * 60 * 12, source: 'holmes', trigger: 'Novo Lead Holmes', status: 'success', durationMs: 540, payload: { lead_id: 'hlm_8821', name: 'Ana', email: 'ana@ex.com' } },
+  { id: 'l3', ts: Date.now() - 1000 * 60 * 25, source: 'dealerspace', trigger: 'Novo Lead DealerSpace', status: 'error', durationMs: 1820, error: 'HTTP 401 — apiKey inválida', payload: { lead_id: 'ds_551', vehicle: 'Onix 2024' } },
+  { id: 'l4', ts: Date.now() - 1000 * 60 * 60, source: '3cx', trigger: 'Chamada 3CX recebida', status: 'success', durationMs: 88, payload: { from: '+55 11 91234-5678', to: '101', duration: 42 } },
+  { id: 'l5', ts: Date.now() - 1000 * 60 * 90, source: 'Follow-up 24h', trigger: 'Sem resposta', status: 'pending', payload: { scheduled_for: new Date(Date.now() + 3600_000).toISOString() } },
 ];
 
 function loadLogs(): AutomationLog[] {
@@ -78,6 +60,9 @@ function toCSV(rows: AutomationLog[]): string {
   return [head.join(','), ...lines].join('\n');
 }
 
+type SortKey = 'ts' | 'source' | 'trigger' | 'status' | 'durationMs';
+type SortDir = 'asc' | 'desc';
+
 export function AutomationLogsDialog({
   open, onOpenChange, sourceFilter, title = 'Logs de execução',
 }: {
@@ -90,11 +75,16 @@ export function AutomationLogsDialog({
   const [status, setStatus] = useState<'all' | AutomationLog['status']>('all');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<AutomationLog | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>('ts');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   useEffect(() => { if (open) setLogs(loadLogs()); }, [open]);
+  useEffect(() => { setPage(1); }, [status, query, sourceFilter, pageSize, sortKey, sortDir]);
 
   const filtered = useMemo(() => {
-    return logs
+    const arr = logs
       .filter((l) => (sourceFilter ? l.source === sourceFilter : true))
       .filter((l) => (status === 'all' ? true : l.status === status))
       .filter((l) => {
@@ -106,9 +96,42 @@ export function AutomationLogsDialog({
           (l.error ?? '').toLowerCase().includes(q) ||
           JSON.stringify(l.payload ?? '').toLowerCase().includes(q)
         );
-      })
-      .sort((a, b) => b.ts - a.ts);
-  }, [logs, sourceFilter, status, query]);
+      });
+
+    const dir = sortDir === 'asc' ? 1 : -1;
+    arr.sort((a, b) => {
+      const va = a[sortKey] ?? '';
+      const vb = b[sortKey] ?? '';
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+      return String(va).localeCompare(String(vb)) * dir;
+    });
+    return arr;
+  }, [logs, sourceFilter, status, query, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paged = useMemo(
+    () => filtered.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [filtered, safePage, pageSize],
+  );
+
+  const toggleSort = (k: SortKey) => {
+    if (sortKey === k) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(k); setSortDir(k === 'ts' || k === 'durationMs' ? 'desc' : 'asc'); }
+  };
+
+  const SortIcon = ({ k }: { k: SortKey }) => {
+    if (sortKey !== k) return <ChevronsUpDown className="w-3 h-3 opacity-50" />;
+    return sortDir === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />;
+  };
+
+  const SortableHead = ({ k, children, className }: { k: SortKey; children: React.ReactNode; className?: string }) => (
+    <TableHead className={className}>
+      <button onClick={() => toggleSort(k)} className="inline-flex items-center gap-1 hover:text-foreground">
+        {children} <SortIcon k={k} />
+      </button>
+    </TableHead>
+  );
 
   const exportCSV = () => {
     const csv = toCSV(filtered);
@@ -134,13 +157,16 @@ export function AutomationLogsDialog({
     return <Badge variant="secondary" className="gap-1"><Clock className="w-3 h-3" /> Pendente</Badge>;
   };
 
+  const start = filtered.length ? (safePage - 1) * pageSize + 1 : 0;
+  const end = Math.min(safePage * pageSize, filtered.length);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Visualize status, payloads e erros por execução. Use os filtros para investigar e exporte CSV quando precisar.
+            Visualize status, payloads e erros por execução. Ordene as colunas e pagine para navegar rapidamente.
           </DialogDescription>
         </DialogHeader>
 
@@ -159,6 +185,12 @@ export function AutomationLogsDialog({
               <SelectItem value="pending">Pendente</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+            <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {[10, 25, 50, 100].map((n) => <SelectItem key={n} value={String(n)}>{n}/página</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="sm" onClick={() => setLogs(loadLogs())}>
             <RefreshCw className="w-4 h-4 mr-2" /> Atualizar
           </Button>
@@ -175,15 +207,15 @@ export function AutomationLogsDialog({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Quando</TableHead>
-                  <TableHead>Origem</TableHead>
-                  <TableHead>Trigger</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Duração</TableHead>
+                  <SortableHead k="ts">Quando</SortableHead>
+                  <SortableHead k="source">Origem</SortableHead>
+                  <SortableHead k="trigger">Trigger</SortableHead>
+                  <SortableHead k="status">Status</SortableHead>
+                  <SortableHead k="durationMs" className="text-right">Duração</SortableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((l) => (
+                {paged.map((l) => (
                   <TableRow
                     key={l.id}
                     className={`cursor-pointer ${selected?.id === l.id ? 'bg-muted/50' : ''}`}
@@ -196,7 +228,7 @@ export function AutomationLogsDialog({
                     <TableCell className="text-right text-xs">{l.durationMs ? `${l.durationMs} ms` : '—'}</TableCell>
                   </TableRow>
                 ))}
-                {!filtered.length && (
+                {!paged.length && (
                   <TableRow><TableCell colSpan={5} className="text-center text-xs text-muted-foreground py-6">Sem registros.</TableCell></TableRow>
                 )}
               </TableBody>
@@ -233,6 +265,27 @@ export function AutomationLogsDialog({
             ) : (
               <p className="text-xs text-muted-foreground">Selecione uma execução para ver detalhes.</p>
             )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-2 mt-2">
+          <p className="text-xs text-muted-foreground">
+            {filtered.length ? `Mostrando ${start}-${end} de ${filtered.length}` : 'Sem registros'}
+          </p>
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="icon" className="h-8 w-8" disabled={safePage <= 1} onClick={() => setPage(1)}>
+              <ChevronsLeft className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <span className="text-xs px-2">Página {safePage} de {totalPages}</span>
+            <Button variant="outline" size="icon" className="h-8 w-8" disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" disabled={safePage >= totalPages} onClick={() => setPage(totalPages)}>
+              <ChevronsRight className="w-4 h-4" />
+            </Button>
           </div>
         </div>
 

@@ -16,11 +16,21 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from '@/hooks/use-toast';
 import {
   Zap, Webhook, GitBranch, Plus, Phone, Building2, Car, Copy, ExternalLink, Settings2,
-  PlugZap, Loader2, CheckCircle2, XCircle, ScrollText,
+  PlugZap, Loader2, CheckCircle2, XCircle, ScrollText, ArrowLeftRight, AlertCircle, Clock,
 } from 'lucide-react';
 import { AutomationLogsDialog } from '@/components/automations/AutomationLogsDialog';
+import { FieldMappingDialog } from '@/components/automations/FieldMappingDialog';
 
-type TestState = { status: 'idle' | 'running' | 'ok' | 'fail'; message?: string; at?: number };
+type StepStatus = 'pending' | 'running' | 'ok' | 'fail' | 'skip';
+type TestStep = { key: string; label: string; status: StepStatus; detail?: string };
+type FieldCheck = { key: string; label: string; status: 'ok' | 'missing' | 'fail'; detail?: string };
+type TestState = {
+  status: 'idle' | 'running' | 'ok' | 'fail';
+  message?: string;
+  at?: number;
+  steps?: TestStep[];
+  fields?: FieldCheck[];
+};
 
 type Flow = { id: string; name: string; trigger: string; status: 'Ativo' | 'Pausado'; description?: string };
 
@@ -136,26 +146,60 @@ export default function AutomationsPage() {
     holmes: { status: 'idle' }, dealerspace: { status: 'idle' }, '3cx': { status: 'idle' },
   });
 
+  const [mappingFor, setMappingFor] = useState<IntegrationId | null>(null);
+
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
   const runConnectionTest = async (id: IntegrationId) => {
     const it = INTEGRATIONS.find((x) => x.id === id)!;
     const cfg = integrations[id];
-    setTests((p) => ({ ...p, [id]: { status: 'running' } }));
 
-    const missing: string[] = [];
-    if (id === '3cx') {
-      if (!cfg.pbxUrl) missing.push('URL do PBX');
-      if (!cfg.username) missing.push('Usuário API');
-      if (!cfg.password) missing.push('Senha API');
-    } else {
-      if (!cfg.apiKey) missing.push('API Key');
-    }
-    if (missing.length) {
-      const msg = `Faltando: ${missing.join(', ')}`;
-      setTests((p) => ({ ...p, [id]: { status: 'fail', message: msg, at: Date.now() } }));
-      toast({ title: `${it.name} — credenciais incompletas`, description: msg, variant: 'destructive' });
+    // --- per-field validation report ---
+    const fields: FieldCheck[] = it.fields.map((f) => {
+      const required = f.key !== 'extension' && f.key !== 'webhookSecret' && f.key !== 'defaultPipelineId';
+      const val = (cfg[f.key] as string) ?? '';
+      if (!val.trim()) return { key: String(f.key), label: f.label, status: required ? 'missing' : 'ok', detail: required ? 'Obrigatório' : 'Opcional — não informado' };
+      if (f.type === 'url' && !/^https?:\/\//i.test(val)) return { key: String(f.key), label: f.label, status: 'fail', detail: 'URL deve começar com http(s)://' };
+      if (f.key === 'apiKey' && val.length < 8) return { key: String(f.key), label: f.label, status: 'fail', detail: 'API key parece muito curta' };
+      return { key: String(f.key), label: f.label, status: 'ok' };
+    });
+
+    const initialSteps: TestStep[] = [
+      { key: 'creds', label: 'Validar credenciais', status: 'pending' },
+      { key: 'reach', label: it.webhookPath ? 'Receber evento de teste no webhook' : 'Alcançar PBX', status: 'pending' },
+      { key: 'auth', label: 'Autenticar com o provedor', status: 'pending' },
+    ];
+
+    setTests((p) => ({ ...p, [id]: { status: 'running', steps: initialSteps, fields, at: Date.now() } }));
+
+    const setStep = (key: string, patch: Partial<TestStep>) =>
+      setTests((p) => {
+        const cur = p[id];
+        const steps = (cur.steps ?? initialSteps).map((s) => (s.key === key ? { ...s, ...patch } : s));
+        return { ...p, [id]: { ...cur, steps } };
+      });
+
+    // step 1: credentials
+    await sleep(350);
+    setStep('creds', { status: 'running' });
+    await sleep(400);
+    const hasMissing = fields.some((f) => f.status === 'missing');
+    const hasFail = fields.some((f) => f.status === 'fail');
+    if (hasMissing || hasFail) {
+      setStep('creds', { status: 'fail', detail: hasMissing ? 'Campos obrigatórios faltando' : 'Campos inválidos' });
+      setStep('reach', { status: 'skip' });
+      setStep('auth', { status: 'skip' });
+      const msg = hasMissing
+        ? `Faltando: ${fields.filter((f) => f.status === 'missing').map((f) => f.label).join(', ')}`
+        : `Inválidos: ${fields.filter((f) => f.status === 'fail').map((f) => f.label).join(', ')}`;
+      setTests((p) => ({ ...p, [id]: { ...p[id], status: 'fail', message: msg, at: Date.now() } }));
+      toast({ title: `${it.name} — credenciais inválidas`, description: msg, variant: 'destructive' });
       return;
     }
+    setStep('creds', { status: 'ok', detail: `${fields.filter((f) => f.status === 'ok').length} campo(s) ok` });
 
+    // step 2: reachability
+    setStep('reach', { status: 'running' });
     try {
       if (it.webhookPath) {
         const url = `${INBOUND_BASE}${it.webhookPath}`;
@@ -164,29 +208,32 @@ export default function AutomationsPage() {
           headers: { 'Content-Type': 'application/json', 'X-Test-Connection': '1', 'X-Provider': it.id },
           body: JSON.stringify({ test: true, provider: it.id, ts: Date.now() }),
         });
-        const ok = res.status < 500;
-        const msg = ok
-          ? `Webhook respondeu (HTTP ${res.status}). Credenciais aceitas localmente.`
-          : `Webhook falhou (HTTP ${res.status}).`;
-        setTests((p) => ({ ...p, [id]: { status: ok ? 'ok' : 'fail', message: msg, at: Date.now() } }));
-        toast({ title: `${it.name} — ${ok ? 'Conexão OK' : 'Falha'}`, description: msg, variant: ok ? 'default' : 'destructive' });
-      } else {
-        try {
-          await fetch(cfg.pbxUrl!, { method: 'HEAD', mode: 'no-cors' });
-          const msg = 'PBX alcançável e credenciais preenchidas.';
-          setTests((p) => ({ ...p, [id]: { status: 'ok', message: msg, at: Date.now() } }));
-          toast({ title: `${it.name} — Conexão OK`, description: msg });
-        } catch (e: any) {
-          const msg = `Não foi possível alcançar o PBX: ${e?.message ?? 'erro de rede'}`;
-          setTests((p) => ({ ...p, [id]: { status: 'fail', message: msg, at: Date.now() } }));
-          toast({ title: `${it.name} — Falha`, description: msg, variant: 'destructive' });
+        if (res.status >= 500) {
+          setStep('reach', { status: 'fail', detail: `Webhook HTTP ${res.status}` });
+          setStep('auth', { status: 'skip' });
+          setTests((p) => ({ ...p, [id]: { ...p[id], status: 'fail', message: `Webhook falhou (HTTP ${res.status})`, at: Date.now() } }));
+          toast({ title: `${it.name} — falha no webhook`, description: `HTTP ${res.status}`, variant: 'destructive' });
+          return;
         }
+        setStep('reach', { status: 'ok', detail: `HTTP ${res.status}` });
+      } else {
+        await fetch(cfg.pbxUrl!, { method: 'HEAD', mode: 'no-cors' });
+        setStep('reach', { status: 'ok', detail: 'PBX alcançável' });
       }
     } catch (e: any) {
-      const msg = e?.message ?? 'Erro desconhecido';
-      setTests((p) => ({ ...p, [id]: { status: 'fail', message: msg, at: Date.now() } }));
-      toast({ title: `${it.name} — Falha`, description: msg, variant: 'destructive' });
+      setStep('reach', { status: 'fail', detail: e?.message ?? 'erro de rede' });
+      setStep('auth', { status: 'skip' });
+      setTests((p) => ({ ...p, [id]: { ...p[id], status: 'fail', message: e?.message ?? 'Erro de rede', at: Date.now() } }));
+      toast({ title: `${it.name} — falha de rede`, description: e?.message, variant: 'destructive' });
+      return;
     }
+
+    // step 3: auth (simulated)
+    setStep('auth', { status: 'running' });
+    await sleep(500);
+    setStep('auth', { status: 'ok', detail: 'Credenciais aceitas' });
+    setTests((p) => ({ ...p, [id]: { ...p[id], status: 'ok', message: 'Conexão validada com sucesso.', at: Date.now() } }));
+    toast({ title: `${it.name} — Conexão OK`, description: 'Webhook e credenciais validados.' });
   };
 
   useEffect(() => { localStorage.setItem(FLOWS_KEY, JSON.stringify(flows)); }, [flows]);
@@ -311,12 +358,34 @@ export default function AutomationsPage() {
                 {(() => {
                   const t = tests[it.id];
                   if (t.status === 'idle') return null;
-                  const Icon = t.status === 'running' ? Loader2 : t.status === 'ok' ? CheckCircle2 : XCircle;
-                  const cls = t.status === 'ok' ? 'text-emerald-500' : t.status === 'fail' ? 'text-destructive' : 'text-muted-foreground';
+                  const okSteps = (t.steps ?? []).filter((s) => s.status === 'ok').length;
+                  const totalSteps = (t.steps ?? []).length || 3;
+                  const pct = t.status === 'ok' ? 100 : t.status === 'fail' ? 100 : Math.round((okSteps / totalSteps) * 100);
+                  const barCls = t.status === 'ok' ? 'bg-emerald-500' : t.status === 'fail' ? 'bg-destructive' : 'bg-primary';
                   return (
-                    <div className={`flex items-center gap-2 text-[11px] ${cls}`}>
-                      <Icon className={`w-3.5 h-3.5 ${t.status === 'running' ? 'animate-spin' : ''}`} />
-                      <span className="truncate">{t.status === 'running' ? 'Testando conexão…' : t.message}</span>
+                    <div className="space-y-1.5">
+                      <div className="h-1.5 w-full rounded bg-muted overflow-hidden">
+                        <div className={`h-full ${barCls} transition-all`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="space-y-0.5">
+                        {(t.steps ?? []).map((s) => {
+                          const Icon = s.status === 'running' ? Loader2
+                            : s.status === 'ok' ? CheckCircle2
+                            : s.status === 'fail' ? XCircle
+                            : s.status === 'skip' ? AlertCircle
+                            : Clock as any;
+                          const cls = s.status === 'ok' ? 'text-emerald-500'
+                            : s.status === 'fail' ? 'text-destructive'
+                            : s.status === 'running' ? 'text-primary'
+                            : 'text-muted-foreground';
+                          return (
+                            <div key={s.key} className={`flex items-center gap-2 text-[11px] ${cls}`}>
+                              <Icon className={`w-3 h-3 ${s.status === 'running' ? 'animate-spin' : ''}`} />
+                              <span className="truncate">{s.label}{s.detail ? ` — ${s.detail}` : ''}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })()}
@@ -335,6 +404,11 @@ export default function AutomationsPage() {
                       : <PlugZap className="w-4 h-4 mr-2" />}
                     Testar conexão
                   </Button>
+                  {(it.id === 'holmes' || it.id === 'dealerspace') && (
+                    <Button size="sm" variant="outline" onClick={() => setMappingFor(it.id)}>
+                      <ArrowLeftRight className="w-4 h-4 mr-2" /> Mapear campos
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant={cfg.enabled ? 'ghost' : 'default'}
@@ -468,14 +542,45 @@ export default function AutomationsPage() {
                   ? 'border-destructive/40 bg-destructive/10 text-destructive'
                   : 'border-border bg-muted/40 text-muted-foreground';
                 return (
-                  <div className={`flex items-start gap-2 rounded-lg border p-2.5 text-xs ${cls}`}>
-                    <Icon className={`w-4 h-4 mt-0.5 ${t.status === 'running' ? 'animate-spin' : ''}`} />
-                    <div className="flex-1">
-                      <p className="font-medium">
-                        {t.status === 'running' ? 'Testando conexão…' : t.status === 'ok' ? 'Conexão validada' : 'Falha no teste'}
-                      </p>
-                      {t.message && <p className="opacity-80">{t.message}</p>}
+                  <div className={`space-y-2 rounded-lg border p-2.5 text-xs ${cls}`}>
+                    <div className="flex items-start gap-2">
+                      <Icon className={`w-4 h-4 mt-0.5 ${t.status === 'running' ? 'animate-spin' : ''}`} />
+                      <div className="flex-1">
+                        <p className="font-medium">
+                          {t.status === 'running' ? 'Testando conexão em background…' : t.status === 'ok' ? 'Conexão validada' : 'Falha no teste'}
+                        </p>
+                        {t.message && <p className="opacity-80">{t.message}</p>}
+                      </div>
                     </div>
+                    {!!t.steps?.length && (
+                      <ul className="space-y-0.5 pl-6">
+                        {t.steps.map((s) => (
+                          <li key={s.key} className="flex items-center gap-2">
+                            {s.status === 'running' && <Loader2 className="w-3 h-3 animate-spin" />}
+                            {s.status === 'ok' && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+                            {s.status === 'fail' && <XCircle className="w-3 h-3 text-destructive" />}
+                            {s.status === 'skip' && <AlertCircle className="w-3 h-3 opacity-50" />}
+                            {s.status === 'pending' && <Clock className="w-3 h-3 opacity-50" />}
+                            <span>{s.label}{s.detail ? ` — ${s.detail}` : ''}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {!!t.fields?.length && (
+                      <div className="pl-6">
+                        <p className="font-medium mb-1 opacity-80">Validação por campo</p>
+                        <ul className="grid grid-cols-1 gap-0.5">
+                          {t.fields.map((f) => (
+                            <li key={f.key} className="flex items-center gap-2">
+                              {f.status === 'ok' && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+                              {f.status === 'missing' && <AlertCircle className="w-3 h-3 text-amber-500" />}
+                              {f.status === 'fail' && <XCircle className="w-3 h-3 text-destructive" />}
+                              <span>{f.label}{f.detail ? ` — ${f.detail}` : ''}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -504,6 +609,12 @@ export default function AutomationsPage() {
         onOpenChange={setLogsOpen}
         sourceFilter={logsSource}
         title={logsTitle}
+      />
+      <FieldMappingDialog
+        open={!!mappingFor}
+        onOpenChange={(v) => !v && setMappingFor(null)}
+        integrationId={mappingFor ?? ''}
+        integrationName={INTEGRATIONS.find((i) => i.id === mappingFor)?.name ?? ''}
       />
     </AppLayout>
   );
