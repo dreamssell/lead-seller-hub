@@ -358,12 +358,34 @@ export default function AutomationsPage() {
                 {(() => {
                   const t = tests[it.id];
                   if (t.status === 'idle') return null;
-                  const Icon = t.status === 'running' ? Loader2 : t.status === 'ok' ? CheckCircle2 : XCircle;
-                  const cls = t.status === 'ok' ? 'text-emerald-500' : t.status === 'fail' ? 'text-destructive' : 'text-muted-foreground';
+                  const okSteps = (t.steps ?? []).filter((s) => s.status === 'ok').length;
+                  const totalSteps = (t.steps ?? []).length || 3;
+                  const pct = t.status === 'ok' ? 100 : t.status === 'fail' ? 100 : Math.round((okSteps / totalSteps) * 100);
+                  const barCls = t.status === 'ok' ? 'bg-emerald-500' : t.status === 'fail' ? 'bg-destructive' : 'bg-primary';
                   return (
-                    <div className={`flex items-center gap-2 text-[11px] ${cls}`}>
-                      <Icon className={`w-3.5 h-3.5 ${t.status === 'running' ? 'animate-spin' : ''}`} />
-                      <span className="truncate">{t.status === 'running' ? 'Testando conexão…' : t.message}</span>
+                    <div className="space-y-1.5">
+                      <div className="h-1.5 w-full rounded bg-muted overflow-hidden">
+                        <div className={`h-full ${barCls} transition-all`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="space-y-0.5">
+                        {(t.steps ?? []).map((s) => {
+                          const Icon = s.status === 'running' ? Loader2
+                            : s.status === 'ok' ? CheckCircle2
+                            : s.status === 'fail' ? XCircle
+                            : s.status === 'skip' ? AlertCircle
+                            : Clock as any;
+                          const cls = s.status === 'ok' ? 'text-emerald-500'
+                            : s.status === 'fail' ? 'text-destructive'
+                            : s.status === 'running' ? 'text-primary'
+                            : 'text-muted-foreground';
+                          return (
+                            <div key={s.key} className={`flex items-center gap-2 text-[11px] ${cls}`}>
+                              <Icon className={`w-3 h-3 ${s.status === 'running' ? 'animate-spin' : ''}`} />
+                              <span className="truncate">{s.label}{s.detail ? ` — ${s.detail}` : ''}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })()}
@@ -382,6 +404,11 @@ export default function AutomationsPage() {
                       : <PlugZap className="w-4 h-4 mr-2" />}
                     Testar conexão
                   </Button>
+                  {(it.id === 'holmes' || it.id === 'dealerspace') && (
+                    <Button size="sm" variant="outline" onClick={() => setMappingFor(it.id)}>
+                      <ArrowLeftRight className="w-4 h-4 mr-2" /> Mapear campos
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant={cfg.enabled ? 'ghost' : 'default'}
