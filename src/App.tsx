@@ -88,6 +88,7 @@ const App = () => (
               <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppPage /></ProtectedRoute>} />
               <Route path="/video" element={<ProtectedRoute><VideoCallsPage /></ProtectedRoute>} />
               <Route path="/automations" element={<ProtectedRoute><AutomationsPage /></ProtectedRoute>} />
+              <Route path="/3cx" element={<ProtectedRoute><ThreeCxDashboardPage /></ProtectedRoute>} />
               <Route path="/cadastros" element={<ProtectedRoute><CadastrosPage /></ProtectedRoute>} />
               <Route path="/ceo" element={<ProtectedRoute><CEODashboardPage /></ProtectedRoute>} />
               <Route path="/status" element={<ProtectedRoute><BackendStatusPage /></ProtectedRoute>} />
