@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Calendar as CalendarIcon, Download, FileText, Filter, KanbanSquare, RefreshCcw, Search, ShieldCheck, BarChart3, FileSpreadsheet, Table as TableIcon, Radio } from 'lucide-react';
+import { Calendar as CalendarIcon, Download, FileText, Filter, KanbanSquare, RefreshCcw, Search, ShieldCheck, BarChart3, FileSpreadsheet, Table as TableIcon, Radio, AlertTriangle, Lock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -16,6 +16,7 @@ import { SignatureDocumentsTable } from '@/components/signature/SignatureDocumen
 import { SignatureRoleAuditLog } from '@/components/signature/SignatureRoleAuditLog';
 import { ExportColumnPicker } from '@/components/signature/ExportColumnPicker';
 import { exportSignaturesCSV, exportSignaturesPDF, DEFAULT_EXPORT_COLUMNS, type ExportColumnKey } from '@/lib/signatureExport';
+import { SignatureErrorLogs } from '@/components/signature/SignatureErrorLogs';
 
 type Doc = PipelineDoc & {
   owner_id: string;
@@ -59,6 +60,7 @@ export default function SignaturesPage() {
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
   const [isLeader, setIsLeader] = useState(false);
+  const [hasAnyRole, setHasAnyRole] = useState<boolean | null>(null);
   const [userNames, setUserNames] = useState<Record<string, string>>({});
   const [userRoles, setUserRoles] = useState<Record<string, string>>({});
   const [subNames, setSubNames] = useState<Record<string, string>>({});
@@ -93,7 +95,9 @@ export default function SignaturesPage() {
       .from('user_signature_roles')
       .select('role')
       .eq('user_id', user.id);
-    setIsLeader((roles || []).some((r: any) => ['supervisor', 'coordenador', 'diretor'].includes(r.role)));
+    const rolesArr = (roles || []) as any[];
+    setHasAnyRole(rolesArr.length > 0);
+    setIsLeader(rolesArr.some((r: any) => ['supervisor', 'coordenador', 'diretor'].includes(r.role)));
 
     const userIds = Array.from(new Set(list.map((d) => d.created_by)));
     const subIds = Array.from(new Set(list.map((d) => d.sub_company_id).filter(Boolean) as string[]));
@@ -201,6 +205,15 @@ export default function SignaturesPage() {
 
   return (
     <AppLayout title="Assinaturas" subtitle="Central de acompanhamento, equipe e relatórios">
+      {hasAnyRole === false ? (
+        <div className="glass-card p-10 text-center">
+          <Lock className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
+          <h2 className="text-lg font-semibold mb-1">Acesso restrito</h2>
+          <p className="text-sm text-muted-foreground">
+            Você não tem cargo atribuído no módulo de Assinaturas. Solicite a um supervisor, coordenador ou diretor.
+          </p>
+        </div>
+      ) : (
       <Tabs defaultValue="pipeline" className="space-y-4">
         <TabsList>
           <TabsTrigger value="pipeline"><KanbanSquare className="w-3.5 h-3.5 mr-1.5" /> Pipeline</TabsTrigger>
@@ -209,6 +222,9 @@ export default function SignaturesPage() {
             <TabsTrigger value="dashboard"><BarChart3 className="w-3.5 h-3.5 mr-1.5" /> Dashboard Gerencial</TabsTrigger>
           )}
           <TabsTrigger value="roles"><ShieldCheck className="w-3.5 h-3.5 mr-1.5" /> Equipe & Cargos</TabsTrigger>
+          {isLeader && (
+            <TabsTrigger value="errors"><AlertTriangle className="w-3.5 h-3.5 mr-1.5" /> Registro de erros</TabsTrigger>
+          )}
         </TabsList>
 
         {/* Filters */}
@@ -301,9 +317,16 @@ export default function SignaturesPage() {
           <SignatureRolesManager />
           <SignatureRoleAuditLog />
         </TabsContent>
-      </Tabs>
 
-      {!loading && docs.length === 0 && (
+        {isLeader && (
+          <TabsContent value="errors">
+            <SignatureErrorLogs />
+          </TabsContent>
+        )}
+      </Tabs>
+      )}
+
+      {!loading && hasAnyRole !== false && docs.length === 0 && (
         <div className="glass-card p-8 text-center mt-4">
           <FileText className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
           <p className="text-sm text-muted-foreground">
