@@ -124,6 +124,14 @@ export default function AutomationsPage() {
   const [draft, setDraft] = useState<Flow>({ id: '', name: '', trigger: 'Nova conversa', status: 'Ativo', description: '' });
 
   const [configOpen, setConfigOpen] = useState<IntegrationId | null>(null);
+  const [logsOpen, setLogsOpen] = useState(false);
+  const [logsSource, setLogsSource] = useState<string | undefined>(undefined);
+  const [logsTitle, setLogsTitle] = useState('Logs de execução');
+  const openLogs = (source?: string, title?: string) => {
+    setLogsSource(source);
+    setLogsTitle(title ?? 'Logs de execução');
+    setLogsOpen(true);
+  };
   const [tests, setTests] = useState<Record<IntegrationId, TestState>>({
     holmes: { status: 'idle' }, dealerspace: { status: 'idle' }, '3cx': { status: 'idle' },
   });
