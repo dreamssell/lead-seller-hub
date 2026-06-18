@@ -499,6 +499,12 @@ export default function AutomationsPage() {
           )}
         </DialogContent>
       </Dialog>
+      <AutomationLogsDialog
+        open={logsOpen}
+        onOpenChange={setLogsOpen}
+        sourceFilter={logsSource}
+        title={logsTitle}
+      />
     </AppLayout>
   );
 }
