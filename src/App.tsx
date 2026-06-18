@@ -38,6 +38,7 @@ import NotFound from "./pages/NotFound";
 import VideoJoinPage from "./pages/VideoJoinPage";
 import SignaturePortalPage from "./pages/SignaturePortalPage";
 import SignaturesPage from "./pages/SignaturesPage";
+import ThreeCxDashboardPage from "./pages/ThreeCxDashboardPage";
 
 
 
