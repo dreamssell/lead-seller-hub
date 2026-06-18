@@ -442,7 +442,40 @@ export default function AutomationsPage() {
                 ))}
               </div>
 
-              <DialogFooter>
+              {(() => {
+                const t = tests[current.id];
+                if (t.status === 'idle') return null;
+                const Icon = t.status === 'running' ? Loader2 : t.status === 'ok' ? CheckCircle2 : XCircle;
+                const cls = t.status === 'ok'
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  : t.status === 'fail'
+                  ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                  : 'border-border bg-muted/40 text-muted-foreground';
+                return (
+                  <div className={`flex items-start gap-2 rounded-lg border p-2.5 text-xs ${cls}`}>
+                    <Icon className={`w-4 h-4 mt-0.5 ${t.status === 'running' ? 'animate-spin' : ''}`} />
+                    <div className="flex-1">
+                      <p className="font-medium">
+                        {t.status === 'running' ? 'Testando conexão…' : t.status === 'ok' ? 'Conexão validada' : 'Falha no teste'}
+                      </p>
+                      {t.message && <p className="opacity-80">{t.message}</p>}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <DialogFooter className="gap-2 sm:gap-2">
+                <Button
+                  variant="outline"
+                  disabled={tests[current.id].status === 'running'}
+                  onClick={() => runConnectionTest(current.id)}
+                  className="mr-auto"
+                >
+                  {tests[current.id].status === 'running'
+                    ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    : <PlugZap className="w-4 h-4 mr-2" />}
+                  Testar conexão
+                </Button>
                 <Button variant="ghost" onClick={() => setConfigOpen(null)}>Fechar</Button>
                 <Button onClick={() => { setConfigOpen(null); toast({ title: `${current.name} salvo` }); }}>Salvar</Button>
               </DialogFooter>
