@@ -268,7 +268,9 @@ export default function AutomationsPage() {
         </CardHeader>
         <CardContent className="flex gap-2">
           <Button variant="outline"><Webhook className="w-4 h-4 mr-2" /> Novo Webhook</Button>
-          <Button variant="outline"><GitBranch className="w-4 h-4 mr-2" /> Ver Logs</Button>
+          <Button variant="outline" onClick={() => openLogs(undefined, 'Logs — Webhooks & Integrações')}>
+            <GitBranch className="w-4 h-4 mr-2" /> Ver Logs
+          </Button>
         </CardContent>
       </Card>
 
