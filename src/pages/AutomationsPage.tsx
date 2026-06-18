@@ -253,7 +253,9 @@ export default function AutomationsPage() {
             </CardHeader>
             <CardContent className="flex gap-2">
               <Button size="sm" variant="outline" onClick={() => openEdit(f)}>Editar</Button>
-              <Button size="sm" variant="ghost">Logs</Button>
+              <Button size="sm" variant="ghost" onClick={() => openLogs(f.name, `Logs — ${f.name}`)}>
+                <ScrollText className="w-4 h-4 mr-2" /> Logs
+              </Button>
             </CardContent>
           </Card>
         ))}
