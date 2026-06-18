@@ -1,25 +1,179 @@
+import { useEffect, useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Zap, Webhook, GitBranch, Plus } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { toast } from '@/hooks/use-toast';
+import {
+  Zap, Webhook, GitBranch, Plus, Phone, Building2, Car, Copy, ExternalLink, Settings2,
+} from 'lucide-react';
 
-const flows = [
-  { name: 'Boas-vindas WhatsApp', trigger: 'Nova conversa', status: 'Ativo' },
-  { name: 'Distribuição de Leads', trigger: 'Lead qualificado', status: 'Ativo' },
-  { name: 'Follow-up 24h', trigger: 'Sem resposta', status: 'Pausado' },
+type Flow = { id: string; name: string; trigger: string; status: 'Ativo' | 'Pausado'; description?: string };
+
+const DEFAULT_FLOWS: Flow[] = [
+  { id: 'f1', name: 'Boas-vindas WhatsApp', trigger: 'Nova conversa', status: 'Ativo' },
+  { id: 'f2', name: 'Distribuição de Leads', trigger: 'Lead qualificado', status: 'Ativo' },
+  { id: 'f3', name: 'Follow-up 24h', trigger: 'Sem resposta', status: 'Pausado' },
 ];
 
+const FLOWS_KEY = 'automations.flows.v1';
+const INTEG_KEY = 'automations.integrations.v1';
+
+type IntegrationId = 'holmes' | 'dealerspace' | '3cx';
+
+type IntegrationConfig = {
+  enabled: boolean;
+  // Holmes / DealerSpace
+  apiKey?: string;
+  webhookSecret?: string;
+  defaultPipelineId?: string;
+  // 3CX
+  pbxUrl?: string;
+  username?: string;
+  password?: string;
+  extension?: string;
+};
+
+const PROJECT_ID = (import.meta as any).env?.VITE_SUPABASE_PROJECT_ID ?? 'gcjaeoxjhcfeispehmga';
+const INBOUND_BASE = `https://${PROJECT_ID}.functions.supabase.co/handle-inbound-webhook`;
+
+const INTEGRATIONS: Array<{
+  id: IntegrationId;
+  name: string;
+  url: string;
+  category: 'Leads' | 'Telefonia';
+  desc: string;
+  icon: typeof Phone;
+  color: string;
+  webhookPath?: string;
+  fields: Array<{ key: keyof IntegrationConfig; label: string; type?: 'text' | 'password' | 'url'; placeholder?: string; helper?: string }>;
+}> = [
+  {
+    id: 'holmes',
+    name: 'Holmes',
+    url: 'https://holmes.app/',
+    category: 'Leads',
+    desc: 'Receba Leads automaticamente da Holmes via webhook e dispare ações no funil.',
+    icon: Building2,
+    color: 'from-indigo-500/20 to-violet-500/20',
+    webhookPath: '/holmes',
+    fields: [
+      { key: 'apiKey', label: 'API Key Holmes', type: 'password', placeholder: 'hlm_...', helper: 'Gere em Holmes → Integrações → API' },
+      { key: 'webhookSecret', label: 'Webhook Secret', type: 'password', placeholder: 'shared secret', helper: 'Assina o payload (HMAC) — opcional' },
+      { key: 'defaultPipelineId', label: 'Pipeline padrão (ID)', placeholder: 'pipe_xxx' },
+    ],
+  },
+  {
+    id: 'dealerspace',
+    name: 'DealerSpace',
+    url: 'https://dealerspace.ai/',
+    category: 'Leads',
+    desc: 'Receba Leads de concessionárias da DealerSpace e roteie para o canal/atendente correto.',
+    icon: Car,
+    color: 'from-emerald-500/20 to-teal-500/20',
+    webhookPath: '/dealerspace',
+    fields: [
+      { key: 'apiKey', label: 'API Key DealerSpace', type: 'password', placeholder: 'ds_...', helper: 'Painel → Settings → API Keys' },
+      { key: 'webhookSecret', label: 'Webhook Secret', type: 'password', placeholder: 'shared secret' },
+      { key: 'defaultPipelineId', label: 'Pipeline padrão (ID)', placeholder: 'pipe_xxx' },
+    ],
+  },
+  {
+    id: '3cx',
+    name: '3CX',
+    url: 'https://www.3cx.com/',
+    category: 'Telefonia',
+    desc: 'Painel de exibição de ligações, KPIs e métricas da empresa, equipes e individual via 3CX.',
+    icon: Phone,
+    color: 'from-sky-500/20 to-blue-500/20',
+    fields: [
+      { key: 'pbxUrl', label: 'URL do PBX', type: 'url', placeholder: 'https://meu-pbx.3cx.com:5001', helper: 'URL pública do servidor 3CX' },
+      { key: 'username', label: 'Usuário API', placeholder: 'admin' },
+      { key: 'password', label: 'Senha API', type: 'password' },
+      { key: 'extension', label: 'Ramal padrão (opcional)', placeholder: '101' },
+    ],
+  },
+];
+
+function loadJSON<T>(key: string, fallback: T): T {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) as T : fallback; } catch { return fallback; }
+}
+
 export default function AutomationsPage() {
+  const [flows, setFlows] = useState<Flow[]>(() => loadJSON(FLOWS_KEY, DEFAULT_FLOWS));
+  const [integrations, setIntegrations] = useState<Record<IntegrationId, IntegrationConfig>>(() =>
+    loadJSON(INTEG_KEY, { holmes: { enabled: false }, dealerspace: { enabled: false }, '3cx': { enabled: false } })
+  );
+
+  const [actionOpen, setActionOpen] = useState(false);
+  const [editing, setEditing] = useState<Flow | null>(null);
+  const [draft, setDraft] = useState<Flow>({ id: '', name: '', trigger: 'Nova conversa', status: 'Ativo', description: '' });
+
+  const [configOpen, setConfigOpen] = useState<IntegrationId | null>(null);
+
+  useEffect(() => { localStorage.setItem(FLOWS_KEY, JSON.stringify(flows)); }, [flows]);
+  useEffect(() => { localStorage.setItem(INTEG_KEY, JSON.stringify(integrations)); }, [integrations]);
+
+  const openNew = () => {
+    setEditing(null);
+    setDraft({ id: '', name: '', trigger: 'Nova conversa', status: 'Ativo', description: '' });
+    setActionOpen(true);
+  };
+
+  const openEdit = (f: Flow) => {
+    setEditing(f);
+    setDraft(f);
+    setActionOpen(true);
+  };
+
+  const saveAction = () => {
+    if (!draft.name.trim()) {
+      toast({ title: 'Nome obrigatório', description: 'Informe um nome para a ação.', variant: 'destructive' });
+      return;
+    }
+    if (editing) {
+      setFlows((prev) => prev.map((f) => (f.id === editing.id ? { ...draft, id: editing.id } : f)));
+      toast({ title: 'Ação atualizada' });
+    } else {
+      const id = `f_${Date.now()}`;
+      setFlows((prev) => [{ ...draft, id }, ...prev]);
+      toast({ title: 'Ação criada', description: draft.name });
+    }
+    setActionOpen(false);
+  };
+
+  const current = useMemo(() => INTEGRATIONS.find((i) => i.id === configOpen) ?? null, [configOpen]);
+  const currentCfg = current ? integrations[current.id] : null;
+
+  const updateCurrent = (patch: Partial<IntegrationConfig>) => {
+    if (!current) return;
+    setIntegrations((prev) => ({ ...prev, [current.id]: { ...prev[current.id], ...patch } }));
+  };
+
+  const copy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast({ title: 'Copiado', description: text });
+  };
+
   return (
     <AppLayout title="Automações & Integrações" subtitle="Fluxos automatizados, triggers e webhooks">
       <div className="flex justify-end mb-4">
-        <Button><Plus className="w-4 h-4 mr-2" /> Nova Automação</Button>
+        <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" /> Nova Ação</Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {flows.map((f) => (
-          <Card key={f.name} className="glass-card">
+          <Card key={f.id} className="glass-card">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm flex items-center gap-2">
@@ -30,14 +184,14 @@ export default function AutomationsPage() {
               <CardDescription className="text-xs">Trigger: {f.trigger}</CardDescription>
             </CardHeader>
             <CardContent className="flex gap-2">
-              <Button size="sm" variant="outline">Editar</Button>
+              <Button size="sm" variant="outline" onClick={() => openEdit(f)}>Editar</Button>
               <Button size="sm" variant="ghost">Logs</Button>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <Card className="glass-card">
+      <Card className="glass-card mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Webhook className="w-5 h-5" /> Webhooks & Integrações</CardTitle>
           <CardDescription>Conecte serviços externos via HTTP.</CardDescription>
@@ -47,6 +201,168 @@ export default function AutomationsPage() {
           <Button variant="outline"><GitBranch className="w-4 h-4 mr-2" /> Ver Logs</Button>
         </CardContent>
       </Card>
+
+      <div className="mb-3">
+        <h3 className="text-sm font-semibold text-foreground">Plataformas conectadas</h3>
+        <p className="text-xs text-muted-foreground">Integre Holmes, DealerSpace e 3CX para receber Leads e métricas de telefonia.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {INTEGRATIONS.map((it) => {
+          const cfg = integrations[it.id];
+          const Icon = it.icon;
+          return (
+            <Card key={it.id} className={`glass-card bg-gradient-to-br ${it.color} border-border/50`}>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-background/60 flex items-center justify-center">
+                      <Icon className="w-5 h-5 text-foreground" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        {it.name}
+                        <a href={it.url} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground">
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </CardTitle>
+                      <CardDescription className="text-[11px]">{it.category}</CardDescription>
+                    </div>
+                  </div>
+                  <Badge variant={cfg.enabled ? 'default' : 'secondary'} className="shrink-0">
+                    {cfg.enabled ? 'Ativo' : 'Inativo'}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground">{it.desc}</p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setConfigOpen(it.id)}>
+                    <Settings2 className="w-4 h-4 mr-2" /> Configurar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={cfg.enabled ? 'ghost' : 'default'}
+                    onClick={() => {
+                      setIntegrations((prev) => ({ ...prev, [it.id]: { ...prev[it.id], enabled: !prev[it.id].enabled } }));
+                      toast({ title: cfg.enabled ? `${it.name} desativado` : `${it.name} ativado` });
+                    }}
+                  >
+                    {cfg.enabled ? 'Desativar' : 'Ativar'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Nova/Editar Ação */}
+      <Dialog open={actionOpen} onOpenChange={setActionOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Editar Ação' : 'Nova Ação'}</DialogTitle>
+            <DialogDescription>Defina um nome, gatilho e status para a ação automatizada.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Nome</Label>
+              <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Ex.: Notificar SDR no novo Lead" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Gatilho</Label>
+                <Select value={draft.trigger} onValueChange={(v) => setDraft({ ...draft, trigger: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Nova conversa">Nova conversa</SelectItem>
+                    <SelectItem value="Lead qualificado">Lead qualificado</SelectItem>
+                    <SelectItem value="Sem resposta">Sem resposta</SelectItem>
+                    <SelectItem value="Novo Lead Holmes">Novo Lead Holmes</SelectItem>
+                    <SelectItem value="Novo Lead DealerSpace">Novo Lead DealerSpace</SelectItem>
+                    <SelectItem value="Chamada 3CX recebida">Chamada 3CX recebida</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Status</Label>
+                <Select value={draft.status} onValueChange={(v) => setDraft({ ...draft, status: v as Flow['status'] })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Ativo">Ativo</SelectItem>
+                    <SelectItem value="Pausado">Pausado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Descrição (opcional)</Label>
+              <Textarea rows={3} value={draft.description ?? ''} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="O que essa ação faz?" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setActionOpen(false)}>Cancelar</Button>
+            <Button onClick={saveAction}>{editing ? 'Salvar' : 'Criar Ação'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Configurar integração */}
+      <Dialog open={!!configOpen} onOpenChange={(v) => !v && setConfigOpen(null)}>
+        <DialogContent className="max-w-lg">
+          {current && currentCfg && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <current.icon className="w-5 h-5" /> {current.name}
+                </DialogTitle>
+                <DialogDescription>{current.desc}</DialogDescription>
+              </DialogHeader>
+
+              <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                <div>
+                  <p className="text-sm font-medium">Integração ativa</p>
+                  <p className="text-xs text-muted-foreground">Ative para começar a receber/enviar dados.</p>
+                </div>
+                <Switch checked={!!currentCfg.enabled} onCheckedChange={(v) => updateCurrent({ enabled: v })} />
+              </div>
+
+              {current.webhookPath && (
+                <div className="space-y-1.5">
+                  <Label>Webhook de entrada</Label>
+                  <div className="flex gap-2">
+                    <Input readOnly value={`${INBOUND_BASE}${current.webhookPath}`} className="font-mono text-xs" />
+                    <Button variant="outline" size="icon" onClick={() => copy(`${INBOUND_BASE}${current.webhookPath}`)}>
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Cole esta URL no painel da {current.name} para receber eventos.</p>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {current.fields.map((f) => (
+                  <div key={f.key as string} className="space-y-1.5">
+                    <Label>{f.label}</Label>
+                    <Input
+                      type={f.type ?? 'text'}
+                      placeholder={f.placeholder}
+                      value={(currentCfg[f.key] as string) ?? ''}
+                      onChange={(e) => updateCurrent({ [f.key]: e.target.value } as Partial<IntegrationConfig>)}
+                    />
+                    {f.helper && <p className="text-[11px] text-muted-foreground">{f.helper}</p>}
+                  </div>
+                ))}
+              </div>
+
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setConfigOpen(null)}>Fechar</Button>
+                <Button onClick={() => { setConfigOpen(null); toast({ title: `${current.name} salvo` }); }}>Salvar</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
