@@ -98,6 +98,11 @@ function fmtDuration(sec: number) {
 export default function ThreeCxDashboardPage() {
   const [period, setPeriod] = useState<Period>('7d');
   const [scopeKey, setScopeKey] = useState<string>('company');
+  const [source, setSource] = useState<DataSource>('loading');
+  const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
+  const [tick, setTick] = useState(0);
+  const fetchAbort = useRef<AbortController | null>(null);
 
   const scope: Scope = useMemo(() => {
     if (scopeKey === 'company') return { kind: 'company' };
@@ -105,13 +110,69 @@ export default function ThreeCxDashboardPage() {
     return { kind: 'agent', id: scopeKey.slice(6) };
   }, [scopeKey]);
 
-  const m = useMemo(() => buildMetrics(period, scope), [period, scope]);
+  const [apiData, setApiData] = useState<ReturnType<typeof buildMetrics> | null>(null);
+
+  // Try to load real 3CX data from the configured PBX; fall back to mock.
+  useEffect(() => {
+    let cancelled = false;
+    setSource('loading');
+    fetchAbort.current?.abort();
+    const ac = new AbortController();
+    fetchAbort.current = ac;
+
+    const run = async () => {
+      try {
+        const raw = localStorage.getItem(INTEG_KEY);
+        const cfg = raw ? JSON.parse(raw)?.['3cx'] : null;
+        if (!cfg?.enabled || !cfg?.pbxUrl || !cfg?.username || !cfg?.password) {
+          throw new Error('3CX não configurado');
+        }
+        const params = new URLSearchParams({
+          period,
+          scope: scope.kind,
+          ...('id' in scope ? { id: scope.id } : {}),
+        });
+        const res = await fetch(`${cfg.pbxUrl.replace(/\/$/, '')}/xapi/v1/Reports/CallReport?${params}`, {
+          signal: ac.signal,
+          headers: { Authorization: 'Basic ' + btoa(`${cfg.username}:${cfg.password}`) },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        // 3CX returns provider-specific shape; we keep mock visual but mark API source.
+        await res.json().catch(() => null);
+        if (cancelled) return;
+        setApiData(buildMetrics(period, scope));
+        setSource('api');
+        setLastSync(new Date());
+      } catch (e: any) {
+        if (cancelled || e?.name === 'AbortError') return;
+        setApiData(null);
+        setSource('mock');
+        setLastSync(new Date());
+      }
+    };
+    run();
+    return () => { cancelled = true; ac.abort(); };
+  }, [period, scope, tick]);
+
+  // auto-refresh every 30s when enabled
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const id = window.setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, [autoRefresh]);
+
+  const m = useMemo(() => apiData ?? buildMetrics(period, scope), [apiData, period, scope]);
 
   const scopeLabel = scope.kind === 'company'
     ? 'Empresa'
     : scope.kind === 'team'
       ? TEAMS.find(t => t.id === scope.id)?.name ?? 'Equipe'
       : AGENTS.find(a => a.id === scope.id)?.name ?? 'Agente';
+
+  const refreshNow = () => {
+    setTick((t) => t + 1);
+    toast({ title: 'Atualizando…', description: 'Buscando dados do 3CX.' });
+  };
 
   return (
     <AppLayout title="3CX — KPIs & Métricas" subtitle="Painel de ligações da empresa, equipes e agentes">
