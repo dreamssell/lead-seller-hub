@@ -1805,6 +1805,48 @@ export type Database = {
           },
         ]
       }
+      signature_error_logs: {
+        Row: {
+          context: string
+          created_at: string
+          details: Json | null
+          id: string
+          message: string
+          original_filename: string | null
+          owner_id: string | null
+          route: string | null
+          sub_company_id: string | null
+          user_email: string | null
+          user_id: string | null
+        }
+        Insert: {
+          context: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          message: string
+          original_filename?: string | null
+          owner_id?: string | null
+          route?: string | null
+          sub_company_id?: string | null
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          context?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          message?: string
+          original_filename?: string | null
+          owner_id?: string | null
+          route?: string | null
+          sub_company_id?: string | null
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       signature_events: {
         Row: {
           actor_id: string | null
