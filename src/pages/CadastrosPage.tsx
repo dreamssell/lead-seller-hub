@@ -349,49 +349,48 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
     setLoading(false);
   };
 
-  useEffect(() => { 
-    load(); 
+  useEffect(() => {
+    load();
     if (entity === 'contacts') {
       loadUsers();
-      
-      const applyHighlightUI = (cardId: string) => {
-        const card = document.querySelector(`[data-card-id="${cardId}"]`);
-        if (card) {
-          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          card.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
-          setTimeout(() => card.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 5000);
-        } else if (rows.length > 0) {
-          // Se as linhas foram carregadas e o card não existe, removemos o destaque
-          const exists = rows.some(r => String(r.id) === cardId);
-          if (!exists) {
-            console.log(`Card ${cardId} not found in data, cleaning highlight state.`);
-            setHighlightedCard(null);
-            
-            const params = new URLSearchParams(window.location.search);
-            if (params.has('highlight_card')) {
-              params.delete('highlight_card');
-              const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
-              window.history.replaceState({}, '', newUrl);
-            }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entity]);
+
+  // Highlight de card (kanban) — separado para evitar loop com `rows` no load.
+  useEffect(() => {
+    if (entity !== 'contacts' || viewMode !== 'kanban') return;
+
+    const applyHighlightUI = (cardId: string) => {
+      const card = document.querySelector(`[data-card-id="${cardId}"]`);
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
+        setTimeout(() => card.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 5000);
+      } else if (rows.length > 0) {
+        const exists = rows.some(r => String(r.id) === cardId);
+        if (!exists) {
+          setHighlightedCard(null);
+          const params = new URLSearchParams(window.location.search);
+          if (params.has('highlight_card')) {
+            params.delete('highlight_card');
+            const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
           }
         }
-      };
-
-      if (viewMode === 'kanban') {
-        const params = new URLSearchParams(window.location.search);
-        const urlCardId = params.get('highlight_card');
-        
-        if (urlCardId && urlCardId !== highlightedCardId) {
-          setHighlightedCard(urlCardId);
-        }
-        
-        if (highlightedCardId) {
-           // Re-destaque persistente após carregamento ou navegação
-           setTimeout(() => applyHighlightUI(highlightedCardId), 800);
-        }
       }
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    const urlCardId = params.get('highlight_card');
+    if (urlCardId && urlCardId !== highlightedCardId) {
+      setHighlightedCard(urlCardId);
     }
-  }, [entity, viewMode, rows, highlightedCardId, setHighlightedCard]); // rows como dependência para validar existência
+    if (highlightedCardId) {
+      const t = setTimeout(() => applyHighlightUI(highlightedCardId), 800);
+      return () => clearTimeout(t);
+    }
+  }, [entity, viewMode, rows, highlightedCardId, setHighlightedCard]);
 
   if (entity === 'contacts' && !schema.fields.some(f => f.name === 'assigned_agent_id')) {
     schema.fields.push({ 
