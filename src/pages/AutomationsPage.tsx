@@ -307,9 +307,20 @@ export default function AutomationsPage() {
                     </div>
                   );
                 })()}
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={() => setConfigOpen(it.id)}>
                     <Settings2 className="w-4 h-4 mr-2" /> Configurar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={tests[it.id].status === 'running'}
+                    onClick={() => runConnectionTest(it.id)}
+                  >
+                    {tests[it.id].status === 'running'
+                      ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      : <PlugZap className="w-4 h-4 mr-2" />}
+                    Testar conexão
                   </Button>
                   <Button
                     size="sm"
