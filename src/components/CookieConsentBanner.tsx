@@ -122,6 +122,15 @@ export function CookieConsentBanner() {
 
               <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
                 <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full sm:w-auto"
+                  onClick={onlyEssential}
+                >
+                  <Shield className="h-3.5 w-3.5" />
+                  Apenas essenciais
+                </Button>
+                <Button
                   variant="ghost"
                   size="sm"
                   className="w-full sm:w-auto"
@@ -129,14 +138,6 @@ export function CookieConsentBanner() {
                 >
                   <Settings2 className="h-3.5 w-3.5" />
                   Personalizar
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full sm:w-auto"
-                  onClick={onlyEssential}
-                >
-                  Apenas essenciais
                 </Button>
                 <Button size="sm" className="w-full sm:w-auto" onClick={acceptAll}>
                   Aceitar todos
