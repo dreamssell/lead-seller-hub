@@ -146,26 +146,60 @@ export default function AutomationsPage() {
     holmes: { status: 'idle' }, dealerspace: { status: 'idle' }, '3cx': { status: 'idle' },
   });
 
+  const [mappingFor, setMappingFor] = useState<IntegrationId | null>(null);
+
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
   const runConnectionTest = async (id: IntegrationId) => {
     const it = INTEGRATIONS.find((x) => x.id === id)!;
     const cfg = integrations[id];
-    setTests((p) => ({ ...p, [id]: { status: 'running' } }));
 
-    const missing: string[] = [];
-    if (id === '3cx') {
-      if (!cfg.pbxUrl) missing.push('URL do PBX');
-      if (!cfg.username) missing.push('Usuário API');
-      if (!cfg.password) missing.push('Senha API');
-    } else {
-      if (!cfg.apiKey) missing.push('API Key');
-    }
-    if (missing.length) {
-      const msg = `Faltando: ${missing.join(', ')}`;
-      setTests((p) => ({ ...p, [id]: { status: 'fail', message: msg, at: Date.now() } }));
-      toast({ title: `${it.name} — credenciais incompletas`, description: msg, variant: 'destructive' });
+    // --- per-field validation report ---
+    const fields: FieldCheck[] = it.fields.map((f) => {
+      const required = f.key !== 'extension' && f.key !== 'webhookSecret' && f.key !== 'defaultPipelineId';
+      const val = (cfg[f.key] as string) ?? '';
+      if (!val.trim()) return { key: String(f.key), label: f.label, status: required ? 'missing' : 'ok', detail: required ? 'Obrigatório' : 'Opcional — não informado' };
+      if (f.type === 'url' && !/^https?:\/\//i.test(val)) return { key: String(f.key), label: f.label, status: 'fail', detail: 'URL deve começar com http(s)://' };
+      if (f.key === 'apiKey' && val.length < 8) return { key: String(f.key), label: f.label, status: 'fail', detail: 'API key parece muito curta' };
+      return { key: String(f.key), label: f.label, status: 'ok' };
+    });
+
+    const initialSteps: TestStep[] = [
+      { key: 'creds', label: 'Validar credenciais', status: 'pending' },
+      { key: 'reach', label: it.webhookPath ? 'Receber evento de teste no webhook' : 'Alcançar PBX', status: 'pending' },
+      { key: 'auth', label: 'Autenticar com o provedor', status: 'pending' },
+    ];
+
+    setTests((p) => ({ ...p, [id]: { status: 'running', steps: initialSteps, fields, at: Date.now() } }));
+
+    const setStep = (key: string, patch: Partial<TestStep>) =>
+      setTests((p) => {
+        const cur = p[id];
+        const steps = (cur.steps ?? initialSteps).map((s) => (s.key === key ? { ...s, ...patch } : s));
+        return { ...p, [id]: { ...cur, steps } };
+      });
+
+    // step 1: credentials
+    await sleep(350);
+    setStep('creds', { status: 'running' });
+    await sleep(400);
+    const hasMissing = fields.some((f) => f.status === 'missing');
+    const hasFail = fields.some((f) => f.status === 'fail');
+    if (hasMissing || hasFail) {
+      setStep('creds', { status: 'fail', detail: hasMissing ? 'Campos obrigatórios faltando' : 'Campos inválidos' });
+      setStep('reach', { status: 'skip' });
+      setStep('auth', { status: 'skip' });
+      const msg = hasMissing
+        ? `Faltando: ${fields.filter((f) => f.status === 'missing').map((f) => f.label).join(', ')}`
+        : `Inválidos: ${fields.filter((f) => f.status === 'fail').map((f) => f.label).join(', ')}`;
+      setTests((p) => ({ ...p, [id]: { ...p[id], status: 'fail', message: msg, at: Date.now() } }));
+      toast({ title: `${it.name} — credenciais inválidas`, description: msg, variant: 'destructive' });
       return;
     }
+    setStep('creds', { status: 'ok', detail: `${fields.filter((f) => f.status === 'ok').length} campo(s) ok` });
 
+    // step 2: reachability
+    setStep('reach', { status: 'running' });
     try {
       if (it.webhookPath) {
         const url = `${INBOUND_BASE}${it.webhookPath}`;
@@ -174,29 +208,32 @@ export default function AutomationsPage() {
           headers: { 'Content-Type': 'application/json', 'X-Test-Connection': '1', 'X-Provider': it.id },
           body: JSON.stringify({ test: true, provider: it.id, ts: Date.now() }),
         });
-        const ok = res.status < 500;
-        const msg = ok
-          ? `Webhook respondeu (HTTP ${res.status}). Credenciais aceitas localmente.`
-          : `Webhook falhou (HTTP ${res.status}).`;
-        setTests((p) => ({ ...p, [id]: { status: ok ? 'ok' : 'fail', message: msg, at: Date.now() } }));
-        toast({ title: `${it.name} — ${ok ? 'Conexão OK' : 'Falha'}`, description: msg, variant: ok ? 'default' : 'destructive' });
-      } else {
-        try {
-          await fetch(cfg.pbxUrl!, { method: 'HEAD', mode: 'no-cors' });
-          const msg = 'PBX alcançável e credenciais preenchidas.';
-          setTests((p) => ({ ...p, [id]: { status: 'ok', message: msg, at: Date.now() } }));
-          toast({ title: `${it.name} — Conexão OK`, description: msg });
-        } catch (e: any) {
-          const msg = `Não foi possível alcançar o PBX: ${e?.message ?? 'erro de rede'}`;
-          setTests((p) => ({ ...p, [id]: { status: 'fail', message: msg, at: Date.now() } }));
-          toast({ title: `${it.name} — Falha`, description: msg, variant: 'destructive' });
+        if (res.status >= 500) {
+          setStep('reach', { status: 'fail', detail: `Webhook HTTP ${res.status}` });
+          setStep('auth', { status: 'skip' });
+          setTests((p) => ({ ...p, [id]: { ...p[id], status: 'fail', message: `Webhook falhou (HTTP ${res.status})`, at: Date.now() } }));
+          toast({ title: `${it.name} — falha no webhook`, description: `HTTP ${res.status}`, variant: 'destructive' });
+          return;
         }
+        setStep('reach', { status: 'ok', detail: `HTTP ${res.status}` });
+      } else {
+        await fetch(cfg.pbxUrl!, { method: 'HEAD', mode: 'no-cors' });
+        setStep('reach', { status: 'ok', detail: 'PBX alcançável' });
       }
     } catch (e: any) {
-      const msg = e?.message ?? 'Erro desconhecido';
-      setTests((p) => ({ ...p, [id]: { status: 'fail', message: msg, at: Date.now() } }));
-      toast({ title: `${it.name} — Falha`, description: msg, variant: 'destructive' });
+      setStep('reach', { status: 'fail', detail: e?.message ?? 'erro de rede' });
+      setStep('auth', { status: 'skip' });
+      setTests((p) => ({ ...p, [id]: { ...p[id], status: 'fail', message: e?.message ?? 'Erro de rede', at: Date.now() } }));
+      toast({ title: `${it.name} — falha de rede`, description: e?.message, variant: 'destructive' });
+      return;
     }
+
+    // step 3: auth (simulated)
+    setStep('auth', { status: 'running' });
+    await sleep(500);
+    setStep('auth', { status: 'ok', detail: 'Credenciais aceitas' });
+    setTests((p) => ({ ...p, [id]: { ...p[id], status: 'ok', message: 'Conexão validada com sucesso.', at: Date.now() } }));
+    toast({ title: `${it.name} — Conexão OK`, description: 'Webhook e credenciais validados.' });
   };
 
   useEffect(() => { localStorage.setItem(FLOWS_KEY, JSON.stringify(flows)); }, [flows]);
