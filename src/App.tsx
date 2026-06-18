@@ -39,6 +39,7 @@ import VideoJoinPage from "./pages/VideoJoinPage";
 import SignaturePortalPage from "./pages/SignaturePortalPage";
 import SignaturesPage from "./pages/SignaturesPage";
 import ThreeCxDashboardPage from "./pages/ThreeCxDashboardPage";
+import { CookieConsentBanner } from "./components/CookieConsentBanner";
 
 
 
@@ -53,6 +54,7 @@ const App = () => (
         <TooltipProvider>
         <Toaster />
         <Sonner />
+        <CookieConsentBanner />
         <BrowserRouter>
           <AuthProvider>
             <VoipProvider>
