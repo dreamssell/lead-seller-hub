@@ -16,7 +16,10 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from '@/hooks/use-toast';
 import {
   Zap, Webhook, GitBranch, Plus, Phone, Building2, Car, Copy, ExternalLink, Settings2,
+  PlugZap, Loader2, CheckCircle2, XCircle,
 } from 'lucide-react';
+
+type TestState = { status: 'idle' | 'running' | 'ok' | 'fail'; message?: string; at?: number };
 
 type Flow = { id: string; name: string; trigger: string; status: 'Ativo' | 'Pausado'; description?: string };
 
