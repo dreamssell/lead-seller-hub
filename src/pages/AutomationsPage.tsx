@@ -123,6 +123,62 @@ export default function AutomationsPage() {
   const [draft, setDraft] = useState<Flow>({ id: '', name: '', trigger: 'Nova conversa', status: 'Ativo', description: '' });
 
   const [configOpen, setConfigOpen] = useState<IntegrationId | null>(null);
+  const [tests, setTests] = useState<Record<IntegrationId, TestState>>({
+    holmes: { status: 'idle' }, dealerspace: { status: 'idle' }, '3cx': { status: 'idle' },
+  });
+
+  const runConnectionTest = async (id: IntegrationId) => {
+    const it = INTEGRATIONS.find((x) => x.id === id)!;
+    const cfg = integrations[id];
+    setTests((p) => ({ ...p, [id]: { status: 'running' } }));
+
+    const missing: string[] = [];
+    if (id === '3cx') {
+      if (!cfg.pbxUrl) missing.push('URL do PBX');
+      if (!cfg.username) missing.push('Usuário API');
+      if (!cfg.password) missing.push('Senha API');
+    } else {
+      if (!cfg.apiKey) missing.push('API Key');
+    }
+    if (missing.length) {
+      const msg = `Faltando: ${missing.join(', ')}`;
+      setTests((p) => ({ ...p, [id]: { status: 'fail', message: msg, at: Date.now() } }));
+      toast({ title: `${it.name} — credenciais incompletas`, description: msg, variant: 'destructive' });
+      return;
+    }
+
+    try {
+      if (it.webhookPath) {
+        const url = `${INBOUND_BASE}${it.webhookPath}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Test-Connection': '1', 'X-Provider': it.id },
+          body: JSON.stringify({ test: true, provider: it.id, ts: Date.now() }),
+        });
+        const ok = res.status < 500;
+        const msg = ok
+          ? `Webhook respondeu (HTTP ${res.status}). Credenciais aceitas localmente.`
+          : `Webhook falhou (HTTP ${res.status}).`;
+        setTests((p) => ({ ...p, [id]: { status: ok ? 'ok' : 'fail', message: msg, at: Date.now() } }));
+        toast({ title: `${it.name} — ${ok ? 'Conexão OK' : 'Falha'}`, description: msg, variant: ok ? 'default' : 'destructive' });
+      } else {
+        try {
+          await fetch(cfg.pbxUrl!, { method: 'HEAD', mode: 'no-cors' });
+          const msg = 'PBX alcançável e credenciais preenchidas.';
+          setTests((p) => ({ ...p, [id]: { status: 'ok', message: msg, at: Date.now() } }));
+          toast({ title: `${it.name} — Conexão OK`, description: msg });
+        } catch (e: any) {
+          const msg = `Não foi possível alcançar o PBX: ${e?.message ?? 'erro de rede'}`;
+          setTests((p) => ({ ...p, [id]: { status: 'fail', message: msg, at: Date.now() } }));
+          toast({ title: `${it.name} — Falha`, description: msg, variant: 'destructive' });
+        }
+      }
+    } catch (e: any) {
+      const msg = e?.message ?? 'Erro desconhecido';
+      setTests((p) => ({ ...p, [id]: { status: 'fail', message: msg, at: Date.now() } }));
+      toast({ title: `${it.name} — Falha`, description: msg, variant: 'destructive' });
+    }
+  };
 
   useEffect(() => { localStorage.setItem(FLOWS_KEY, JSON.stringify(flows)); }, [flows]);
   useEffect(() => { localStorage.setItem(INTEG_KEY, JSON.stringify(integrations)); }, [integrations]);
