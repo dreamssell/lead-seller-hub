@@ -295,6 +295,18 @@ export default function AutomationsPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-xs text-muted-foreground">{it.desc}</p>
+                {(() => {
+                  const t = tests[it.id];
+                  if (t.status === 'idle') return null;
+                  const Icon = t.status === 'running' ? Loader2 : t.status === 'ok' ? CheckCircle2 : XCircle;
+                  const cls = t.status === 'ok' ? 'text-emerald-500' : t.status === 'fail' ? 'text-destructive' : 'text-muted-foreground';
+                  return (
+                    <div className={`flex items-center gap-2 text-[11px] ${cls}`}>
+                      <Icon className={`w-3.5 h-3.5 ${t.status === 'running' ? 'animate-spin' : ''}`} />
+                      <span className="truncate">{t.status === 'running' ? 'Testando conexão…' : t.message}</span>
+                    </div>
+                  );
+                })()}
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => setConfigOpen(it.id)}>
                     <Settings2 className="w-4 h-4 mr-2" /> Configurar
