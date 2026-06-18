@@ -95,7 +95,14 @@ export function SignatureDocumentModal({ open, onOpenChange, leadId, subCompanyI
     setSubmitting(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const path = `${user!.id}/${Date.now()}_${file.name}`;
+      const safeName = file.name
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9._-]+/g, "_")
+        .replace(/_+/g, "_")
+        .replace(/^_+|_+$/g, "")
+        .slice(-120);
+      const path = `${user!.id}/${Date.now()}_${safeName}`;
       const up = await supabase.storage.from("signed-documents").upload(path, file, { contentType: file.type });
       if (up.error) throw up.error;
 
