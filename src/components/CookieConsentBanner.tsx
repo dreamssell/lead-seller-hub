@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Cookie, X, Settings2, Shield, BarChart3 } from 'lucide-react';
+import { Cookie, X, Settings2, Shield, BarChart3, Megaphone, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -12,6 +13,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 
 const STORAGE_KEY = 'lgpd:consent:v1';
+const CONSENT_EVENT = 'lgpd:consent-changed';
 
 type Consent = {
   essential: true;
@@ -36,11 +38,36 @@ export function CookieConsentBanner() {
   }, []);
 
   const save = (consent: Consent) => {
+    let persisted = false;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(consent));
+      const check = localStorage.getItem(STORAGE_KEY);
+      persisted = !!check && JSON.parse(check).ts === consent.ts;
     } catch {}
     setOpen(false);
     setCustomize(false);
+
+    // Apply consent immediately to the app
+    window.dispatchEvent(new CustomEvent(CONSENT_EVENT, { detail: consent }));
+
+    const active = [
+      'Essenciais',
+      consent.analytics && 'Analytics',
+      consent.marketing && 'Marketing',
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
+    if (persisted) {
+      toast.success('Preferências de privacidade salvas', {
+        description: `Aplicado agora: ${active}`,
+        icon: <CheckCircle2 className="h-4 w-4" />,
+      });
+    } else {
+      toast.error('Não foi possível salvar suas preferências', {
+        description: 'Verifique se o navegador permite armazenamento local.',
+      });
+    }
   };
 
   const acceptAll = () =>
@@ -95,6 +122,15 @@ export function CookieConsentBanner() {
 
               <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
                 <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full sm:w-auto"
+                  onClick={onlyEssential}
+                >
+                  <Shield className="h-3.5 w-3.5" />
+                  Apenas essenciais
+                </Button>
+                <Button
                   variant="ghost"
                   size="sm"
                   className="w-full sm:w-auto"
@@ -102,14 +138,6 @@ export function CookieConsentBanner() {
                 >
                   <Settings2 className="h-3.5 w-3.5" />
                   Personalizar
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full sm:w-auto"
-                  onClick={onlyEssential}
-                >
-                  Apenas essenciais
                 </Button>
                 <Button size="sm" className="w-full sm:w-auto" onClick={acceptAll}>
                   Aceitar todos
@@ -126,7 +154,8 @@ export function CookieConsentBanner() {
           <DialogHeader>
             <DialogTitle>Preferências de cookies</DialogTitle>
             <DialogDescription>
-              Controle quais categorias de cookies podem ser usadas nesta sessão.
+              Escolha quais categorias podem ser usadas. Sua decisão é salva no seu navegador
+              (localStorage) e aplicada imediatamente.
             </DialogDescription>
           </DialogHeader>
 
@@ -134,21 +163,21 @@ export function CookieConsentBanner() {
             <PrefRow
               icon={<Shield className="h-4 w-4" />}
               title="Essenciais"
-              desc="Necessários para autenticação e funcionamento da plataforma."
+              desc="Sempre ativos. Permitem login, sessão segura, roteamento, preferências de tema/idioma e proteção contra fraudes. Sem eles, a plataforma não funciona."
               checked
               disabled
             />
             <PrefRow
               icon={<BarChart3 className="h-4 w-4" />}
-              title="Analíticos"
-              desc="Métricas anônimas para entender uso e melhorar a experiência."
+              title="Analytics"
+              desc="Métricas agregadas e anônimas sobre páginas visitadas, tempo de uso e erros — usadas para corrigir bugs e priorizar melhorias. Nenhum dado pessoal é vendido."
               checked={analytics}
               onChange={setAnalytics}
             />
             <PrefRow
-              icon={<Cookie className="h-4 w-4" />}
+              icon={<Megaphone className="h-4 w-4" />}
               title="Marketing"
-              desc="Personalização de conteúdo e comunicações relevantes."
+              desc="Permite personalizar conteúdo, medir campanhas e exibir comunicações relevantes (e-mail, in-app). Pode incluir cookies de parceiros de mídia."
               checked={marketing}
               onChange={setMarketing}
             />
