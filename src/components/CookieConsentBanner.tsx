@@ -154,7 +154,8 @@ export function CookieConsentBanner() {
           <DialogHeader>
             <DialogTitle>Preferências de cookies</DialogTitle>
             <DialogDescription>
-              Controle quais categorias de cookies podem ser usadas nesta sessão.
+              Escolha quais categorias podem ser usadas. Sua decisão é salva no seu navegador
+              (localStorage) e aplicada imediatamente.
             </DialogDescription>
           </DialogHeader>
 
@@ -162,21 +163,21 @@ export function CookieConsentBanner() {
             <PrefRow
               icon={<Shield className="h-4 w-4" />}
               title="Essenciais"
-              desc="Necessários para autenticação e funcionamento da plataforma."
+              desc="Sempre ativos. Permitem login, sessão segura, roteamento, preferências de tema/idioma e proteção contra fraudes. Sem eles, a plataforma não funciona."
               checked
               disabled
             />
             <PrefRow
               icon={<BarChart3 className="h-4 w-4" />}
-              title="Analíticos"
-              desc="Métricas anônimas para entender uso e melhorar a experiência."
+              title="Analytics"
+              desc="Métricas agregadas e anônimas sobre páginas visitadas, tempo de uso e erros — usadas para corrigir bugs e priorizar melhorias. Nenhum dado pessoal é vendido."
               checked={analytics}
               onChange={setAnalytics}
             />
             <PrefRow
-              icon={<Cookie className="h-4 w-4" />}
+              icon={<Megaphone className="h-4 w-4" />}
               title="Marketing"
-              desc="Personalização de conteúdo e comunicações relevantes."
+              desc="Permite personalizar conteúdo, medir campanhas e exibir comunicações relevantes (e-mail, in-app). Pode incluir cookies de parceiros de mídia."
               checked={marketing}
               onChange={setMarketing}
             />
