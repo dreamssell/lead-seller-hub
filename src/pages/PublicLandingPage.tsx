@@ -20,17 +20,30 @@ export default function PublicLandingPage() {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
+    let pageId: string | null = null;
     (async () => {
       const { data: p } = await supabase.from('landing_pages').select('*').eq('slug', slug).eq('status', 'published').maybeSingle();
       if (!p) { setNotFound(true); return; }
+      pageId = p.id;
       const { data: b } = await supabase.from('landing_buttons').select('*').eq('page_id', p.id).order('sort_order');
       setPage(p); setButtons((b as any) || []);
-      // log view
       fetch(FUNCTION_URL, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ page_id: p.id, type: 'view', referrer: document.referrer, user_agent: navigator.userAgent }),
       }).catch(() => null);
     })();
+
+    // Realtime: refletir alterações do builder na página pública instantaneamente
+    const channel = supabase.channel(`landing-public-${slug}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'landing_pages', filter: `slug=eq.${slug}` },
+        (payload) => setPage((prev: any) => ({ ...prev, ...(payload.new as any) })))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'landing_buttons' }, async () => {
+        if (!pageId) return;
+        const { data: b } = await supabase.from('landing_buttons').select('*').eq('page_id', pageId).order('sort_order');
+        setButtons((b as any) || []);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [slug]);
 
   if (notFound) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Página não encontrada.</div>;

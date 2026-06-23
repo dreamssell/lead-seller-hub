@@ -13,8 +13,10 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
-import { Plus, Trash2, Save, ExternalLink, Eye, Copy, ArrowLeft } from 'lucide-react';
-import { QRCodeCanvas } from 'qrcode.react';
+import { Plus, Trash2, Save, ExternalLink, Eye, Copy, ArrowLeft, Sparkles, RefreshCw } from 'lucide-react';
+import { TemplatePickerDialog } from '@/components/outros/TemplatePickerDialog';
+import { QrCodeStudio } from '@/components/outros/QrCodeStudio';
+import type { LandingTemplate } from '@/lib/landingTemplates';
 
 type Page = any;
 type Btn = {
@@ -32,6 +34,9 @@ export default function LandingBuilderPage() {
   const [buttons, setButtons] = useState<Btn[]>([]);
   const [pipelines, setPipelines] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const [tplOpen, setTplOpen] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
+  const [livePreview, setLivePreview] = useState<'inline' | 'public'>('inline');
 
   useEffect(() => {
     (async () => {
@@ -43,6 +48,21 @@ export default function LandingBuilderPage() {
       setPage(p.data); setButtons((b.data as any) || []); setPipelines((pl.data as any) || []);
     })();
   }, [id]);
+
+  // Debounced autosave — drives the realtime live preview iframe
+  useEffect(() => {
+    if (!page) return;
+    const t = setTimeout(() => {
+      supabase.from('landing_pages').update({
+        title: page.title, headline: page.headline, subheadline: page.subheadline,
+        page_bg_color: page.page_bg_color, text_color: page.text_color, align: page.align,
+        tracking_label: page.tracking_label, slug: page.slug,
+        pipeline_id: page.pipeline_id || null, auto_create_lead: page.auto_create_lead, form_mode: page.form_mode,
+      }).eq('id', page.id);
+    }, 600);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page?.title, page?.headline, page?.subheadline, page?.page_bg_color, page?.text_color, page?.align, page?.tracking_label, page?.form_mode, page?.pipeline_id, page?.auto_create_lead]);
 
   const publicUrl = useMemo(() => page ? `${window.location.origin}/p/${page.slug}` : '', [page]);
 
@@ -82,13 +102,27 @@ export default function LandingBuilderPage() {
     await supabase.from('landing_buttons').delete().eq('id', b.id);
   };
 
+  const applyTemplate = async (tpl: LandingTemplate) => {
+    const next = { ...page, ...tpl.page };
+    setPage(next);
+    await supabase.from('landing_pages').update(tpl.page as any).eq('id', page.id);
+    // Replace buttons with template buttons
+    await supabase.from('landing_buttons').delete().eq('page_id', page.id);
+    const { data } = await supabase.from('landing_buttons').insert(
+      tpl.buttons.map((b, i) => ({ page_id: page.id, ...b, sort_order: i })) as any
+    ).select('*').order('sort_order');
+    setButtons((data as any) || []);
+    toast({ title: `Template aplicado: ${tpl.name}` });
+  };
+
   return (
     <AppLayout title="Editor de página de captura" subtitle={`/${page.slug}`}>
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <Button variant="ghost" size="sm" onClick={() => nav('/outros')}><ArrowLeft className="w-4 h-4 mr-1" />Voltar</Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => window.open(`/outros/${page.id}/preview`, '_blank')}><Eye className="w-4 h-4 mr-1" />Pré-visualizar em branco</Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" onClick={() => setTplOpen(true)}><Sparkles className="w-4 h-4 mr-1" />Usar template</Button>
+            <Button variant="outline" onClick={() => window.open(`/outros/${page.id}/preview`, '_blank')}><Eye className="w-4 h-4 mr-1" />Tela em branco</Button>
             <Button variant="outline" onClick={() => window.open(publicUrl, '_blank')}><ExternalLink className="w-4 h-4 mr-1" />Abrir página real</Button>
             <Button onClick={save} disabled={saving}><Save className="w-4 h-4 mr-1" />{saving ? 'Salvando...' : 'Salvar'}</Button>
           </div>
@@ -199,28 +233,43 @@ export default function LandingBuilderPage() {
                   </div>
                 </CardContent></Card>
 
-                <Card><CardContent className="p-4">
-                  <p className="text-xs font-semibold uppercase mb-2 text-muted-foreground">Compartilhamento</p>
-                  <div className="flex gap-3 items-start">
-                    <div className="flex-1 space-y-2">
-                      <div className="flex gap-2"><Input readOnly value={publicUrl} /><Button variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(publicUrl); toast({ title: 'Copiado' }); }}><Copy className="w-4 h-4" /></Button></div>
-                      <p className="text-xs text-muted-foreground">Compartilhe o link ou o QR Code com parceiros e clientes. Crie quantos quiser nessa mesma página.</p>
-                    </div>
-                    <div className="bg-white p-2 rounded"><QRCodeCanvas value={publicUrl} size={96} /></div>
-                  </div>
+                <Card><CardContent className="p-4 space-y-3">
+                  <p className="text-xs font-semibold uppercase mb-2 text-muted-foreground">Link público</p>
+                  <div className="flex gap-2"><Input readOnly value={publicUrl} /><Button variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(publicUrl); toast({ title: 'Copiado' }); }}><Copy className="w-4 h-4" /></Button></div>
+                  <p className="text-xs text-muted-foreground">Compartilhe o link ou o QR Code com parceiros e clientes. Crie quantos quiser nessa mesma página.</p>
                 </CardContent></Card>
+
+                <QrCodeStudio value={publicUrl} filename={page.slug} />
               </TabsContent>
             </Tabs>
           </div>
 
           {/* Live preview */}
-          <Card className="overflow-hidden">
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Pré-visualização ao vivo</CardTitle></CardHeader>
+          <Card className="overflow-hidden lg:sticky lg:top-4 self-start">
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm">Pré-visualização ao vivo</CardTitle>
+              <div className="flex items-center gap-1">
+                <div className="flex rounded-md border overflow-hidden text-xs">
+                  <button onClick={() => setLivePreview('inline')} className={`px-2 py-1 ${livePreview === 'inline' ? 'bg-primary text-primary-foreground' : ''}`}>Instantânea</button>
+                  <button onClick={() => setLivePreview('public')} className={`px-2 py-1 ${livePreview === 'public' ? 'bg-primary text-primary-foreground' : ''}`}>Página pública</button>
+                </div>
+                {livePreview === 'public' && (
+                  <Button size="icon" variant="ghost" title="Recarregar" onClick={() => setPreviewKey(k => k + 1)}><RefreshCw className="w-3.5 h-3.5" /></Button>
+                )}
+              </div>
+            </CardHeader>
             <CardContent className="p-0">
-              <LivePreview page={page} buttons={buttons} />
+              {livePreview === 'inline'
+                ? <LivePreview page={page} buttons={buttons} />
+                : page.status === 'published'
+                  ? <iframe key={previewKey} src={publicUrl} className="w-full h-[600px] border-0" title="Página pública" />
+                  : <div className="p-8 text-center text-sm text-muted-foreground">Publique a página (em <strong>Conteúdo → Publicada</strong>) para ver a página pública em tempo real aqui.</div>
+              }
             </CardContent>
           </Card>
         </div>
+
+        <TemplatePickerDialog open={tplOpen} onOpenChange={setTplOpen} onApply={applyTemplate} />
       </div>
     </AppLayout>
   );

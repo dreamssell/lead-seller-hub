@@ -10,8 +10,10 @@ import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/components/ui/use-toast';
-import { Link2, QrCode, Plus, Eye, MousePointerClick, Sparkles, Copy, ExternalLink, Trash2, Pencil } from 'lucide-react';
-import { QRCodeCanvas } from 'qrcode.react';
+import { Link2, Plus, Eye, MousePointerClick, Sparkles, Copy, ExternalLink, Trash2, Pencil, Download, FileSpreadsheet } from 'lucide-react';
+import { TemplatePickerDialog } from '@/components/outros/TemplatePickerDialog';
+import { QrCodeStudio } from '@/components/outros/QrCodeStudio';
+import type { LandingTemplate } from '@/lib/landingTemplates';
 
 type Page = {
   id: string; slug: string; title: string; status: 'draft' | 'published';
@@ -28,6 +30,7 @@ export default function OutrosPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [analyticsId, setAnalyticsId] = useState<string | null>(null);
+  const [tplOpen, setTplOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -48,20 +51,72 @@ export default function OutrosPage() {
     leads: pages.reduce((s, p) => s + (p.lead_count || 0), 0),
   }), [pages]);
 
-  const createNew = async () => {
+  const createFromTemplate = async (tpl: LandingTemplate | null) => {
     if (!access?.owner_id) { toast({ title: 'Conta não detectada', variant: 'destructive' }); return; }
     const slug = `cap-${Math.random().toString(36).slice(2, 8)}`;
-    const { data, error } = await supabase.from('landing_pages').insert({
-      owner_id: access.owner_id,
-      sub_company_id: access.sub_company_id,
-      slug,
-      title: 'Nova página de captura',
-      headline: 'Fale com a nossa equipe',
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    const base = tpl ? tpl.page : {
+      title: 'Nova página de captura', headline: 'Fale com a nossa equipe',
       subheadline: 'Escolha um canal e iniciamos seu atendimento agora.',
-      created_by: (await supabase.auth.getUser()).data.user?.id,
+      page_bg_color: '#0F172A', text_color: '#FFFFFF', align: 'center',
+      form_mode: 'none', auto_create_lead: false,
+    };
+    const { data, error } = await supabase.from('landing_pages').insert({
+      owner_id: access.owner_id, sub_company_id: access.sub_company_id, slug,
+      ...base, created_by: userId,
     } as any).select('id').maybeSingle();
     if (error) return toast({ title: 'Erro ao criar', description: error.message, variant: 'destructive' });
-    if (data?.id) nav(`/outros/${data.id}/editar`);
+    if (data?.id) {
+      if (tpl?.buttons?.length) {
+        await supabase.from('landing_buttons').insert(
+          tpl.buttons.map((b, i) => ({ page_id: data.id, ...b, sort_order: i })) as any
+        );
+      }
+      nav(`/outros/${data.id}/editar`);
+    }
+  };
+  const createNew = () => createFromTemplate(null);
+
+  const exportCsv = () => {
+    const rows = [
+      ['Página', 'Slug', 'Rastreio', 'Status', 'Views', 'Cliques', 'Leads', 'Criado em', 'Atualizado em'],
+      ...pages.map(p => [
+        p.title, p.slug, p.tracking_label || '', p.status,
+        String(p.view_count), String(p.click_count), String(p.lead_count),
+        new Date(p.created_at).toISOString(), new Date(p.updated_at).toISOString(),
+      ]),
+    ];
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `outros-metricas-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast({ title: 'CSV exportado' });
+  };
+
+  const exportCtaCsv = async () => {
+    const { data: btns } = await supabase
+      .from('landing_buttons')
+      .select('id,label,url,action_type,click_count,page_id')
+      .order('click_count', { ascending: false });
+    const pageMap = new Map(pages.map(p => [p.id, p]));
+    const rows = [
+      ['Página', 'Slug', 'CTA', 'Tipo', 'Destino', 'Cliques'],
+      ...((btns as any[]) || []).map(b => {
+        const p = pageMap.get(b.page_id);
+        return [p?.title || '', p?.slug || '', b.label, b.action_type, b.url, String(b.click_count || 0)];
+      }),
+    ];
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `outros-ctas-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast({ title: 'CSV de CTAs exportado' });
   };
 
   const remove = async (id: string) => {
@@ -93,8 +148,11 @@ export default function OutrosPage() {
               <CardTitle className="text-base">Suas páginas</CardTitle>
               <CardDescription>Cada página gera um link público e um QR Code para compartilhar.</CardDescription>
             </div>
-            <div className="flex gap-2">
-              <Input placeholder="Buscar..." value={query} onChange={e => setQuery(e.target.value)} className="w-56" />
+            <div className="flex gap-2 flex-wrap">
+              <Input placeholder="Buscar..." value={query} onChange={e => setQuery(e.target.value)} className="w-48" />
+              <Button variant="outline" onClick={exportCsv}><Download className="w-4 h-4 mr-1" />Métricas CSV</Button>
+              <Button variant="outline" onClick={exportCtaCsv}><FileSpreadsheet className="w-4 h-4 mr-1" />CTAs CSV</Button>
+              <Button variant="outline" onClick={() => setTplOpen(true)}><Sparkles className="w-4 h-4 mr-1" />Templates</Button>
               <Button onClick={createNew}><Plus className="w-4 h-4 mr-1" />Nova página</Button>
             </div>
           </CardHeader>
@@ -147,6 +205,7 @@ export default function OutrosPage() {
       </div>
 
       <AnalyticsModal pageId={analyticsId} onClose={() => setAnalyticsId(null)} />
+      <TemplatePickerDialog open={tplOpen} onOpenChange={setTplOpen} onApply={createFromTemplate} />
     </AppLayout>
   );
 }
@@ -179,25 +238,17 @@ function AnalyticsModal({ pageId, onClose }: { pageId: string | null; onClose: (
           <DialogDescription>/{page.slug}{page.tracking_label ? ` · rastreio: ${page.tracking_label}` : ''}</DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card><CardContent className="p-4">
-            <p className="text-xs font-semibold uppercase mb-2 text-muted-foreground">Link público</p>
-            <div className="flex gap-2"><Input readOnly value={link} /><Button variant="outline" onClick={() => { navigator.clipboard.writeText(link); toast({ title: 'Copiado' }); }}><Copy className="w-4 h-4" /></Button></div>
-            <div className="grid grid-cols-3 gap-2 mt-4 text-center">
-              <div><p className="text-xs text-muted-foreground">Views</p><p className="font-bold">{page.view_count}</p></div>
-              <div><p className="text-xs text-muted-foreground">Cliques</p><p className="font-bold">{page.click_count}</p></div>
-              <div><p className="text-xs text-muted-foreground">Leads</p><p className="font-bold">{page.lead_count}</p></div>
-            </div>
-          </CardContent></Card>
-          <Card><CardContent className="p-4 flex flex-col items-center">
-            <p className="text-xs font-semibold uppercase mb-2 text-muted-foreground self-start"><QrCode className="w-3 h-3 inline mr-1" />QR Code</p>
-            <div className="bg-white p-3 rounded-lg"><QRCodeCanvas value={link} size={160} /></div>
-            <Button variant="outline" size="sm" className="mt-3" onClick={() => {
-              const c = document.querySelector('canvas'); if (!c) return;
-              const a = document.createElement('a'); a.download = `${page.slug}.png`; a.href = (c as HTMLCanvasElement).toDataURL(); a.click();
-            }}>Baixar PNG</Button>
-          </CardContent></Card>
-        </div>
+        <Card><CardContent className="p-4">
+          <p className="text-xs font-semibold uppercase mb-2 text-muted-foreground">Link público</p>
+          <div className="flex gap-2"><Input readOnly value={link} /><Button variant="outline" onClick={() => { navigator.clipboard.writeText(link); toast({ title: 'Copiado' }); }}><Copy className="w-4 h-4" /></Button></div>
+          <div className="grid grid-cols-3 gap-2 mt-4 text-center">
+            <div><p className="text-xs text-muted-foreground">Views</p><p className="font-bold">{page.view_count}</p></div>
+            <div><p className="text-xs text-muted-foreground">Cliques</p><p className="font-bold">{page.click_count}</p></div>
+            <div><p className="text-xs text-muted-foreground">Leads</p><p className="font-bold">{page.lead_count}</p></div>
+          </div>
+        </CardContent></Card>
+
+        <QrCodeStudio value={link} filename={page.slug} />
 
         <div>
           <h4 className="text-sm font-semibold mb-2">Desempenho por CTA</h4>
