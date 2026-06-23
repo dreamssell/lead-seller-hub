@@ -16,8 +16,9 @@ import {
 import {
   TrendingUp, TrendingDown, Users, DollarSign, Target,
   CheckCircle2, Activity, Briefcase, Award, Zap, ShieldCheck,
-  Download, ChevronRight, Calendar,
+  Download, ChevronRight, Calendar, Inbox, Phone, PhoneCall, FileSignature,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
