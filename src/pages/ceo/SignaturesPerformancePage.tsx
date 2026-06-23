@@ -2,11 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CeoFilterBar, CeoFilters, periodStart, PERIOD_LABELS } from '@/components/ceo/CeoFilterBar';
+import { Button } from '@/components/ui/button';
+import { CeoFilterBar, periodStart, PERIOD_LABELS } from '@/components/ceo/CeoFilterBar';
+import { useCeoFilters } from '@/hooks/useCeoFilters';
 import { TopRanking } from '@/components/ceo/TopRanking';
 import { SignatureDashboard } from '@/components/signature/SignatureDashboard';
 import { supabase } from '@/integrations/supabase/client';
-import { FileSignature, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { downloadCsv, downloadPdf } from '@/lib/ceoExport';
+import { FileSignature, CheckCircle2, Clock, AlertCircle, Download, FileText } from 'lucide-react';
 
 function Kpi({ icon: Icon, label, value, accent }: any) {
   return (
@@ -25,7 +28,7 @@ function Kpi({ icon: Icon, label, value, accent }: any) {
 }
 
 export default function SignaturesPerformancePage() {
-  const [filters, setFilters] = useState<CeoFilters>({ period: '30d', subCompanyId: 'all', collaboratorId: 'all' });
+  const { filters, setFilters } = useCeoFilters({ period: '30d' });
   const [docs, setDocs] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [subs, setSubs] = useState<any[]>([]);
@@ -84,10 +87,27 @@ export default function SignaturesPerformancePage() {
   const userNames = useMemo(() => Object.fromEntries(profiles.map(p => [p.user_id, p.display_name || p.user_id.slice(0, 8)])), [profiles]);
   const subNames = useMemo(() => Object.fromEntries(subs.map(s => [s.id, s.name])), [subs]);
 
+  const exportRows = () => filtered.map(d => ({
+    titulo: d.title || d.name || '', status: d.status,
+    empresa: subNames[d.sub_company_id] || '', criado_por: userNames[d.created_by] || '',
+    criado_em: new Date(d.created_at).toLocaleString('pt-BR'),
+    expira_em: d.expires_at ? new Date(d.expires_at).toLocaleString('pt-BR') : '',
+  }));
+  const kpisExport = [
+    { label: 'Total', value: counts.total }, { label: 'Assinados', value: counts.signed },
+    { label: 'Pendentes', value: counts.pending }, { label: 'Expirados', value: counts.expired },
+  ];
+
   return (
     <AppLayout title="Assinaturas Eletrônicas" subtitle="Métricas, KPIs e status reais das assinaturas">
       <div className="space-y-6">
-        <CeoFilterBar value={filters} onChange={setFilters} />
+        <CeoFilterBar value={filters} onChange={setFilters} extraRight={
+          <>
+            <Button variant="outline" size="sm" onClick={() => downloadCsv(`assinaturas-${Date.now()}.csv`, exportRows())}><Download className="w-4 h-4 mr-1" />CSV</Button>
+            <Button variant="outline" size="sm" onClick={() => downloadPdf(`assinaturas-${Date.now()}.pdf`, 'Assinaturas Eletrônicas', `Período: ${PERIOD_LABELS[filters.period]}`, kpisExport, exportRows())}><FileText className="w-4 h-4 mr-1" />PDF</Button>
+          </>
+        } />
+
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Kpi icon={FileSignature} label="Total enviados" value={counts.total} />
