@@ -28,6 +28,7 @@ export default function OutrosPage() {
   const nav = useNavigate();
   const { access } = useAuth();
   const [pages, setPages] = useState<Page[]>([]);
+  const [buttons, setButtons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [analyticsId, setAnalyticsId] = useState<string | null>(null);
@@ -35,8 +36,12 @@ export default function OutrosPage() {
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from('landing_pages').select('*').order('updated_at', { ascending: false });
-    setPages((data as any) || []);
+    const [p, b] = await Promise.all([
+      supabase.from('landing_pages').select('*').order('updated_at', { ascending: false }),
+      supabase.from('landing_buttons').select('id,label,url,action_type,click_count,page_id'),
+    ]);
+    setPages((p.data as any) || []);
+    setButtons((b.data as any) || []);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
