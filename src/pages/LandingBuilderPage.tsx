@@ -119,14 +119,29 @@ export default function LandingBuilderPage() {
     <AppLayout title="Editor de página de captura" subtitle={`/${page.slug}`}>
       <div className="space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <Button variant="ghost" size="sm" onClick={() => nav('/outros')}><ArrowLeft className="w-4 h-4 mr-1" />Voltar</Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => nav('/outros')}><ArrowLeft className="w-4 h-4 mr-1" />Voltar</Button>
+            <Badge variant={page.status === 'published' ? 'default' : 'secondary'}>
+              {page.status === 'published' ? '● Publicada — registrando métricas' : '○ Rascunho — métricas pausadas'}
+            </Badge>
+          </div>
           <div className="flex gap-2 flex-wrap">
             <Button variant="outline" onClick={() => setTplOpen(true)}><Sparkles className="w-4 h-4 mr-1" />Usar template</Button>
             <Button variant="outline" onClick={() => window.open(`/outros/${page.id}/preview`, '_blank')}><Eye className="w-4 h-4 mr-1" />Tela em branco</Button>
             <Button variant="outline" onClick={() => window.open(publicUrl, '_blank')}><ExternalLink className="w-4 h-4 mr-1" />Abrir página real</Button>
+            {page.status === 'published' ? (
+              <Button variant="outline" onClick={async () => { update('status', 'draft'); await supabase.from('landing_pages').update({ status: 'draft' }).eq('id', page.id); toast({ title: 'Página despublicada', description: 'Métricas pausadas. A página pública ficará indisponível.' }); }}>
+                Despublicar
+              </Button>
+            ) : (
+              <Button variant="default" onClick={async () => { update('status', 'published'); await supabase.from('landing_pages').update({ status: 'published' }).eq('id', page.id); toast({ title: 'Página publicada', description: 'Já está registrando views, cliques e leads.' }); }}>
+                Publicar
+              </Button>
+            )}
             <Button onClick={save} disabled={saving}><Save className="w-4 h-4 mr-1" />{saving ? 'Salvando...' : 'Salvar'}</Button>
           </div>
         </div>
+
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Editor */}
