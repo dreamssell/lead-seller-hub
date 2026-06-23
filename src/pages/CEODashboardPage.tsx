@@ -106,6 +106,14 @@ export default function CEODashboardPage() {
   const [exporting, setExporting] = useState(false);
   const [drill, setDrill] = useState<DrillType | null>(null);
   const dashboardRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+
+  const focusCards = [
+    { title: 'Captura de Leads', desc: 'Holmes, DealerSpace e demais canais', icon: Inbox, path: '/ceo/leads-capture', tint: 'from-primary/20' },
+    { title: 'Ligações', desc: 'Performance VoIP e Wavoip', icon: Phone, path: '/ceo/calls', tint: 'from-emerald-500/20' },
+    { title: '3CX', desc: 'Métricas em tempo real do PBX', icon: PhoneCall, path: '/3cx', tint: 'from-sky-500/20' },
+    { title: 'Assinaturas', desc: 'Documentos e status do portal', icon: FileSignature, path: '/ceo/signatures', tint: 'from-accent/20' },
+  ];
 
   useEffect(() => {
     (async () => {
