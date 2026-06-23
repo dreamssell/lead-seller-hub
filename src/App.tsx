@@ -39,6 +39,9 @@ import VideoJoinPage from "./pages/VideoJoinPage";
 import SignaturePortalPage from "./pages/SignaturePortalPage";
 import SignaturesPage from "./pages/SignaturesPage";
 import ThreeCxDashboardPage from "./pages/ThreeCxDashboardPage";
+import LeadsCapturePage from "./pages/ceo/LeadsCapturePage";
+import CallsPerformancePage from "./pages/ceo/CallsPerformancePage";
+import SignaturesPerformancePage from "./pages/ceo/SignaturesPerformancePage";
 import { CookieConsentBanner } from "./components/CookieConsentBanner";
 
 
@@ -93,6 +96,9 @@ const App = () => (
               <Route path="/3cx" element={<ProtectedRoute><ThreeCxDashboardPage /></ProtectedRoute>} />
               <Route path="/cadastros" element={<ProtectedRoute><CadastrosPage /></ProtectedRoute>} />
               <Route path="/ceo" element={<ProtectedRoute><CEODashboardPage /></ProtectedRoute>} />
+              <Route path="/ceo/leads-capture" element={<ProtectedRoute><LeadsCapturePage /></ProtectedRoute>} />
+              <Route path="/ceo/calls" element={<ProtectedRoute><CallsPerformancePage /></ProtectedRoute>} />
+              <Route path="/ceo/signatures" element={<ProtectedRoute><SignaturesPerformancePage /></ProtectedRoute>} />
               <Route path="/status" element={<ProtectedRoute><BackendStatusPage /></ProtectedRoute>} />
               <Route path="/documentation" element={<ProtectedRoute pageKey="documentation"><DocumentationPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
