@@ -148,8 +148,11 @@ export default function OutrosPage() {
               <CardTitle className="text-base">Suas páginas</CardTitle>
               <CardDescription>Cada página gera um link público e um QR Code para compartilhar.</CardDescription>
             </div>
-            <div className="flex gap-2">
-              <Input placeholder="Buscar..." value={query} onChange={e => setQuery(e.target.value)} className="w-56" />
+            <div className="flex gap-2 flex-wrap">
+              <Input placeholder="Buscar..." value={query} onChange={e => setQuery(e.target.value)} className="w-48" />
+              <Button variant="outline" onClick={exportCsv}><Download className="w-4 h-4 mr-1" />Métricas CSV</Button>
+              <Button variant="outline" onClick={exportCtaCsv}><FileSpreadsheet className="w-4 h-4 mr-1" />CTAs CSV</Button>
+              <Button variant="outline" onClick={() => setTplOpen(true)}><Sparkles className="w-4 h-4 mr-1" />Templates</Button>
               <Button onClick={createNew}><Plus className="w-4 h-4 mr-1" />Nova página</Button>
             </div>
           </CardHeader>
