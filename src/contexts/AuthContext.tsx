@@ -12,6 +12,7 @@ type AccountAccess = {
   blocked_pages: string[];
   status: string;
   allow_custom_logic: boolean;
+  feature_landing_builder: boolean;
 };
 
 interface AuthContextType {
