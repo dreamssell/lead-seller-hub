@@ -51,20 +51,72 @@ export default function OutrosPage() {
     leads: pages.reduce((s, p) => s + (p.lead_count || 0), 0),
   }), [pages]);
 
-  const createNew = async () => {
+  const createFromTemplate = async (tpl: LandingTemplate | null) => {
     if (!access?.owner_id) { toast({ title: 'Conta não detectada', variant: 'destructive' }); return; }
     const slug = `cap-${Math.random().toString(36).slice(2, 8)}`;
-    const { data, error } = await supabase.from('landing_pages').insert({
-      owner_id: access.owner_id,
-      sub_company_id: access.sub_company_id,
-      slug,
-      title: 'Nova página de captura',
-      headline: 'Fale com a nossa equipe',
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    const base = tpl ? tpl.page : {
+      title: 'Nova página de captura', headline: 'Fale com a nossa equipe',
       subheadline: 'Escolha um canal e iniciamos seu atendimento agora.',
-      created_by: (await supabase.auth.getUser()).data.user?.id,
+      page_bg_color: '#0F172A', text_color: '#FFFFFF', align: 'center',
+      form_mode: 'none', auto_create_lead: false,
+    };
+    const { data, error } = await supabase.from('landing_pages').insert({
+      owner_id: access.owner_id, sub_company_id: access.sub_company_id, slug,
+      ...base, created_by: userId,
     } as any).select('id').maybeSingle();
     if (error) return toast({ title: 'Erro ao criar', description: error.message, variant: 'destructive' });
-    if (data?.id) nav(`/outros/${data.id}/editar`);
+    if (data?.id) {
+      if (tpl?.buttons?.length) {
+        await supabase.from('landing_buttons').insert(
+          tpl.buttons.map((b, i) => ({ page_id: data.id, ...b, sort_order: i })) as any
+        );
+      }
+      nav(`/outros/${data.id}/editar`);
+    }
+  };
+  const createNew = () => createFromTemplate(null);
+
+  const exportCsv = () => {
+    const rows = [
+      ['Página', 'Slug', 'Rastreio', 'Status', 'Views', 'Cliques', 'Leads', 'Criado em', 'Atualizado em'],
+      ...pages.map(p => [
+        p.title, p.slug, p.tracking_label || '', p.status,
+        String(p.view_count), String(p.click_count), String(p.lead_count),
+        new Date(p.created_at).toISOString(), new Date(p.updated_at).toISOString(),
+      ]),
+    ];
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `outros-metricas-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast({ title: 'CSV exportado' });
+  };
+
+  const exportCtaCsv = async () => {
+    const { data: btns } = await supabase
+      .from('landing_buttons')
+      .select('id,label,url,action_type,click_count,page_id')
+      .order('click_count', { ascending: false });
+    const pageMap = new Map(pages.map(p => [p.id, p]));
+    const rows = [
+      ['Página', 'Slug', 'CTA', 'Tipo', 'Destino', 'Cliques'],
+      ...((btns as any[]) || []).map(b => {
+        const p = pageMap.get(b.page_id);
+        return [p?.title || '', p?.slug || '', b.label, b.action_type, b.url, String(b.click_count || 0)];
+      }),
+    ];
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `outros-ctas-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast({ title: 'CSV de CTAs exportado' });
   };
 
   const remove = async (id: string) => {
