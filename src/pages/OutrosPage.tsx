@@ -10,8 +10,10 @@ import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/components/ui/use-toast';
-import { Link2, QrCode, Plus, Eye, MousePointerClick, Sparkles, Copy, ExternalLink, Trash2, Pencil } from 'lucide-react';
-import { QRCodeCanvas } from 'qrcode.react';
+import { Link2, Plus, Eye, MousePointerClick, Sparkles, Copy, ExternalLink, Trash2, Pencil, Download, FileSpreadsheet } from 'lucide-react';
+import { TemplatePickerDialog } from '@/components/outros/TemplatePickerDialog';
+import { QrCodeStudio } from '@/components/outros/QrCodeStudio';
+import type { LandingTemplate } from '@/lib/landingTemplates';
 
 type Page = {
   id: string; slug: string; title: string; status: 'draft' | 'published';
