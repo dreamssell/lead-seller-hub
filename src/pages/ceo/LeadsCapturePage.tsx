@@ -139,14 +139,21 @@ export default function LeadsCapturePage() {
         } />
 
 
-        <Tabs value={sourceTab} onValueChange={(v) => setSourceTab(v as any)}>
-          <TabsList>
-            <TabsTrigger value="all"><Globe className="w-4 h-4 mr-2" />Todos os canais</TabsTrigger>
-            <TabsTrigger value="Holmes"><LinkIcon className="w-4 h-4 mr-2" />Holmes</TabsTrigger>
-            <TabsTrigger value="DealerSpace"><LinkIcon className="w-4 h-4 mr-2" />DealerSpace</TabsTrigger>
-            <TabsTrigger value="Outros">Outros</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {(() => {
+          const builtIn = ['Holmes', 'DealerSpace'];
+          const dynamic = Array.from(new Set(leads.map(l => classify(l.source)).filter(c => !builtIn.includes(c)))).sort();
+          const all = [...builtIn, ...dynamic];
+          return (
+            <Tabs value={sourceTab} onValueChange={(v) => setSourceTab(v)}>
+              <TabsList className="flex-wrap h-auto">
+                <TabsTrigger value="all"><Globe className="w-4 h-4 mr-2" />Todos os canais</TabsTrigger>
+                {all.map(c => (
+                  <TabsTrigger key={c} value={c}><LinkIcon className="w-4 h-4 mr-2" />{c}</TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          );
+        })()}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Kpi icon={Inbox} label="Leads capturados" value={filtered.length} hint={`Período: ${PERIOD_LABELS[filters.period]}`} />
