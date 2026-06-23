@@ -201,16 +201,13 @@ export default function LandingBuilderPage() {
                   </div>
                 </CardContent></Card>
 
-                <Card><CardContent className="p-4">
-                  <p className="text-xs font-semibold uppercase mb-2 text-muted-foreground">Compartilhamento</p>
-                  <div className="flex gap-3 items-start">
-                    <div className="flex-1 space-y-2">
-                      <div className="flex gap-2"><Input readOnly value={publicUrl} /><Button variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(publicUrl); toast({ title: 'Copiado' }); }}><Copy className="w-4 h-4" /></Button></div>
-                      <p className="text-xs text-muted-foreground">Compartilhe o link ou o QR Code com parceiros e clientes. Crie quantos quiser nessa mesma página.</p>
-                    </div>
-                    <div className="bg-white p-2 rounded"><QRCodeCanvas value={publicUrl} size={96} /></div>
-                  </div>
+                <Card><CardContent className="p-4 space-y-3">
+                  <p className="text-xs font-semibold uppercase mb-2 text-muted-foreground">Link público</p>
+                  <div className="flex gap-2"><Input readOnly value={publicUrl} /><Button variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(publicUrl); toast({ title: 'Copiado' }); }}><Copy className="w-4 h-4" /></Button></div>
+                  <p className="text-xs text-muted-foreground">Compartilhe o link ou o QR Code com parceiros e clientes. Crie quantos quiser nessa mesma página.</p>
                 </CardContent></Card>
+
+                <QrCodeStudio value={publicUrl} filename={page.slug} />
               </TabsContent>
             </Tabs>
           </div>
