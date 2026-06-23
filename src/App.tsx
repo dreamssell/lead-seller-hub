@@ -42,6 +42,10 @@ import ThreeCxDashboardPage from "./pages/ThreeCxDashboardPage";
 import LeadsCapturePage from "./pages/ceo/LeadsCapturePage";
 import CallsPerformancePage from "./pages/ceo/CallsPerformancePage";
 import SignaturesPerformancePage from "./pages/ceo/SignaturesPerformancePage";
+import OutrosPage from "./pages/OutrosPage";
+import LandingBuilderPage from "./pages/LandingBuilderPage";
+import LandingPreviewPage from "./pages/LandingPreviewPage";
+import PublicLandingPage from "./pages/PublicLandingPage";
 import { CookieConsentBanner } from "./components/CookieConsentBanner";
 
 
