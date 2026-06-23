@@ -30,6 +30,7 @@ export type SidebarPageKey =
   | 'reports'
   | 'pipeline'
   | 'ceo'
+  | 'outros'
   | 'settings'
   | 'developer'
   | 'api-keys'
