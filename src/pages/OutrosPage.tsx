@@ -205,6 +205,7 @@ export default function OutrosPage() {
       </div>
 
       <AnalyticsModal pageId={analyticsId} onClose={() => setAnalyticsId(null)} />
+      <TemplatePickerDialog open={tplOpen} onOpenChange={setTplOpen} onApply={createFromTemplate} />
     </AppLayout>
   );
 }
