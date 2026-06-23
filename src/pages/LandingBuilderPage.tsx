@@ -87,6 +87,19 @@ export default function LandingBuilderPage() {
     await supabase.from('landing_buttons').delete().eq('id', b.id);
   };
 
+  const applyTemplate = async (tpl: LandingTemplate) => {
+    const next = { ...page, ...tpl.page };
+    setPage(next);
+    await supabase.from('landing_pages').update(tpl.page as any).eq('id', page.id);
+    // Replace buttons with template buttons
+    await supabase.from('landing_buttons').delete().eq('page_id', page.id);
+    const { data } = await supabase.from('landing_buttons').insert(
+      tpl.buttons.map((b, i) => ({ page_id: page.id, ...b, sort_order: i })) as any
+    ).select('*').order('sort_order');
+    setButtons((data as any) || []);
+    toast({ title: `Template aplicado: ${tpl.name}` });
+  };
+
   return (
     <AppLayout title="Editor de página de captura" subtitle={`/${page.slug}`}>
       <div className="space-y-4">
