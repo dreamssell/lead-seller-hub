@@ -21,7 +21,7 @@ const SOURCE_GROUPS: Record<string, RegExp> = {
 const CHART_COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 function classify(source?: string | null) {
-  if (!source) return 'Outros';
+  if (!source) return 'Sem origem';
   for (const [k, re] of Object.entries(SOURCE_GROUPS)) if (re.test(source)) return k;
   return source;
 }
