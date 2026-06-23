@@ -115,10 +115,29 @@ export default function LeadsCapturePage() {
     }));
   }, [filtered, profiles]);
 
+  const exportRows = () => filtered.map(l => ({
+    nome: l.name, email: l.email || '', telefone: l.phone || '', canal: l.channel || '',
+    origem: l.source || '', categoria: classify(l.source), status: l.status,
+    valor_estimado: Number(l.estimated_value || 0), responsavel: profileName(l.assigned_to || l.created_by),
+    criado_em: new Date(l.created_at).toLocaleString('pt-BR'),
+  }));
+  const kpisExport = [
+    { label: 'Leads', value: filtered.length },
+    { label: 'Convertidos', value: won.length },
+    { label: 'Taxa de conversão', value: `${conv.toFixed(1)}%` },
+    { label: 'Receita', value: `R$ ${revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` },
+  ];
+
   return (
     <AppLayout title="Captura de Leads" subtitle="Métricas e KPIs reais — Holmes, DealerSpace e demais canais">
       <div className="space-y-6">
-        <CeoFilterBar value={filters} onChange={setFilters} />
+        <CeoFilterBar value={filters} onChange={setFilters} extraRight={
+          <>
+            <Button variant="outline" size="sm" onClick={() => downloadCsv(`leads-${Date.now()}.csv`, exportRows())}><Download className="w-4 h-4 mr-1" />CSV</Button>
+            <Button variant="outline" size="sm" onClick={() => downloadPdf(`leads-${Date.now()}.pdf`, 'Captura de Leads', `Período: ${PERIOD_LABELS[filters.period]}`, kpisExport, exportRows())}><FileText className="w-4 h-4 mr-1" />PDF</Button>
+          </>
+        } />
+
 
         <Tabs value={sourceTab} onValueChange={(v) => setSourceTab(v as any)}>
           <TabsList>
