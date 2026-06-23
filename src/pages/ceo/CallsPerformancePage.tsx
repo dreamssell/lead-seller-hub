@@ -3,11 +3,14 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { CeoFilterBar, CeoFilters, periodStart, PERIOD_LABELS } from '@/components/ceo/CeoFilterBar';
+import { Button } from '@/components/ui/button';
+import { CeoFilterBar, periodStart, PERIOD_LABELS } from '@/components/ceo/CeoFilterBar';
+import { useCeoFilters } from '@/hooks/useCeoFilters';
 import { TopRanking } from '@/components/ceo/TopRanking';
 import { supabase } from '@/integrations/supabase/client';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line, Legend } from 'recharts';
-import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, TrendingUp, Wifi, Activity } from 'lucide-react';
+import { downloadCsv, downloadPdf } from '@/lib/ceoExport';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, TrendingUp, Wifi, Activity, Download, FileText } from 'lucide-react';
 
 type Channel = 'all' | 'voip' | 'wavoip';
 
