@@ -118,10 +118,11 @@ export default function LandingBuilderPage() {
   return (
     <AppLayout title="Editor de página de captura" subtitle={`/${page.slug}`}>
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <Button variant="ghost" size="sm" onClick={() => nav('/outros')}><ArrowLeft className="w-4 h-4 mr-1" />Voltar</Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => window.open(`/outros/${page.id}/preview`, '_blank')}><Eye className="w-4 h-4 mr-1" />Pré-visualizar em branco</Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" onClick={() => setTplOpen(true)}><Sparkles className="w-4 h-4 mr-1" />Usar template</Button>
+            <Button variant="outline" onClick={() => window.open(`/outros/${page.id}/preview`, '_blank')}><Eye className="w-4 h-4 mr-1" />Tela em branco</Button>
             <Button variant="outline" onClick={() => window.open(publicUrl, '_blank')}><ExternalLink className="w-4 h-4 mr-1" />Abrir página real</Button>
             <Button onClick={save} disabled={saving}><Save className="w-4 h-4 mr-1" />{saving ? 'Salvando...' : 'Salvar'}</Button>
           </div>
