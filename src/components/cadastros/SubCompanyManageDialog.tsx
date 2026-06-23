@@ -500,6 +500,13 @@ function RulesTab({ sub }: { sub: SubCompany }) {
             <p className="text-xs text-muted-foreground">Permite que esta sub-empresa adicione personalizações à parte do código matriz.</p>
           </div>
         </div>
+        <div className="flex items-start gap-3 rounded-lg border p-3 bg-primary/5">
+          <Switch checked={landingBuilder} onCheckedChange={setLandingBuilder} />
+          <div>
+            <p className="text-sm font-medium">Captura por páginas (módulo "Outros")</p>
+            <p className="text-xs text-muted-foreground">Libera o criador de páginas, CTAs e QR Codes. Aparece no menu como "Outros" ao lado dos canais externos.</p>
+          </div>
+        </div>
         <Button onClick={save} disabled={saving} className="w-full">{saving ? 'Salvando...' : 'Salvar regras'}</Button>
       </div>
     </div>
