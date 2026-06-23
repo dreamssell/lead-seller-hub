@@ -37,8 +37,9 @@ function classifyChannel(log: any): 'voip' | 'wavoip' {
 }
 
 export default function CallsPerformancePage() {
-  const [filters, setFilters] = useState<CeoFilters>({ period: '30d', subCompanyId: 'all', collaboratorId: 'all' });
-  const [channel, setChannel] = useState<Channel>('all');
+  const { filters, setFilters, setExtra } = useCeoFilters({ period: '30d' }, { ch: 'all' });
+  const channel = filters.ch as Channel;
+  const setChannel = (v: string) => setExtra({ ch: v });
   const [logs, setLogs] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
 
