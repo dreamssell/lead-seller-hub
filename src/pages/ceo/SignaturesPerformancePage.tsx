@@ -28,7 +28,7 @@ function Kpi({ icon: Icon, label, value, accent }: any) {
 }
 
 export default function SignaturesPerformancePage() {
-  const [filters, setFilters] = useState<CeoFilters>({ period: '30d', subCompanyId: 'all', collaboratorId: 'all' });
+  const { filters, setFilters } = useCeoFilters({ period: '30d' });
   const [docs, setDocs] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [subs, setSubs] = useState<any[]>([]);
