@@ -52,10 +52,27 @@ export default function OutrosPage() {
   );
 
   const totals = useMemo(() => ({
-    views: pages.reduce((s, p) => s + (p.view_count || 0), 0),
-    clicks: pages.reduce((s, p) => s + (p.click_count || 0), 0),
-    leads: pages.reduce((s, p) => s + (p.lead_count || 0), 0),
-  }), [pages]);
+    views: filtered.reduce((s, p) => s + (p.view_count || 0), 0),
+    clicks: filtered.reduce((s, p) => s + (p.click_count || 0), 0),
+    leads: filtered.reduce((s, p) => s + (p.lead_count || 0), 0),
+  }), [filtered]);
+
+  const CHANNEL_LABEL: Record<string, string> = {
+    whatsapp: 'WhatsApp', site: 'Site', link: 'Link externo', form: 'Formulário',
+  };
+
+  const channelBreakdown = useMemo(() => {
+    const pageIds = new Set(filtered.map(p => p.id));
+    const m: Record<string, { ctas: number; clicks: number }> = {};
+    buttons.filter(b => pageIds.has(b.page_id)).forEach(b => {
+      const k = CHANNEL_LABEL[b.action_type] || b.action_type || 'Outro';
+      m[k] = m[k] || { ctas: 0, clicks: 0 };
+      m[k].ctas++;
+      m[k].clicks += Number(b.click_count || 0);
+    });
+    return Object.entries(m).map(([canal, v]) => ({ canal, ctas: v.ctas, cliques: v.clicks }))
+      .sort((a, b) => b.cliques - a.cliques);
+  }, [filtered, buttons]);
 
   const createFromTemplate = async (tpl: LandingTemplate | null) => {
     if (!access?.owner_id) { toast({ title: 'Conta não detectada', variant: 'destructive' }); return; }
