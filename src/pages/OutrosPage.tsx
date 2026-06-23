@@ -103,43 +103,73 @@ export default function OutrosPage() {
   const exportCsv = () => {
     const rows = [
       ['Página', 'Slug', 'Rastreio', 'Status', 'Views', 'Cliques', 'Leads', 'Criado em', 'Atualizado em'],
-      ...pages.map(p => [
+      ...filtered.map(p => [
         p.title, p.slug, p.tracking_label || '', p.status,
         String(p.view_count), String(p.click_count), String(p.lead_count),
         new Date(p.created_at).toISOString(), new Date(p.updated_at).toISOString(),
       ]),
+      [],
+      ['Breakdown por canal detectado'],
+      ['Canal', 'CTAs', 'Cliques'],
+      ...channelBreakdown.map(c => [c.canal, String(c.ctas), String(c.cliques)]),
     ];
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `outros-metricas-${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `captura-leads-${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     toast({ title: 'CSV exportado' });
   };
 
   const exportCtaCsv = async () => {
-    const { data: btns } = await supabase
-      .from('landing_buttons')
-      .select('id,label,url,action_type,click_count,page_id')
-      .order('click_count', { ascending: false });
-    const pageMap = new Map(pages.map(p => [p.id, p]));
+    const pageIds = new Set(filtered.map(p => p.id));
+    const pageMap = new Map(filtered.map(p => [p.id, p]));
     const rows = [
       ['Página', 'Slug', 'CTA', 'Tipo', 'Destino', 'Cliques'],
-      ...((btns as any[]) || []).map(b => {
-        const p = pageMap.get(b.page_id);
-        return [p?.title || '', p?.slug || '', b.label, b.action_type, b.url, String(b.click_count || 0)];
-      }),
+      ...buttons
+        .filter(b => pageIds.has(b.page_id))
+        .sort((a, b) => (b.click_count || 0) - (a.click_count || 0))
+        .map(b => {
+          const p = pageMap.get(b.page_id);
+          return [p?.title || '', p?.slug || '', b.label, b.action_type, b.url, String(b.click_count || 0)];
+        }),
     ];
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `outros-ctas-${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `captura-leads-ctas-${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     toast({ title: 'CSV de CTAs exportado' });
+  };
+
+  const exportPdf = () => {
+    const kpis = [
+      { label: 'Páginas', value: filtered.length },
+      { label: 'Views', value: totals.views },
+      { label: 'Cliques', value: totals.clicks },
+      { label: 'Leads', value: totals.leads },
+    ];
+    const pageRows = filtered.map(p => ({
+      pagina: p.title,
+      slug: p.slug,
+      status: p.status === 'published' ? 'Publicada' : 'Rascunho',
+      views: p.view_count,
+      cliques: p.click_count,
+      leads: p.lead_count,
+    }));
+    const channelRows = channelBreakdown.map(c => ({ canal: c.canal, ctas: c.ctas, cliques: c.cliques }));
+    downloadPdf(
+      `captura-leads-${new Date().toISOString().slice(0, 10)}.pdf`,
+      'Captura de Leads',
+      query ? `Filtro: "${query}"` : 'Todas as páginas',
+      kpis,
+      [...pageRows, ...(channelRows.length ? [{ pagina: '— Breakdown por canal —', slug: '', status: '', views: '', cliques: '', leads: '' }, ...channelRows.map(c => ({ pagina: c.canal, slug: '', status: 'canal', views: '', cliques: c.cliques, leads: c.ctas }))] : [])],
+    );
+    toast({ title: 'PDF exportado' });
   };
 
   const remove = async (id: string) => {
