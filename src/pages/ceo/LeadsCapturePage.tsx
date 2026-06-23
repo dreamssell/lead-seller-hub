@@ -44,7 +44,9 @@ function Kpi({ icon: Icon, label, value, hint }: any) {
 }
 
 export default function LeadsCapturePage() {
-  const [filters, setFilters] = useState<CeoFilters>({ period: '30d', subCompanyId: 'all', collaboratorId: 'all' });
+  const { filters, setFilters, setExtra } = useCeoFilters({ period: '30d' }, { src: 'all' });
+  const sourceTab = filters.src as 'all' | 'Holmes' | 'DealerSpace' | 'Outros';
+  const setSourceTab = (v: string) => setExtra({ src: v });
   const [leads, setLeads] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [sourceTab, setSourceTab] = useState<'all' | 'Holmes' | 'DealerSpace' | 'Outros'>('all');
