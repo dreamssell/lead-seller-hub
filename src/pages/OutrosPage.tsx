@@ -30,6 +30,7 @@ export default function OutrosPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [analyticsId, setAnalyticsId] = useState<string | null>(null);
+  const [tplOpen, setTplOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
