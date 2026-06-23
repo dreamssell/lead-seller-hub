@@ -16,8 +16,9 @@ import {
 import {
   TrendingUp, TrendingDown, Users, DollarSign, Target,
   CheckCircle2, Activity, Briefcase, Award, Zap, ShieldCheck,
-  Download, ChevronRight, Calendar,
+  Download, ChevronRight, Calendar, Inbox, Phone, PhoneCall, FileSignature,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
@@ -105,6 +106,14 @@ export default function CEODashboardPage() {
   const [exporting, setExporting] = useState(false);
   const [drill, setDrill] = useState<DrillType | null>(null);
   const dashboardRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+
+  const focusCards = [
+    { title: 'Captura de Leads', desc: 'Holmes, DealerSpace e demais canais', icon: Inbox, path: '/ceo/leads-capture', tint: 'from-primary/20' },
+    { title: 'Ligações', desc: 'Performance VoIP e Wavoip', icon: Phone, path: '/ceo/calls', tint: 'from-emerald-500/20' },
+    { title: '3CX', desc: 'Métricas em tempo real do PBX', icon: PhoneCall, path: '/3cx', tint: 'from-sky-500/20' },
+    { title: 'Assinaturas', desc: 'Documentos e status do portal', icon: FileSignature, path: '/ceo/signatures', tint: 'from-accent/20' },
+  ];
 
   useEffect(() => {
     (async () => {
@@ -338,6 +347,28 @@ export default function CEODashboardPage() {
                 <span className="text-muted-foreground">Atualizado agora</span>
               </div>
             </div>
+          </div>
+
+          {/* Painéis de foco — atalhos para análises dedicadas */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {focusCards.map((c) => {
+              const Icon = c.icon;
+              return (
+                <button
+                  key={c.title}
+                  onClick={() => navigate(c.path)}
+                  className={`text-left glass-card p-5 transition-all hover:border-primary/50 hover:shadow-md bg-gradient-to-br ${c.tint} to-transparent`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="p-2.5 rounded-lg bg-background/70 text-primary"><Icon className="w-5 h-5" /></div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                  <p className="font-semibold text-sm">{c.title}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{c.desc}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-primary font-semibold mt-3">Abrir painel dedicado →</p>
+                </button>
+              );
+            })}
           </div>
 
           {/* KPI grid */}
