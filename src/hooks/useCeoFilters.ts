@@ -39,7 +39,7 @@ export function useCeoFilters(defaults: Partial<CeoFilters> = {}, extras: Record
     }, { replace: true });
   }, [setParams, extras]);
 
-  const onChangeFilters = useCallback((v: CeoFilters) => setValue(v), [setValue]);
+  const onChangeFilters = useCallback((v: CeoFilters) => setValue(v as any), [setValue]);
 
   return { filters: value, setFilters: onChangeFilters, setExtra: setValue };
 }
