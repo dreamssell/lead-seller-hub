@@ -13,8 +13,10 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
-import { Plus, Trash2, Save, ExternalLink, Eye, Copy, ArrowLeft } from 'lucide-react';
-import { QRCodeCanvas } from 'qrcode.react';
+import { Plus, Trash2, Save, ExternalLink, Eye, Copy, ArrowLeft, Sparkles, RefreshCw } from 'lucide-react';
+import { TemplatePickerDialog } from '@/components/outros/TemplatePickerDialog';
+import { QrCodeStudio } from '@/components/outros/QrCodeStudio';
+import type { LandingTemplate } from '@/lib/landingTemplates';
 
 type Page = any;
 type Btn = {
