@@ -9,6 +9,7 @@ import {
   Headphones,
   Key,
   LayoutDashboard,
+  Link2,
   MessageSquare,
   PenLine,
   Phone,
