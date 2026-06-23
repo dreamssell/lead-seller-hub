@@ -34,6 +34,9 @@ export default function LandingBuilderPage() {
   const [buttons, setButtons] = useState<Btn[]>([]);
   const [pipelines, setPipelines] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const [tplOpen, setTplOpen] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
+  const [livePreview, setLivePreview] = useState<'inline' | 'public'>('inline');
 
   useEffect(() => {
     (async () => {
