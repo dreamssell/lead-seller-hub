@@ -104,6 +104,9 @@ const App = () => (
               <Route path="/ceo/leads-capture" element={<ProtectedRoute><LeadsCapturePage /></ProtectedRoute>} />
               <Route path="/ceo/calls" element={<ProtectedRoute><CallsPerformancePage /></ProtectedRoute>} />
               <Route path="/ceo/signatures" element={<ProtectedRoute><SignaturesPerformancePage /></ProtectedRoute>} />
+              <Route path="/outros" element={<ProtectedRoute pageKey="outros"><OutrosPage /></ProtectedRoute>} />
+              <Route path="/outros/:id/editar" element={<ProtectedRoute pageKey="outros"><LandingBuilderPage /></ProtectedRoute>} />
+              <Route path="/outros/:id/preview" element={<ProtectedRoute pageKey="outros"><LandingPreviewPage /></ProtectedRoute>} />
               <Route path="/status" element={<ProtectedRoute><BackendStatusPage /></ProtectedRoute>} />
               <Route path="/documentation" element={<ProtectedRoute pageKey="documentation"><DocumentationPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
