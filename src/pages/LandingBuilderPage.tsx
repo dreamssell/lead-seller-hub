@@ -49,6 +49,21 @@ export default function LandingBuilderPage() {
     })();
   }, [id]);
 
+  // Debounced autosave — drives the realtime live preview iframe
+  useEffect(() => {
+    if (!page) return;
+    const t = setTimeout(() => {
+      supabase.from('landing_pages').update({
+        title: page.title, headline: page.headline, subheadline: page.subheadline,
+        page_bg_color: page.page_bg_color, text_color: page.text_color, align: page.align,
+        tracking_label: page.tracking_label, slug: page.slug,
+        pipeline_id: page.pipeline_id || null, auto_create_lead: page.auto_create_lead, form_mode: page.form_mode,
+      }).eq('id', page.id);
+    }, 600);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page?.title, page?.headline, page?.subheadline, page?.page_bg_color, page?.text_color, page?.align, page?.tracking_label, page?.form_mode, page?.pipeline_id, page?.auto_create_lead]);
+
   const publicUrl = useMemo(() => page ? `${window.location.origin}/p/${page.slug}` : '', [page]);
 
   if (!page) return <AppLayout title="Editor de página"><p className="text-sm text-muted-foreground">Carregando...</p></AppLayout>;
