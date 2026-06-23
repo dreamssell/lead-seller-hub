@@ -2,12 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CeoFilterBar, CeoFilters, periodStart, PERIOD_LABELS } from '@/components/ceo/CeoFilterBar';
+import { CeoFilterBar, PERIOD_LABELS } from '@/components/ceo/CeoFilterBar';
+import { useCeoFilters } from '@/hooks/useCeoFilters';
+import { periodStart } from '@/components/ceo/CeoFilterBar';
 import { TopRanking } from '@/components/ceo/TopRanking';
 import { supabase } from '@/integrations/supabase/client';
+import { downloadCsv, downloadPdf } from '@/lib/ceoExport';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
-import { Inbox, CheckCircle2, TrendingUp, Globe, Link as LinkIcon } from 'lucide-react';
+import { Inbox, CheckCircle2, TrendingUp, Globe, Link as LinkIcon, Download, FileText } from 'lucide-react';
 
 const SOURCE_GROUPS: Record<string, RegExp> = {
   Holmes: /holmes/i,
