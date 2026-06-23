@@ -2,11 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CeoFilterBar, CeoFilters, periodStart, PERIOD_LABELS } from '@/components/ceo/CeoFilterBar';
+import { Button } from '@/components/ui/button';
+import { CeoFilterBar, periodStart, PERIOD_LABELS } from '@/components/ceo/CeoFilterBar';
+import { useCeoFilters } from '@/hooks/useCeoFilters';
 import { TopRanking } from '@/components/ceo/TopRanking';
 import { SignatureDashboard } from '@/components/signature/SignatureDashboard';
 import { supabase } from '@/integrations/supabase/client';
-import { FileSignature, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { downloadCsv, downloadPdf } from '@/lib/ceoExport';
+import { FileSignature, CheckCircle2, Clock, AlertCircle, Download, FileText } from 'lucide-react';
 
 function Kpi({ icon: Icon, label, value, accent }: any) {
   return (
