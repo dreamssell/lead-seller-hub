@@ -110,10 +110,28 @@ export default function CallsPerformancePage() {
     }));
   }, [filtered, profiles]);
 
+  const exportRows = () => filtered.map(l => ({
+    data: new Date(l.timestamp || l.created_at).toLocaleString('pt-BR'),
+    canal: classifyChannel(l), tipo: l.type || '', status: l.status || '',
+    direcao: l.metadata?.direction || '', usuario: profileName(l.metadata?.user_id || l.replay_user_id),
+  }));
+  const kpisExport = [
+    { label: 'Total', value: counts.total }, { label: 'Recebidas', value: counts.inbound },
+    { label: 'Realizadas', value: counts.outbound }, { label: 'Perdidas', value: counts.missed },
+    { label: 'Atendimento', value: `${counts.answerRate}%` },
+    { label: 'VoIP', value: counts.voip }, { label: 'Wavoip', value: counts.wavoip },
+  ];
+
   return (
     <AppLayout title="Ligações — VoIP & Wavoip" subtitle="Performance e KPIs reais de telefonia">
       <div className="space-y-6">
-        <CeoFilterBar value={filters} onChange={setFilters} />
+        <CeoFilterBar value={filters} onChange={setFilters} extraRight={
+          <>
+            <Button variant="outline" size="sm" onClick={() => downloadCsv(`ligacoes-${Date.now()}.csv`, exportRows())}><Download className="w-4 h-4 mr-1" />CSV</Button>
+            <Button variant="outline" size="sm" onClick={() => downloadPdf(`ligacoes-${Date.now()}.pdf`, 'Ligações — VoIP & Wavoip', `Período: ${PERIOD_LABELS[filters.period]}`, kpisExport, exportRows())}><FileText className="w-4 h-4 mr-1" />PDF</Button>
+          </>
+        } />
+
 
         <Tabs value={channel} onValueChange={(v) => setChannel(v as Channel)}>
           <TabsList>
