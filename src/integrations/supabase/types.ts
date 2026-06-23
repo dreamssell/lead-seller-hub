@@ -3837,6 +3837,7 @@ export type Database = {
           allow_custom_logic: boolean
           allowed_pages: string[]
           blocked_pages: string[]
+          feature_landing_builder: boolean
           is_account_admin: boolean
           owner_id: string
           status: string
