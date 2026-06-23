@@ -49,7 +49,7 @@ export default function LeadsCapturePage() {
   const setSourceTab = (v: string) => setExtra({ src: v });
   const [leads, setLeads] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
-  const [sourceTab, setSourceTab] = useState<'all' | 'Holmes' | 'DealerSpace' | 'Outros'>('all');
+  
 
   useEffect(() => {
     (async () => {
