@@ -349,6 +349,28 @@ export default function CEODashboardPage() {
             </div>
           </div>
 
+          {/* Painéis de foco — atalhos para análises dedicadas */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {focusCards.map((c) => {
+              const Icon = c.icon;
+              return (
+                <button
+                  key={c.title}
+                  onClick={() => navigate(c.path)}
+                  className={`text-left glass-card p-5 transition-all hover:border-primary/50 hover:shadow-md bg-gradient-to-br ${c.tint} to-transparent`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="p-2.5 rounded-lg bg-background/70 text-primary"><Icon className="w-5 h-5" /></div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                  <p className="font-semibold text-sm">{c.title}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{c.desc}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-primary font-semibold mt-3">Abrir painel dedicado →</p>
+                </button>
+              );
+            })}
+          </div>
+
           {/* KPI grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {metrics.map(m => (
