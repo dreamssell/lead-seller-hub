@@ -245,13 +245,31 @@ export default function LandingBuilderPage() {
           </div>
 
           {/* Live preview */}
-          <Card className="overflow-hidden">
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Pré-visualização ao vivo</CardTitle></CardHeader>
+          <Card className="overflow-hidden lg:sticky lg:top-4 self-start">
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm">Pré-visualização ao vivo</CardTitle>
+              <div className="flex items-center gap-1">
+                <div className="flex rounded-md border overflow-hidden text-xs">
+                  <button onClick={() => setLivePreview('inline')} className={`px-2 py-1 ${livePreview === 'inline' ? 'bg-primary text-primary-foreground' : ''}`}>Instantânea</button>
+                  <button onClick={() => setLivePreview('public')} className={`px-2 py-1 ${livePreview === 'public' ? 'bg-primary text-primary-foreground' : ''}`}>Página pública</button>
+                </div>
+                {livePreview === 'public' && (
+                  <Button size="icon" variant="ghost" title="Recarregar" onClick={() => setPreviewKey(k => k + 1)}><RefreshCw className="w-3.5 h-3.5" /></Button>
+                )}
+              </div>
+            </CardHeader>
             <CardContent className="p-0">
-              <LivePreview page={page} buttons={buttons} />
+              {livePreview === 'inline'
+                ? <LivePreview page={page} buttons={buttons} />
+                : page.status === 'published'
+                  ? <iframe key={previewKey} src={publicUrl} className="w-full h-[600px] border-0" title="Página pública" />
+                  : <div className="p-8 text-center text-sm text-muted-foreground">Publique a página (em <strong>Conteúdo → Publicada</strong>) para ver a página pública em tempo real aqui.</div>
+              }
             </CardContent>
           </Card>
         </div>
+
+        <TemplatePickerDialog open={tplOpen} onOpenChange={setTplOpen} onApply={applyTemplate} />
       </div>
     </AppLayout>
   );
