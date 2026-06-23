@@ -74,6 +74,7 @@ const App = () => (
               <Route path="/status-view" element={<PublicStatusPage />} />
               <Route path="/video/join/:roomId" element={<VideoJoinPage />} />
               <Route path="/sign/:token" element={<SignaturePortalPage />} />
+              <Route path="/p/:slug" element={<PublicLandingPage />} />
 
 
 
