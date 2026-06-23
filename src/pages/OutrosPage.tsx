@@ -181,25 +181,17 @@ function AnalyticsModal({ pageId, onClose }: { pageId: string | null; onClose: (
           <DialogDescription>/{page.slug}{page.tracking_label ? ` · rastreio: ${page.tracking_label}` : ''}</DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card><CardContent className="p-4">
-            <p className="text-xs font-semibold uppercase mb-2 text-muted-foreground">Link público</p>
-            <div className="flex gap-2"><Input readOnly value={link} /><Button variant="outline" onClick={() => { navigator.clipboard.writeText(link); toast({ title: 'Copiado' }); }}><Copy className="w-4 h-4" /></Button></div>
-            <div className="grid grid-cols-3 gap-2 mt-4 text-center">
-              <div><p className="text-xs text-muted-foreground">Views</p><p className="font-bold">{page.view_count}</p></div>
-              <div><p className="text-xs text-muted-foreground">Cliques</p><p className="font-bold">{page.click_count}</p></div>
-              <div><p className="text-xs text-muted-foreground">Leads</p><p className="font-bold">{page.lead_count}</p></div>
-            </div>
-          </CardContent></Card>
-          <Card><CardContent className="p-4 flex flex-col items-center">
-            <p className="text-xs font-semibold uppercase mb-2 text-muted-foreground self-start"><QrCode className="w-3 h-3 inline mr-1" />QR Code</p>
-            <div className="bg-white p-3 rounded-lg"><QRCodeCanvas value={link} size={160} /></div>
-            <Button variant="outline" size="sm" className="mt-3" onClick={() => {
-              const c = document.querySelector('canvas'); if (!c) return;
-              const a = document.createElement('a'); a.download = `${page.slug}.png`; a.href = (c as HTMLCanvasElement).toDataURL(); a.click();
-            }}>Baixar PNG</Button>
-          </CardContent></Card>
-        </div>
+        <Card><CardContent className="p-4">
+          <p className="text-xs font-semibold uppercase mb-2 text-muted-foreground">Link público</p>
+          <div className="flex gap-2"><Input readOnly value={link} /><Button variant="outline" onClick={() => { navigator.clipboard.writeText(link); toast({ title: 'Copiado' }); }}><Copy className="w-4 h-4" /></Button></div>
+          <div className="grid grid-cols-3 gap-2 mt-4 text-center">
+            <div><p className="text-xs text-muted-foreground">Views</p><p className="font-bold">{page.view_count}</p></div>
+            <div><p className="text-xs text-muted-foreground">Cliques</p><p className="font-bold">{page.click_count}</p></div>
+            <div><p className="text-xs text-muted-foreground">Leads</p><p className="font-bold">{page.lead_count}</p></div>
+          </div>
+        </CardContent></Card>
+
+        <QrCodeStudio value={link} filename={page.slug} />
 
         <div>
           <h4 className="text-sm font-semibold mb-2">Desempenho por CTA</h4>
