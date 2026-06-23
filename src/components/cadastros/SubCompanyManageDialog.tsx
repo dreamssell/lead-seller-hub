@@ -19,6 +19,7 @@ type SubCompany = {
   credit_limit: number; credit_balance: number; credit_alert_threshold: number;
   auto_action: 'alert' | 'request_recharge' | 'block'; status: string;
   allow_custom_logic: boolean;
+  feature_landing_builder?: boolean;
 };
 
 type LoginToken = {
@@ -441,15 +442,17 @@ function RulesTab({ sub }: { sub: SubCompany }) {
   const [threshold, setThreshold] = useState(sub.credit_alert_threshold);
   const [action, setAction] = useState(sub.auto_action);
   const [allowCustom, setAllowCustom] = useState(sub.allow_custom_logic);
+  const [landingBuilder, setLandingBuilder] = useState(!!sub.feature_landing_builder);
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
     setSaving(true);
     const { error } = await supabase.from('sub_companies')
-      .update({ 
-        credit_alert_threshold: threshold, 
+      .update({
+        credit_alert_threshold: threshold,
         auto_action: action,
-        allow_custom_logic: allowCustom 
+        allow_custom_logic: allowCustom,
+        feature_landing_builder: landingBuilder,
       } as any).eq('id', sub.id);
     setSaving(false);
     if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
@@ -495,6 +498,13 @@ function RulesTab({ sub }: { sub: SubCompany }) {
           <div>
             <p className="text-sm font-medium">Liberdade de customização</p>
             <p className="text-xs text-muted-foreground">Permite que esta sub-empresa adicione personalizações à parte do código matriz.</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3 rounded-lg border p-3 bg-primary/5">
+          <Switch checked={landingBuilder} onCheckedChange={setLandingBuilder} />
+          <div>
+            <p className="text-sm font-medium">Captura por páginas (módulo "Outros")</p>
+            <p className="text-xs text-muted-foreground">Libera o criador de páginas, CTAs e QR Codes. Aparece no menu como "Outros" ao lado dos canais externos.</p>
           </div>
         </div>
         <Button onClick={save} disabled={saving} className="w-full">{saving ? 'Salvando...' : 'Salvar regras'}</Button>

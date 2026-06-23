@@ -12,6 +12,7 @@ type AccountAccess = {
   blocked_pages: string[];
   status: string;
   allow_custom_logic: boolean;
+  feature_landing_builder: boolean;
 };
 
 interface AuthContextType {
@@ -85,6 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!access) return true;
     if (access.status === 'blocked') return page === 'profile';
     if (access.blocked_pages?.includes(page)) return false;
+    // Feature flag: módulo "Outros" só aparece se a sub-empresa contratou
+    if (page === 'outros' && access.sub_company_id && !access.feature_landing_builder) return false;
     if (access.is_account_admin || access.allowed_pages.length === 0) return true;
     return access.allowed_pages.includes(page) || page === 'profile';
   };

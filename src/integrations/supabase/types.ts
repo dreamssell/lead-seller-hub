@@ -966,6 +966,199 @@ export type Database = {
         }
         Relationships: []
       }
+      landing_buttons: {
+        Row: {
+          action_type: string
+          bg_color: string
+          click_count: number
+          created_at: string
+          id: string
+          label: string
+          page_id: string
+          shape: string
+          size: string
+          sort_order: number
+          text_color: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          action_type?: string
+          bg_color?: string
+          click_count?: number
+          created_at?: string
+          id?: string
+          label: string
+          page_id: string
+          shape?: string
+          size?: string
+          sort_order?: number
+          text_color?: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          action_type?: string
+          bg_color?: string
+          click_count?: number
+          created_at?: string
+          id?: string
+          label?: string
+          page_id?: string
+          shape?: string
+          size?: string
+          sort_order?: number
+          text_color?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "landing_buttons_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "landing_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      landing_events: {
+        Row: {
+          button_id: string | null
+          created_at: string
+          id: string
+          lead_id: string | null
+          metadata: Json
+          page_id: string
+          referrer: string | null
+          type: string
+          user_agent: string | null
+        }
+        Insert: {
+          button_id?: string | null
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          metadata?: Json
+          page_id: string
+          referrer?: string | null
+          type: string
+          user_agent?: string | null
+        }
+        Update: {
+          button_id?: string | null
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          metadata?: Json
+          page_id?: string
+          referrer?: string | null
+          type?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "landing_events_button_id_fkey"
+            columns: ["button_id"]
+            isOneToOne: false
+            referencedRelation: "landing_buttons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "landing_events_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "landing_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      landing_pages: {
+        Row: {
+          align: string
+          auto_create_lead: boolean
+          click_count: number
+          created_at: string
+          created_by: string | null
+          form_fields: Json
+          form_mode: string
+          headline: string | null
+          id: string
+          lead_count: number
+          owner_id: string
+          page_bg_color: string
+          pipeline_id: string | null
+          settings: Json
+          slug: string
+          status: string
+          sub_company_id: string | null
+          subheadline: string | null
+          text_color: string
+          title: string
+          tracking_label: string | null
+          updated_at: string
+          view_count: number
+        }
+        Insert: {
+          align?: string
+          auto_create_lead?: boolean
+          click_count?: number
+          created_at?: string
+          created_by?: string | null
+          form_fields?: Json
+          form_mode?: string
+          headline?: string | null
+          id?: string
+          lead_count?: number
+          owner_id: string
+          page_bg_color?: string
+          pipeline_id?: string | null
+          settings?: Json
+          slug: string
+          status?: string
+          sub_company_id?: string | null
+          subheadline?: string | null
+          text_color?: string
+          title: string
+          tracking_label?: string | null
+          updated_at?: string
+          view_count?: number
+        }
+        Update: {
+          align?: string
+          auto_create_lead?: boolean
+          click_count?: number
+          created_at?: string
+          created_by?: string | null
+          form_fields?: Json
+          form_mode?: string
+          headline?: string | null
+          id?: string
+          lead_count?: number
+          owner_id?: string
+          page_bg_color?: string
+          pipeline_id?: string | null
+          settings?: Json
+          slug?: string
+          status?: string
+          sub_company_id?: string | null
+          subheadline?: string | null
+          text_color?: string
+          title?: string
+          tracking_label?: string | null
+          updated_at?: string
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "landing_pages_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_events: {
         Row: {
           actor_id: string | null
@@ -2040,6 +2233,7 @@ export type Database = {
           credit_limit: number
           credits_used_30d: number
           credits_used_today: number
+          feature_landing_builder: boolean
           id: string
           inherit_branding: boolean
           last_alert_at: string | null
@@ -2066,6 +2260,7 @@ export type Database = {
           credit_limit?: number
           credits_used_30d?: number
           credits_used_today?: number
+          feature_landing_builder?: boolean
           id?: string
           inherit_branding?: boolean
           last_alert_at?: string | null
@@ -2092,6 +2287,7 @@ export type Database = {
           credit_limit?: number
           credits_used_30d?: number
           credits_used_today?: number
+          feature_landing_builder?: boolean
           id?: string
           inherit_branding?: boolean
           last_alert_at?: string | null
@@ -3641,6 +3837,7 @@ export type Database = {
           allow_custom_logic: boolean
           allowed_pages: string[]
           blocked_pages: string[]
+          feature_landing_builder: boolean
           is_account_admin: boolean
           owner_id: string
           status: string

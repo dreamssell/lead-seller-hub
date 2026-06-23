@@ -42,6 +42,10 @@ import ThreeCxDashboardPage from "./pages/ThreeCxDashboardPage";
 import LeadsCapturePage from "./pages/ceo/LeadsCapturePage";
 import CallsPerformancePage from "./pages/ceo/CallsPerformancePage";
 import SignaturesPerformancePage from "./pages/ceo/SignaturesPerformancePage";
+import OutrosPage from "./pages/OutrosPage";
+import LandingBuilderPage from "./pages/LandingBuilderPage";
+import LandingPreviewPage from "./pages/LandingPreviewPage";
+import PublicLandingPage from "./pages/PublicLandingPage";
 import { CookieConsentBanner } from "./components/CookieConsentBanner";
 
 
@@ -70,6 +74,7 @@ const App = () => (
               <Route path="/status-view" element={<PublicStatusPage />} />
               <Route path="/video/join/:roomId" element={<VideoJoinPage />} />
               <Route path="/sign/:token" element={<SignaturePortalPage />} />
+              <Route path="/p/:slug" element={<PublicLandingPage />} />
 
 
 
@@ -99,6 +104,9 @@ const App = () => (
               <Route path="/ceo/leads-capture" element={<ProtectedRoute><LeadsCapturePage /></ProtectedRoute>} />
               <Route path="/ceo/calls" element={<ProtectedRoute><CallsPerformancePage /></ProtectedRoute>} />
               <Route path="/ceo/signatures" element={<ProtectedRoute><SignaturesPerformancePage /></ProtectedRoute>} />
+              <Route path="/outros" element={<ProtectedRoute pageKey="outros"><OutrosPage /></ProtectedRoute>} />
+              <Route path="/outros/:id/editar" element={<ProtectedRoute pageKey="outros"><LandingBuilderPage /></ProtectedRoute>} />
+              <Route path="/outros/:id/preview" element={<ProtectedRoute pageKey="outros"><LandingPreviewPage /></ProtectedRoute>} />
               <Route path="/status" element={<ProtectedRoute><BackendStatusPage /></ProtectedRoute>} />
               <Route path="/documentation" element={<ProtectedRoute pageKey="documentation"><DocumentationPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />

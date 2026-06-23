@@ -2,3 +2,6 @@ project_id = "gcjaeoxjhcfeispehmga"
 
 [functions.signature-portal]
 verify_jwt = false
+
+[functions.landing-capture]
+verify_jwt = false
