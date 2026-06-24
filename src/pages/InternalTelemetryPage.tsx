@@ -182,7 +182,7 @@ export default function InternalTelemetryPage() {
   }, {});
 
   return (
-    <AppLayout>
+    <AppLayout title="Telemetria interna">
       <div className="p-6 space-y-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
