@@ -46,6 +46,7 @@ import OutrosPage from "./pages/OutrosPage";
 import LandingBuilderPage from "./pages/LandingBuilderPage";
 import LandingPreviewPage from "./pages/LandingPreviewPage";
 import PublicLandingPage from "./pages/PublicLandingPage";
+import InternalTelemetryPage from "./pages/InternalTelemetryPage";
 import { CookieConsentBanner } from "./components/CookieConsentBanner";
 
 
@@ -109,6 +110,7 @@ const App = () => (
               <Route path="/outros/:id/preview" element={<ProtectedRoute pageKey="outros"><LandingPreviewPage /></ProtectedRoute>} />
               <Route path="/status" element={<ProtectedRoute><BackendStatusPage /></ProtectedRoute>} />
               <Route path="/documentation" element={<ProtectedRoute pageKey="documentation"><DocumentationPage /></ProtectedRoute>} />
+              <Route path="/internal/telemetry" element={<ProtectedRoute><InternalTelemetryPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             </VideoCallProvider>
