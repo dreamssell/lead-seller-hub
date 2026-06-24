@@ -10,11 +10,12 @@ import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/components/ui/use-toast';
-import { Link2, Plus, Eye, MousePointerClick, Sparkles, Copy, ExternalLink, Trash2, Pencil, Download, FileSpreadsheet, FileText } from 'lucide-react';
+import { Link2, Plus, Eye, MousePointerClick, Sparkles, Copy, ExternalLink, Trash2, Pencil, Download, FileSpreadsheet, FileText, Search, Loader2 } from 'lucide-react';
 import { TemplatePickerDialog } from '@/components/outros/TemplatePickerDialog';
 import { QrCodeStudio } from '@/components/outros/QrCodeStudio';
 import { downloadPdf } from '@/lib/ceoExport';
 import type { LandingTemplate } from '@/lib/landingTemplates';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
 
 type Page = {
   id: string; slug: string; title: string; status: 'draft' | 'published';
