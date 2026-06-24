@@ -186,14 +186,47 @@ export default function OutrosPage() {
   };
 
   return (
-    <AppLayout title="Outros — Captura por páginas" subtitle="Crie páginas simples para CTAs, WhatsApp, sites e QR Codes compartilháveis.">
+    <AppLayout title="Captura de Leads" subtitle="Páginas, CTAs e QR Codes — métricas por canal detectado.">
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <Card className="glass-card"><CardContent className="p-5"><p className="text-xs uppercase text-muted-foreground font-semibold">Páginas</p><p className="text-2xl font-bold mt-1">{pages.length}</p></CardContent></Card>
+          <Card className="glass-card"><CardContent className="p-5"><p className="text-xs uppercase text-muted-foreground font-semibold">Páginas</p><p className="text-2xl font-bold mt-1">{filtered.length}</p></CardContent></Card>
           <Card className="glass-card"><CardContent className="p-5 flex items-start justify-between"><div><p className="text-xs uppercase text-muted-foreground font-semibold">Visualizações</p><p className="text-2xl font-bold mt-1">{totals.views}</p></div><Eye className="w-5 h-5 text-primary" /></CardContent></Card>
           <Card className="glass-card"><CardContent className="p-5 flex items-start justify-between"><div><p className="text-xs uppercase text-muted-foreground font-semibold">Cliques em CTA</p><p className="text-2xl font-bold mt-1">{totals.clicks}</p></div><MousePointerClick className="w-5 h-5 text-primary" /></CardContent></Card>
           <Card className="glass-card"><CardContent className="p-5 flex items-start justify-between"><div><p className="text-xs uppercase text-muted-foreground font-semibold">Leads gerados</p><p className="text-2xl font-bold mt-1">{totals.leads}</p></div><Sparkles className="w-5 h-5 text-primary" /></CardContent></Card>
         </div>
+
+        <Card className="glass-card">
+          <CardHeader>
+            <CardTitle className="text-base">Total de leads · breakdown por canal detectado</CardTitle>
+            <CardDescription>Distribuição de CTAs e cliques por tipo de canal nas páginas filtradas.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {channelBreakdown.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Nenhum CTA configurado nas páginas filtradas.</p>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {channelBreakdown.map(c => {
+                  const pct = totals.clicks ? Math.round((c.cliques / totals.clicks) * 100) : 0;
+                  return (
+                    <div key={c.canal} className="rounded-lg border border-border p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium">{c.canal}</span>
+                        <Badge variant="secondary">{c.ctas} CTAs</Badge>
+                      </div>
+                      <p className="text-xl font-bold">{c.cliques}</p>
+                      <p className="text-xs text-muted-foreground">cliques · {pct}% do total</p>
+                    </div>
+                  );
+                })}
+                <div className="rounded-lg border border-primary/40 bg-primary/5 p-3">
+                  <span className="text-sm font-medium">Total de leads</span>
+                  <p className="text-xl font-bold mt-1">{totals.leads}</p>
+                  <p className="text-xs text-muted-foreground">capturados nas páginas filtradas</p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Card className="glass-card">
           <CardHeader className="flex flex-row items-center justify-between">
@@ -203,7 +236,8 @@ export default function OutrosPage() {
             </div>
             <div className="flex gap-2 flex-wrap">
               <Input placeholder="Buscar..." value={query} onChange={e => setQuery(e.target.value)} className="w-48" />
-              <Button variant="outline" onClick={exportCsv}><Download className="w-4 h-4 mr-1" />Métricas CSV</Button>
+              <Button variant="outline" onClick={exportCsv}><Download className="w-4 h-4 mr-1" />CSV</Button>
+              <Button variant="outline" onClick={exportPdf}><FileText className="w-4 h-4 mr-1" />PDF</Button>
               <Button variant="outline" onClick={exportCtaCsv}><FileSpreadsheet className="w-4 h-4 mr-1" />CTAs CSV</Button>
               <Button variant="outline" onClick={() => setTplOpen(true)}><Sparkles className="w-4 h-4 mr-1" />Templates</Button>
               <Button onClick={createNew}><Plus className="w-4 h-4 mr-1" />Nova página</Button>
