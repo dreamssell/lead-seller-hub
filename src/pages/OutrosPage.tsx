@@ -202,27 +202,65 @@ export default function OutrosPage() {
             <CardDescription>Distribuição de CTAs e cliques por tipo de canal nas páginas filtradas.</CardDescription>
           </CardHeader>
           <CardContent>
-            {channelBreakdown.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">Nenhum CTA configurado nas páginas filtradas.</p>
+            {loading ? (
+              <div className="flex items-center justify-center py-10 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Carregando métricas…</div>
+            ) : channelBreakdown.length === 0 ? (
+              <div className="text-center py-8 text-sm text-muted-foreground">
+                <MousePointerClick className="w-8 h-8 mx-auto mb-2 opacity-60" />
+                Nenhum CTA configurado {query ? 'nas páginas filtradas' : 'ainda'}.
+              </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {channelBreakdown.map(c => {
-                  const pct = totals.clicks ? Math.round((c.cliques / totals.clicks) * 100) : 0;
-                  return (
-                    <div key={c.canal} className="rounded-lg border border-border p-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium">{c.canal}</span>
-                        <Badge variant="secondary">{c.ctas} CTAs</Badge>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {channelBreakdown.map(c => {
+                    const pct = totals.clicks ? Math.round((c.cliques / totals.clicks) * 100) : 0;
+                    return (
+                      <div key={c.canal} className="rounded-lg border border-border p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium">{c.canal}</span>
+                          <Badge variant="secondary">{c.ctas} CTAs</Badge>
+                        </div>
+                        <p className="text-xl font-bold">{c.cliques}</p>
+                        <p className="text-xs text-muted-foreground">cliques · {pct}% do total</p>
                       </div>
-                      <p className="text-xl font-bold">{c.cliques}</p>
-                      <p className="text-xs text-muted-foreground">cliques · {pct}% do total</p>
-                    </div>
-                  );
-                })}
-                <div className="rounded-lg border border-primary/40 bg-primary/5 p-3">
-                  <span className="text-sm font-medium">Total de leads</span>
-                  <p className="text-xl font-bold mt-1">{totals.leads}</p>
-                  <p className="text-xs text-muted-foreground">capturados nas páginas filtradas</p>
+                    );
+                  })}
+                  <div className="rounded-lg border border-primary/40 bg-primary/5 p-3">
+                    <span className="text-sm font-medium">Total de leads</span>
+                    <p className="text-xl font-bold mt-1">{totals.leads}</p>
+                    <p className="text-xs text-muted-foreground">capturados nas páginas filtradas</p>
+                  </div>
+                </div>
+                <div className="h-[260px]">
+                  {totals.clicks === 0 ? (
+                    <div className="h-full flex items-center justify-center text-xs text-muted-foreground">Sem cliques registrados para plotar.</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={channelBreakdown} dataKey="cliques" nameKey="canal" outerRadius={90} label={(e) => `${e.canal}`}>
+                          {channelBreakdown.map((_, i) => {
+                            const colors = ['hsl(var(--primary))', 'hsl(var(--accent))', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+                            return <Cell key={i} fill={colors[i % colors.length]} />;
+                          })}
+                        </Pie>
+                        <Tooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+                <div className="lg:col-span-3 h-[220px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={channelBreakdown}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="canal" stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                      <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                      <Tooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                      <Legend />
+                      <Bar dataKey="cliques" name="Cliques" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="ctas" name="CTAs" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             )}
@@ -245,12 +283,19 @@ export default function OutrosPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {loading ? <p className="text-sm text-muted-foreground text-center py-10">Carregando...</p>
-              : filtered.length === 0 ? (
+            {loading ? (
+              <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Carregando páginas…</div>
+            ) : pages.length === 0 ? (
                 <div className="text-center py-12">
                   <Link2 className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
                   <p className="text-sm text-muted-foreground mb-4">Você ainda não criou nenhuma página de captura.</p>
                   <Button onClick={createNew}><Plus className="w-4 h-4 mr-1" />Criar a primeira</Button>
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="text-center py-12">
+                  <Search className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
+                  <p className="text-sm text-muted-foreground mb-2">Nenhuma página encontrada para "{query}".</p>
+                  <Button variant="outline" onClick={() => setQuery('')}>Limpar busca</Button>
                 </div>
               ) : (
                 <Table>
