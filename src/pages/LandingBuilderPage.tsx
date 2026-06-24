@@ -17,6 +17,7 @@ import { Plus, Trash2, Save, ExternalLink, Eye, Copy, ArrowLeft, Sparkles, Refre
 import { TemplatePickerDialog } from '@/components/outros/TemplatePickerDialog';
 import { QrCodeStudio } from '@/components/outros/QrCodeStudio';
 import type { LandingTemplate } from '@/lib/landingTemplates';
+import { getPublicLandingUrl } from '@/lib/publicLinks';
 
 type Page = any;
 type Btn = {
@@ -64,7 +65,7 @@ export default function LandingBuilderPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page?.title, page?.headline, page?.subheadline, page?.page_bg_color, page?.text_color, page?.align, page?.tracking_label, page?.form_mode, page?.pipeline_id, page?.auto_create_lead]);
 
-  const publicUrl = useMemo(() => page ? `${window.location.origin}/p/${page.slug}` : '', [page]);
+  const publicUrl = useMemo(() => page ? getPublicLandingUrl(page.slug) : '', [page]);
 
   if (!page) return <AppLayout title="Editor de página"><p className="text-sm text-muted-foreground">Carregando...</p></AppLayout>;
 
