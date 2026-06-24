@@ -1,10 +1,23 @@
+import { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth, EXTERNAL_LOGIN_URL } from '@/contexts/AuthContext';
 import { getPageKeyByPath, type SidebarPageKey } from '@/lib/navigation';
+import { logRouteTelemetry } from '@/lib/routeTelemetry';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   pageKey?: SidebarPageKey;
+}
+
+function BlockedTelemetry({ pageKey, path }: { pageKey: string; path: string }) {
+  useEffect(() => {
+    void logRouteTelemetry({
+      type: 'protected_route_blocked',
+      message: `Acesso negado para ${pageKey} em ${path}`,
+      metadata: { path, pageKey, reason: 'page_not_allowed' },
+    });
+  }, [pageKey, path]);
+  return null;
 }
 
 export default function ProtectedRoute({ children, pageKey }: ProtectedRouteProps) {
@@ -23,6 +36,11 @@ export default function ProtectedRoute({ children, pageKey }: ProtectedRouteProp
   }
 
   if (!session) {
+    void logRouteTelemetry({
+      type: 'protected_route_unauthenticated',
+      message: `Sessão ausente ao acessar ${location.pathname}`,
+      metadata: { path: location.pathname, redirect_to: EXTERNAL_LOGIN_URL || '/auth/callback' },
+    });
     if (EXTERNAL_LOGIN_URL) {
       window.location.href = EXTERNAL_LOGIN_URL;
       return null;
@@ -34,6 +52,7 @@ export default function ProtectedRoute({ children, pageKey }: ProtectedRouteProp
   if (!canAccessPage(key)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-6">
+        <BlockedTelemetry pageKey={String(key)} path={location.pathname} />
         <div className="max-w-md text-center space-y-3">
           <h1 className="text-xl font-semibold text-foreground">Acesso restrito</h1>
           <p className="text-sm text-muted-foreground">
