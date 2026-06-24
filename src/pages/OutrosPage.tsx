@@ -10,9 +10,10 @@ import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/components/ui/use-toast';
-import { Link2, Plus, Eye, MousePointerClick, Sparkles, Copy, ExternalLink, Trash2, Pencil, Download, FileSpreadsheet } from 'lucide-react';
+import { Link2, Plus, Eye, MousePointerClick, Sparkles, Copy, ExternalLink, Trash2, Pencil, Download, FileSpreadsheet, FileText } from 'lucide-react';
 import { TemplatePickerDialog } from '@/components/outros/TemplatePickerDialog';
 import { QrCodeStudio } from '@/components/outros/QrCodeStudio';
+import { downloadPdf } from '@/lib/ceoExport';
 import type { LandingTemplate } from '@/lib/landingTemplates';
 
 type Page = {
@@ -27,6 +28,7 @@ export default function OutrosPage() {
   const nav = useNavigate();
   const { access } = useAuth();
   const [pages, setPages] = useState<Page[]>([]);
+  const [buttons, setButtons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [analyticsId, setAnalyticsId] = useState<string | null>(null);
@@ -34,8 +36,12 @@ export default function OutrosPage() {
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from('landing_pages').select('*').order('updated_at', { ascending: false });
-    setPages((data as any) || []);
+    const [p, b] = await Promise.all([
+      supabase.from('landing_pages').select('*').order('updated_at', { ascending: false }),
+      supabase.from('landing_buttons').select('id,label,url,action_type,click_count,page_id'),
+    ]);
+    setPages((p.data as any) || []);
+    setButtons((b.data as any) || []);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -46,10 +52,27 @@ export default function OutrosPage() {
   );
 
   const totals = useMemo(() => ({
-    views: pages.reduce((s, p) => s + (p.view_count || 0), 0),
-    clicks: pages.reduce((s, p) => s + (p.click_count || 0), 0),
-    leads: pages.reduce((s, p) => s + (p.lead_count || 0), 0),
-  }), [pages]);
+    views: filtered.reduce((s, p) => s + (p.view_count || 0), 0),
+    clicks: filtered.reduce((s, p) => s + (p.click_count || 0), 0),
+    leads: filtered.reduce((s, p) => s + (p.lead_count || 0), 0),
+  }), [filtered]);
+
+  const CHANNEL_LABEL: Record<string, string> = {
+    whatsapp: 'WhatsApp', site: 'Site', link: 'Link externo', form: 'Formulário',
+  };
+
+  const channelBreakdown = useMemo(() => {
+    const pageIds = new Set(filtered.map(p => p.id));
+    const m: Record<string, { ctas: number; clicks: number }> = {};
+    buttons.filter(b => pageIds.has(b.page_id)).forEach(b => {
+      const k = CHANNEL_LABEL[b.action_type] || b.action_type || 'Outro';
+      m[k] = m[k] || { ctas: 0, clicks: 0 };
+      m[k].ctas++;
+      m[k].clicks += Number(b.click_count || 0);
+    });
+    return Object.entries(m).map(([canal, v]) => ({ canal, ctas: v.ctas, cliques: v.clicks }))
+      .sort((a, b) => b.cliques - a.cliques);
+  }, [filtered, buttons]);
 
   const createFromTemplate = async (tpl: LandingTemplate | null) => {
     if (!access?.owner_id) { toast({ title: 'Conta não detectada', variant: 'destructive' }); return; }
@@ -80,43 +103,73 @@ export default function OutrosPage() {
   const exportCsv = () => {
     const rows = [
       ['Página', 'Slug', 'Rastreio', 'Status', 'Views', 'Cliques', 'Leads', 'Criado em', 'Atualizado em'],
-      ...pages.map(p => [
+      ...filtered.map(p => [
         p.title, p.slug, p.tracking_label || '', p.status,
         String(p.view_count), String(p.click_count), String(p.lead_count),
         new Date(p.created_at).toISOString(), new Date(p.updated_at).toISOString(),
       ]),
+      [],
+      ['Breakdown por canal detectado'],
+      ['Canal', 'CTAs', 'Cliques'],
+      ...channelBreakdown.map(c => [c.canal, String(c.ctas), String(c.cliques)]),
     ];
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `outros-metricas-${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `captura-leads-${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     toast({ title: 'CSV exportado' });
   };
 
   const exportCtaCsv = async () => {
-    const { data: btns } = await supabase
-      .from('landing_buttons')
-      .select('id,label,url,action_type,click_count,page_id')
-      .order('click_count', { ascending: false });
-    const pageMap = new Map(pages.map(p => [p.id, p]));
+    const pageIds = new Set(filtered.map(p => p.id));
+    const pageMap = new Map(filtered.map(p => [p.id, p]));
     const rows = [
       ['Página', 'Slug', 'CTA', 'Tipo', 'Destino', 'Cliques'],
-      ...((btns as any[]) || []).map(b => {
-        const p = pageMap.get(b.page_id);
-        return [p?.title || '', p?.slug || '', b.label, b.action_type, b.url, String(b.click_count || 0)];
-      }),
+      ...buttons
+        .filter(b => pageIds.has(b.page_id))
+        .sort((a, b) => (b.click_count || 0) - (a.click_count || 0))
+        .map(b => {
+          const p = pageMap.get(b.page_id);
+          return [p?.title || '', p?.slug || '', b.label, b.action_type, b.url, String(b.click_count || 0)];
+        }),
     ];
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `outros-ctas-${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `captura-leads-ctas-${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     toast({ title: 'CSV de CTAs exportado' });
+  };
+
+  const exportPdf = () => {
+    const kpis = [
+      { label: 'Páginas', value: filtered.length },
+      { label: 'Views', value: totals.views },
+      { label: 'Cliques', value: totals.clicks },
+      { label: 'Leads', value: totals.leads },
+    ];
+    const pageRows = filtered.map(p => ({
+      pagina: p.title,
+      slug: p.slug,
+      status: p.status === 'published' ? 'Publicada' : 'Rascunho',
+      views: p.view_count,
+      cliques: p.click_count,
+      leads: p.lead_count,
+    }));
+    const channelRows = channelBreakdown.map(c => ({ canal: c.canal, ctas: c.ctas, cliques: c.cliques }));
+    downloadPdf(
+      `captura-leads-${new Date().toISOString().slice(0, 10)}.pdf`,
+      'Captura de Leads',
+      query ? `Filtro: "${query}"` : 'Todas as páginas',
+      kpis,
+      [...pageRows, ...(channelRows.length ? [{ pagina: '— Breakdown por canal —', slug: '', status: '', views: '', cliques: '', leads: '' }, ...channelRows.map(c => ({ pagina: c.canal, slug: '', status: 'canal', views: '', cliques: c.cliques, leads: c.ctas }))] : [])],
+    );
+    toast({ title: 'PDF exportado' });
   };
 
   const remove = async (id: string) => {
@@ -133,14 +186,47 @@ export default function OutrosPage() {
   };
 
   return (
-    <AppLayout title="Outros — Captura por páginas" subtitle="Crie páginas simples para CTAs, WhatsApp, sites e QR Codes compartilháveis.">
+    <AppLayout title="Captura de Leads" subtitle="Páginas, CTAs e QR Codes — métricas por canal detectado.">
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <Card className="glass-card"><CardContent className="p-5"><p className="text-xs uppercase text-muted-foreground font-semibold">Páginas</p><p className="text-2xl font-bold mt-1">{pages.length}</p></CardContent></Card>
+          <Card className="glass-card"><CardContent className="p-5"><p className="text-xs uppercase text-muted-foreground font-semibold">Páginas</p><p className="text-2xl font-bold mt-1">{filtered.length}</p></CardContent></Card>
           <Card className="glass-card"><CardContent className="p-5 flex items-start justify-between"><div><p className="text-xs uppercase text-muted-foreground font-semibold">Visualizações</p><p className="text-2xl font-bold mt-1">{totals.views}</p></div><Eye className="w-5 h-5 text-primary" /></CardContent></Card>
           <Card className="glass-card"><CardContent className="p-5 flex items-start justify-between"><div><p className="text-xs uppercase text-muted-foreground font-semibold">Cliques em CTA</p><p className="text-2xl font-bold mt-1">{totals.clicks}</p></div><MousePointerClick className="w-5 h-5 text-primary" /></CardContent></Card>
           <Card className="glass-card"><CardContent className="p-5 flex items-start justify-between"><div><p className="text-xs uppercase text-muted-foreground font-semibold">Leads gerados</p><p className="text-2xl font-bold mt-1">{totals.leads}</p></div><Sparkles className="w-5 h-5 text-primary" /></CardContent></Card>
         </div>
+
+        <Card className="glass-card">
+          <CardHeader>
+            <CardTitle className="text-base">Total de leads · breakdown por canal detectado</CardTitle>
+            <CardDescription>Distribuição de CTAs e cliques por tipo de canal nas páginas filtradas.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {channelBreakdown.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Nenhum CTA configurado nas páginas filtradas.</p>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {channelBreakdown.map(c => {
+                  const pct = totals.clicks ? Math.round((c.cliques / totals.clicks) * 100) : 0;
+                  return (
+                    <div key={c.canal} className="rounded-lg border border-border p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium">{c.canal}</span>
+                        <Badge variant="secondary">{c.ctas} CTAs</Badge>
+                      </div>
+                      <p className="text-xl font-bold">{c.cliques}</p>
+                      <p className="text-xs text-muted-foreground">cliques · {pct}% do total</p>
+                    </div>
+                  );
+                })}
+                <div className="rounded-lg border border-primary/40 bg-primary/5 p-3">
+                  <span className="text-sm font-medium">Total de leads</span>
+                  <p className="text-xl font-bold mt-1">{totals.leads}</p>
+                  <p className="text-xs text-muted-foreground">capturados nas páginas filtradas</p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Card className="glass-card">
           <CardHeader className="flex flex-row items-center justify-between">
@@ -150,7 +236,8 @@ export default function OutrosPage() {
             </div>
             <div className="flex gap-2 flex-wrap">
               <Input placeholder="Buscar..." value={query} onChange={e => setQuery(e.target.value)} className="w-48" />
-              <Button variant="outline" onClick={exportCsv}><Download className="w-4 h-4 mr-1" />Métricas CSV</Button>
+              <Button variant="outline" onClick={exportCsv}><Download className="w-4 h-4 mr-1" />CSV</Button>
+              <Button variant="outline" onClick={exportPdf}><FileText className="w-4 h-4 mr-1" />PDF</Button>
               <Button variant="outline" onClick={exportCtaCsv}><FileSpreadsheet className="w-4 h-4 mr-1" />CTAs CSV</Button>
               <Button variant="outline" onClick={() => setTplOpen(true)}><Sparkles className="w-4 h-4 mr-1" />Templates</Button>
               <Button onClick={createNew}><Plus className="w-4 h-4 mr-1" />Nova página</Button>
