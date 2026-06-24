@@ -3,7 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 export type RouteTelemetryType =
   | 'route_404'
   | 'protected_route_blocked'
-  | 'protected_route_unauthenticated';
+  | 'protected_route_unauthenticated'
+  | 'api_unauthorized'
+  | 'api_forbidden';
 
 interface LogParams {
   type: RouteTelemetryType;
