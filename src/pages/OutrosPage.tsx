@@ -16,6 +16,7 @@ import { QrCodeStudio } from '@/components/outros/QrCodeStudio';
 import { downloadPdf } from '@/lib/ceoExport';
 import type { LandingTemplate } from '@/lib/landingTemplates';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
+import { getPublicLandingUrl } from '@/lib/publicLinks';
 
 type Page = {
   id: string; slug: string; title: string; status: 'draft' | 'published';
@@ -23,7 +24,7 @@ type Page = {
   created_at: string; updated_at: string;
 };
 
-const publicUrl = (slug: string) => `${window.location.origin}/p/${slug}`;
+const publicUrl = (slug: string) => getPublicLandingUrl(slug);
 
 export default function OutrosPage() {
   const nav = useNavigate();
