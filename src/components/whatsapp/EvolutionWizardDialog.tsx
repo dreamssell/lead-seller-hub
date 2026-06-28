@@ -25,7 +25,13 @@ import {
   Download,
   History,
   PlugZap,
+  X,
+  Clock,
+  ScanLine,
+  Wifi,
 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { WhatsAppConnection } from './types';
