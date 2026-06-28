@@ -87,7 +87,8 @@ class EvolutionAdapter implements WhatsAppProviderAdapter {
   }
 
   async sendMessage(conn: WhatsAppConnection, customerId: string, content: string) {
-    const url = conn.metadata?.url;
+    const rawUrl = (conn.metadata?.url || '').trim();
+    const url = rawUrl && !/^https?:\/\//i.test(rawUrl) ? `https://${rawUrl}` : rawUrl;
     const token = conn.metadata?.token;
     const instance = conn.metadata?.instance || conn.metadata?.phone_number_id;
     
@@ -100,7 +101,7 @@ class EvolutionAdapter implements WhatsAppProviderAdapter {
     if (!customer?.phone) throw new Error('Cliente não possui telefone cadastrado.');
 
     try {
-      const res = await fetch(`${url.replace(/\/$/, '')}/message/sendText/${instance}`, {
+      const res = await fetch(`${url.replace(/\/$/, '')}/message/sendText/${encodeURIComponent(instance)}`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
