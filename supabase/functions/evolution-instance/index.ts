@@ -669,17 +669,78 @@ Deno.serve(async (req) => {
         }
       };
 
-      // ---- 1) Evolution totals (for reconciliation) — fetched once per run.
-      let evoTotals: { contacts?: number; chats?: number; messages?: number } = {};
-      if (offset === 0) {
-        const cr = await tryEndpoints("findContacts", [
-          { path: `/chat/findContacts/${instEnc}`, init: { method: "POST", body: JSON.stringify({ where: {} }) } },
-          { path: `/chat/fetchContacts/${instEnc}` },
-        ]);
-        evoTotals.contacts = pickArray(cr?.data).length || undefined;
-      }
+      // Pull `total` out of paginated v2 responses, when present.
+      const pickTotal = (d: any): number | undefined => {
+        if (!d || typeof d !== "object") return undefined;
+        if (typeof d.total === "number") return d.total;
+        if (typeof d.messages?.total === "number") return d.messages.total;
+        if (typeof d.chats?.total === "number") return d.chats.total;
+        if (typeof d.contacts?.total === "number") return d.contacts.total;
+        return undefined;
+      };
 
-      // ---- 2) Seed contacts (only on first batch and not in dry-run for inserts).
+      // Evolution v2 paginates: { messages: { total, pages, currentPage, records } }.
+      // We page until we've fetched every record (or hit the hard per-chat cap).
+      const fetchAllMessages = async (jid: string, cap: number): Promise<{ records: any[]; total?: number }> => {
+        const pageSize = 100; // v2 sane page
+        let page = 1;
+        const out: any[] = [];
+        let total: number | undefined;
+        // safety: max 50 pages per chat (= 5000 msgs)
+        for (let i = 0; i < 50 && out.length < cap; i++) {
+          const r = await tryEndpoints("findMessages", [
+            { path: `/chat/findMessages/${instEnc}`, init: { method: "POST", body: JSON.stringify({ where: { key: { remoteJid: jid } }, page, offset: pageSize }) } },
+            { path: `/chat/findMessages/${instEnc}`, init: { method: "POST", body: JSON.stringify({ where: { key: { remoteJid: jid } }, limit: pageSize, page }) } },
+            { path: `/chat/findMessages/${instEnc}`, init: { method: "POST", body: JSON.stringify({ where: { remoteJid: jid }, limit: pageSize, page }) } },
+            { path: `/chat/fetchMessages/${instEnc}?remoteJid=${encodeURIComponent(jid)}&limit=${pageSize}&page=${page}` },
+          ]);
+          if (!r) break;
+          const t = pickTotal(r.data);
+          if (t != null) total = t;
+          const recs = pickArray(r.data);
+          if (!recs.length) break;
+          out.push(...recs);
+          // If we got fewer than pageSize, we're done.
+          if (recs.length < pageSize) break;
+          // If total is known and we've reached it, stop.
+          if (total != null && out.length >= total) break;
+          page++;
+        }
+        return { records: out.slice(0, cap), total };
+      };
+
+      const fetchAllChats = async (cap: number): Promise<any[]> => {
+        // Try unpaginated first — Evolution often returns the full array.
+        const direct = await tryEndpoints("findChats", [
+          { path: `/chat/findChats/${instEnc}`, init: { method: "POST", body: JSON.stringify({ where: {} }) } },
+          { path: `/chat/findChats/${instEnc}`, init: { method: "POST", body: JSON.stringify({}) } },
+          { path: `/chat/fetchChats/${instEnc}` },
+          { path: `/chats/${instEnc}` },
+        ]);
+        const first = pickArray(direct?.data);
+        const total = pickTotal(direct?.data);
+        if (first.length && (total == null || first.length >= (total ?? first.length))) return first.slice(0, cap);
+        // Paginate
+        const out = [...first];
+        let page = 2;
+        const pageSize = 100;
+        for (let i = 0; i < 100 && out.length < cap && (total == null || out.length < total); i++) {
+          const r = await tryEndpoints("findChats", [
+            { path: `/chat/findChats/${instEnc}`, init: { method: "POST", body: JSON.stringify({ where: {}, page, offset: pageSize }) } },
+            { path: `/chat/findChats/${instEnc}`, init: { method: "POST", body: JSON.stringify({ where: {}, limit: pageSize, page }) } },
+          ]);
+          if (!r) break;
+          const recs = pickArray(r.data);
+          if (!recs.length) break;
+          out.push(...recs);
+          if (recs.length < pageSize) break;
+          page++;
+        }
+        return out.slice(0, cap);
+      };
+
+      // ---- 1) Evolution totals + contacts seed (only on first batch).
+      let evoTotals: { contacts?: number; chats?: number; messages?: number } = {};
       let seededContacts = 0;
       let seededContactsPlanned = 0;
       if (offset === 0) {
@@ -689,6 +750,8 @@ Deno.serve(async (req) => {
           { path: `/contacts/${instEnc}` },
         ]);
         const contacts = pickArray(contactsRes?.data);
+        evoTotals.contacts = (pickTotal(contactsRes?.data) ?? contacts.length) || undefined;
+
         if (contacts.length) {
           const phones: string[] = [];
           const byPhone = new Map<string, { name: string }>();
@@ -727,17 +790,11 @@ Deno.serve(async (req) => {
         }
       }
 
-      // ---- 3) Chat list.
-      const chatsRes = await tryEndpoints("findChats", [
-        { path: `/chat/findChats/${instEnc}`, init: { method: "POST", body: JSON.stringify({ where: {} }) } },
-        { path: `/chat/findChats/${instEnc}`, init: { method: "POST", body: JSON.stringify({}) } },
-        { path: `/chat/fetchChats/${instEnc}` },
-        { path: `/chats/${instEnc}` },
-      ]);
-      const chats: any[] = pickArray(chatsRes?.data);
+      // ---- 2) Chat list (paginated).
+      const chats: any[] = await fetchAllChats(maxChats);
       if (offset === 0) evoTotals.chats = chats.length || undefined;
 
-      if (!chatsRes && !chats.length) {
+      if (!chats.length) {
         await logEvent("evolution.import", "error", `findChats falhou em todos os endpoints`);
         return json({ ok: false, error: `Evolution não respondeu ao listar conversas. Verifique a versão da API.`, endpoint_failures: endpointFailures }, 502);
       }
@@ -751,7 +808,7 @@ Deno.serve(async (req) => {
       const totalAvailable = Math.min(chats.length, maxChats);
       const slice = chats.slice(offset, offset + batchSize);
 
-      // Create audit run row on first batch (only for real imports; for dry-run we still log but mark dry_run=true).
+      // Create audit run row on first batch.
       if (offset === 0 && !runId) {
         const insRun = await admin.from("evolution_import_runs").insert({
           connection_id, owner_id: conn.owner_id, sub_company_id: conn.sub_company_id,
@@ -767,6 +824,7 @@ Deno.serve(async (req) => {
       let plannedMessages = 0;
       let importedMedia = 0;
       let processedChats = 0;
+      let messagesTotalCounted = 0;
 
       for (const chat of slice) {
         processedChats++;
@@ -803,12 +861,9 @@ Deno.serve(async (req) => {
           plannedCustomers++; // would create
         }
 
-        const msgsRes = await tryEndpoints("findMessages", [
-          { path: `/chat/findMessages/${instEnc}`, init: { method: "POST", body: JSON.stringify({ where: { key: { remoteJid: jid } }, limit: perChat }) } },
-          { path: `/chat/findMessages/${instEnc}`, init: { method: "POST", body: JSON.stringify({ where: { remoteJid: jid }, limit: perChat }) } },
-          { path: `/chat/fetchMessages/${instEnc}?remoteJid=${encodeURIComponent(jid)}&limit=${perChat}` },
-        ]);
-        const msgs: any[] = pickArray(msgsRes?.data);
+        const { records: msgs, total: chatMsgTotal } = await fetchAllMessages(jid, perChat);
+        if (chatMsgTotal != null) messagesTotalCounted += chatMsgTotal;
+        else messagesTotalCounted += msgs.length;
         if (!msgs.length) { skipped.no_messages++; continue; }
 
         const msgIds: string[] = [];
@@ -890,7 +945,10 @@ Deno.serve(async (req) => {
           const prev = accFailures[k] ?? { count: 0 };
           accFailures[k] = { count: prev.count + v.count, last_error: v.last_error ?? prev.last_error };
         }
-        const evoTotalsMerged = { ...(cur?.evolution_totals ?? {}), ...evoTotals };
+        const evoTotalsMerged: any = { ...(cur?.evolution_totals ?? {}), ...evoTotals };
+        // Accumulate per-chat message totals reported by Evolution across batches.
+        evoTotalsMerged.messages =
+          Number(cur?.evolution_totals?.messages ?? 0) + messagesTotalCounted;
 
         const update: any = {
           imported: accImported, skipped: accSkipped,
@@ -945,6 +1003,7 @@ Deno.serve(async (req) => {
         dry_run: dryRun,
         chats_seen: chats.length,
         evolution_totals: evoTotals,
+        batch_messages_seen: messagesTotalCounted,
         total_available: totalAvailable,
         offset,
         next_offset: nextOffset,
