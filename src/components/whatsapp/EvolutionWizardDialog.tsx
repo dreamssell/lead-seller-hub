@@ -25,7 +25,13 @@ import {
   Download,
   History,
   PlugZap,
+  X,
+  Clock,
+  ScanLine,
+  Wifi,
 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { WhatsAppConnection } from './types';
@@ -39,7 +45,10 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   conn: WhatsAppConnection;
   onConnected: () => void;
+  /** When true, automatically initiates instance creation + QR generation on open. */
+  autoStart?: boolean;
 }
+
 
 type Step = 'credentials' | 'qr' | 'connected' | 'failed';
 type FailureReason = 'timeout' | 'auth' | 'forbidden' | 'unknown';
@@ -77,7 +86,7 @@ function validateInstance(v: string): string | null {
   return null;
 }
 
-export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }: Props) {
+export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, autoStart }: Props) {
   const initialMeta = (conn.metadata ?? {}) as Record<string, any>;
   const [step, setStep] = useState<Step>('credentials');
   const [url, setUrl] = useState<string>(initialMeta.url ?? 'https://evolution.api.example.com');
@@ -101,6 +110,24 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
     checks: Record<string, { ok: boolean; status?: number; message: string }>;
   } | null>(null);
 
+  // Auto-import scheduling settings (persisted on Conn.metadata).
+  const [autoImportEnabled, setAutoImportEnabled] = useState<boolean>(
+    !!initialMeta.auto_import_enabled,
+  );
+  const [autoImportHours, setAutoImportHours] = useState<number>(
+    Math.max(1, Math.min(168, Number(initialMeta.auto_import_interval_hours) || 6)),
+  );
+
+  // Progressive import state.
+  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{
+    customers: number;
+    messages: number;
+    processed: number;
+    total: number;
+  }>({ customers: 0, messages: 0, processed: 0, total: 0 });
+  const importCancelRef = useRef<boolean>(false);
+
   const pollTimeoutRef = useRef<number | null>(null);
   const qrRefreshRef = useRef<number | null>(null);
   const countdownRef = useRef<number | null>(null);
@@ -121,12 +148,33 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
       setFailure(null);
       setTestResult(null);
       setAutoReconnect(meta.auto_reconnect ?? true);
+      setAutoImportEnabled(!!meta.auto_import_enabled);
+      setAutoImportHours(Math.max(1, Math.min(168, Number(meta.auto_import_interval_hours) || 6)));
+      setImporting(false);
+      importCancelRef.current = false;
+      setImportProgress({ customers: 0, messages: 0, processed: 0, total: 0 });
       setStep(conn.status === 'connected' ? 'connected' : 'credentials');
     } else {
       stopAll();
+      importCancelRef.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Auto-start QR generation when requested (called from "Testar conexão" → instância não aberta).
+  useEffect(() => {
+    if (open && autoStart && step === 'credentials' && !busy) {
+      const t = window.setTimeout(() => {
+        if (!validateUrl(url) && !validateToken(token) && !validateInstance(instance)) {
+          startInstance();
+        }
+      }, 200);
+      return () => window.clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, autoStart]);
+
+
 
   const stopAll = () => {
     if (pollTimeoutRef.current) window.clearTimeout(pollTimeoutRef.current);
@@ -468,6 +516,67 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
     </div>
   );
 
+  // ---------- Stepper ----------
+  const stepperIndex = (() => {
+    if (step === 'credentials') return 0;
+    if (step === 'qr' && !qr) return 1;             // generating
+    if (step === 'qr' && qr && stateText !== 'open') return 2; // waiting scan / pairing
+    if (step === 'connected') return 3;
+    return 1;
+  })();
+
+  const STEPS = [
+    { label: 'Credenciais', icon: PlugZap, hint: 'Informe URL, API Key e instância.' },
+    { label: 'Gerar QR', icon: QrCode, hint: 'Estamos pedindo o QR Code ao servidor Evolution.' },
+    { label: 'Escanear & parear', icon: ScanLine, hint: 'Abra WhatsApp → Aparelhos conectados → Conectar um aparelho.' },
+    { label: 'Confirmação', icon: CheckCircle2, hint: 'Pareamento detectado — sincronizando sua sessão.' },
+  ];
+
+  const renderStepper = () => (
+    <div className="rounded-xl border border-border/60 bg-secondary/20 p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        {STEPS.map((s, i) => {
+          const done = i < stepperIndex;
+          const active = i === stepperIndex;
+          const Icon = done ? CheckCircle2 : s.icon;
+          return (
+            <div key={s.label} className="flex items-center gap-2 flex-1 min-w-0">
+              <div
+                className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold border ${
+                  done
+                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-600'
+                    : active
+                    ? 'bg-primary/15 border-primary/50 text-primary'
+                    : 'bg-secondary border-border text-muted-foreground'
+                }`}
+              >
+                {active && (i === 1 || i === 2) ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Icon className="w-3.5 h-3.5" />
+                )}
+              </div>
+              <span
+                className={`text-[11px] truncate ${
+                  active ? 'font-semibold text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                {s.label}
+              </span>
+              {i < STEPS.length - 1 && (
+                <span className={`hidden sm:block flex-1 h-px ${done ? 'bg-emerald-500/40' : 'bg-border'}`} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-muted-foreground leading-relaxed">
+        <span className="font-semibold text-foreground">Etapa {stepperIndex + 1} de {STEPS.length}: </span>
+        {STEPS[stepperIndex].hint}
+      </p>
+    </div>
+  );
+
   const renderQr = () => (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -480,10 +589,10 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
         <div className="flex flex-col items-end gap-1">
           <Badge variant="outline" className="gap-1.5">
             <Loader2 className="w-3 h-3 animate-spin" />
-            {stateText || 'aguardando'}
+            {stateText || 'aguardando leitura'}
           </Badge>
-          <span className="text-[11px] text-muted-foreground tabular-nums">
-            restam {remaining}s
+          <span className="text-[11px] text-muted-foreground tabular-nums flex items-center gap-1">
+            <Clock className="w-3 h-3" /> restam {remaining}s
           </span>
         </div>
       </div>
@@ -497,7 +606,7 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
         ) : (
           <div className="flex flex-col items-center gap-2 text-muted-foreground">
             <Loader2 className="w-8 h-8 animate-spin" />
-            <p className="text-xs">Gerando QR Code...</p>
+            <p className="text-xs">Solicitando QR Code à Evolution…</p>
           </div>
         )}
       </div>
@@ -534,54 +643,196 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
         </div>
       )}
       <div className="flex items-start gap-2 text-xs text-muted-foreground bg-secondary/40 rounded-lg p-3">
-        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+        <Wifi className="w-4 h-4 shrink-0 mt-0.5" />
         <span>
-          O QR é atualizado a cada 30s. O polling começa em {MIN_POLL_MS / 1000}s e aplica
-          backoff até {MAX_POLL_MS / 1000}s em caso de falhas temporárias.
+          Aguardando o WhatsApp parear… O QR é renovado a cada 30s e checamos a sessão a cada {MIN_POLL_MS / 1000}s
+          (backoff até {MAX_POLL_MS / 1000}s em caso de erros temporários).
         </span>
       </div>
     </div>
   );
 
-  const [importing, setImporting] = useState(false);
+  // ---------- Progressive import ----------
   const runImport = async () => {
     setImporting(true);
-    const { data, error } = await invoke('import_chats', { max_chats: 80, messages_per_chat: 25 });
-    setImporting(false);
-    if (error || !data?.ok) {
-      toast.error('Falha ao importar conversas', { description: error?.message || data?.error || 'Tente novamente.' });
-      return;
+    importCancelRef.current = false;
+    setImportProgress({ customers: 0, messages: 0, processed: 0, total: 0 });
+
+    let offset = 0;
+    const batchSize = 5;
+    const maxChats = 200;
+    const perChat = 25;
+    let safety = 60; // hard cap on loop iterations
+
+    try {
+      while (safety-- > 0) {
+        if (importCancelRef.current) {
+          toast.info('Importação cancelada', {
+            description: `${importProgress.customers} contatos · ${importProgress.messages} mensagens importadas até aqui.`,
+          });
+          break;
+        }
+        const { data, error } = await invoke('import_chats', {
+          max_chats: maxChats,
+          messages_per_chat: perChat,
+          offset,
+          batch_size: batchSize,
+        });
+        if (error || !data?.ok) {
+          toast.error('Falha ao importar conversas', {
+            description: error?.message || data?.error || 'Tente novamente.',
+          });
+          break;
+        }
+        setImportProgress((prev) => ({
+          customers: prev.customers + (data.batch_customers ?? 0),
+          messages: prev.messages + (data.batch_messages ?? 0),
+          processed: data.next_offset ?? prev.processed,
+          total: data.total_available ?? prev.total,
+        }));
+        offset = data.next_offset ?? offset + batchSize;
+        if (data.done) {
+          toast.success('Importação concluída', {
+            description: `${importProgress.customers + (data.batch_customers ?? 0)} contatos · ${
+              importProgress.messages + (data.batch_messages ?? 0)
+            } mensagens.`,
+          });
+          break;
+        }
+      }
+    } finally {
+      setImporting(false);
     }
-    toast.success(
-      `Importação concluída`,
-      { description: `${data.customers_imported} contatos · ${data.messages_imported} mensagens` },
+  };
+
+  const cancelImport = () => {
+    importCancelRef.current = true;
+  };
+
+  const saveAutoImport = async (enabled: boolean, hours: number) => {
+    setAutoImportEnabled(enabled);
+    setAutoImportHours(hours);
+    const { error } = await invoke('set_auto_import', { enabled, interval_hours: hours });
+    if (error) {
+      toast.error('Não foi possível salvar a auto-importação', { description: error.message });
+    } else {
+      toast.success(
+        enabled
+          ? `Auto-importação ativa: a cada ${hours}h`
+          : 'Auto-importação desativada',
+      );
+    }
+  };
+
+  const renderConnected = () => {
+    const pct =
+      importProgress.total > 0
+        ? Math.min(100, Math.round((importProgress.processed / importProgress.total) * 100))
+        : importing
+        ? 5
+        : 0;
+    return (
+      <div className="space-y-4">
+        <div className="text-center py-4 space-y-3">
+          <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/10 flex items-center justify-center">
+            <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+          </div>
+          <div>
+            <p className="font-semibold">WhatsApp conectado com sucesso</p>
+            <p className="text-sm text-muted-foreground">
+              Instância <span className="font-mono">{instance}</span>
+              {(conn as any).phone_number && <> · {(conn as any).phone_number}</>}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold">Importar conversas existentes</p>
+              <p className="text-[11px] text-muted-foreground">
+                Traz contatos e últimas mensagens do WhatsApp pareado. Novas mensagens chegam automaticamente via webhook.
+              </p>
+            </div>
+            {importing ? (
+              <Button size="sm" variant="destructive" onClick={cancelImport} className="shrink-0">
+                <X className="w-4 h-4 mr-1" /> Cancelar
+              </Button>
+            ) : (
+              <Button size="sm" onClick={runImport} className="shrink-0">
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Importar agora
+              </Button>
+            )}
+          </div>
+
+          {(importing || importProgress.customers > 0 || importProgress.messages > 0) && (
+            <div className="space-y-2">
+              <Progress value={pct} className="h-2" />
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-md bg-background/60 border border-border/60 py-2">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Contatos</p>
+                  <p className="text-sm font-bold tabular-nums">{importProgress.customers}</p>
+                </div>
+                <div className="rounded-md bg-background/60 border border-border/60 py-2">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Mensagens</p>
+                  <p className="text-sm font-bold tabular-nums">{importProgress.messages}</p>
+                </div>
+                <div className="rounded-md bg-background/60 border border-border/60 py-2">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Conversas</p>
+                  <p className="text-sm font-bold tabular-nums">
+                    {importProgress.processed}
+                    {importProgress.total > 0 && <span className="text-muted-foreground">/{importProgress.total}</span>}
+                  </p>
+                </div>
+              </div>
+              {importing && (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Processando lote… você pode cancelar a qualquer momento.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold">Auto-importação agendada</p>
+              <p className="text-[11px] text-muted-foreground">
+                Sincroniza periodicamente conversas e novos contatos, sem duplicar mensagens (deduplicação por ID).
+              </p>
+            </div>
+            <label className="flex items-center gap-2 text-[11px] cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                checked={autoImportEnabled}
+                onChange={(e) => saveAutoImport(e.target.checked, autoImportHours)}
+              />
+              {autoImportEnabled ? 'Ativada' : 'Desativada'}
+            </label>
+          </div>
+          {autoImportEnabled && (
+            <div className="flex items-center gap-2">
+              <Label className="text-[11px] text-muted-foreground">A cada</Label>
+              <Input
+                type="number"
+                min={1}
+                max={168}
+                value={autoImportHours}
+                onChange={(e) => setAutoImportHours(Math.max(1, Math.min(168, Number(e.target.value) || 6)))}
+                onBlur={() => saveAutoImport(true, autoImportHours)}
+                className="h-7 w-20 text-xs"
+              />
+              <span className="text-[11px] text-muted-foreground">horas</span>
+            </div>
+          )}
+        </div>
+      </div>
     );
   };
 
-  const renderConnected = () => (
-    <div className="text-center py-8 space-y-4">
-      <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/10 flex items-center justify-center">
-        <CheckCircle2 className="w-8 h-8 text-emerald-500" />
-      </div>
-      <div>
-        <p className="font-semibold">WhatsApp conectado com sucesso</p>
-        <p className="text-sm text-muted-foreground">
-          Instância <span className="font-mono">{instance}</span>
-          {(conn as any).phone_number && <> · {(conn as any).phone_number}</>}
-        </p>
-      </div>
-      <div className="rounded-lg border border-border bg-muted/30 p-3 text-left space-y-2">
-        <p className="text-xs font-semibold">Importar conversas existentes</p>
-        <p className="text-[11px] text-muted-foreground">
-          Traz contatos e últimas mensagens do WhatsApp pareado para o Chat Omnichannel. Novas mensagens chegam automaticamente via webhook.
-        </p>
-        <Button size="sm" onClick={runImport} disabled={importing} className="w-full sm:w-auto">
-          {importing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-          {importing ? 'Importando…' : 'Importar agora'}
-        </Button>
-      </div>
-    </div>
-  );
+
 
   const renderFailed = () => {
     const isAuth = failure?.reason === 'auth' || failure?.reason === 'forbidden';
@@ -636,7 +887,9 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
             <TabsTrigger value="retention" className="text-[11px] sm:text-xs py-1.5">Retenção</TabsTrigger>
           </TabsList>
           <TabsContent value="setup" className="space-y-4 pt-3">
+            {step !== 'failed' && renderStepper()}
             {step === 'credentials' && renderCredentials()}
+
             {step === 'qr' && renderQr()}
             {step === 'connected' && renderConnected()}
             {step === 'failed' && renderFailed()}

@@ -63,6 +63,8 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [showEvolutionWizard, setShowEvolutionWizard] = useState(false);
+  const [wizardAutoStart, setWizardAutoStart] = useState(false);
+
   const [showDebug, setShowDebug] = useState(false);
   const [debugInfo, setDebugInfo] = useState<{ url: string; headers: string[]; error: any } | null>(null);
 
@@ -152,8 +154,17 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
       } else if (data?.connected) {
         toast.success('Conectado!', { description: `Dispositivo: ${data.phone || 'WhatsApp Active'}` });
       } else {
-        toast.warning('Provedor respondeu, mas instância não está aberta');
+        if (conn.provider === 'evolution') {
+          toast.warning('Instância não está aberta — abrindo pareamento por QR Code…', {
+            description: 'Vamos gerar o QR automaticamente. Tenha o WhatsApp em mãos.',
+          });
+          setWizardAutoStart(true);
+          setShowEvolutionWizard(true);
+        } else {
+          toast.warning('Provedor respondeu, mas instância não está aberta');
+        }
       }
+
       onSaved();
     } catch (err: any) {
       setTesting(false);
@@ -311,11 +322,16 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
       {conn.provider === 'evolution' && (
         <EvolutionWizardDialog
           open={showEvolutionWizard}
-          onOpenChange={setShowEvolutionWizard}
+          onOpenChange={(o) => {
+            setShowEvolutionWizard(o);
+            if (!o) setWizardAutoStart(false);
+          }}
           conn={conn}
           onConnected={onSaved}
+          autoStart={wizardAutoStart}
         />
       )}
+
     </Card>
   );
 }
