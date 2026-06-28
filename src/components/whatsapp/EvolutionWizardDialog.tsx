@@ -659,10 +659,11 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
     setImportProgress({ customers: 0, messages: 0, processed: 0, total: 0 });
 
     let offset = 0;
-    const batchSize = 5;
-    const maxChats = 200;
-    const perChat = 25;
-    let safety = 60; // hard cap on loop iterations
+    const batchSize = 15;
+    const maxChats = 5000;
+    const perChat = 500;
+    let safety = 400; // hard cap on loop iterations
+
 
     try {
       while (safety-- > 0) {
