@@ -38,8 +38,12 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-5">
         {navSections.map((section) => {
-          const items = section.items.filter((item) => canAccessPage(item.key));
+          const items = section.items.filter((item) => {
+            if (item.ownerOnly && !isOwner) return false;
+            return canAccessPage(item.key);
+          });
           if (items.length === 0) return null;
+
           return (
           <div key={section.label}>
             <p className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
