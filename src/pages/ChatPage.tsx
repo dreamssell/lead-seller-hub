@@ -1251,6 +1251,27 @@ export default function ChatPage() {
                 </div>
               </div>
 
+              <CollaborationBar
+                customerId={selectedConv.id}
+                onOpenTransfer={() => setCollabTransferOpen(true)}
+                isSupervisor={isSupervisor}
+                currentUserId={currentUserId}
+              />
+              <WhisperFeed customerId={selectedConv.id} currentUserId={currentUserId} />
+              {isSupervisor && selectedConv.assignedTo && selectedConv.assignedTo !== currentUserId && (
+                <WhisperComposer
+                  customerId={selectedConv.id}
+                  ownerId={null}
+                  toAgentId={selectedConv.assignedTo}
+                >
+                  <div>
+                    <SupervisorBanner agentName={String(selectedConv.assignedTo)} onWhisper={() => {}} />
+                  </div>
+                </WhisperComposer>
+              )}
+
+
+
               <div className="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col">
                 {activeChannel === 'telegram' && hasMoreHistory && (
                   <div className="flex justify-center py-2">
