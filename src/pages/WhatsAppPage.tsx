@@ -86,11 +86,14 @@ export default function WhatsAppPage() {
                 <Plug className="w-4 h-4" />
                 Conexões
               </TabsTrigger>
-              <TabsTrigger value="audit" className="gap-2">
-                <History className="w-4 h-4" />
-                Auditoria & Logs
-              </TabsTrigger>
+              {isOwner && (
+                <TabsTrigger value="audit" className="gap-2">
+                  <History className="w-4 h-4" />
+                  Auditoria & Logs
+                </TabsTrigger>
+              )}
               <TabsTrigger value="health" className="gap-2">
+
                 <Activity className="w-4 h-4" />
                 Saúde do Sistema
               </TabsTrigger>
