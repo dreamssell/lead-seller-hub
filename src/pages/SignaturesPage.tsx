@@ -226,10 +226,11 @@ export default function SignaturesPage() {
             <TabsTrigger value="dashboard"><BarChart3 className="w-3.5 h-3.5 mr-1.5" /> Dashboard Gerencial</TabsTrigger>
           )}
           <TabsTrigger value="roles"><ShieldCheck className="w-3.5 h-3.5 mr-1.5" /> Equipe & Cargos</TabsTrigger>
-          {isLeader && (
+          {isOwner && (
             <TabsTrigger value="errors"><AlertTriangle className="w-3.5 h-3.5 mr-1.5" /> Registro de erros</TabsTrigger>
           )}
         </TabsList>
+
 
         {/* Filters */}
         <div className="glass-card p-4">
