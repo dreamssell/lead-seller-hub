@@ -86,7 +86,7 @@ function validateInstance(v: string): string | null {
   return null;
 }
 
-export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }: Props) {
+export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, autoStart }: Props) {
   const initialMeta = (conn.metadata ?? {}) as Record<string, any>;
   const [step, setStep] = useState<Step>('credentials');
   const [url, setUrl] = useState<string>(initialMeta.url ?? 'https://evolution.api.example.com');
@@ -110,6 +110,24 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
     checks: Record<string, { ok: boolean; status?: number; message: string }>;
   } | null>(null);
 
+  // Auto-import scheduling settings (persisted on Conn.metadata).
+  const [autoImportEnabled, setAutoImportEnabled] = useState<boolean>(
+    !!initialMeta.auto_import_enabled,
+  );
+  const [autoImportHours, setAutoImportHours] = useState<number>(
+    Math.max(1, Math.min(168, Number(initialMeta.auto_import_interval_hours) || 6)),
+  );
+
+  // Progressive import state.
+  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{
+    customers: number;
+    messages: number;
+    processed: number;
+    total: number;
+  }>({ customers: 0, messages: 0, processed: 0, total: 0 });
+  const importCancelRef = useRef<boolean>(false);
+
   const pollTimeoutRef = useRef<number | null>(null);
   const qrRefreshRef = useRef<number | null>(null);
   const countdownRef = useRef<number | null>(null);
@@ -130,12 +148,33 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
       setFailure(null);
       setTestResult(null);
       setAutoReconnect(meta.auto_reconnect ?? true);
+      setAutoImportEnabled(!!meta.auto_import_enabled);
+      setAutoImportHours(Math.max(1, Math.min(168, Number(meta.auto_import_interval_hours) || 6)));
+      setImporting(false);
+      importCancelRef.current = false;
+      setImportProgress({ customers: 0, messages: 0, processed: 0, total: 0 });
       setStep(conn.status === 'connected' ? 'connected' : 'credentials');
     } else {
       stopAll();
+      importCancelRef.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Auto-start QR generation when requested (called from "Testar conexão" → instância não aberta).
+  useEffect(() => {
+    if (open && autoStart && step === 'credentials' && !busy) {
+      const t = window.setTimeout(() => {
+        if (!validateUrl(url) && !validateToken(token) && !validateInstance(instance)) {
+          startInstance();
+        }
+      }, 200);
+      return () => window.clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, autoStart]);
+
+
 
   const stopAll = () => {
     if (pollTimeoutRef.current) window.clearTimeout(pollTimeoutRef.current);
