@@ -46,6 +46,7 @@ async function evoFetch(
   token: string,
   path: string,
   init: RequestInit = {},
+  timeoutMs = 15000,
 ) {
   const url = `${baseUrl.replace(/\/$/, "")}${path}`;
   const headers: Record<string, string> = {
@@ -54,15 +55,24 @@ async function evoFetch(
     Authorization: `Bearer ${token}`,
     ...(init.headers as Record<string, string> | undefined),
   };
-  const res = await fetch(url, { ...init, headers });
-  const text = await res.text();
-  let data: any = null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = { raw: text };
+    const res = await fetch(url, { ...init, headers, signal: ctrl.signal });
+    const text = await res.text();
+    let data: any = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = { raw: text };
+    }
+    return { ok: res.ok, status: res.status, data };
+  } catch (e) {
+    const aborted = (e as any)?.name === "AbortError";
+    return { ok: false, status: aborted ? 408 : 0, data: { error: (e as Error).message } };
+  } finally {
+    clearTimeout(timer);
   }
-  return { ok: res.ok, status: res.status, data };
 }
 
 /**
@@ -74,20 +84,20 @@ async function evoFetchRetry(
   token: string,
   path: string,
   init: RequestInit = {},
-  attempts = 4,
+  attempts = 2,
 ) {
   let lastErr: unknown = null;
   for (let i = 0; i < attempts; i++) {
     try {
       const r = await evoFetch(baseUrl, token, path, init);
-      const transient = r.status === 429 || r.status === 0 || (r.status >= 500 && r.status <= 599);
+      const transient = r.status === 429 || r.status === 0 || r.status === 408 || (r.status >= 500 && r.status <= 599);
       if (!transient) return r;
       lastErr = new Error(`HTTP ${r.status}`);
     } catch (e) {
       lastErr = e;
     }
     if (i < attempts - 1) {
-      const delay = Math.min(8000, 400 * Math.pow(2, i)) + Math.floor(Math.random() * 250);
+      const delay = Math.min(2500, 350 * Math.pow(2, i)) + Math.floor(Math.random() * 150);
       await new Promise((res) => setTimeout(res, delay));
     }
   }
@@ -516,12 +526,14 @@ Deno.serve(async (req) => {
     }
 
     if (action === "import_chats") {
+      try {
       // Best-effort webhook re-registration (skipped in dry-run to avoid side-effects).
       const dryRun = body.dry_run === true;
-      const downloadMedia = body.download_media !== false; // default true
+      const downloadMedia = body.download_media !== false && !dryRun;
       if (!dryRun) {
         try { await registerWebhook(baseUrl, token, instance, connection_id); } catch (_) { /* best effort */ }
       }
+
 
       const maxChats = Math.max(1, Math.min(Number(body.max_chats) || 2000, 10000));
       const perChat = Math.max(1, Math.min(Number(body.messages_per_chat) || 200, 1000));
@@ -544,21 +556,34 @@ Deno.serve(async (req) => {
         endpointFailures[endpoint] = slot;
       };
 
+      // Remember the first variant that worked for each endpoint name so we
+      // don't pay the 404-probe cost on every chat.
+      const endpointPathCache: Record<string, number> = {};
       const tryEndpoints = async (
         endpointName: string,
         paths: { path: string; init?: RequestInit }[],
       ) => {
+        const startIdx = endpointPathCache[endpointName] ?? 0;
+        const ordered = [
+          ...paths.slice(startIdx),
+          ...paths.slice(0, startIdx),
+        ];
         let lastErr: unknown = null;
-        for (const p of paths) {
+        for (let i = 0; i < ordered.length; i++) {
+          const p = ordered[i];
           try {
             const r = await evoFetchRetry(baseUrl, token, p.path, p.init ?? {});
-            if (r.ok) return r;
+            if (r.ok) {
+              endpointPathCache[endpointName] = (startIdx + i) % paths.length;
+              return r;
+            }
             lastErr = new Error(`HTTP ${r.status}`);
           } catch (e) { lastErr = e; }
         }
         if (lastErr) noteFailure(endpointName, lastErr);
         return null;
       };
+
 
       const pickArray = (d: any): any[] => {
         if (Array.isArray(d)) return d;
@@ -933,6 +958,16 @@ Deno.serve(async (req) => {
         customers_imported: dryRun ? plannedCustomers : importedCustomers,
         messages_imported: dryRun ? plannedMessages : importedMessages,
       });
+      } catch (e) {
+        const msg = (e as Error)?.message || String(e);
+        console.error("[evolution-instance] import_chats failed", msg);
+        await logEvent("evolution.import", "error", msg);
+        return json({
+          ok: false,
+          error: msg,
+          hint: "Falha durante a importação. Verifique URL/API Key/instância da Evolution e tente novamente.",
+        }, 200);
+      }
     }
 
 
