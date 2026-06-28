@@ -123,7 +123,8 @@ Deno.serve(async (req) => {
   }
 
   const meta = (conn.metadata as Record<string, any>) ?? {};
-  const baseUrl = (body.url ?? meta.url ?? "").trim();
+  const rawUrl = (body.url ?? meta.url ?? "").trim();
+  const baseUrl = rawUrl && !/^https?:\/\//i.test(rawUrl) ? `https://${rawUrl}` : rawUrl;
   const token = (body.token ?? meta.token ?? "").trim();
   const instance =
     (body.instance ?? meta.instance ?? meta.phone_number_id ?? "").trim();
