@@ -147,7 +147,8 @@ Deno.serve(async (req) => {
         provider: "wavoip" 
       };
     } else if (provider === "evolution") {
-      const evoUrl = (url || "").replace(/\/$/, "");
+      const rawEvo = (url || "").trim().replace(/\/$/, "");
+      const evoUrl = rawEvo && !/^https?:\/\//i.test(rawEvo) ? `https://${rawEvo}` : rawEvo;
       const instance = body?.instance || body?.phone_number_id;
       if (!evoUrl || !token || !instance) {
         result = { connected: false, status: "unconfigured", error: "URL, API Key e Instance Name são obrigatórios." };
