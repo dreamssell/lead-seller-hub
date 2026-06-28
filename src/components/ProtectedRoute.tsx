@@ -3,11 +3,15 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth, EXTERNAL_LOGIN_URL } from '@/contexts/AuthContext';
 import { getPageKeyByPath, type SidebarPageKey } from '@/lib/navigation';
 import { logRouteTelemetry } from '@/lib/routeTelemetry';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   pageKey?: SidebarPageKey;
+  /** Restrict access to the platform owner (global admin). */
+  ownerOnly?: boolean;
 }
+
 
 function BlockedTelemetry({ pageKey, path }: { pageKey: string; path: string }) {
   useEffect(() => {
