@@ -47,7 +47,10 @@ export type SidebarNavItem = {
   label: string;
   path: string;
   desc: string;
+  /** Visible only to the platform owner (global admin). Hidden for clients and sub-empresas. */
+  ownerOnly?: boolean;
 };
+
 
 export const navSections: { label: string; items: SidebarNavItem[] }[] = [
   {
