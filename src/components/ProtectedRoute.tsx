@@ -24,11 +24,13 @@ function BlockedTelemetry({ pageKey, path }: { pageKey: string; path: string }) 
   return null;
 }
 
-export default function ProtectedRoute({ children, pageKey }: ProtectedRouteProps) {
+export default function ProtectedRoute({ children, pageKey, ownerOnly }: ProtectedRouteProps) {
   const { session, loading, accessLoading, canAccessPage } = useAuth();
+  const { isOwner, loading: ownerLoading } = usePlatformOwner();
   const location = useLocation();
 
-  if (loading || accessLoading) {
+  if (loading || accessLoading || (ownerOnly && ownerLoading)) {
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
