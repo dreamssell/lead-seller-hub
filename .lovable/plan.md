@@ -1,107 +1,141 @@
 
-# Chat Omnichannel WhatsApp — Evolução em 4 Fases
+# Fase 2 — Colaboração Interna + SLA
 
-Persona prioritária: **Atendente / SDR (throughput)**. Cada fase entrega valor sozinha; nada quebra o que já existe.
-
----
-
-## Fase 1 — Composer Avançado + Throughput do Atendente *(implemento agora)*
-
-Foco: o atendente conseguir responder mais rápido e melhor que no WhatsApp Business.
-
-**Composer**
-- Gravação de áudio com waveform animada, timer, cancelar/enviar, preview antes de enviar.
-- Drag-and-drop de arquivos sobre a janela do chat + clipboard paste (Ctrl+V de imagem).
-- Preview rico de mídia antes do envio (imagem, PDF, áudio, documento) com legenda opcional.
-- Formatação WhatsApp: `*negrito*`, `_itálico_`, `~tachado~`, ``` `monospace` ``` — barra de formatação + atalhos (Ctrl+B/I).
-- Picker de emoji integrado (já parcialmente existe — reorganizar).
-- Mensagem agendada: agendar envio para data/hora futura (nova tabela `scheduled_messages` + processador cron).
-- Auto-save de rascunho por conversa em `localStorage`.
-- Contador de caracteres e indicador de "digitando…" enviado ao WhatsApp.
-
-**Atalhos do atendente**
-- `/` abre busca de respostas rápidas inline com preview e variáveis (`{{nome}}`, `{{empresa}}`).
-- Atalhos globais: `Ctrl+Enter` envia, `Esc` cancela edição, `↑` edita última mensagem, `Ctrl+K` busca conversa, `Ctrl+/` lista atalhos.
-- Sugestão de resposta com IA (botão "✨ Sugerir resposta") baseado no histórico recente — usa Lovable AI Gateway com `google/gemini-3-flash-preview`.
-- Tradução automática 1-clique (PT↔EN↔ES).
-- Resumo da conversa (botão no header) — gera um TL;DR via IA.
-
-**Polimento de UI**
-- Bolhas com melhor contraste, status de entrega ✓✓ azul, timestamps relativos.
-- Indicador "visto por <agente>" para a equipe interna.
-- Scroll inteligente: trava no fundo quando perto, mostra botão "↓ N novas" quando longe.
+Entrega em 7 frentes, todas ativadas sem quebrar o que já existe (Evolution, Wavoip, importação, Composer Fase 1).
 
 ---
 
-## Fase 2 — Colaboração Interna + SLA
+## 1. Banco (uma migration única)
 
-- Transferir / atribuir conversa para colega ou fila com motivo.
-- Menção `@colega` em notas internas → notifica o mencionado.
-- Modo supervisor: assistir conversa ao vivo + sussurro (mensagem só o atendente vê).
-- Tags coloridas, prioridade (baixa/média/alta/urgente), status de ticket.
-- SLA com timer visível: primeiro-resposta, próxima-resposta, resolução; cores conforme proximidade.
-- Roteamento por canal/skill já existe — adicionar regras por horário e carga.
-- Handoff humano↔IA com contexto preservado.
+**Novas colunas em `customers`**
+- `assigned_to uuid` — atendente responsável.
+- `queue_id uuid` — fila atual.
+- `priority text` — `low | medium | high | urgent` (default `medium`).
+- `ticket_status text` — `open | pending | snoozed | resolved | closed` (default `open`).
+- `tags text[]` — IDs de tags coloridas.
+- `sla_first_response_due_at`, `sla_next_response_due_at`, `sla_resolution_due_at timestamptz`.
+- `first_response_at`, `resolved_at timestamptz`.
+- `ai_handoff jsonb` — `{ mode: 'human'|'ai', last_handoff_at, context_summary }`.
 
----
+**Novas tabelas**
+- `chat_queues (id, owner_id, name, color, sla_policy_id, business_hours jsonb, created_at)`.
+- `chat_tags (id, owner_id, name, color, created_at)`.
+- `sla_policies (id, owner_id, name, first_response_minutes, next_response_minutes, resolution_minutes, business_hours_only bool)`.
+- `conversation_assignments (id, customer_id, from_user_id, to_user_id, to_queue_id, reason, created_at, created_by)` — auditoria de transferências.
+- `note_mentions (id, note_id, mentioned_user_id, customer_id, owner_id, read_at, created_at)` — feed de @menções.
+- `supervisor_whispers (id, customer_id, from_supervisor_id, to_agent_id, content, read_at, created_at)` — só agente vê.
+- `routing_rules (id, owner_id, name, priority int, channel text, skill text, schedule jsonb, max_load int, target_queue_id, target_user_id, active bool)`.
 
-## Fase 3 — CRM 360° + Mídia Rica
+Todas com `GRANT SELECT, INSERT, UPDATE, DELETE … authenticated` + `service_role`, RLS por `owner_id`/escopo de equipe, e índices em `customer_id`, `assigned_to`, `due_at`.
 
-- Painel direito com timeline unificada do cliente: leads, tarefas, assinaturas, ligações, e-mails, eventos.
-- Galeria de mídias da conversa (grid filtrável por tipo).
-- Envio de catálogo de produtos, listas interativas e botões (recursos nativos do WhatsApp Business API via Evolution).
-- Cards de localização, contato (vCard) e enquetes.
-- Anexar documento de assinatura direto do módulo Signatures.
-- Visualizador in-app para PDF, áudio, vídeo (sem download forçado).
-
----
-
-## Fase 4 — Buscas, Inbox Unificada e Automação Avançada
-
-- Busca global full-text em todas as mensagens (índice `tsvector`).
-- Filtros salvos por atendente: "minhas não respondidas", "urgentes hoje", etc.
-- Threads fixadas e marcadores personalizados.
-- Inbox unificada multi-canal (WhatsApp + Instagram + Messenger + Telegram + Widget).
-- Bot de triagem visual (drag-drop flow builder).
-- Auto-tag por IA, classificação de sentimento, follow-up automático após X horas.
+**Triggers**
+- `customers` UPDATE: quando `assigned_to`/`queue_id` muda → registra em `conversation_assignments` e em `customer_notes` cria nota automática "Transferido por X para Y · motivo: …".
+- `chat_messages` AFTER INSERT: se for primeira resposta do agente, preenche `first_response_at` e zera `sla_first_response_due_at`. Recalcula `sla_next_response_due_at` para cada mensagem recebida.
+- `customer_notes` AFTER INSERT: parse `@usuario` no conteúdo e popular `note_mentions` + `notifications` ("Você foi mencionado em…").
 
 ---
 
-## Detalhes técnicos da Fase 1
+## 2. UI — Transferir / Atribuir conversa
 
-**Novos arquivos**
-- `src/components/chat/AudioRecorder.tsx` — gravação MediaRecorder + waveform em canvas + upload p/ `whatsapp-media`.
-- `src/components/chat/MediaDropzone.tsx` — overlay drag-and-drop + paste handler.
-- `src/components/chat/MediaPreviewDialog.tsx` — preview + legenda + envio.
-- `src/components/chat/FormatToolbar.tsx` — bold/italic/strike/mono.
-- `src/components/chat/ScheduleMessageDialog.tsx` — date/time picker.
-- `src/components/chat/QuickReplyPopover.tsx` — autocomplete `/` slash.
-- `src/components/chat/AISuggestPopover.tsx` — botão sugerir/resumir/traduzir.
-- `src/components/chat/KeyboardShortcutsHelp.tsx` — modal `Ctrl+/`.
-- `src/hooks/useChatShortcuts.ts` — bindings de teclado.
-- `src/hooks/useDraftMessage.ts` — persistência localStorage por `customer_id`.
-- `supabase/functions/chat-ai-assist/index.ts` — endpoint IA (suggest, summarize, translate) usando Lovable AI Gateway.
+- Novo componente `TransferConversationDialog.tsx` no header do chat: select de colega (busca em `profiles`/`user_account_access`) **ou** fila, campo motivo obrigatório, botão "Transferir".
+- Botão "Atribuir a mim" rápido (1 clique).
+- Mostra atendente atual + fila como `Badge` no header.
+- Linha do tempo de transferências dentro de `ChatRightPanel` (nova aba **Histórico**).
 
-**Mudanças em arquivos existentes**
-- `src/pages/ChatPage.tsx` — integrar dropzone, atalhos, header com "Resumir conversa".
-- Componente do composer no ChatPage — substituir input simples por composer rico.
+## 3. @menção + notificações
 
-**Banco**
-- Nova tabela `scheduled_messages (id, customer_id, owner_id, connection_id, body, media_url, scheduled_for, status, created_at, sent_at, error)`.
-- Tabela existente `chat_messages` — adicionar coluna `formatting` (jsonb) opcional para registrar formatação aplicada.
-- Bucket `whatsapp-media` já existe (privado) — usar para áudios e anexos novos.
-- RLS + GRANTs conforme padrão do projeto.
+- No `Textarea` de nota interna de `ChatRightPanel`, autocomplete `@` (lista usuários do owner via `user_account_access`).
+- Highlight `@nome` ao renderizar.
+- Trigger no banco cria notificação (toast em tempo real via `notifications` realtime já existente).
+- Aba "Menções" no `NotificationsBell`.
 
-**Edge Function `chat-ai-assist`**
-- POST com `{ mode: 'suggest' | 'summarize' | 'translate', target_lang?, messages[] }`.
-- Usa `LOVABLE_API_KEY` + `google/gemini-3-flash-preview`.
-- Trata 429/402 com mensagens claras.
+## 4. Modo Supervisor + Sussurro
 
-**Compatibilidade**
-- Nada do fluxo atual (Evolution, Wavoip, importação, badges) é alterado.
-- Áudios gravados serão enviados via Evolution endpoint `sendMedia/sendWhatsAppAudio` (já suportado pelo adapter).
+- Hook `useIsSupervisor()` (papel `supervisor`/`coordenador`/`diretor` ou `admin`).
+- Quando supervisor abre uma conversa atribuída a outro atendente:
+  - Banner "👁 Modo Supervisor — observando atendimento de **Fulano**".
+  - Botão **Sussurrar**: abre popover com `Textarea` → grava em `supervisor_whispers`.
+- No painel do atendente, sussurros aparecem como bolha amarela só para ele, com badge "🔒 Supervisor".
+
+## 5. Tags coloridas + Prioridade + Status de ticket
+
+- `TagsManager.tsx` em Configurações (CRUD em `chat_tags`).
+- Header do chat com:
+  - `PrioritySelect` (4 níveis, cores: cinza / azul / laranja / vermelho).
+  - `TicketStatusSelect` (open / pending / snoozed / resolved / closed).
+  - `TagPicker` (popover multi-select com cores).
+- Lista de conversas mostra prioridade como barra lateral colorida e tags como chips.
+- Filtros laterais: por status, prioridade, tag, atendente, fila.
+
+## 6. SLA com timer visível
+
+- `SlaTimer.tsx`: componente que recebe `due_at` e renderiza badge animado:
+  - Verde (>50% restante), amarelo (<50%), laranja (<20%), vermelho pulsante (vencido).
+- Header do chat: 3 timers (1ª resposta, próxima resposta, resolução).
+- Coluna na lista de conversas com o timer mais crítico.
+- Configuração de `sla_policies` em **Configurações → Atendimento → SLA**.
+- Edge Function `chat-sla-tick` agendada `*/1 * * * *` via `pg_cron`: gera `notifications` quando faltar <20% e quando vencer.
+
+## 7. Roteamento por horário e carga
+
+- Estender `ChannelRoutingTab.tsx`:
+  - Aba **Regras avançadas**: tabela `routing_rules` com editor (canal, skill, horário/dias, carga máxima por agente, fila/agente alvo, prioridade da regra).
+  - Toggle ativo/inativo.
+- Função `route_conversation(customer_id)` em SQL aplica regras em ordem de `priority`.
+- Trigger em `customers` (INSERT/quando `assigned_to` nulo) chama a função.
+
+## 8. Handoff Humano ↔ IA
+
+- Botão no header **"Assumir do bot" / "Passar para IA"**.
+- Ao alternar:
+  - Salva `customers.ai_handoff = { mode, last_handoff_at, context_summary }`.
+  - Chama Edge Function `chat-ai-assist` (modo `summarize`) para gerar TL;DR das últimas 20 mensagens e gravar em `context_summary`.
+  - Cria nota interna automática: "🤖 → 👤 Handoff: <resumo>".
+- Quando IA está ativa, badge "🤖 IA respondendo" no header e composer mostra dica "Bot ativo — clique em Assumir para responder manualmente".
 
 ---
 
-## Próximo passo
-Implemento a Fase 1 completa agora. Ao final, peço seu OK antes de partir para a Fase 2.
+## Arquivos novos
+
+```
+src/components/chat/TransferConversationDialog.tsx
+src/components/chat/PrioritySelect.tsx
+src/components/chat/TicketStatusSelect.tsx
+src/components/chat/TagPicker.tsx
+src/components/chat/SlaTimer.tsx
+src/components/chat/SupervisorBanner.tsx
+src/components/chat/WhisperComposer.tsx
+src/components/chat/AssignmentTimeline.tsx
+src/components/chat/MentionTextarea.tsx
+src/components/settings/TagsManager.tsx
+src/components/settings/SlaPoliciesTab.tsx
+src/components/settings/AdvancedRoutingRulesTab.tsx
+src/hooks/useIsSupervisor.ts
+src/hooks/useSlaCountdown.ts
+src/hooks/useMentionSuggestions.ts
+src/lib/slaUtils.ts
+supabase/functions/chat-sla-tick/index.ts
+```
+
+## Arquivos alterados
+
+- `src/pages/ChatPage.tsx` — header rico (transferir, prioridade, status, tags, timers, handoff), banner supervisor, sussurros inline.
+- `src/components/chat/ChatRightPanel.tsx` — aba "Histórico" + autocomplete @ em notas.
+- `src/components/settings/ChannelRoutingTab.tsx` — sub-aba "Regras avançadas".
+- `src/components/notifications/NotificationsBell.tsx` — filtro "Menções".
+
+---
+
+## Ordem de execução
+
+1. Migration completa (todas as tabelas/colunas/triggers/grants/RLS).
+2. Hooks utilitários (`useIsSupervisor`, `useSlaCountdown`, `useMentionSuggestions`).
+3. Componentes UI (transferir, prioridade, status, tags, sla, supervisor, sussurro, mention textarea).
+4. Integração no `ChatPage.tsx` e `ChatRightPanel.tsx`.
+5. Telas de configuração (tags, SLA, roteamento avançado).
+6. Edge Function `chat-sla-tick` + `pg_cron`.
+7. Typecheck e ajuste fino.
+
+**Compatibilidade:** todos os campos novos têm default seguro, nada do fluxo atual quebra. Fase 1 (Composer) permanece intacta.
+
+Posso seguir?

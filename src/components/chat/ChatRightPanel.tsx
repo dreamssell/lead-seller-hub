@@ -5,10 +5,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { StickyNote, Zap, Loader2, Trash2, Plus, X, Send } from 'lucide-react';
+import { StickyNote, Zap, Loader2, Trash2, Plus, X, Send, History as HistoryIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { MentionTextarea } from './MentionTextarea';
+import { AssignmentTimeline } from './AssignmentTimeline';
+
 
 interface Note {
   id: string;
@@ -34,7 +37,9 @@ interface Props {
 }
 
 export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }: Props) {
-  const [tab, setTab] = useState<'notes' | 'replies'>('notes');
+  const [tab, setTab] = useState<'notes' | 'replies' | 'history'>('notes');
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+
   const [notes, setNotes] = useState<Note[]>([]);
   const [replies, setReplies] = useState<QuickReply[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
@@ -58,6 +63,16 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
       }
     });
   }, []);
+
+  useEffect(() => {
+    supabase
+      .from('customers')
+      .select('owner_id')
+      .eq('id', customerId)
+      .maybeSingle()
+      .then(({ data }) => setOwnerId((data as any)?.owner_id || null));
+  }, [customerId]);
+
 
   const loadNotes = async () => {
     setLoadingNotes(true);
@@ -165,28 +180,33 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="flex-1 flex flex-col">
-        <TabsList className="grid grid-cols-2 mx-3 mt-3">
-          <TabsTrigger value="notes" className="gap-1.5">
-            <StickyNote className="w-3.5 h-3.5" /> Notas internas
+        <TabsList className="grid grid-cols-3 mx-3 mt-3">
+          <TabsTrigger value="notes" className="gap-1.5 text-xs">
+            <StickyNote className="w-3.5 h-3.5" /> Notas
           </TabsTrigger>
-          <TabsTrigger value="replies" className="gap-1.5">
-            <Zap className="w-3.5 h-3.5" /> Respostas rápidas
+          <TabsTrigger value="replies" className="gap-1.5 text-xs">
+            <Zap className="w-3.5 h-3.5" /> Rápidas
+          </TabsTrigger>
+          <TabsTrigger value="history" className="gap-1.5 text-xs">
+            <HistoryIcon className="w-3.5 h-3.5" /> Histórico
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="notes" className="flex-1 flex flex-col mt-3 px-3 pb-3 data-[state=inactive]:hidden">
           <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2">
             <p className="text-[10px] text-amber-700 dark:text-amber-300 font-medium">
-              🔒 Visível apenas para a equipe — o cliente nunca vê estas notas.
+              🔒 Visível apenas para a equipe. Use <b>@usuário</b> para mencionar e notificar colegas.
             </p>
           </div>
-          <Textarea
+          <MentionTextarea
+            ownerId={ownerId}
             value={newNote}
-            onChange={(e) => setNewNote(e.target.value)}
-            placeholder="Escrever nota interna sobre este lead..."
-            className="text-sm resize-none mb-2"
+            onChange={setNewNote}
+            placeholder="Escrever nota interna... use @ para mencionar"
             rows={3}
+            className="text-sm resize-none mb-2"
           />
+
           <Button size="sm" onClick={handleAddNote} disabled={!newNote.trim() || savingNote} className="mb-3">
             {savingNote ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : <Plus className="w-3.5 h-3.5 mr-2" />}
             Adicionar nota
@@ -290,7 +310,12 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
             )}
           </ScrollArea>
         </TabsContent>
+
+        <TabsContent value="history" className="flex-1 flex flex-col mt-3 px-3 pb-3 data-[state=inactive]:hidden">
+          <AssignmentTimeline customerId={customerId} />
+        </TabsContent>
       </Tabs>
+
     </div>
   );
 }

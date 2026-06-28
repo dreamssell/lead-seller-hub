@@ -397,6 +397,71 @@ export type Database = {
           },
         ]
       }
+      chat_queues: {
+        Row: {
+          business_hours: Json
+          color: string
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+          sla_policy_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          business_hours?: Json
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          owner_id: string
+          sla_policy_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          business_hours?: Json
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          sla_policy_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_queues_sla_policy_id_fkey"
+            columns: ["sla_policy_id"]
+            isOneToOne: false
+            referencedRelation: "sla_policies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_tags: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          owner_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+        }
+        Relationships: []
+      }
       company_settings: {
         Row: {
           address: string | null
@@ -580,6 +645,53 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      conversation_assignments: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          from_queue_id: string | null
+          from_user_id: string | null
+          id: string
+          owner_id: string
+          reason: string | null
+          to_queue_id: string | null
+          to_user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          from_queue_id?: string | null
+          from_user_id?: string | null
+          id?: string
+          owner_id: string
+          reason?: string | null
+          to_queue_id?: string | null
+          to_user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          from_queue_id?: string | null
+          from_user_id?: string | null
+          id?: string
+          owner_id?: string
+          reason?: string | null
+          to_queue_id?: string | null
+          to_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_assignments_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       crm_email_templates: {
         Row: {
@@ -835,53 +947,86 @@ export type Database = {
       customers: {
         Row: {
           address: string | null
+          ai_handoff: Json
+          assigned_to: string | null
           channel: string | null
           company: string | null
           created_at: string
           created_by: string
           document: string | null
           email: string | null
+          first_response_at: string | null
           id: string
           name: string
           notes: string | null
           origin_connection_id: string | null
           owner_id: string | null
           phone: string | null
+          priority: string
+          queue_id: string | null
+          resolved_at: string | null
+          sla_first_response_due_at: string | null
+          sla_next_response_due_at: string | null
+          sla_resolution_due_at: string | null
           sub_company_id: string | null
+          tags: string[]
+          ticket_status: string
           updated_at: string
         }
         Insert: {
           address?: string | null
+          ai_handoff?: Json
+          assigned_to?: string | null
           channel?: string | null
           company?: string | null
           created_at?: string
           created_by: string
           document?: string | null
           email?: string | null
+          first_response_at?: string | null
           id?: string
           name: string
           notes?: string | null
           origin_connection_id?: string | null
           owner_id?: string | null
           phone?: string | null
+          priority?: string
+          queue_id?: string | null
+          resolved_at?: string | null
+          sla_first_response_due_at?: string | null
+          sla_next_response_due_at?: string | null
+          sla_resolution_due_at?: string | null
           sub_company_id?: string | null
+          tags?: string[]
+          ticket_status?: string
           updated_at?: string
         }
         Update: {
           address?: string | null
+          ai_handoff?: Json
+          assigned_to?: string | null
           channel?: string | null
           company?: string | null
           created_at?: string
           created_by?: string
           document?: string | null
           email?: string | null
+          first_response_at?: string | null
           id?: string
           name?: string
           notes?: string | null
           origin_connection_id?: string | null
           owner_id?: string | null
           phone?: string | null
+          priority?: string
+          queue_id?: string | null
+          resolved_at?: string | null
+          sla_first_response_due_at?: string | null
+          sla_next_response_due_at?: string | null
+          sla_resolution_due_at?: string | null
           sub_company_id?: string | null
+          tags?: string[]
+          ticket_status?: string
           updated_at?: string
         }
         Relationships: [
@@ -1514,6 +1659,47 @@ export type Database = {
           },
         ]
       }
+      note_mentions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          mentioned_user_id: string
+          note_id: string
+          owner_id: string
+          read_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          mentioned_user_id: string
+          note_id: string
+          owner_id: string
+          read_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          mentioned_user_id?: string
+          note_id?: string
+          owner_id?: string
+          read_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "note_mentions_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "customer_notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_preferences: {
         Row: {
           channel: string | null
@@ -2018,6 +2204,54 @@ export type Database = {
         }
         Relationships: []
       }
+      routing_rules: {
+        Row: {
+          active: boolean
+          channel: string | null
+          created_at: string
+          id: string
+          max_load: number | null
+          name: string
+          owner_id: string
+          priority: number
+          schedule: Json
+          skill: string | null
+          target_queue_id: string | null
+          target_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          channel?: string | null
+          created_at?: string
+          id?: string
+          max_load?: number | null
+          name: string
+          owner_id: string
+          priority?: number
+          schedule?: Json
+          skill?: string | null
+          target_queue_id?: string | null
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          channel?: string | null
+          created_at?: string
+          id?: string
+          max_load?: number | null
+          name?: string
+          owner_id?: string
+          priority?: number
+          schedule?: Json
+          skill?: string | null
+          target_queue_id?: string | null
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       signature_documents: {
         Row: {
           contact_id: string | null
@@ -2289,6 +2523,42 @@ export type Database = {
           },
         ]
       }
+      sla_policies: {
+        Row: {
+          business_hours_only: boolean
+          created_at: string
+          first_response_minutes: number
+          id: string
+          name: string
+          next_response_minutes: number
+          owner_id: string
+          resolution_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          business_hours_only?: boolean
+          created_at?: string
+          first_response_minutes?: number
+          id?: string
+          name: string
+          next_response_minutes?: number
+          owner_id: string
+          resolution_minutes?: number
+          updated_at?: string
+        }
+        Update: {
+          business_hours_only?: boolean
+          created_at?: string
+          first_response_minutes?: number
+          id?: string
+          name?: string
+          next_response_minutes?: number
+          owner_id?: string
+          resolution_minutes?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       smtp_settings: {
         Row: {
           created_at: string
@@ -2554,6 +2824,47 @@ export type Database = {
             columns: ["sub_company_id"]
             isOneToOne: false
             referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supervisor_whispers: {
+        Row: {
+          content: string
+          created_at: string
+          customer_id: string
+          from_supervisor_id: string
+          id: string
+          owner_id: string
+          read_at: string | null
+          to_agent_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          customer_id: string
+          from_supervisor_id: string
+          id?: string
+          owner_id: string
+          read_at?: string | null
+          to_agent_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          customer_id?: string
+          from_supervisor_id?: string
+          id?: string
+          owner_id?: string
+          read_at?: string | null
+          to_agent_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supervisor_whispers_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
             referencedColumns: ["id"]
           },
         ]

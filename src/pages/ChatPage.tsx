@@ -39,6 +39,13 @@ import { MediaDropzone } from '@/components/chat/MediaDropzone';
 import { KeyboardShortcutsHelp } from '@/components/chat/KeyboardShortcutsHelp';
 import { useChatShortcuts } from '@/hooks/useChatShortcuts';
 import { renderWhatsAppText } from '@/lib/whatsappFormat';
+import { CollaborationBar } from '@/components/chat/CollaborationBar';
+import { WhisperFeed } from '@/components/chat/WhisperFeed';
+import { SupervisorBanner } from '@/components/chat/SupervisorBanner';
+import { WhisperComposer } from '@/components/chat/WhisperComposer';
+import { TransferConversationDialog } from '@/components/chat/TransferConversationDialog';
+import { useIsSupervisor } from '@/hooks/useIsSupervisor';
+
 
 
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -139,6 +146,43 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<any[]>([]);
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState('');
+  const [collabTransferOpen, setCollabTransferOpen] = useState(false);
+  const { isSupervisor, userId: currentUserId } = useIsSupervisor();
+
+  // Global listeners: whispers + mentions for the current user
+  useEffect(() => {
+    if (!currentUserId) return;
+    const whisperCh = supabase
+      .channel(`my-whispers-${currentUserId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'supervisor_whispers', filter: `to_agent_id=eq.${currentUserId}` },
+        (payload: any) => {
+          toast({
+            title: '🔒 Sussurro do supervisor',
+            description: payload.new?.content || 'Você recebeu uma mensagem privada do supervisor.',
+          });
+        },
+      )
+      .subscribe();
+    const mentionCh = supabase
+      .channel(`my-mentions-${currentUserId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'note_mentions', filter: `mentioned_user_id=eq.${currentUserId}` },
+        () => {
+          toast({ title: '💬 Você foi mencionado em uma nota interna' });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(whisperCh);
+      supabase.removeChannel(mentionCh);
+    };
+  }, [currentUserId]);
+
+
+
   const [messageText, setMessageText] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -1241,6 +1285,27 @@ export default function ChatPage() {
                 </div>
               </div>
 
+              <CollaborationBar
+                customerId={selectedConv.id}
+                onOpenTransfer={() => setCollabTransferOpen(true)}
+                isSupervisor={isSupervisor}
+                currentUserId={currentUserId}
+              />
+              <WhisperFeed customerId={selectedConv.id} currentUserId={currentUserId} />
+              {isSupervisor && selectedConv.assignedTo && selectedConv.assignedTo !== currentUserId && (
+                <WhisperComposer
+                  customerId={selectedConv.id}
+                  ownerId={null}
+                  toAgentId={selectedConv.assignedTo}
+                >
+                  <div>
+                    <SupervisorBanner agentName={String(selectedConv.assignedTo)} onWhisper={() => {}} />
+                  </div>
+                </WhisperComposer>
+              )}
+
+
+
               <div className="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col">
                 {activeChannel === 'telegram' && hasMoreHistory && (
                   <div className="flex justify-center py-2">
@@ -1324,6 +1389,18 @@ export default function ChatPage() {
           />
         )}
       </div>
+
+      {selectedConv && (
+        <TransferConversationDialog
+          open={collabTransferOpen}
+          onOpenChange={setCollabTransferOpen}
+          customerId={selectedConv.id}
+          ownerId={(selectedConv as any)?.owner_id || null}
+          onTransferred={() => {}}
+        />
+      )}
+
+
 
       <SignatureDocumentModal
         open={signatureModalOpen}
