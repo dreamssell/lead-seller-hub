@@ -66,24 +66,21 @@ class WavoipAdapter implements WhatsAppProviderAdapter {
 
 class EvolutionAdapter implements WhatsAppProviderAdapter {
   async getStatus(conn: WhatsAppConnection) {
-    // Evolution API: GET /instance/connectionState/{instance}
-    const rawUrl = (conn.metadata?.url || '').trim();
-    const url = rawUrl && !/^https?:\/\//i.test(rawUrl) ? `https://${rawUrl}` : rawUrl;
-    const token = conn.metadata?.token;
+    // Route through edge function to avoid browser CORS against the Evolution host.
     const instance = conn.metadata?.instance || conn.metadata?.phone_number_id;
-    if (!url || !token || !instance) {
-      return { connected: false, status: 'unconfigured', error: 'Configure URL, API Key e Instance Name.' };
+    const { data, error } = await supabase.functions.invoke('whatsapp-status', {
+      body: {
+        connection_id: conn.id,
+        provider: 'evolution',
+        url: conn.metadata?.url,
+        token: conn.metadata?.token,
+        instance,
+      },
+    });
+    if (error) {
+      return { connected: false, status: 'error', error: error.message };
     }
-    try {
-      const res = await fetch(`${url.replace(/\/$/, '')}/instance/connectionState/${encodeURIComponent(instance)}`, {
-        headers: { apikey: token, Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json().catch(() => ({}));
-      const state = data?.instance?.state || data?.state;
-      return { connected: state === 'open', status: state || 'unknown', raw: data };
-    } catch (err: any) {
-      return { connected: false, status: 'error', error: err?.message || 'Falha na requisição' };
-    }
+    return data;
   }
 
   async sendMessage(conn: WhatsAppConnection, customerId: string, content: string) {
