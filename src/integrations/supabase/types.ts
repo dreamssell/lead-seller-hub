@@ -1084,10 +1084,12 @@ export type Database = {
           form_mode: string
           headline: string | null
           id: string
+          last_published_at: string | null
           lead_count: number
           owner_id: string
           page_bg_color: string
           pipeline_id: string | null
+          published_version: number
           settings: Json
           slug: string
           status: string
@@ -1109,10 +1111,12 @@ export type Database = {
           form_mode?: string
           headline?: string | null
           id?: string
+          last_published_at?: string | null
           lead_count?: number
           owner_id: string
           page_bg_color?: string
           pipeline_id?: string | null
+          published_version?: number
           settings?: Json
           slug: string
           status?: string
@@ -1134,10 +1138,12 @@ export type Database = {
           form_mode?: string
           headline?: string | null
           id?: string
+          last_published_at?: string | null
           lead_count?: number
           owner_id?: string
           page_bg_color?: string
           pipeline_id?: string | null
+          published_version?: number
           settings?: Json
           slug?: string
           status?: string
