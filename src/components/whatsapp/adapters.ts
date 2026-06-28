@@ -67,14 +67,15 @@ class WavoipAdapter implements WhatsAppProviderAdapter {
 class EvolutionAdapter implements WhatsAppProviderAdapter {
   async getStatus(conn: WhatsAppConnection) {
     // Evolution API: GET /instance/connectionState/{instance}
-    const url = conn.metadata?.url;
+    const rawUrl = (conn.metadata?.url || '').trim();
+    const url = rawUrl && !/^https?:\/\//i.test(rawUrl) ? `https://${rawUrl}` : rawUrl;
     const token = conn.metadata?.token;
     const instance = conn.metadata?.instance || conn.metadata?.phone_number_id;
     if (!url || !token || !instance) {
       return { connected: false, status: 'unconfigured', error: 'Configure URL, API Key e Instance Name.' };
     }
     try {
-      const res = await fetch(`${url.replace(/\/$/, '')}/instance/connectionState/${instance}`, {
+      const res = await fetch(`${url.replace(/\/$/, '')}/instance/connectionState/${encodeURIComponent(instance)}`, {
         headers: { apikey: token, Authorization: `Bearer ${token}` },
       });
       const data = await res.json().catch(() => ({}));
