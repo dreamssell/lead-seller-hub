@@ -816,20 +816,24 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
             </div>
             {importing ? (
               <Button size="sm" variant="destructive" onClick={cancelImport} className="shrink-0">
-                <X className="w-4 h-4 mr-1" /> Cancelar
+                <X className="w-4 h-4 mr-1" /> Cancelar {importMode === 'dry' ? 'simulação' : 'importação'}
               </Button>
             ) : (
-              <Button size="sm" onClick={runImport} className="shrink-0">
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Importar agora
-              </Button>
+              <div className="flex gap-2 shrink-0">
+                <Button size="sm" variant="outline" onClick={() => runImport('dry')}>
+                  <ScanLine className="w-4 h-4 mr-2" /> Simular
+                </Button>
+                <Button size="sm" onClick={() => runImport('real')}>
+                  <RefreshCw className="w-4 h-4 mr-2" /> Importar agora
+                </Button>
+              </div>
             )}
           </div>
 
           {(importing || importProgress.customers > 0 || importProgress.messages > 0) && (
             <div className="space-y-2">
               <Progress value={pct} className="h-2" />
-              <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="grid grid-cols-4 gap-2 text-center">
                 <div className="rounded-md bg-background/60 border border-border/60 py-2">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Contatos</p>
                   <p className="text-sm font-bold tabular-nums">{importProgress.customers}</p>
@@ -837,6 +841,10 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
                 <div className="rounded-md bg-background/60 border border-border/60 py-2">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Mensagens</p>
                   <p className="text-sm font-bold tabular-nums">{importProgress.messages}</p>
+                </div>
+                <div className="rounded-md bg-background/60 border border-border/60 py-2">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Mídias</p>
+                  <p className="text-sm font-bold tabular-nums">{importProgress.media}</p>
                 </div>
                 <div className="rounded-md bg-background/60 border border-border/60 py-2">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Conversas</p>
@@ -848,12 +856,70 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
               </div>
               {importing && (
                 <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                  <Loader2 className="w-3 h-3 animate-spin" /> Processando lote… você pode cancelar a qualquer momento.
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  {importMode === 'dry' ? 'Simulando…' : 'Processando lote…'} você pode cancelar a qualquer momento.
                 </p>
               )}
             </div>
           )}
+
+          {importReport && (
+            <div className="rounded-md border border-border bg-background/60 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold flex items-center gap-2">
+                  Relatório de auditoria
+                  {importReport.dry_run && (
+                    <Badge variant="outline" className="text-[10px]">Simulação</Badge>
+                  )}
+                  {importReport.congruence === 'congruent' && (
+                    <Badge className="text-[10px] bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15">Congruente</Badge>
+                  )}
+                  {importReport.congruence === 'divergent' && (
+                    <Badge className="text-[10px] bg-amber-500/15 text-amber-600 hover:bg-amber-500/15">Divergente</Badge>
+                  )}
+                  {importReport.congruence === 'pending' && (
+                    <Badge variant="outline" className="text-[10px]">Pendente</Badge>
+                  )}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div className="rounded bg-muted/40 p-2">
+                  <p className="font-semibold text-muted-foreground">Evolution API</p>
+                  <p>Contatos: <span className="tabular-nums">{importReport.evolution_totals.contacts ?? '—'}</span></p>
+                  <p>Chats: <span className="tabular-nums">{importReport.evolution_totals.chats ?? '—'}</span></p>
+                </div>
+                <div className="rounded bg-muted/40 p-2">
+                  <p className="font-semibold text-muted-foreground">No banco</p>
+                  <p>Contatos: <span className="tabular-nums">{importReport.db_totals?.customers ?? (importReport.dry_run ? 'n/a (dry-run)' : '—')}</span></p>
+                  <p>Mensagens: <span className="tabular-nums">{importReport.db_totals?.messages ?? (importReport.dry_run ? 'n/a (dry-run)' : '—')}</span></p>
+                </div>
+              </div>
+              {Object.values(importReport.skipped).some((n) => n > 0) && (
+                <div className="text-[11px]">
+                  <p className="font-semibold text-muted-foreground mb-1">Itens ignorados</p>
+                  <div className="flex flex-wrap gap-1">
+                    {Object.entries(importReport.skipped).filter(([, v]) => v > 0).map(([k, v]) => (
+                      <Badge key={k} variant="secondary" className="text-[10px]">
+                        {k.replace('_', ' ')}: {v}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {Object.keys(importReport.endpoint_failures).length > 0 && (
+                <div className="text-[11px]">
+                  <p className="font-semibold text-muted-foreground mb-1">Falhas por endpoint</p>
+                  {Object.entries(importReport.endpoint_failures).map(([k, v]) => (
+                    <p key={k} className="text-amber-600">
+                      <span className="font-mono">{k}</span>: {v.count}× — {v.last_error ?? 'erro temporário'}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
+
 
         <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
           <div className="flex items-start justify-between gap-3">
