@@ -55,20 +55,24 @@ export default function ProtectedRoute({ children, pageKey, ownerOnly }: Protect
   }
 
   const key = pageKey || getPageKeyByPath(location.pathname);
-  if (!canAccessPage(key)) {
+  const blocked = (ownerOnly && !isOwner) || !canAccessPage(key);
+  if (blocked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-6">
         <BlockedTelemetry pageKey={String(key)} path={location.pathname} />
         <div className="max-w-md text-center space-y-3">
           <h1 className="text-xl font-semibold text-foreground">Acesso restrito</h1>
           <p className="text-sm text-muted-foreground">
-            Você não tem permissão para acessar esta página. Contate o administrador da sua conta.
+            {ownerOnly && !isOwner
+              ? 'Esta página é exclusiva do administrador da plataforma.'
+              : 'Você não tem permissão para acessar esta página. Contate o administrador da sua conta.'}
           </p>
           <a href="/profile" className="inline-block text-sm text-primary hover:underline">Ir para o meu perfil</a>
         </div>
       </div>
     );
   }
+
 
   return <>{children}</>;
 }
