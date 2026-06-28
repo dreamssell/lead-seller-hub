@@ -170,11 +170,15 @@ export default function ChatPage() {
               addDebugLog('error', 'Nenhuma conexão WhatsApp encontrada');
               setAuthValidation({ valid: false, reason: 'Nenhuma conexão configurada', loading: false });
               setWhatsappStatus({ connected: false, loading: false });
+              setConnectedProviders([]);
               return;
             }
             setActiveWhatsAppConn(firstConn as WhatsAppConnection);
+            setConnectedProviders([]);
           } else {
             setActiveWhatsAppConn(connections[0] as WhatsAppConnection);
+            const uniq = Array.from(new Set(connections.map((c: any) => String(c.provider || '').toUpperCase()).filter(Boolean)));
+            setConnectedProviders(uniq);
           }
 
           const conn = activeWhatsAppConn || (connections && connections[0]);
