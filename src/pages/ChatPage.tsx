@@ -104,6 +104,7 @@ export default function ChatPage() {
   const [showDebugPanel, setShowDebugPanel] = useState(false);
   const [authValidation, setAuthValidation] = useState<{ valid: boolean; reason?: string; loading: boolean }>({ valid: false, loading: true });
   const [activeWhatsAppConn, setActiveWhatsAppConn] = useState<WhatsAppConnection | null>(null);
+  const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
   const [whatsappStatus, setWhatsappStatus] = useState<{ connected: boolean; loading: boolean; phone?: string; error?: string }>({
     connected: false,
     loading: true,
