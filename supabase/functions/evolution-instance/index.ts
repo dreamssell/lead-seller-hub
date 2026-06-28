@@ -46,6 +46,7 @@ async function evoFetch(
   token: string,
   path: string,
   init: RequestInit = {},
+  timeoutMs = 15000,
 ) {
   const url = `${baseUrl.replace(/\/$/, "")}${path}`;
   const headers: Record<string, string> = {
@@ -54,15 +55,24 @@ async function evoFetch(
     Authorization: `Bearer ${token}`,
     ...(init.headers as Record<string, string> | undefined),
   };
-  const res = await fetch(url, { ...init, headers });
-  const text = await res.text();
-  let data: any = null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = { raw: text };
+    const res = await fetch(url, { ...init, headers, signal: ctrl.signal });
+    const text = await res.text();
+    let data: any = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = { raw: text };
+    }
+    return { ok: res.ok, status: res.status, data };
+  } catch (e) {
+    const aborted = (e as any)?.name === "AbortError";
+    return { ok: false, status: aborted ? 408 : 0, data: { error: (e as Error).message } };
+  } finally {
+    clearTimeout(timer);
   }
-  return { ok: res.ok, status: res.status, data };
 }
 
 /**
