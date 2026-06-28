@@ -6,6 +6,7 @@ export interface WhatsAppProviderAdapter {
   sendMessage(conn: WhatsAppConnection, customerId: string, content: string): Promise<any>;
   sendMedia?(conn: WhatsAppConnection, customerId: string, file: File, caption?: string): Promise<any>;
   sendAudio?(conn: WhatsAppConnection, customerId: string, blob: Blob): Promise<any>;
+  sendRich?(conn: WhatsAppConnection, customerId: string, payload: any): Promise<any>;
   syncContacts(conn: WhatsAppConnection): Promise<any>;
 }
 
@@ -145,8 +146,91 @@ class EvolutionAdapter implements WhatsAppProviderAdapter {
     return sendEvolutionMedia(conn, customerId, f, '', 'audio');
   }
 
+  async sendRich(conn: WhatsAppConnection, customerId: string, payload: any) {
+    return sendEvolutionRich(conn, customerId, payload);
+  }
+
   async syncContacts(_conn: WhatsAppConnection) {
     return { success: true };
+  }
+}
+
+async function evolutionContext(conn: WhatsAppConnection, customerId: string) {
+  const rawUrl = (conn.metadata?.url || '').trim();
+  const url = rawUrl && !/^https?:\/\//i.test(rawUrl) ? `https://${rawUrl}` : rawUrl;
+  const token = conn.metadata?.token;
+  const instance = conn.metadata?.instance || conn.metadata?.phone_number_id;
+  if (!url || !token || !instance) throw new Error('Configurações da Evolution API incompletas.');
+  const { data: customer } = await supabase.from('customers').select('phone').eq('id', customerId).single();
+  if (!customer?.phone) throw new Error('Cliente não possui telefone cadastrado.');
+  return { url: url.replace(/\/$/, ''), token, instance, number: customer.phone };
+}
+
+async function evolutionPost(ctx: { url: string; token: string; instance: string }, endpoint: string, body: any) {
+  const res = await fetch(`${ctx.url}/message/${endpoint}/${encodeURIComponent(ctx.instance)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: ctx.token, Authorization: `Bearer ${ctx.token}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.message || `Erro Evolution: ${res.status}`);
+  }
+  return await res.json();
+}
+
+async function sendEvolutionRich(conn: WhatsAppConnection, customerId: string, payload: any) {
+  const ctx = await evolutionContext(conn, customerId);
+  switch (payload.type) {
+    case 'location':
+      return evolutionPost(ctx, 'sendLocation', {
+        number: ctx.number,
+        locationMessage: {
+          latitude: payload.latitude, longitude: payload.longitude,
+          name: payload.name || '', address: payload.address || '',
+        },
+      });
+    case 'contact':
+      return evolutionPost(ctx, 'sendContact', {
+        number: ctx.number,
+        contactMessage: [{ fullName: payload.fullName, wuid: payload.phone, phoneNumber: payload.phone }],
+      });
+    case 'poll':
+      return evolutionPost(ctx, 'sendPoll', {
+        number: ctx.number,
+        pollMessage: { name: payload.name, selectableCount: payload.selectableCount || 1, values: payload.values },
+      });
+    case 'list':
+      return evolutionPost(ctx, 'sendList', {
+        number: ctx.number,
+        listMessage: {
+          title: payload.title || '', description: payload.description, buttonText: payload.buttonText || 'Ver',
+          footerText: '',
+          sections: [{ title: payload.title || 'Opções', rows: payload.rows }],
+        },
+      });
+    case 'buttons':
+      return evolutionPost(ctx, 'sendButtons', {
+        number: ctx.number,
+        buttonsMessage: {
+          title: payload.title || '', description: payload.description, footerText: payload.footer || '',
+          buttons: payload.buttons.map((b: any) => ({ buttonId: b.id, buttonText: { displayText: b.text }, type: 1 })),
+        },
+      });
+    case 'product': {
+      const price = payload.price != null ? ` — R$ ${Number(payload.price).toFixed(2)}` : '';
+      return evolutionPost(ctx, 'sendText', {
+        number: ctx.number,
+        textMessage: { text: `🛍️ *${payload.name}*${price}` },
+      });
+    }
+    case 'signature':
+      return evolutionPost(ctx, 'sendText', {
+        number: ctx.number,
+        textMessage: { text: `📄 *${payload.title}*\n${payload.url}` },
+      });
+    default:
+      throw new Error(`Tipo de mensagem rica não suportado: ${payload.type}`);
   }
 }
 
