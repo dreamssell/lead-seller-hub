@@ -12,10 +12,12 @@ import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 
 import { runVideoSmokeTest } from '@/utils/videoSmokeTest';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
 export default function VideoCallsPage() {
-
+  const { isOwner } = usePlatformOwner();
   const { startCall, status } = useVideoCall();
+
   const [activeRoomType, setActiveRoomType] = useState<'individual' | 'group'>('individual');
   const [isLoading, setIsLoading] = useState(false);
 
