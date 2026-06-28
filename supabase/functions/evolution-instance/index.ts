@@ -87,9 +87,30 @@ Deno.serve(async (req) => {
 
   if (connErr || !conn) return json({ error: "connection_not_found" }, 404);
 
+  // Platform admin always allowed.
+  const { data: isPlatformAdmin } = await admin.rpc("has_role", {
+    _user_id: userId,
+    _role: "admin",
+  });
+
   // Authorization: a sub-company user may ONLY touch connections that belong to
   // their own sub_company_id. The master owner sees everything they own.
-  let allowed = conn.owner_id === userId;
+  let allowed = isPlatformAdmin === true || conn.owner_id === userId;
+
+  // Orphan connection (owner_id null) — claim it for the caller so it stops being
+  // unmanageable. This typically happens when the row was created by an older flow
+  // that never persisted the owner. Only the platform admin or, if absent, the
+  // caller themselves can adopt it.
+  if (!allowed && !conn.owner_id) {
+    allowed = true;
+    await admin
+      .from("whatsapp_connections")
+      .update({ owner_id: userId })
+      .eq("id", connection_id)
+      .is("owner_id", null);
+    conn.owner_id = userId;
+  }
+
   if (!allowed && conn.owner_id) {
     const { data: accessRows } = await admin
       .from("user_account_access")
