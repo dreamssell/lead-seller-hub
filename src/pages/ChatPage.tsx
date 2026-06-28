@@ -1356,6 +1356,18 @@ export default function ChatPage() {
         )}
       </div>
 
+      {selectedConv && (
+        <TransferConversationDialog
+          open={collabTransferOpen}
+          onOpenChange={setCollabTransferOpen}
+          customerId={selectedConv.id}
+          ownerId={(selectedConv as any)?.owner_id || null}
+          onTransferred={() => {}}
+        />
+      )}
+
+
+
       <SignatureDocumentModal
         open={signatureModalOpen}
         onOpenChange={setSignatureModalOpen}
