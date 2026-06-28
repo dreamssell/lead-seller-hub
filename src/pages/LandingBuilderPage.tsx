@@ -274,7 +274,13 @@ export default function LandingBuilderPage() {
                   <p className="text-xs text-muted-foreground">Compartilhe o link ou o QR Code com parceiros e clientes. Crie quantos quiser nessa mesma página.</p>
                 </CardContent></Card>
 
-                <QrCodeStudio value={publicUrl} filename={page.slug} />
+                <QrCodeStudio
+                  value={publicUrl}
+                  filename={page.slug}
+                  version={(page as any).published_version || 0}
+                  lastPublishedAt={(page as any).last_published_at || null}
+                />
+
               </TabsContent>
             </Tabs>
           </div>
