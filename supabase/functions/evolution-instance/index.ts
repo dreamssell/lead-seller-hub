@@ -21,7 +21,6 @@ type Action = "create" | "qr" | "state" | "logout" | "delete" | "test" | "set_we
 interface Body {
   action: Action;
   connection_id: string;
-  // Optional overrides used by the wizard before metadata is persisted:
   url?: string;
   token?: string;
   instance?: string;
@@ -30,10 +29,16 @@ interface Body {
   messages_per_chat?: number;
   offset?: number;
   batch_size?: number;
+  include_groups?: boolean;
+  dry_run?: boolean;
+  download_media?: boolean;
+  run_id?: string;            // continuation of an existing audit run
   // set_auto_import options:
   enabled?: boolean;
   interval_hours?: number;
 }
+
+const MEDIA_BUCKET = "whatsapp-media";
 
 
 async function evoFetch(
