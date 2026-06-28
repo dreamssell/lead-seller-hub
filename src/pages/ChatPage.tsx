@@ -27,7 +27,7 @@ import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
-import { WhatsAppConnection, PROVIDER_CONFIGS } from '@/components/whatsapp/types';
+import { WhatsAppConnection } from '@/components/whatsapp/types';
 import { useVoip } from '@/contexts/VoipContext';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
 import { ChatRightPanel } from '@/components/chat/ChatRightPanel';
@@ -113,6 +113,18 @@ const getWhatsAppDbSummary = (connections: WhatsAppConnection[]) => {
     primary: connected[0] || connections[0] || null,
     connectedCount: connected.length,
   };
+};
+
+const getWhatsAppStatusLabel = (status: WhatsAppDbStatus) => {
+  if (status === 'active') return 'Ativo';
+  if (status === 'offline') return 'Offline';
+  return 'Desconectado';
+};
+
+const getWhatsAppStatusClasses = (status: WhatsAppDbStatus) => {
+  if (status === 'active') return 'bg-success/10 border-success/20 text-success';
+  if (status === 'offline') return 'bg-warning/10 border-warning/20 text-warning';
+  return 'bg-destructive/10 border-destructive/20 text-destructive';
 };
 
 export default function ChatPage() {
@@ -618,6 +630,12 @@ export default function ChatPage() {
             const Icon = ch.icon;
             const isWhatsApp = ch.key === 'whatsapp';
             const isPlaceholder = ['youtube', 'tiktok'].includes(ch.key);
+            const whatsappProvidersLabel = connectedProviders.length > 0
+              ? connectedProviders.join(' + ')
+              : activeWhatsAppConn
+                ? providerLabel(activeWhatsAppConn.provider)
+                : 'WHATSAPP';
+            const WhatsAppStatusIcon = whatsappStatus.dbStatus === 'active' ? CheckCircle2 : AlertCircle;
             
             return (
               <motion.button
@@ -633,18 +651,18 @@ export default function ChatPage() {
                   {isWhatsApp ? (
                     whatsappStatus.loading ? (
                       <RefreshCw className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
-                    ) : whatsappStatus.connected ? (
-                      <div className="flex items-center gap-1.5 bg-success/10 px-2 py-0.5 rounded-full border border-success/20 max-w-[180px]">
-                        <CheckCircle2 className="w-3 h-3 text-success shrink-0" />
-                        <span className="text-[10px] font-bold text-success uppercase tracking-wider truncate">
-                          {(connectedProviders.length > 0 ? connectedProviders.join(' + ') : (activeWhatsAppConn?.provider?.toUpperCase() || 'WhatsApp'))} Ativo
+                    ) : whatsappStatus.dbStatus === 'disconnected' ? (
+                      <Link to="/whatsapp" onClick={(e) => e.stopPropagation()} className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border hover:bg-destructive/20 transition-colors ${getWhatsAppStatusClasses(whatsappStatus.dbStatus)}`}>
+                        <WhatsAppStatusIcon className="w-3 h-3 shrink-0" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider truncate">Desconectado</span>
+                      </Link>
+                    ) : (
+                      <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border max-w-[220px] ${getWhatsAppStatusClasses(whatsappStatus.dbStatus)}`}>
+                        <WhatsAppStatusIcon className="w-3 h-3 shrink-0" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider truncate">
+                          {whatsappProvidersLabel} {getWhatsAppStatusLabel(whatsappStatus.dbStatus)}
                         </span>
                       </div>
-                    ) : (
-                      <Link to="/whatsapp" onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 bg-destructive/10 px-2 py-0.5 rounded-full border border-destructive/20 hover:bg-destructive/20 transition-colors">
-                        <AlertCircle className="w-3 h-3 text-destructive" />
-                        <span className="text-[10px] font-bold text-destructive uppercase tracking-wider">Desconectado</span>
-                      </Link>
                     )
                   ) : isPlaceholder ? (
                     <Badge variant="outline" className="text-[9px] h-4 px-1.5 font-bold uppercase tracking-tighter opacity-70">
@@ -713,13 +731,17 @@ export default function ChatPage() {
         {(channelInfo.key === 'whatsapp' || channelInfo.key === 'telegram') && (
           <div className="flex items-center gap-2">
             {channelInfo.key === 'whatsapp' ? (
-              whatsappStatus.connected ? (
+              whatsappStatus.dbStatus === 'active' ? (
                 <Badge variant="outline" className="border-success/30 text-success text-[10px] h-5 gap-1">
-                  <CheckCircle2 className="w-2.5 h-2.5" /> LIVE
+                  <CheckCircle2 className="w-2.5 h-2.5" /> ATIVO
+                </Badge>
+              ) : whatsappStatus.dbStatus === 'offline' ? (
+                <Badge variant="outline" className="border-warning/30 text-warning text-[10px] h-5 gap-1">
+                  <AlertCircle className="w-2.5 h-2.5" /> OFFLINE
                 </Badge>
               ) : (
                 <Badge variant="outline" className="border-destructive/30 text-destructive text-[10px] h-5 gap-1">
-                  <AlertCircle className="w-2.5 h-2.5" /> OFFLINE
+                  <AlertCircle className="w-2.5 h-2.5" /> DESCONECTADO
                 </Badge>
               )
             ) : (
@@ -876,7 +898,7 @@ export default function ChatPage() {
               <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
                 <AlertCircle className="w-8 h-8 text-destructive" />
               </div>
-              <h3 className="text-xl font-bold mb-2">WhatsApp Desconectado</h3>
+              <h3 className="text-xl font-bold mb-2">WhatsApp {getWhatsAppStatusLabel(whatsappStatus.dbStatus)}</h3>
               <p className="text-muted-foreground mb-6">
                 {authValidation.reason || `Sua conexão ${activeWhatsAppConn?.provider?.toUpperCase() || 'WhatsApp'} precisa estar ativa para visualizar e responder mensagens.`}
               </p>
