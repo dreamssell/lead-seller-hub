@@ -313,7 +313,7 @@ export default function ChatPage() {
       } else if (activeChannel) {
         checkProviderStatus(activeChannel);
       }
-    }, 30000); // 30s interval
+    }, 60000); // 60s — equilíbrio entre frescor e consumo de API
 
 
     // Realtime subscription
