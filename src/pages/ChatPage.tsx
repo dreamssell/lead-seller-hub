@@ -149,6 +149,40 @@ export default function ChatPage() {
   const [collabTransferOpen, setCollabTransferOpen] = useState(false);
   const { isSupervisor, userId: currentUserId } = useIsSupervisor();
 
+  // Global listeners: whispers + mentions for the current user
+  useEffect(() => {
+    if (!currentUserId) return;
+    const whisperCh = supabase
+      .channel(`my-whispers-${currentUserId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'supervisor_whispers', filter: `to_agent_id=eq.${currentUserId}` },
+        (payload: any) => {
+          toast({
+            title: '🔒 Sussurro do supervisor',
+            description: payload.new?.content || 'Você recebeu uma mensagem privada do supervisor.',
+          });
+        },
+      )
+      .subscribe();
+    const mentionCh = supabase
+      .channel(`my-mentions-${currentUserId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'note_mentions', filter: `mentioned_user_id=eq.${currentUserId}` },
+        () => {
+          toast({ title: '💬 Você foi mencionado em uma nota interna' });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(whisperCh);
+      supabase.removeChannel(mentionCh);
+    };
+  }, [currentUserId]);
+
+
+
   const [messageText, setMessageText] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
