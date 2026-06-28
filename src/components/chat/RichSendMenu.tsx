@@ -274,10 +274,13 @@ function SignatureDialog({ open, onClose, onSend, customerId }: any) {
   }, [open, customerId]);
   const submit = async () => {
     if (!sel) return toast.error('Selecione um documento');
-    const url = sel.signed_url || sel.document_url;
-    if (!url) return toast.error('Documento sem URL disponível');
+    const path = sel.signed_file_path || sel.original_file_path;
+    if (!path) return toast.error('Documento sem arquivo disponível');
+    const { data: pub } = supabase.storage.from('signatures').getPublicUrl(path);
+    const url = pub?.publicUrl;
+    if (!url) return toast.error('Não foi possível gerar a URL do documento');
     setBusy(true);
-    try { await onSend({ type: 'signature', documentId: sel.id, url, title: sel.title || 'Documento de assinatura' }); onClose(); }
+    try { await onSend({ type: 'signature', documentId: sel.id, url, title: sel.description || 'Documento de assinatura' }); onClose(); }
     finally { setBusy(false); }
   };
   return (
@@ -289,7 +292,7 @@ function SignatureDialog({ open, onClose, onSend, customerId }: any) {
               <button key={d.id} onClick={() => setSel(d)}
                 className={`w-full flex items-center gap-2 p-2 rounded border text-left ${sel?.id === d.id ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}>
                 <FileSignature className="w-4 h-4 text-emerald-500" />
-                <div className="flex-1 min-w-0"><p className="text-xs font-medium truncate">{d.title || 'Sem título'}</p><p className="text-[10px] text-muted-foreground">{d.status}</p></div>
+                <div className="flex-1 min-w-0"><p className="text-xs font-medium truncate">{d.description || 'Sem título'}</p><p className="text-[10px] text-muted-foreground">{d.status}</p></div>
               </button>
             ))}
           </div>}
