@@ -1,0 +1,1 @@
+UPDATE public.whatsapp_connections SET owner_id = 'c391f9a5-5ba1-44ed-8214-ddc60bba27f7' WHERE id = '81784d24-6afc-4e2d-9e65-ac34fa5d757f' AND owner_id IS NULL;
