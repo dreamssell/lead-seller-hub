@@ -45,7 +45,10 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   conn: WhatsAppConnection;
   onConnected: () => void;
+  /** When true, automatically initiates instance creation + QR generation on open. */
+  autoStart?: boolean;
 }
+
 
 type Step = 'credentials' | 'qr' | 'connected' | 'failed';
 type FailureReason = 'timeout' | 'auth' | 'forbidden' | 'unknown';
