@@ -17,6 +17,8 @@ import { SignatureRoleAuditLog } from '@/components/signature/SignatureRoleAudit
 import { ExportColumnPicker } from '@/components/signature/ExportColumnPicker';
 import { exportSignaturesCSV, exportSignaturesPDF, DEFAULT_EXPORT_COLUMNS, type ExportColumnKey } from '@/lib/signatureExport';
 import { SignatureErrorLogs } from '@/components/signature/SignatureErrorLogs';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
+
 
 type Doc = PipelineDoc & {
   owner_id: string;
