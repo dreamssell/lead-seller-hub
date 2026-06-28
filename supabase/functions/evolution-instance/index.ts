@@ -958,6 +958,16 @@ Deno.serve(async (req) => {
         customers_imported: dryRun ? plannedCustomers : importedCustomers,
         messages_imported: dryRun ? plannedMessages : importedMessages,
       });
+      } catch (e) {
+        const msg = (e as Error)?.message || String(e);
+        console.error("[evolution-instance] import_chats failed", msg);
+        await logEvent("evolution.import", "error", msg);
+        return json({
+          ok: false,
+          error: msg,
+          hint: "Falha durante a importação. Verifique URL/API Key/instância da Evolution e tente novamente.",
+        }, 200);
+      }
     }
 
 
