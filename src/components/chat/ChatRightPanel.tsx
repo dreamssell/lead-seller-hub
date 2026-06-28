@@ -37,7 +37,9 @@ interface Props {
 }
 
 export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }: Props) {
-  const [tab, setTab] = useState<'notes' | 'replies'>('notes');
+  const [tab, setTab] = useState<'notes' | 'replies' | 'history'>('notes');
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+
   const [notes, setNotes] = useState<Note[]>([]);
   const [replies, setReplies] = useState<QuickReply[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
