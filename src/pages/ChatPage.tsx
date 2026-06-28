@@ -359,6 +359,10 @@ export default function ChatPage() {
         }
         if (activeChannel) loadConversations(activeChannel);
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_connections' }, () => {
+        addDebugLog('info', 'Conexão WhatsApp atualizada no banco; relendo status persistido.');
+        checkProviderStatus('whatsapp');
+      })
       .subscribe();
 
     // Realtime simulation for delivery receipts
