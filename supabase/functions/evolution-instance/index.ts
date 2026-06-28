@@ -485,41 +485,161 @@ Deno.serve(async (req) => {
       // 1) Ensure webhook is set so new messages keep flowing.
       try { await registerWebhook(baseUrl, token, instance, connection_id); } catch (_) { /* best effort */ }
 
-      const maxChats = Math.max(1, Math.min(Number(body.max_chats) || 50, 500));
-      const perChat = Math.max(1, Math.min(Number(body.messages_per_chat) || 20, 100));
+      const maxChats = Math.max(1, Math.min(Number(body.max_chats) || 2000, 10000));
+      const perChat = Math.max(1, Math.min(Number(body.messages_per_chat) || 200, 1000));
       const offset = Math.max(0, Number(body.offset) || 0);
-      const batchSize = Math.max(1, Math.min(Number(body.batch_size) || 5, 20));
+      const batchSize = Math.max(1, Math.min(Number(body.batch_size) || 15, 50));
+      const includeGroups = body.include_groups !== false; // default true now
+      const instEnc = encodeURIComponent(instance);
 
-      // 2) Fetch chats. Evolution v2: POST /chat/findChats/{instance} with {where:{}}
-      const chatsRes = await evoFetch(
-        baseUrl,
-        token,
-        `/chat/findChats/${encodeURIComponent(instance)}`,
-        { method: "POST", body: JSON.stringify({ where: {} }) },
-      );
-      const chats: any[] = Array.isArray(chatsRes.data)
-        ? chatsRes.data
-        : Array.isArray(chatsRes.data?.chats)
-          ? chatsRes.data.chats
-          : [];
+      // Helper to try multiple endpoint shapes — Evolution v1/v2 vary.
+      const tryEndpoints = async (
+        paths: { path: string; init?: RequestInit }[],
+      ) => {
+        for (const p of paths) {
+          const r = await evoFetch(baseUrl, token, p.path, p.init);
+          if (r.ok) return r;
+        }
+        return null;
+      };
 
-      if (!chatsRes.ok && !chats.length) {
-        await logEvent("evolution.import", "error", `findChats HTTP ${chatsRes.status}`);
-        return json({ ok: false, error: `Evolution respondeu ${chatsRes.status} ao listar conversas.` }, 502);
+      const pickArray = (d: any): any[] => {
+        if (Array.isArray(d)) return d;
+        if (Array.isArray(d?.chats)) return d.chats;
+        if (Array.isArray(d?.contacts)) return d.contacts;
+        if (Array.isArray(d?.messages)) return d.messages;
+        if (Array.isArray(d?.messages?.records)) return d.messages.records;
+        if (Array.isArray(d?.data)) return d.data;
+        if (Array.isArray(d?.records)) return d.records;
+        return [];
+      };
+
+      const parsePhone = (jid: string): string | null => {
+        if (!jid) return null;
+        const base = jid.split("@")[0].split(":")[0];
+        const digits = base.replace(/\D/g, "");
+        if (digits.length >= 6 && digits.length <= 20) return digits;
+        return null;
+      };
+
+      const synthContent = (m: any): string => {
+        const msg = m.message || {};
+        if (msg.conversation) return msg.conversation;
+        if (msg.extendedTextMessage?.text) return msg.extendedTextMessage.text;
+        if (msg.imageMessage) return msg.imageMessage.caption ? `[Imagem] ${msg.imageMessage.caption}` : "[Imagem]";
+        if (msg.videoMessage) return msg.videoMessage.caption ? `[Vídeo] ${msg.videoMessage.caption}` : "[Vídeo]";
+        if (msg.audioMessage) return msg.audioMessage.ptt ? "[Áudio - mensagem de voz]" : "[Áudio]";
+        if (msg.documentMessage) return `[Documento] ${msg.documentMessage.fileName || ""}`.trim();
+        if (msg.stickerMessage) return "[Sticker]";
+        if (msg.locationMessage) return "[Localização]";
+        if (msg.contactMessage || msg.contactsArrayMessage) return "[Contato]";
+        if (msg.reactionMessage?.text) return `[Reação] ${msg.reactionMessage.text}`;
+        if (msg.pollCreationMessage) return `[Enquete] ${msg.pollCreationMessage.name || ""}`.trim();
+        return m.text || m.body || m.message?.text || "[Mensagem]";
+      };
+
+      // 2) On first page: seed contacts via /chat/findContacts so we don't depend on
+      //    chats having a "name". This catches the full contact list (34 in the user's case).
+      let seededContacts = 0;
+      if (offset === 0) {
+        const contactsRes = await tryEndpoints([
+          { path: `/chat/findContacts/${instEnc}`, init: { method: "POST", body: JSON.stringify({ where: {} }) } },
+          { path: `/chat/fetchContacts/${instEnc}` },
+          { path: `/contacts/${instEnc}` },
+        ]);
+        const contacts = pickArray(contactsRes?.data);
+        if (contacts.length) {
+          // Batch existing lookup
+          const phones: string[] = [];
+          const byPhone = new Map<string, { name: string }>();
+          for (const c of contacts) {
+            const jid: string = c.id || c.remoteJid || c.remote_jid || c.jid || "";
+            if (!includeGroups && jid.endsWith("@g.us")) continue;
+            const phone = parsePhone(jid);
+            if (!phone) continue;
+            phones.push(phone);
+            byPhone.set(phone, {
+              name: c.pushName || c.name || c.notifyName || c.verifiedName || `WhatsApp ${phone}`,
+            });
+          }
+          if (phones.length) {
+            const { data: existing } = await admin
+              .from("customers")
+              .select("phone")
+              .eq("sub_company_id", conn.sub_company_id as any)
+              .in("phone", phones);
+            const existingSet = new Set((existing ?? []).map((r: any) => r.phone));
+            const toInsert = [...byPhone.entries()]
+              .filter(([p]) => !existingSet.has(p))
+              .map(([phone, v]) => ({
+                name: v.name,
+                phone,
+                channel: "whatsapp",
+                owner_id: conn.owner_id,
+                sub_company_id: conn.sub_company_id,
+                origin_connection_id: connection_id,
+                created_by: conn.owner_id || userId,
+              }));
+            if (toInsert.length) {
+              // chunk to avoid payload limits
+              const chunk = 200;
+              for (let i = 0; i < toInsert.length; i += chunk) {
+                const part = toInsert.slice(i, i + chunk);
+                const ins = await admin.from("customers").insert(part);
+                if (!ins.error) seededContacts += part.length;
+              }
+            }
+          }
+        }
       }
+
+      // 3) Fetch chat list — try v2 POST then v1 GET fallbacks.
+      const chatsRes = await tryEndpoints([
+        { path: `/chat/findChats/${instEnc}`, init: { method: "POST", body: JSON.stringify({ where: {} }) } },
+        { path: `/chat/findChats/${instEnc}`, init: { method: "POST", body: JSON.stringify({}) } },
+        { path: `/chat/fetchChats/${instEnc}` },
+        { path: `/chats/${instEnc}` },
+      ]);
+      const chats: any[] = pickArray(chatsRes?.data);
+
+      if (!chatsRes && !chats.length) {
+        await logEvent("evolution.import", "error", `findChats falhou em todos os endpoints`);
+        return json({ ok: false, error: `Evolution não respondeu ao listar conversas. Verifique a versão da API.` }, 502);
+      }
+
+      // Sort by most recent activity if possible (Evolution sometimes returns unsorted)
+      chats.sort((a, b) => {
+        const ta = Number(a.updatedAt || a.t || a.lastMessageTimestamp || 0);
+        const tb = Number(b.updatedAt || b.t || b.lastMessageTimestamp || 0);
+        return tb - ta;
+      });
 
       const totalAvailable = Math.min(chats.length, maxChats);
       const slice = chats.slice(offset, offset + batchSize);
 
-      let importedCustomers = 0;
+      let importedCustomers = seededContacts;
       let importedMessages = 0;
+      let processedChats = 0;
+      let skippedGroups = 0;
 
       for (const chat of slice) {
+        processedChats++;
         const jid: string = chat.id || chat.remoteJid || chat.remote_jid || "";
-        if (!jid || jid.endsWith("@g.us")) continue; // skip groups
-        const phone = jid.replace("@s.whatsapp.net", "").replace("@c.us", "");
-        if (!/^\d{6,20}$/.test(phone)) continue;
-        const displayName: string = chat.name || chat.pushName || chat.notifyName || `WhatsApp ${phone}`;
+        const isGroup = jid.endsWith("@g.us");
+        if (isGroup && !includeGroups) { skippedGroups++; continue; }
+
+        // For groups we still need a synthetic "phone" — use jid hash digits
+        let phone: string | null;
+        if (isGroup) {
+          phone = jid.replace(/\D/g, "").slice(0, 20) || null;
+        } else {
+          phone = parsePhone(jid);
+        }
+        if (!phone) continue;
+
+        const displayName: string =
+          chat.name || chat.subject || chat.pushName || chat.notifyName ||
+          (isGroup ? `Grupo ${phone.slice(-6)}` : `WhatsApp ${phone}`);
 
         // Upsert customer scoped by sub_company
         let customerId: string | null = null;
@@ -528,7 +648,6 @@ Deno.serve(async (req) => {
           .select("id")
           .eq("phone", phone)
           .eq("sub_company_id", conn.sub_company_id as any)
-
           .maybeSingle();
         if (existing.data?.id) {
           customerId = existing.data.id;
@@ -543,7 +662,8 @@ Deno.serve(async (req) => {
               sub_company_id: conn.sub_company_id,
               origin_connection_id: connection_id,
               created_by: conn.owner_id || userId,
-            })
+              metadata: isGroup ? { is_group: true, jid } : undefined,
+            } as any)
             .select("id")
             .single();
           if (ins.error || !ins.data) continue;
@@ -551,53 +671,51 @@ Deno.serve(async (req) => {
           importedCustomers++;
         }
 
-        // 3) Fetch messages for this chat
-        const msgsRes = await evoFetch(
-          baseUrl,
-          token,
-          `/chat/findMessages/${encodeURIComponent(instance)}`,
+        // Fetch messages — try v2 + v1 shapes
+        const msgsRes = await tryEndpoints([
           {
-            method: "POST",
-            body: JSON.stringify({
-              where: { key: { remoteJid: jid } },
-              limit: perChat,
-            }),
+            path: `/chat/findMessages/${instEnc}`,
+            init: {
+              method: "POST",
+              body: JSON.stringify({ where: { key: { remoteJid: jid } }, limit: perChat }),
+            },
           },
-        );
-        const msgs: any[] = Array.isArray(msgsRes.data)
-          ? msgsRes.data
-          : Array.isArray(msgsRes.data?.messages?.records)
-            ? msgsRes.data.messages.records
-            : Array.isArray(msgsRes.data?.messages)
-              ? msgsRes.data.messages
-              : [];
+          {
+            path: `/chat/findMessages/${instEnc}`,
+            init: {
+              method: "POST",
+              body: JSON.stringify({ where: { remoteJid: jid }, limit: perChat }),
+            },
+          },
+          {
+            path: `/chat/fetchMessages/${instEnc}?remoteJid=${encodeURIComponent(jid)}&limit=${perChat}`,
+          },
+        ]);
+        const msgs: any[] = pickArray(msgsRes?.data);
+        if (!msgs.length) continue;
 
+        // Batch-check existing messages
+        const msgIds: string[] = [];
+        for (const m of msgs) {
+          const id = m.key?.id || m.id || m.messageId;
+          if (id) msgIds.push(id);
+        }
+        const { data: dupRows } = await admin
+          .from("chat_messages")
+          .select("uaz_msg_id")
+          .in("uaz_msg_id", msgIds);
+        const dupSet = new Set((dupRows ?? []).map((r: any) => r.uaz_msg_id));
+
+        const toInsert: any[] = [];
         for (const m of msgs) {
           const msgId: string = m.key?.id || m.id || m.messageId;
-          if (!msgId || !customerId) continue;
+          if (!msgId || dupSet.has(msgId)) continue;
           const fromMe: boolean = !!m.key?.fromMe;
-          const text: string =
-            m.message?.conversation ||
-            m.message?.extendedTextMessage?.text ||
-            m.message?.imageMessage?.caption ||
-            m.message?.videoMessage?.caption ||
-            m.text ||
-            m.body ||
-            "";
-          if (!text) continue;
-
-          // Idempotency by uaz_msg_id (we reuse the same column for evolution).
-          const dup = await admin
-            .from("chat_messages")
-            .select("id")
-            .eq("uaz_msg_id", msgId)
-            .maybeSingle();
-          if (dup.data) continue;
-
-          const ins = await admin.from("chat_messages").insert({
+          const content = synthContent(m);
+          toInsert.push({
             customer_id: customerId,
             sender_type: fromMe ? "agent" : "client",
-            content: text,
+            content,
             uaz_msg_id: msgId,
             channel: "whatsapp",
             sub_company_id: conn.sub_company_id,
@@ -607,7 +725,15 @@ Deno.serve(async (req) => {
               ? new Date(Number(m.messageTimestamp) * 1000).toISOString()
               : undefined,
           });
-          if (!ins.error) importedMessages++;
+        }
+        if (toInsert.length) {
+          // chunk inserts
+          const chunk = 200;
+          for (let i = 0; i < toInsert.length; i += chunk) {
+            const part = toInsert.slice(i, i + chunk);
+            const ins = await admin.from("chat_messages").insert(part);
+            if (!ins.error) importedMessages += part.length;
+          }
         }
       }
 
@@ -624,8 +750,8 @@ Deno.serve(async (req) => {
         await logEvent(
           "evolution.import",
           "success",
-          `Importação concluída: ${importedCustomers} contatos, ${importedMessages} mensagens (batch final)`,
-          { total_chats: chats.length, max_chats: maxChats, per_chat: perChat },
+          `Importação concluída: ${importedCustomers} contatos, ${importedMessages} mensagens (total chats: ${chats.length})`,
+          { total_chats: chats.length, max_chats: maxChats, per_chat: perChat, skipped_groups: skippedGroups },
         );
       }
 
@@ -636,9 +762,10 @@ Deno.serve(async (req) => {
         offset,
         next_offset: nextOffset,
         done,
+        processed_chats: processedChats,
+        skipped_groups: skippedGroups,
         batch_customers: importedCustomers,
         batch_messages: importedMessages,
-        // legacy aliases:
         customers_imported: importedCustomers,
         messages_imported: importedMessages,
       });
