@@ -945,7 +945,10 @@ Deno.serve(async (req) => {
           const prev = accFailures[k] ?? { count: 0 };
           accFailures[k] = { count: prev.count + v.count, last_error: v.last_error ?? prev.last_error };
         }
-        const evoTotalsMerged = { ...(cur?.evolution_totals ?? {}), ...evoTotals };
+        const evoTotalsMerged: any = { ...(cur?.evolution_totals ?? {}), ...evoTotals };
+        // Accumulate per-chat message totals reported by Evolution across batches.
+        evoTotalsMerged.messages =
+          Number(cur?.evolution_totals?.messages ?? 0) + messagesTotalCounted;
 
         const update: any = {
           imported: accImported, skipped: accSkipped,
