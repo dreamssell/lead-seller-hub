@@ -248,7 +248,7 @@ export default function ChatPage() {
       } catch (err: any) {
         addDebugLog('error', `Exceção durante verificação ${channel}`, err);
         if (channel === 'whatsapp') {
-          setWhatsappStatus({ connected: false, loading: false, error: 'Falha ao verificar status' });
+          setWhatsappStatus({ connected: false, loading: false, dbStatus: 'offline', error: 'Falha ao verificar status' });
           setAuthValidation({ valid: false, reason: 'Erro ao validar acesso.', loading: false });
         }
       } finally {
