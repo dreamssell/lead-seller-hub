@@ -1562,6 +1562,45 @@ export type Database = {
           },
         ]
       }
+      password_change_audit: {
+        Row: {
+          created_at: string
+          failure_reason: string | null
+          id: string
+          ip_address: string | null
+          session_id: string | null
+          signed_out_others: boolean
+          status: string
+          user_agent: string | null
+          user_email: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          failure_reason?: string | null
+          id?: string
+          ip_address?: string | null
+          session_id?: string | null
+          signed_out_others?: boolean
+          status: string
+          user_agent?: string | null
+          user_email?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          failure_reason?: string | null
+          id?: string
+          ip_address?: string | null
+          session_id?: string | null
+          signed_out_others?: boolean
+          status?: string
+          user_agent?: string | null
+          user_email?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       pipeline_audit_logs: {
         Row: {
           action: string
