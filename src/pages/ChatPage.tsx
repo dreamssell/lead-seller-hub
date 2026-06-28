@@ -1196,7 +1196,7 @@ export default function ChatPage() {
                     <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm relative group ${
                       m.sender_type !== 'client' ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-secondary text-foreground rounded-bl-md'
                     }`}>
-                      <p>{m.content}</p>
+                      <p className="whitespace-pre-wrap break-words">{renderWhatsAppText(m.content)}</p>
                       <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
                         <p className="text-[10px]">
                           {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
