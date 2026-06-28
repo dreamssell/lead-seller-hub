@@ -554,21 +554,34 @@ Deno.serve(async (req) => {
         endpointFailures[endpoint] = slot;
       };
 
+      // Remember the first variant that worked for each endpoint name so we
+      // don't pay the 404-probe cost on every chat.
+      const endpointPathCache: Record<string, number> = {};
       const tryEndpoints = async (
         endpointName: string,
         paths: { path: string; init?: RequestInit }[],
       ) => {
+        const startIdx = endpointPathCache[endpointName] ?? 0;
+        const ordered = [
+          ...paths.slice(startIdx),
+          ...paths.slice(0, startIdx),
+        ];
         let lastErr: unknown = null;
-        for (const p of paths) {
+        for (let i = 0; i < ordered.length; i++) {
+          const p = ordered[i];
           try {
             const r = await evoFetchRetry(baseUrl, token, p.path, p.init ?? {});
-            if (r.ok) return r;
+            if (r.ok) {
+              endpointPathCache[endpointName] = (startIdx + i) % paths.length;
+              return r;
+            }
             lastErr = new Error(`HTTP ${r.status}`);
           } catch (e) { lastErr = e; }
         }
         if (lastErr) noteFailure(endpointName, lastErr);
         return null;
       };
+
 
       const pickArray = (d: any): any[] => {
         if (Array.isArray(d)) return d;
