@@ -104,6 +104,7 @@ export default function ChatPage() {
   const [showDebugPanel, setShowDebugPanel] = useState(false);
   const [authValidation, setAuthValidation] = useState<{ valid: boolean; reason?: string; loading: boolean }>({ valid: false, loading: true });
   const [activeWhatsAppConn, setActiveWhatsAppConn] = useState<WhatsAppConnection | null>(null);
+  const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
   const [whatsappStatus, setWhatsappStatus] = useState<{ connected: boolean; loading: boolean; phone?: string; error?: string }>({
     connected: false,
     loading: true,
@@ -169,11 +170,15 @@ export default function ChatPage() {
               addDebugLog('error', 'Nenhuma conexão WhatsApp encontrada');
               setAuthValidation({ valid: false, reason: 'Nenhuma conexão configurada', loading: false });
               setWhatsappStatus({ connected: false, loading: false });
+              setConnectedProviders([]);
               return;
             }
             setActiveWhatsAppConn(firstConn as WhatsAppConnection);
+            setConnectedProviders([]);
           } else {
             setActiveWhatsAppConn(connections[0] as WhatsAppConnection);
+            const uniq = Array.from(new Set(connections.map((c: any) => String(c.provider || '').toUpperCase()).filter(Boolean)));
+            setConnectedProviders(uniq);
           }
 
           const conn = activeWhatsAppConn || (connections && connections[0]);
@@ -603,10 +608,10 @@ export default function ChatPage() {
                     whatsappStatus.loading ? (
                       <RefreshCw className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
                     ) : whatsappStatus.connected ? (
-                      <div className="flex items-center gap-1.5 bg-success/10 px-2 py-0.5 rounded-full border border-success/20">
-                        <CheckCircle2 className="w-3 h-3 text-success" />
-                        <span className="text-[10px] font-bold text-success uppercase tracking-wider">
-                          {activeWhatsAppConn?.provider?.toUpperCase() || 'WhatsApp'} Ativo
+                      <div className="flex items-center gap-1.5 bg-success/10 px-2 py-0.5 rounded-full border border-success/20 max-w-[180px]">
+                        <CheckCircle2 className="w-3 h-3 text-success shrink-0" />
+                        <span className="text-[10px] font-bold text-success uppercase tracking-wider truncate">
+                          {(connectedProviders.length > 0 ? connectedProviders.join(' + ') : (activeWhatsAppConn?.provider?.toUpperCase() || 'WhatsApp'))} Ativo
                         </span>
                       </div>
                     ) : (
@@ -676,7 +681,7 @@ export default function ChatPage() {
           <ChannelIcon className={`w-3.5 h-3.5 ${channelInfo.color}`} />
           <span className={`text-xs font-medium ${channelInfo.color}`}>
             {channelInfo.name} 
-            {channelInfo.key === 'whatsapp' && activeWhatsAppConn && ` (${activeWhatsAppConn.provider.toUpperCase()})`}
+            {channelInfo.key === 'whatsapp' && (connectedProviders.length > 0 || activeWhatsAppConn) && ` (${connectedProviders.length > 0 ? connectedProviders.join(' + ') : activeWhatsAppConn!.provider.toUpperCase()})`}
           </span>
         </div>
         {(channelInfo.key === 'whatsapp' || channelInfo.key === 'telegram') && (
