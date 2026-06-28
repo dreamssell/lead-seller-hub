@@ -588,27 +588,27 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <QrCode className="w-5 h-5 text-violet-500" />
+      <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-2xl max-h-[92vh] overflow-y-auto p-4 sm:p-6 gap-4">
+        <DialogHeader className="space-y-1.5">
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <QrCode className="w-5 h-5 text-violet-500 shrink-0" />
             Conectar Evolution API
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-xs sm:text-sm">
             Espelhe seu WhatsApp via QR Code em poucos passos.
           </DialogDescription>
         </DialogHeader>
 
         <Separator />
 
-        <Tabs defaultValue="setup">
-          <TabsList className="grid grid-cols-4 w-full">
-            <TabsTrigger value="setup" className="text-xs">Configuração</TabsTrigger>
-            <TabsTrigger value="history" className="text-xs">
+        <Tabs defaultValue="setup" className="w-full">
+          <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full h-auto gap-1 p-1">
+            <TabsTrigger value="setup" className="text-[11px] sm:text-xs py-1.5">Configuração</TabsTrigger>
+            <TabsTrigger value="history" className="text-[11px] sm:text-xs py-1.5">
               <History className="w-3.5 h-3.5 mr-1" /> Histórico
             </TabsTrigger>
-            <TabsTrigger value="diagnostics" className="text-xs">Diagnóstico</TabsTrigger>
-            <TabsTrigger value="retention" className="text-xs">Retenção</TabsTrigger>
+            <TabsTrigger value="diagnostics" className="text-[11px] sm:text-xs py-1.5">Diagnóstico</TabsTrigger>
+            <TabsTrigger value="retention" className="text-[11px] sm:text-xs py-1.5">Retenção</TabsTrigger>
           </TabsList>
           <TabsContent value="setup" className="space-y-4 pt-3">
             {step === 'credentials' && renderCredentials()}
