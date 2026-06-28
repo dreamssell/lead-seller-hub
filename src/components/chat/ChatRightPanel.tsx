@@ -64,6 +64,16 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
     });
   }, []);
 
+  useEffect(() => {
+    supabase
+      .from('customers')
+      .select('owner_id')
+      .eq('id', customerId)
+      .maybeSingle()
+      .then(({ data }) => setOwnerId((data as any)?.owner_id || null));
+  }, [customerId]);
+
+
   const loadNotes = async () => {
     setLoadingNotes(true);
     const { data, error } = await supabase
