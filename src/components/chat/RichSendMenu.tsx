@@ -236,12 +236,12 @@ function ProductDialog({ open, onClose, onSend, ownerId }: any) {
   const [sel, setSel] = useState<any>(null); const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!open) return; setLoading(true); setSel(null);
-    const q = supabase.from('products').select('id,name,price,image_url').order('name').limit(100);
-    (ownerId ? q.eq('owner_id', ownerId) : q).then(({ data }) => { setProducts((data as any) || []); setLoading(false); });
+    supabase.from('products').select('id,name,price,description').eq('is_active', true).order('name').limit(100)
+      .then(({ data }) => { setProducts((data as any) || []); setLoading(false); });
   }, [open, ownerId]);
   const submit = async () => {
     if (!sel) return toast.error('Selecione um produto');
-    setBusy(true); try { await onSend({ type: 'product', productId: sel.id, name: sel.name, price: sel.price, imageUrl: sel.image_url }); onClose(); } finally { setBusy(false); }
+    setBusy(true); try { await onSend({ type: 'product', productId: sel.id, name: sel.name, price: sel.price }); onClose(); } finally { setBusy(false); }
   };
   return (
     <Shell open={open} onClose={onClose} title="Enviar produto do catálogo" onSubmit={submit} busy={busy}>
@@ -251,8 +251,11 @@ function ProductDialog({ open, onClose, onSend, ownerId }: any) {
             {products.map(p => (
               <button key={p.id} onClick={() => setSel(p)}
                 className={`w-full flex items-center gap-2 p-2 rounded border text-left ${sel?.id === p.id ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}>
-                {p.image_url ? <img src={p.image_url} alt="" className="w-10 h-10 rounded object-cover" /> : <Package className="w-5 h-5 text-muted-foreground" />}
-                <div className="flex-1 min-w-0"><p className="text-xs font-medium truncate">{p.name}</p>{p.price != null && <p className="text-[10px] text-muted-foreground">R$ {Number(p.price).toFixed(2)}</p>}</div>
+                <Package className="w-5 h-5 text-muted-foreground shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium truncate">{p.name}</p>
+                  {p.price != null && <p className="text-[10px] text-muted-foreground">R$ {Number(p.price).toFixed(2)}</p>}
+                </div>
               </button>
             ))}
           </div>}
@@ -265,7 +268,7 @@ function SignatureDialog({ open, onClose, onSend, customerId }: any) {
   const [sel, setSel] = useState<any>(null); const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!open) return; setLoading(true); setSel(null);
-    supabase.from('signature_documents').select('id,title,status,signed_url,document_url').eq('customer_id', customerId)
+    supabase.from('signature_documents').select('id,description,status,signed_file_path,original_file_path,lead_id').eq('lead_id', customerId)
       .order('created_at', { ascending: false }).limit(50)
       .then(({ data }) => { setDocs((data as any) || []); setLoading(false); });
   }, [open, customerId]);

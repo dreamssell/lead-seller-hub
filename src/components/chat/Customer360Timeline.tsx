@@ -47,8 +47,8 @@ export function Customer360Timeline({ customerId }: Props) {
       const [events, notes, tasks, sigs, assigns] = await Promise.all([
         supabase.from('lead_events').select('id,type,from_stage_name,to_stage_name,channel,created_at').eq('lead_id', customerId).order('created_at', { ascending: false }).limit(30),
         supabase.from('customer_notes').select('id,content,author_name,created_at').eq('customer_id', customerId).order('created_at', { ascending: false }).limit(20),
-        supabase.from('tasks').select('id,title,status,due_at,created_at').eq('customer_id', customerId).order('created_at', { ascending: false }).limit(20).then(r => r, () => ({ data: [], error: null } as any)),
-        supabase.from('signature_documents').select('id,title,status,created_at').eq('customer_id', customerId).order('created_at', { ascending: false }).limit(20).then(r => r, () => ({ data: [], error: null } as any)),
+        supabase.from('tasks').select('id,title,status,due_date,created_at,description').order('created_at', { ascending: false }).limit(0).then(r => r, () => ({ data: [], error: null } as any)),
+        supabase.from('signature_documents').select('id,description,status,created_at,lead_id').eq('lead_id', customerId).order('created_at', { ascending: false }).limit(20).then(r => r, () => ({ data: [], error: null } as any)),
         supabase.from('conversation_assignments').select('id,reason,to_user_id,to_queue_id,created_at').eq('customer_id', customerId).order('created_at', { ascending: false }).limit(20),
       ]);
 
@@ -64,11 +64,11 @@ export function Customer360Timeline({ customerId }: Props) {
       }));
       (tasks.data || []).forEach((t: any) => arr.push({
         id: 't' + t.id, kind: 'task', at: t.created_at,
-        title: t.title, meta: t.status,
+        title: t.title, body: t.description, meta: t.status,
       }));
       (sigs.data || []).forEach((s: any) => arr.push({
         id: 's' + s.id, kind: 'signature', at: s.created_at,
-        title: s.title || 'Documento de assinatura', meta: s.status,
+        title: s.description || 'Documento de assinatura', meta: s.status,
       }));
       (assigns.data || []).forEach((a: any) => arr.push({
         id: 'a' + a.id, kind: 'assignment', at: a.created_at,
