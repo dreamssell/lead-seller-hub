@@ -5,12 +5,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { StickyNote, Zap, Loader2, Trash2, Plus, X, Send, History as HistoryIcon } from 'lucide-react';
+import { StickyNote, Zap, Loader2, Trash2, Plus, X, Send, History as HistoryIcon, Layers, Images } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MentionTextarea } from './MentionTextarea';
 import { AssignmentTimeline } from './AssignmentTimeline';
+import { Customer360Timeline } from './Customer360Timeline';
+import { MediaGallery } from './MediaGallery';
 
 
 interface Note {
@@ -37,7 +39,7 @@ interface Props {
 }
 
 export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }: Props) {
-  const [tab, setTab] = useState<'notes' | 'replies' | 'history'>('notes');
+  const [tab, setTab] = useState<'notes' | 'replies' | 'history' | 'crm' | 'media'>('notes');
   const [ownerId, setOwnerId] = useState<string | null>(null);
 
   const [notes, setNotes] = useState<Note[]>([]);
@@ -180,15 +182,21 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="flex-1 flex flex-col">
-        <TabsList className="grid grid-cols-3 mx-3 mt-3">
-          <TabsTrigger value="notes" className="gap-1.5 text-xs">
-            <StickyNote className="w-3.5 h-3.5" /> Notas
+        <TabsList className="grid grid-cols-5 mx-3 mt-3">
+          <TabsTrigger value="notes" className="gap-1 text-[10px] px-1" title="Notas">
+            <StickyNote className="w-3.5 h-3.5" />
           </TabsTrigger>
-          <TabsTrigger value="replies" className="gap-1.5 text-xs">
-            <Zap className="w-3.5 h-3.5" /> Rápidas
+          <TabsTrigger value="replies" className="gap-1 text-[10px] px-1" title="Respostas rápidas">
+            <Zap className="w-3.5 h-3.5" />
           </TabsTrigger>
-          <TabsTrigger value="history" className="gap-1.5 text-xs">
-            <HistoryIcon className="w-3.5 h-3.5" /> Histórico
+          <TabsTrigger value="crm" className="gap-1 text-[10px] px-1" title="CRM 360°">
+            <Layers className="w-3.5 h-3.5" />
+          </TabsTrigger>
+          <TabsTrigger value="media" className="gap-1 text-[10px] px-1" title="Galeria de mídias">
+            <Images className="w-3.5 h-3.5" />
+          </TabsTrigger>
+          <TabsTrigger value="history" className="gap-1 text-[10px] px-1" title="Histórico de atendimento">
+            <HistoryIcon className="w-3.5 h-3.5" />
           </TabsTrigger>
         </TabsList>
 
@@ -309,6 +317,14 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
               </div>
             )}
           </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="crm" className="flex-1 flex flex-col mt-3 px-3 pb-3 data-[state=inactive]:hidden">
+          <Customer360Timeline customerId={customerId} />
+        </TabsContent>
+
+        <TabsContent value="media" className="flex-1 flex flex-col mt-3 px-3 pb-3 data-[state=inactive]:hidden">
+          <MediaGallery customerId={customerId} />
         </TabsContent>
 
         <TabsContent value="history" className="flex-1 flex flex-col mt-3 px-3 pb-3 data-[state=inactive]:hidden">
