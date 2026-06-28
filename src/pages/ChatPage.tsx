@@ -27,7 +27,7 @@ import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
-import { WhatsAppConnection, PROVIDER_CONFIGS } from '@/components/whatsapp/types';
+import { WhatsAppConnection } from '@/components/whatsapp/types';
 import { useVoip } from '@/contexts/VoipContext';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
 import { ChatRightPanel } from '@/components/chat/ChatRightPanel';
@@ -90,6 +90,43 @@ const mockMessages = [
   { id: 4, from: 'agent', text: 'Verifique se a chave API está ativa em Configurações > Chaves API.', time: '14:36' },
 ];
 
+type WhatsAppDbStatus = 'active' | 'offline' | 'disconnected';
+
+const providerLabel = (provider?: string) => (provider ? provider.toUpperCase() : 'WHATSAPP');
+
+const getUniqueProviderLabels = (connections: WhatsAppConnection[]) => (
+  Array.from(new Set(connections.map((conn) => providerLabel(conn.provider)).filter(Boolean)))
+);
+
+const getConnectionPhoneFromDb = (conn?: WhatsAppConnection | null) => {
+  if (!conn?.metadata) return undefined;
+  return conn.metadata.phone || conn.metadata.phone_number || conn.metadata.number || conn.metadata.owner;
+};
+
+const getWhatsAppDbSummary = (connections: WhatsAppConnection[]) => {
+  const connected = connections.filter((conn) => String(conn.status).toLowerCase() === 'connected');
+  const visible = connected.length > 0 ? connected : connections;
+
+  return {
+    status: connections.length === 0 ? 'disconnected' as WhatsAppDbStatus : connected.length > 0 ? 'active' as WhatsAppDbStatus : 'offline' as WhatsAppDbStatus,
+    labels: getUniqueProviderLabels(visible),
+    primary: connected[0] || connections[0] || null,
+    connectedCount: connected.length,
+  };
+};
+
+const getWhatsAppStatusLabel = (status: WhatsAppDbStatus) => {
+  if (status === 'active') return 'Ativo';
+  if (status === 'offline') return 'Offline';
+  return 'Desconectado';
+};
+
+const getWhatsAppStatusClasses = (status: WhatsAppDbStatus) => {
+  if (status === 'active') return 'bg-success/10 border-success/20 text-success';
+  if (status === 'offline') return 'bg-warning/10 border-warning/20 text-warning';
+  return 'bg-destructive/10 border-destructive/20 text-destructive';
+};
+
 export default function ChatPage() {
   const [activeChannel, setActiveChannel] = useState<ChannelKey | null>(null);
   const [convs, setConvs] = useState(conversationsByChannel);
@@ -105,9 +142,10 @@ export default function ChatPage() {
   const [authValidation, setAuthValidation] = useState<{ valid: boolean; reason?: string; loading: boolean }>({ valid: false, loading: true });
   const [activeWhatsAppConn, setActiveWhatsAppConn] = useState<WhatsAppConnection | null>(null);
   const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
-  const [whatsappStatus, setWhatsappStatus] = useState<{ connected: boolean; loading: boolean; phone?: string; error?: string }>({
+  const [whatsappStatus, setWhatsappStatus] = useState<{ connected: boolean; loading: boolean; dbStatus: WhatsAppDbStatus; phone?: string; error?: string }>({
     connected: false,
     loading: true,
+    dbStatus: 'disconnected',
   });
 
   // Telegram States
@@ -157,61 +195,56 @@ export default function ChatPage() {
     async function checkProviderStatus(channel: ChannelKey, isManual = false) {
       if (isManual) setIsRefreshing(true);
       
-      const providerName = channel === 'whatsapp' ? (activeWhatsAppConn?.provider?.toUpperCase() || 'WhatsApp') : channel.toUpperCase();
-      addDebugLog('request', `Iniciando validação de status: ${providerName}`);
+      const providerName = channel === 'whatsapp' ? 'WhatsApp via status persistido' : channel.toUpperCase();
+      addDebugLog('request', `Lendo status: ${providerName}`);
       
       try {
         if (channel === 'whatsapp') {
           const { data: connections, error: connError } = await supabase
             .from('whatsapp_connections')
             .select('*')
-            .eq('status', 'connected');
+            .in('provider', ['uaz', 'meta', 'wavoip', 'evolution'])
+            .order('updated_at', { ascending: false });
 
-          if (connError || !connections || connections.length === 0) {
-            const { data: firstConn } = await supabase.from('whatsapp_connections').select('*').limit(1).maybeSingle();
-            if (!firstConn) {
-              addDebugLog('error', 'Nenhuma conexão WhatsApp encontrada');
-              setAuthValidation({ valid: false, reason: 'Nenhuma conexão configurada', loading: false });
-              setWhatsappStatus({ connected: false, loading: false });
-              setConnectedProviders([]);
-              return;
-            }
-            setActiveWhatsAppConn(firstConn as WhatsAppConnection);
+          if (connError) {
+            addDebugLog('error', 'Erro ao ler conexões WhatsApp no banco', connError);
+            setActiveWhatsAppConn(null);
             setConnectedProviders([]);
-          } else {
-            setActiveWhatsAppConn(connections[0] as WhatsAppConnection);
-            const uniq = Array.from(new Set(connections.map((c: any) => String(c.provider || '').toUpperCase()).filter(Boolean)));
-            setConnectedProviders(uniq);
+            setWhatsappStatus({ connected: false, loading: false, dbStatus: 'offline', error: 'Falha ao ler conexões no banco' });
+            setAuthValidation({ valid: false, reason: 'Falha ao ler conexões no banco.', loading: false });
+            return;
           }
 
-          const conn = activeWhatsAppConn || (connections && connections[0]);
-          if (!conn) return;
+          const allConnections = (connections || []) as WhatsAppConnection[];
+          const summary = getWhatsAppDbSummary(allConnections);
+          const isConnected = summary.status === 'active';
 
-          const adapter = getProviderAdapter(conn.provider);
-          addDebugLog('info', `Usando provedor WhatsApp: ${conn.provider}. Chamando adapter.`);
-          
-          const data = await adapter.getStatus(conn as WhatsAppConnection);
-          addDebugLog('info', 'Resposta do Provedor recebida', data);
-
-          // Considera o canal conectado se qualquer conexão WhatsApp (Evolution/Wavoip/UAZ)
-          // estiver com status 'connected' no banco — o backend é a fonte da verdade.
-          const anyConnectedInDb = !!(connections && connections.length > 0);
-          const isConnected = !!data?.connected || anyConnectedInDb;
+          setActiveWhatsAppConn(summary.primary);
+          setConnectedProviders(summary.labels);
           setWhatsappStatus({
             connected: isConnected,
             loading: false,
-            phone: data?.phone,
-            error: isConnected ? undefined : data?.error,
+            dbStatus: summary.status,
+            phone: getConnectionPhoneFromDb(summary.primary),
+            error: isConnected ? undefined : summary.status === 'offline' ? 'Conexões configuradas, mas nenhuma marcada como connected no banco.' : 'Nenhuma conexão WhatsApp configurada.',
           });
 
           setAuthValidation({
             valid: isConnected,
-            reason: isConnected ? undefined : (data?.error || `Instância ${conn.provider.toUpperCase()} desconectada`),
+            reason: isConnected ? undefined : summary.status === 'offline'
+              ? `${summary.labels.join(' + ') || 'WhatsApp'} está Offline no banco de dados.`
+              : 'Nenhuma conexão WhatsApp configurada.',
             loading: false,
           });
 
+          addDebugLog('info', `Status persistido: ${summary.labels.join(' + ') || 'WHATSAPP'} = ${summary.status}`, {
+            total: allConnections.length,
+            connected: summary.connectedCount,
+            providers: summary.labels,
+          });
+
           if (isConnected) {
-            addDebugLog('info', `Status: CONECTADO (${conn.provider}). Iniciando carga de contatos.`);
+            addDebugLog('info', `Status: ATIVO (${summary.labels.join(' + ')}). Iniciando carga de contatos.`);
             loadConversations(channel);
           }
         } else if (channel === 'telegram') {
@@ -228,7 +261,7 @@ export default function ChatPage() {
       } catch (err: any) {
         addDebugLog('error', `Exceção durante verificação ${channel}`, err);
         if (channel === 'whatsapp') {
-          setWhatsappStatus({ connected: false, loading: false, error: 'Falha ao verificar status' });
+          setWhatsappStatus({ connected: false, loading: false, dbStatus: 'offline', error: 'Falha ao verificar status' });
           setAuthValidation({ valid: false, reason: 'Erro ao validar acesso.', loading: false });
         }
       } finally {
@@ -308,7 +341,7 @@ export default function ChatPage() {
     // Polling interval with basic backoff logic simulation
     const interval = setInterval(() => {
       if (activeChannel === 'whatsapp' && !whatsappStatus.connected) {
-        addDebugLog('info', 'Polling: Tentando reconectar WhatsApp...');
+        addDebugLog('info', 'Polling: relendo status persistido do WhatsApp...');
         checkProviderStatus('whatsapp');
       } else if (activeChannel) {
         checkProviderStatus(activeChannel);
@@ -325,6 +358,10 @@ export default function ChatPage() {
           setMessages(prev => [...prev, payload.new]);
         }
         if (activeChannel) loadConversations(activeChannel);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_connections' }, () => {
+        addDebugLog('info', 'Conexão WhatsApp atualizada no banco; relendo status persistido.');
+        checkProviderStatus('whatsapp');
       })
       .subscribe();
 
@@ -344,7 +381,7 @@ export default function ChatPage() {
       clearInterval(receiptTimer);
       supabase.removeChannel(channel);
     };
-  }, [selectedConvId, whatsappStatus.connected, activeWhatsAppConn, activeChannel]);
+  }, [selectedConvId, whatsappStatus.connected, activeChannel]);
 
   useEffect(() => {
     // Real-time listener for connection events (Omnichannel Diagnostics)
@@ -598,6 +635,12 @@ export default function ChatPage() {
             const Icon = ch.icon;
             const isWhatsApp = ch.key === 'whatsapp';
             const isPlaceholder = ['youtube', 'tiktok'].includes(ch.key);
+            const whatsappProvidersLabel = connectedProviders.length > 0
+              ? connectedProviders.join(' + ')
+              : activeWhatsAppConn
+                ? providerLabel(activeWhatsAppConn.provider)
+                : 'WHATSAPP';
+            const WhatsAppStatusIcon = whatsappStatus.dbStatus === 'active' ? CheckCircle2 : AlertCircle;
             
             return (
               <motion.button
@@ -613,18 +656,18 @@ export default function ChatPage() {
                   {isWhatsApp ? (
                     whatsappStatus.loading ? (
                       <RefreshCw className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
-                    ) : whatsappStatus.connected ? (
-                      <div className="flex items-center gap-1.5 bg-success/10 px-2 py-0.5 rounded-full border border-success/20 max-w-[180px]">
-                        <CheckCircle2 className="w-3 h-3 text-success shrink-0" />
-                        <span className="text-[10px] font-bold text-success uppercase tracking-wider truncate">
-                          {(connectedProviders.length > 0 ? connectedProviders.join(' + ') : (activeWhatsAppConn?.provider?.toUpperCase() || 'WhatsApp'))} Ativo
+                    ) : whatsappStatus.dbStatus === 'disconnected' ? (
+                      <Link to="/whatsapp" onClick={(e) => e.stopPropagation()} className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border hover:bg-destructive/20 transition-colors ${getWhatsAppStatusClasses(whatsappStatus.dbStatus)}`}>
+                        <WhatsAppStatusIcon className="w-3 h-3 shrink-0" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider truncate">Desconectado</span>
+                      </Link>
+                    ) : (
+                      <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border max-w-[220px] ${getWhatsAppStatusClasses(whatsappStatus.dbStatus)}`}>
+                        <WhatsAppStatusIcon className="w-3 h-3 shrink-0" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider truncate">
+                          {whatsappProvidersLabel} {getWhatsAppStatusLabel(whatsappStatus.dbStatus)}
                         </span>
                       </div>
-                    ) : (
-                      <Link to="/whatsapp" onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 bg-destructive/10 px-2 py-0.5 rounded-full border border-destructive/20 hover:bg-destructive/20 transition-colors">
-                        <AlertCircle className="w-3 h-3 text-destructive" />
-                        <span className="text-[10px] font-bold text-destructive uppercase tracking-wider">Desconectado</span>
-                      </Link>
                     )
                   ) : isPlaceholder ? (
                     <Badge variant="outline" className="text-[9px] h-4 px-1.5 font-bold uppercase tracking-tighter opacity-70">
@@ -693,13 +736,17 @@ export default function ChatPage() {
         {(channelInfo.key === 'whatsapp' || channelInfo.key === 'telegram') && (
           <div className="flex items-center gap-2">
             {channelInfo.key === 'whatsapp' ? (
-              whatsappStatus.connected ? (
+              whatsappStatus.dbStatus === 'active' ? (
                 <Badge variant="outline" className="border-success/30 text-success text-[10px] h-5 gap-1">
-                  <CheckCircle2 className="w-2.5 h-2.5" /> LIVE
+                  <CheckCircle2 className="w-2.5 h-2.5" /> ATIVO
+                </Badge>
+              ) : whatsappStatus.dbStatus === 'offline' ? (
+                <Badge variant="outline" className="border-warning/30 text-warning text-[10px] h-5 gap-1">
+                  <AlertCircle className="w-2.5 h-2.5" /> OFFLINE
                 </Badge>
               ) : (
                 <Badge variant="outline" className="border-destructive/30 text-destructive text-[10px] h-5 gap-1">
-                  <AlertCircle className="w-2.5 h-2.5" /> OFFLINE
+                  <AlertCircle className="w-2.5 h-2.5" /> DESCONECTADO
                 </Badge>
               )
             ) : (
@@ -850,13 +897,13 @@ export default function ChatPage() {
           )}
         </AnimatePresence>
 
-        {!whatsappStatus.connected && activeChannel === 'whatsapp' && (
+        {!whatsappStatus.loading && !whatsappStatus.connected && activeChannel === 'whatsapp' && (
           <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-50 flex items-center justify-center p-6 text-center">
             <div className="glass-card p-8 max-w-md border-destructive/20 shadow-2xl animate-in fade-in zoom-in duration-300">
               <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
                 <AlertCircle className="w-8 h-8 text-destructive" />
               </div>
-              <h3 className="text-xl font-bold mb-2">WhatsApp Desconectado</h3>
+              <h3 className="text-xl font-bold mb-2">WhatsApp {getWhatsAppStatusLabel(whatsappStatus.dbStatus)}</h3>
               <p className="text-muted-foreground mb-6">
                 {authValidation.reason || `Sua conexão ${activeWhatsAppConn?.provider?.toUpperCase() || 'WhatsApp'} precisa estar ativa para visualizar e responder mensagens.`}
               </p>
