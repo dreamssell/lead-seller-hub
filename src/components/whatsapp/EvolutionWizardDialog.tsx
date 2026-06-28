@@ -630,7 +630,7 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
           </TabsContent>
         </Tabs>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 flex-col sm:flex-row sm:justify-end [&>button]:w-full sm:[&>button]:w-auto">
           {step === 'credentials' && (
             <Button onClick={startInstance} disabled={busy || !canSubmit}>
               {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Smartphone className="w-4 h-4 mr-2" />}
