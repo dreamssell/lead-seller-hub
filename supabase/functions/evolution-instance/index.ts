@@ -526,12 +526,14 @@ Deno.serve(async (req) => {
     }
 
     if (action === "import_chats") {
+      try {
       // Best-effort webhook re-registration (skipped in dry-run to avoid side-effects).
       const dryRun = body.dry_run === true;
-      const downloadMedia = body.download_media !== false; // default true
+      const downloadMedia = body.download_media !== false && !dryRun;
       if (!dryRun) {
         try { await registerWebhook(baseUrl, token, instance, connection_id); } catch (_) { /* best effort */ }
       }
+
 
       const maxChats = Math.max(1, Math.min(Number(body.max_chats) || 2000, 10000));
       const perChat = Math.max(1, Math.min(Number(body.messages_per_chat) || 200, 1000));
