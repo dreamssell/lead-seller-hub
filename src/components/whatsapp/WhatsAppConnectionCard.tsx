@@ -24,6 +24,8 @@ import { FacebookDiagnostics } from './FacebookDiagnostics';
 import { WidgetSettings } from './WidgetSettings';
 import { EvolutionWizardDialog } from './EvolutionWizardDialog';
 import { EvolutionStatusBanner } from './EvolutionStatusBanner';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
+
 
 interface ConnectionCardProps {
   conn: WhatsAppConnection;
