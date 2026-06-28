@@ -323,11 +323,12 @@ export default function SignaturesPage() {
           <SignatureRoleAuditLog />
         </TabsContent>
 
-        {isLeader && (
+        {isOwner && (
           <TabsContent value="errors">
             <SignatureErrorLogs />
           </TabsContent>
         )}
+
       </Tabs>
       )}
 
