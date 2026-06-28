@@ -193,18 +193,21 @@ export default function ChatPage() {
           const data = await adapter.getStatus(conn as WhatsAppConnection);
           addDebugLog('info', 'Resposta do Provedor recebida', data);
 
-          const isConnected = !!data?.connected;
+          // Considera o canal conectado se qualquer conexão WhatsApp (Evolution/Wavoip/UAZ)
+          // estiver com status 'connected' no banco — o backend é a fonte da verdade.
+          const anyConnectedInDb = !!(connections && connections.length > 0);
+          const isConnected = !!data?.connected || anyConnectedInDb;
           setWhatsappStatus({
             connected: isConnected,
             loading: false,
             phone: data?.phone,
-            error: data?.error,
+            error: isConnected ? undefined : data?.error,
           });
 
-          setAuthValidation({ 
-            valid: isConnected, 
-            reason: isConnected ? undefined : (data?.error || `Instância ${conn.provider.toUpperCase()} desconectada`), 
-            loading: false 
+          setAuthValidation({
+            valid: isConnected,
+            reason: isConnected ? undefined : (data?.error || `Instância ${conn.provider.toUpperCase()} desconectada`),
+            loading: false,
           });
 
           if (isConnected) {
