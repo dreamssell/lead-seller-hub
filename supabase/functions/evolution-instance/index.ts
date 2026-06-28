@@ -460,12 +460,35 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (action === "set_auto_import") {
+      const enabled = body.enabled !== false;
+      const intervalHours = Math.max(1, Math.min(Number(body.interval_hours) || 6, 168));
+      await admin
+        .from("whatsapp_connections")
+        .update({
+          metadata: {
+            ...meta,
+            auto_import_enabled: enabled,
+            auto_import_interval_hours: intervalHours,
+          },
+        })
+        .eq("id", connection_id);
+      await logEvent(
+        "evolution.auto_import_config",
+        "success",
+        `Auto-importação ${enabled ? "ativada" : "desativada"} a cada ${intervalHours}h`,
+      );
+      return json({ ok: true, enabled, interval_hours: intervalHours });
+    }
+
     if (action === "import_chats") {
       // 1) Ensure webhook is set so new messages keep flowing.
       try { await registerWebhook(baseUrl, token, instance, connection_id); } catch (_) { /* best effort */ }
 
-      const maxChats = Math.max(1, Math.min(Number(body.max_chats) || 50, 200));
+      const maxChats = Math.max(1, Math.min(Number(body.max_chats) || 50, 500));
       const perChat = Math.max(1, Math.min(Number(body.messages_per_chat) || 20, 100));
+      const offset = Math.max(0, Number(body.offset) || 0);
+      const batchSize = Math.max(1, Math.min(Number(body.batch_size) || 5, 20));
 
       // 2) Fetch chats. Evolution v2: POST /chat/findChats/{instance} with {where:{}}
       const chatsRes = await evoFetch(
@@ -485,10 +508,13 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: `Evolution respondeu ${chatsRes.status} ao listar conversas.` }, 502);
       }
 
+      const totalAvailable = Math.min(chats.length, maxChats);
+      const slice = chats.slice(offset, offset + batchSize);
+
       let importedCustomers = 0;
       let importedMessages = 0;
 
-      for (const chat of chats.slice(0, maxChats)) {
+      for (const chat of slice) {
         const jid: string = chat.id || chat.remoteJid || chat.remote_jid || "";
         if (!jid || jid.endsWith("@g.us")) continue; // skip groups
         const phone = jid.replace("@s.whatsapp.net", "").replace("@c.us", "");
@@ -502,6 +528,7 @@ Deno.serve(async (req) => {
           .select("id")
           .eq("phone", phone)
           .eq("sub_company_id", conn.sub_company_id as any)
+
           .maybeSingle();
         if (existing.data?.id) {
           customerId = existing.data.id;
