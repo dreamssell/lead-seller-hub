@@ -382,7 +382,13 @@ function AnalyticsModal({ pageId, onClose }: { pageId: string | null; onClose: (
           </div>
         </CardContent></Card>
 
-        <QrCodeStudio value={link} filename={page.slug} />
+        <QrCodeStudio
+          value={link}
+          filename={page.slug}
+          version={page.published_version || 0}
+          lastPublishedAt={page.last_published_at || null}
+        />
+
 
         <div>
           <h4 className="text-sm font-semibold mb-2">Desempenho por CTA</h4>

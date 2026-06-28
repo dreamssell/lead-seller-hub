@@ -134,11 +134,30 @@ export default function LandingBuilderPage() {
               <Button variant="outline" onClick={async () => { update('status', 'draft'); await supabase.from('landing_pages').update({ status: 'draft' }).eq('id', page.id); toast({ title: 'Página despublicada', description: 'Métricas pausadas. A página pública ficará indisponível.' }); }}>
                 Despublicar
               </Button>
-            ) : (
-              <Button variant="default" onClick={async () => { update('status', 'published'); await supabase.from('landing_pages').update({ status: 'published' }).eq('id', page.id); toast({ title: 'Página publicada', description: 'Já está registrando views, cliques e leads.' }); }}>
-                Publicar
-              </Button>
-            )}
+            ) : null}
+            <Button
+              variant={page.status === 'published' ? 'outline' : 'default'}
+              onClick={async () => {
+                const nextVersion = (page.published_version || 0) + 1;
+                const nowIso = new Date().toISOString();
+                update('status', 'published');
+                update('published_version' as any, nextVersion);
+                update('last_published_at' as any, nowIso);
+                const { error } = await supabase
+                  .from('landing_pages')
+                  .update({ status: 'published', published_version: nextVersion, last_published_at: nowIso })
+                  .eq('id', page.id);
+                if (error) { toast({ title: 'Erro ao publicar', description: error.message, variant: 'destructive' }); return; }
+                setPreviewKey(k => k + 1);
+                toast({
+                  title: page.status === 'published' ? `Atualização publicada (v${nextVersion})` : 'Página publicada',
+                  description: 'QR Code e link público foram regenerados — baixe a nova versão para distribuir.',
+                });
+              }}
+            >
+              {page.status === 'published' ? 'Republicar (atualizar QR)' : 'Publicar'}
+            </Button>
+
             <Button onClick={save} disabled={saving}><Save className="w-4 h-4 mr-1" />{saving ? 'Salvando...' : 'Salvar'}</Button>
           </div>
         </div>
@@ -255,7 +274,13 @@ export default function LandingBuilderPage() {
                   <p className="text-xs text-muted-foreground">Compartilhe o link ou o QR Code com parceiros e clientes. Crie quantos quiser nessa mesma página.</p>
                 </CardContent></Card>
 
-                <QrCodeStudio value={publicUrl} filename={page.slug} />
+                <QrCodeStudio
+                  value={publicUrl}
+                  filename={page.slug}
+                  version={(page as any).published_version || 0}
+                  lastPublishedAt={(page as any).last_published_at || null}
+                />
+
               </TabsContent>
             </Tabs>
           </div>
