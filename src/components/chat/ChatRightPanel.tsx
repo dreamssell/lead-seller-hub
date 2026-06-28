@@ -180,28 +180,33 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="flex-1 flex flex-col">
-        <TabsList className="grid grid-cols-2 mx-3 mt-3">
-          <TabsTrigger value="notes" className="gap-1.5">
-            <StickyNote className="w-3.5 h-3.5" /> Notas internas
+        <TabsList className="grid grid-cols-3 mx-3 mt-3">
+          <TabsTrigger value="notes" className="gap-1.5 text-xs">
+            <StickyNote className="w-3.5 h-3.5" /> Notas
           </TabsTrigger>
-          <TabsTrigger value="replies" className="gap-1.5">
-            <Zap className="w-3.5 h-3.5" /> Respostas rápidas
+          <TabsTrigger value="replies" className="gap-1.5 text-xs">
+            <Zap className="w-3.5 h-3.5" /> Rápidas
+          </TabsTrigger>
+          <TabsTrigger value="history" className="gap-1.5 text-xs">
+            <HistoryIcon className="w-3.5 h-3.5" /> Histórico
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="notes" className="flex-1 flex flex-col mt-3 px-3 pb-3 data-[state=inactive]:hidden">
           <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2">
             <p className="text-[10px] text-amber-700 dark:text-amber-300 font-medium">
-              🔒 Visível apenas para a equipe — o cliente nunca vê estas notas.
+              🔒 Visível apenas para a equipe. Use <b>@usuário</b> para mencionar e notificar colegas.
             </p>
           </div>
-          <Textarea
+          <MentionTextarea
+            ownerId={ownerId}
             value={newNote}
-            onChange={(e) => setNewNote(e.target.value)}
-            placeholder="Escrever nota interna sobre este lead..."
-            className="text-sm resize-none mb-2"
+            onChange={setNewNote}
+            placeholder="Escrever nota interna... use @ para mencionar"
             rows={3}
+            className="text-sm resize-none mb-2"
           />
+
           <Button size="sm" onClick={handleAddNote} disabled={!newNote.trim() || savingNote} className="mb-3">
             {savingNote ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : <Plus className="w-3.5 h-3.5 mr-2" />}
             Adicionar nota
