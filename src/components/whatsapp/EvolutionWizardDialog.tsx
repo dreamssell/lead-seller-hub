@@ -120,12 +120,24 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
 
   // Progressive import state.
   const [importing, setImporting] = useState(false);
+  const [importMode, setImportMode] = useState<'real' | 'dry'>('real');
   const [importProgress, setImportProgress] = useState<{
     customers: number;
     messages: number;
+    media: number;
     processed: number;
     total: number;
-  }>({ customers: 0, messages: 0, processed: 0, total: 0 });
+  }>({ customers: 0, messages: 0, media: 0, processed: 0, total: 0 });
+  const [importReport, setImportReport] = useState<{
+    dry_run: boolean;
+    evolution_totals: { contacts?: number; chats?: number; messages?: number };
+    db_totals?: { customers?: number | null; messages?: number | null; media?: number | null };
+    skipped: Record<string, number>;
+    endpoint_failures: Record<string, { count: number; last_error?: string }>;
+    congruence?: 'congruent' | 'pending' | 'divergent';
+    run_id?: string | null;
+    finished_at?: string;
+  } | null>(null);
   const importCancelRef = useRef<boolean>(false);
 
   const pollTimeoutRef = useRef<number | null>(null);
