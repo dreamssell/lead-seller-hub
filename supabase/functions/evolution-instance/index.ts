@@ -54,6 +54,48 @@ async function evoFetch(
   return { ok: res.ok, status: res.status, data };
 }
 
+function inboundWebhookUrl(connectionId: string): string {
+  const base = Deno.env.get("SUPABASE_URL")!.replace(/\/$/, "");
+  return `${base}/functions/v1/handle-inbound-webhook?connection_id=${connectionId}&channel=whatsapp`;
+}
+
+async function registerWebhook(
+  baseUrl: string,
+  token: string,
+  instance: string,
+  connectionId: string,
+) {
+  const webhookUrl = inboundWebhookUrl(connectionId);
+  const events = [
+    "MESSAGES_UPSERT",
+    "MESSAGES_UPDATE",
+    "SEND_MESSAGE",
+    "CONNECTION_UPDATE",
+    "CONTACTS_UPSERT",
+    "CHATS_UPSERT",
+  ];
+  // Evolution v2 expects nested { webhook: {...} }; v1 accepts flat. Send both.
+  const body = {
+    webhook: {
+      url: webhookUrl,
+      enabled: true,
+      webhookByEvents: false,
+      webhook_by_events: false,
+      events,
+    },
+    url: webhookUrl,
+    enabled: true,
+    webhookByEvents: false,
+    events,
+  };
+  const r = await evoFetch(baseUrl, token, `/webhook/set/${encodeURIComponent(instance)}`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`webhook set failed: HTTP ${r.status}`);
+  return r.data;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
