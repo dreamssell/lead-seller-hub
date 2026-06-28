@@ -71,17 +71,23 @@ export function QrCodeStudio({
       <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="flex flex-col items-center justify-center">
           <div ref={canvasWrapRef} className="p-3 rounded-md" style={{ background: bg }}>
-            <QRCodeCanvas value={value} size={size} level={level} fgColor={fg} bgColor={bg} imageSettings={imageSettings} />
+            <QRCodeCanvas key={`canvas-${versionKey}`} value={value} size={size} level={level} fgColor={fg} bgColor={bg} imageSettings={imageSettings} />
           </div>
           {/* Hidden SVG mirror for SVG download */}
           <div ref={svgWrapRef} className="hidden">
-            <QRCodeSVG value={value} size={size} level={level} fgColor={fg} bgColor={bg} imageSettings={imageSettings} />
+            <QRCodeSVG key={`svg-${versionKey}`} value={value} size={size} level={level} fgColor={fg} bgColor={bg} imageSettings={imageSettings} />
           </div>
           <div className="flex gap-2 mt-3">
             <Button variant="outline" size="sm" onClick={downloadPNG}><Download className="w-4 h-4 mr-1" />PNG</Button>
             <Button variant="outline" size="sm" onClick={downloadSVG}><Download className="w-4 h-4 mr-1" />SVG</Button>
           </div>
+          {version && version > 0 ? (
+            <p className="text-[10px] text-muted-foreground mt-2 text-center">
+              Versão {version}{lastPublishedAt ? ` · publicada em ${new Date(lastPublishedAt).toLocaleString('pt-BR')}` : ''}
+            </p>
+          ) : null}
         </div>
+
 
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm font-semibold"><QrCode className="w-4 h-4" />Personalização avançada</div>
