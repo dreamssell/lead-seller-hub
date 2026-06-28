@@ -164,7 +164,8 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
       setAutoImportHours(Math.max(1, Math.min(168, Number(meta.auto_import_interval_hours) || 6)));
       setImporting(false);
       importCancelRef.current = false;
-      setImportProgress({ customers: 0, messages: 0, processed: 0, total: 0 });
+      setImportProgress({ customers: 0, messages: 0, media: 0, processed: 0, total: 0 });
+      setImportReport(null);
       setStep(conn.status === 'connected' ? 'connected' : 'credentials');
     } else {
       stopAll();
