@@ -203,6 +203,7 @@ export default function ChatPage() {
           const { data: connections, error: connError } = await supabase
             .from('whatsapp_connections')
             .select('*')
+            .in('provider', ['uaz', 'meta', 'wavoip', 'evolution'])
             .order('updated_at', { ascending: false });
 
           if (connError) {
