@@ -177,6 +177,9 @@ async function sendEvolutionMedia(conn: WhatsAppConnection, customerId: string, 
   }
   return await res.json();
 }
+
+export const getProviderAdapter = (provider: string): WhatsAppProviderAdapter => {
+  switch (provider) {
     case 'uaz':
       return new UazAdapter();
     case 'wavoip':
