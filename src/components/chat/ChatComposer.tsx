@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, KeyboardEvent, ReactNode } from 'react';
 import { Send, Paperclip, X, Loader2, FileText, Image as ImageIcon, Mic, AudioLines } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -26,6 +26,7 @@ interface Props {
   disabled?: boolean;
   externalAttachment?: File | null;
   onConsumeExternalAttachment?: () => void;
+  extras?: ReactNode;
 }
 
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -49,6 +50,7 @@ export function ChatComposer({
   disabled,
   externalAttachment,
   onConsumeExternalAttachment,
+  extras,
 }: Props) {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -189,11 +191,12 @@ export function ChatComposer({
       <FormatToolbar textareaRef={taRef} value={text} onChange={onChangeText} />
 
       <div className="flex items-end gap-2 mt-1">
-        <div className="relative">
+        <div className="flex items-center">
           <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => handleFiles(e.target.files)} />
           <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-xl" onClick={() => fileInputRef.current?.click()} title="Anexar arquivo">
             <Paperclip className="w-4 h-4" />
           </Button>
+          {extras}
         </div>
 
         {showAudio ? (
