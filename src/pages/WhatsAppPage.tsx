@@ -168,12 +168,15 @@ export default function WhatsAppPage() {
             )}
           </TabsContent>
 
-          <TabsContent value="audit" className="mt-0">
-            <UazAuditTab 
-              initialLogId={auditFilters?.logId} 
-              initialTenantId={auditFilters?.tenantId} 
-            />
-          </TabsContent>
+          {isOwner && (
+            <TabsContent value="audit" className="mt-0">
+              <UazAuditTab
+                initialLogId={auditFilters?.logId}
+                initialTenantId={auditFilters?.tenantId}
+              />
+            </TabsContent>
+          )}
+
 
           <TabsContent value="health" className="mt-0">
             <Card className="glass-card">
