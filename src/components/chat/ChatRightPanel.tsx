@@ -310,7 +310,12 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
             )}
           </ScrollArea>
         </TabsContent>
+
+        <TabsContent value="history" className="flex-1 flex flex-col mt-3 px-3 pb-3 data-[state=inactive]:hidden">
+          <AssignmentTimeline customerId={customerId} />
+        </TabsContent>
       </Tabs>
+
     </div>
   );
 }
