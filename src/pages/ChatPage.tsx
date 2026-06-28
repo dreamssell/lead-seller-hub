@@ -146,6 +146,9 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<any[]>([]);
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState('');
+  const [collabTransferOpen, setCollabTransferOpen] = useState(false);
+  const { isSupervisor, userId: currentUserId } = useIsSupervisor();
+
   const [messageText, setMessageText] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
