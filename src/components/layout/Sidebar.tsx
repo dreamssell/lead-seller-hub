@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import logo from '@/assets/logo.png';
 import { LogOut } from 'lucide-react';
 import { navSections } from '@/lib/navigation';
@@ -13,6 +14,8 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, canAccessPage } = useAuth();
+  const { isOwner } = usePlatformOwner();
+
 
   const go = (path: string) => {
     navigate(path);
