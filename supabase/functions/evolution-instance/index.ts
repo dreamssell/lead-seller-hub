@@ -84,20 +84,20 @@ async function evoFetchRetry(
   token: string,
   path: string,
   init: RequestInit = {},
-  attempts = 4,
+  attempts = 2,
 ) {
   let lastErr: unknown = null;
   for (let i = 0; i < attempts; i++) {
     try {
       const r = await evoFetch(baseUrl, token, path, init);
-      const transient = r.status === 429 || r.status === 0 || (r.status >= 500 && r.status <= 599);
+      const transient = r.status === 429 || r.status === 0 || r.status === 408 || (r.status >= 500 && r.status <= 599);
       if (!transient) return r;
       lastErr = new Error(`HTTP ${r.status}`);
     } catch (e) {
       lastErr = e;
     }
     if (i < attempts - 1) {
-      const delay = Math.min(8000, 400 * Math.pow(2, i)) + Math.floor(Math.random() * 250);
+      const delay = Math.min(2500, 350 * Math.pow(2, i)) + Math.floor(Math.random() * 150);
       await new Promise((res) => setTimeout(res, delay));
     }
   }
