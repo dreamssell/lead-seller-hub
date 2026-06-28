@@ -16,7 +16,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-type Action = "create" | "qr" | "state" | "logout" | "delete" | "test" | "set_webhook" | "import_chats";
+type Action = "create" | "qr" | "state" | "logout" | "delete" | "test" | "set_webhook" | "import_chats" | "set_auto_import";
 
 interface Body {
   action: Action;
@@ -28,7 +28,13 @@ interface Body {
   // import_chats options:
   max_chats?: number;
   messages_per_chat?: number;
+  offset?: number;
+  batch_size?: number;
+  // set_auto_import options:
+  enabled?: boolean;
+  interval_hours?: number;
 }
+
 
 async function evoFetch(
   baseUrl: string,
