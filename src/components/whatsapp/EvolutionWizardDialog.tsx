@@ -543,8 +543,23 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
     </div>
   );
 
+  const [importing, setImporting] = useState(false);
+  const runImport = async () => {
+    setImporting(true);
+    const { data, error } = await invoke('import_chats', { max_chats: 80, messages_per_chat: 25 });
+    setImporting(false);
+    if (error || !data?.ok) {
+      toast.error('Falha ao importar conversas', { description: error?.message || data?.error || 'Tente novamente.' });
+      return;
+    }
+    toast.success(
+      `Importação concluída`,
+      { description: `${data.customers_imported} contatos · ${data.messages_imported} mensagens` },
+    );
+  };
+
   const renderConnected = () => (
-    <div className="text-center py-8 space-y-3">
+    <div className="text-center py-8 space-y-4">
       <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/10 flex items-center justify-center">
         <CheckCircle2 className="w-8 h-8 text-emerald-500" />
       </div>
@@ -554,6 +569,16 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected }:
           Instância <span className="font-mono">{instance}</span>
           {(conn as any).phone_number && <> · {(conn as any).phone_number}</>}
         </p>
+      </div>
+      <div className="rounded-lg border border-border bg-muted/30 p-3 text-left space-y-2">
+        <p className="text-xs font-semibold">Importar conversas existentes</p>
+        <p className="text-[11px] text-muted-foreground">
+          Traz contatos e últimas mensagens do WhatsApp pareado para o Chat Omnichannel. Novas mensagens chegam automaticamente via webhook.
+        </p>
+        <Button size="sm" onClick={runImport} disabled={importing} className="w-full sm:w-auto">
+          {importing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+          {importing ? 'Importando…' : 'Importar agora'}
+        </Button>
       </div>
     </div>
   );
