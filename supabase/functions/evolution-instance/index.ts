@@ -1003,6 +1003,7 @@ Deno.serve(async (req) => {
         dry_run: dryRun,
         chats_seen: chats.length,
         evolution_totals: evoTotals,
+        batch_messages_seen: messagesTotalCounted,
         total_available: totalAvailable,
         offset,
         next_offset: nextOffset,
