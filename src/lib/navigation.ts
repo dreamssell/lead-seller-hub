@@ -47,7 +47,10 @@ export type SidebarNavItem = {
   label: string;
   path: string;
   desc: string;
+  /** Visible only to the platform owner (global admin). Hidden for clients and sub-empresas. */
+  ownerOnly?: boolean;
 };
+
 
 export const navSections: { label: string; items: SidebarNavItem[] }[] = [
   {
@@ -76,12 +79,15 @@ export const navSections: { label: string; items: SidebarNavItem[] }[] = [
     label: 'Configurações',
     items: [
       { key: 'settings', icon: UserCircle, label: 'Configurações', path: '/settings', desc: 'Perfil e dados da empresa' },
-      { key: 'developer', icon: Settings, label: 'Desenvolvedor', path: '/developer', desc: 'Preferências e integrações técnicas' },
       { key: 'api-keys', icon: Key, label: 'Chaves API', path: '/api-keys', desc: 'Credenciais e integrações externas' },
-      { key: 'status', icon: Activity, label: 'Status do Backend', path: '/status', desc: 'Saúde técnica da plataforma' },
       { key: 'documentation', icon: FileText, label: 'Documentação', path: '/documentation', desc: 'Manuais técnicos e API' },
+      // Itens abaixo são apenas do dono da plataforma — diagnósticos internos, status técnico e
+      // ferramentas de desenvolvimento não devem ser expostos a clientes ou sub-empresas.
+      { key: 'developer', icon: Settings, label: 'Desenvolvedor', path: '/developer', desc: 'Preferências e integrações técnicas', ownerOnly: true },
+      { key: 'status', icon: Activity, label: 'Status do Backend', path: '/status', desc: 'Saúde técnica da plataforma', ownerOnly: true },
     ],
   },
+
 ];
 
 export const PAGE_OPTIONS = navSections.flatMap((section) => section.items);

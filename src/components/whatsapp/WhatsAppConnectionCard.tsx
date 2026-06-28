@@ -24,6 +24,8 @@ import { FacebookDiagnostics } from './FacebookDiagnostics';
 import { WidgetSettings } from './WidgetSettings';
 import { EvolutionWizardDialog } from './EvolutionWizardDialog';
 import { EvolutionStatusBanner } from './EvolutionStatusBanner';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
+
 
 interface ConnectionCardProps {
   conn: WhatsAppConnection;
@@ -48,6 +50,8 @@ export function statusBadge(status: ConnectionStatus) {
 }
 
 export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: ConnectionCardProps) {
+  const { isOwner } = usePlatformOwner();
+
   const config = PROVIDER_CONFIGS[conn.provider] || PROVIDER_CONFIGS.uaz;
   const [url, setUrl] = useState<string>(conn.metadata?.url ?? config.url);
   const [token, setToken] = useState<string>(conn.metadata?.token ?? '');
@@ -196,9 +200,10 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
           />
         )}
 
-        {conn.provider === 'facebook' && (
+        {conn.provider === 'facebook' && isOwner && (
           <FacebookDiagnostics conn={conn} />
         )}
+
 
         {conn.provider === 'widget' && (
           <WidgetSettings conn={conn} onSaved={onSaved} />

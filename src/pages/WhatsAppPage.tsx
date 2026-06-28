@@ -16,8 +16,11 @@ import { toast } from 'sonner';
 import UazAuditTab from '@/components/settings/UazAuditTab';
 import { WhatsAppConnectionCard } from '@/components/whatsapp/WhatsAppConnectionCard';
 import { WhatsAppConnection, WhatsAppProvider } from '@/components/whatsapp/types';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
 export default function WhatsAppPage() {
+  const { isOwner } = usePlatformOwner();
+
   const [connections, setConnections] = useState<WhatsAppConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [auditFilters, setAuditFilters] = useState<{ tenantId?: string; logId?: string } | null>(null);
@@ -83,11 +86,14 @@ export default function WhatsAppPage() {
                 <Plug className="w-4 h-4" />
                 Conexões
               </TabsTrigger>
-              <TabsTrigger value="audit" className="gap-2">
-                <History className="w-4 h-4" />
-                Auditoria & Logs
-              </TabsTrigger>
+              {isOwner && (
+                <TabsTrigger value="audit" className="gap-2">
+                  <History className="w-4 h-4" />
+                  Auditoria & Logs
+                </TabsTrigger>
+              )}
               <TabsTrigger value="health" className="gap-2">
+
                 <Activity className="w-4 h-4" />
                 Saúde do Sistema
               </TabsTrigger>
@@ -162,12 +168,15 @@ export default function WhatsAppPage() {
             )}
           </TabsContent>
 
-          <TabsContent value="audit" className="mt-0">
-            <UazAuditTab 
-              initialLogId={auditFilters?.logId} 
-              initialTenantId={auditFilters?.tenantId} 
-            />
-          </TabsContent>
+          {isOwner && (
+            <TabsContent value="audit" className="mt-0">
+              <UazAuditTab
+                initialLogId={auditFilters?.logId}
+                initialTenantId={auditFilters?.tenantId}
+              />
+            </TabsContent>
+          )}
+
 
           <TabsContent value="health" className="mt-0">
             <Card className="glass-card">

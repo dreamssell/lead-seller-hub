@@ -17,6 +17,8 @@ import { SignatureRoleAuditLog } from '@/components/signature/SignatureRoleAudit
 import { ExportColumnPicker } from '@/components/signature/ExportColumnPicker';
 import { exportSignaturesCSV, exportSignaturesPDF, DEFAULT_EXPORT_COLUMNS, type ExportColumnKey } from '@/lib/signatureExport';
 import { SignatureErrorLogs } from '@/components/signature/SignatureErrorLogs';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
+
 
 type Doc = PipelineDoc & {
   owner_id: string;
@@ -57,6 +59,8 @@ const ROLE_OPTS = [
 
 export default function SignaturesPage() {
   const { user } = useAuth();
+  const { isOwner } = usePlatformOwner();
+
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
   const [isLeader, setIsLeader] = useState(false);
@@ -222,10 +226,11 @@ export default function SignaturesPage() {
             <TabsTrigger value="dashboard"><BarChart3 className="w-3.5 h-3.5 mr-1.5" /> Dashboard Gerencial</TabsTrigger>
           )}
           <TabsTrigger value="roles"><ShieldCheck className="w-3.5 h-3.5 mr-1.5" /> Equipe & Cargos</TabsTrigger>
-          {isLeader && (
+          {isOwner && (
             <TabsTrigger value="errors"><AlertTriangle className="w-3.5 h-3.5 mr-1.5" /> Registro de erros</TabsTrigger>
           )}
         </TabsList>
+
 
         {/* Filters */}
         <div className="glass-card p-4">
@@ -318,11 +323,12 @@ export default function SignaturesPage() {
           <SignatureRoleAuditLog />
         </TabsContent>
 
-        {isLeader && (
+        {isOwner && (
           <TabsContent value="errors">
             <SignatureErrorLogs />
           </TabsContent>
         )}
+
       </Tabs>
       )}
 
