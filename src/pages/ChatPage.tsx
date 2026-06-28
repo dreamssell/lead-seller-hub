@@ -1373,6 +1373,9 @@ export default function ChatPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MediaDropzone active={!!selectedConvId} onDrop={(files) => setExternalAttachment(files[0] || null)} />
+      <KeyboardShortcutsHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </AppLayout>
   );
 }
