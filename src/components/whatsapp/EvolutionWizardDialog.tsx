@@ -666,23 +666,32 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
   );
 
   // ---------- Progressive import ----------
-  const runImport = async () => {
+  const runImport = async (mode: 'real' | 'dry' = 'real') => {
     setImporting(true);
+    setImportMode(mode);
     importCancelRef.current = false;
-    setImportProgress({ customers: 0, messages: 0, processed: 0, total: 0 });
+    setImportProgress({ customers: 0, messages: 0, media: 0, processed: 0, total: 0 });
+    setImportReport(null);
 
     let offset = 0;
+    let runId: string | null = null;
     const batchSize = 15;
     const maxChats = 5000;
     const perChat = 500;
-    let safety = 400; // hard cap on loop iterations
+    let safety = 400;
 
+    const acc = {
+      customers: 0, messages: 0, media: 0,
+      skipped: {} as Record<string, number>,
+      endpoint_failures: {} as Record<string, { count: number; last_error?: string }>,
+      evolution_totals: {} as { contacts?: number; chats?: number; messages?: number },
+    };
 
     try {
       while (safety-- > 0) {
         if (importCancelRef.current) {
-          toast.info('Importação cancelada', {
-            description: `${importProgress.customers} contatos · ${importProgress.messages} mensagens importadas até aqui.`,
+          toast.info(mode === 'dry' ? 'Simulação cancelada' : 'Importação cancelada', {
+            description: `${acc.customers} contatos · ${acc.messages} mensagens · ${acc.media} mídias até aqui.`,
           });
           break;
         }
@@ -692,25 +701,61 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
           offset,
           batch_size: batchSize,
           include_groups: true,
+          dry_run: mode === 'dry',
+          download_media: mode !== 'dry',
+          run_id: runId,
         });
         if (error || !data?.ok) {
-          toast.error('Falha ao importar conversas', {
+          toast.error(mode === 'dry' ? 'Falha na simulação' : 'Falha ao importar conversas', {
             description: error?.message || data?.error || 'Tente novamente.',
           });
           break;
         }
-        setImportProgress((prev) => ({
-          customers: prev.customers + (data.batch_customers ?? 0),
-          messages: prev.messages + (data.batch_messages ?? 0),
-          processed: data.next_offset ?? prev.processed,
-          total: data.total_available ?? prev.total,
-        }));
+        runId = data.run_id ?? runId;
+        acc.customers += data.batch_customers ?? 0;
+        acc.messages += data.batch_messages ?? 0;
+        acc.media += data.batch_media ?? 0;
+        if (data.skipped) for (const [k, v] of Object.entries(data.skipped as Record<string, number>)) {
+          acc.skipped[k] = (acc.skipped[k] ?? 0) + (v as number);
+        }
+        if (data.endpoint_failures) for (const [k, v] of Object.entries(data.endpoint_failures as any)) {
+          const prev = acc.endpoint_failures[k] ?? { count: 0 };
+          acc.endpoint_failures[k] = { count: prev.count + (v as any).count, last_error: (v as any).last_error ?? prev.last_error };
+        }
+        if (data.evolution_totals) acc.evolution_totals = { ...acc.evolution_totals, ...data.evolution_totals };
+
+        setImportProgress({
+          customers: acc.customers,
+          messages: acc.messages,
+          media: acc.media,
+          processed: data.next_offset ?? 0,
+          total: data.total_available ?? 0,
+        });
         offset = data.next_offset ?? offset + batchSize;
         if (data.done) {
-          toast.success('Importação concluída', {
-            description: `${importProgress.customers + (data.batch_customers ?? 0)} contatos · ${
-              importProgress.messages + (data.batch_messages ?? 0)
-            } mensagens.`,
+          // Fetch the final audit row to get db_totals + congruence
+          let db_totals: any = undefined;
+          let congruence: any = undefined;
+          if (runId) {
+            const { data: runRow } = await supabase
+              .from('evolution_import_runs' as any)
+              .select('db_totals, congruence, finished_at')
+              .eq('id', runId)
+              .maybeSingle();
+            db_totals = (runRow as any)?.db_totals;
+            congruence = (runRow as any)?.congruence;
+          }
+          setImportReport({
+            dry_run: mode === 'dry',
+            evolution_totals: acc.evolution_totals,
+            db_totals,
+            skipped: acc.skipped,
+            endpoint_failures: acc.endpoint_failures,
+            congruence,
+            run_id: runId,
+          });
+          toast.success(mode === 'dry' ? 'Simulação concluída' : 'Importação concluída', {
+            description: `${acc.customers} contatos · ${acc.messages} mensagens · ${acc.media} mídias.`,
           });
           break;
         }
