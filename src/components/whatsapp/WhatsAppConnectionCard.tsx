@@ -200,9 +200,10 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
           />
         )}
 
-        {conn.provider === 'facebook' && (
+        {conn.provider === 'facebook' && isOwner && (
           <FacebookDiagnostics conn={conn} />
         )}
+
 
         {conn.provider === 'widget' && (
           <WidgetSettings conn={conn} onSaved={onSaved} />
