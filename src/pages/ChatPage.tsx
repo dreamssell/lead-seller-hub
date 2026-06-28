@@ -608,10 +608,10 @@ export default function ChatPage() {
                     whatsappStatus.loading ? (
                       <RefreshCw className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
                     ) : whatsappStatus.connected ? (
-                      <div className="flex items-center gap-1.5 bg-success/10 px-2 py-0.5 rounded-full border border-success/20">
-                        <CheckCircle2 className="w-3 h-3 text-success" />
-                        <span className="text-[10px] font-bold text-success uppercase tracking-wider">
-                          {activeWhatsAppConn?.provider?.toUpperCase() || 'WhatsApp'} Ativo
+                      <div className="flex items-center gap-1.5 bg-success/10 px-2 py-0.5 rounded-full border border-success/20 max-w-[180px]">
+                        <CheckCircle2 className="w-3 h-3 text-success shrink-0" />
+                        <span className="text-[10px] font-bold text-success uppercase tracking-wider truncate">
+                          {(connectedProviders.length > 0 ? connectedProviders.join(' + ') : (activeWhatsAppConn?.provider?.toUpperCase() || 'WhatsApp'))} Ativo
                         </span>
                       </div>
                     ) : (
