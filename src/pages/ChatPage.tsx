@@ -35,6 +35,7 @@ import { SignatureDocumentModal } from '@/components/signature/SignatureDocument
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { StickyNote, Zap, PhoneCall, Headphones, PenLine, Keyboard } from 'lucide-react';
 import { ChatComposer, ComposerAttachment } from '@/components/chat/ChatComposer';
+import { RichSendMenu, RichPayload } from '@/components/chat/RichSendMenu';
 import { MediaDropzone } from '@/components/chat/MediaDropzone';
 import { KeyboardShortcutsHelp } from '@/components/chat/KeyboardShortcutsHelp';
 import { useChatShortcuts } from '@/hooks/useChatShortcuts';
@@ -754,6 +755,46 @@ export default function ChatPage() {
       throw err;
     }
   };
+
+  const handleSendRich = async (payload: RichPayload) => {
+    if (!selectedConvId) return;
+    const labelMap: Record<string, string> = {
+      location: '📍 Localização',
+      contact: '👤 Contato',
+      poll: '📊 Enquete',
+      list: '📋 Lista interativa',
+      buttons: '🔘 Botões',
+      product: '🛍️ Produto',
+      signature: '📄 Documento de assinatura',
+    };
+    const summary =
+      payload.type === 'location' ? `📍 ${payload.name || `${payload.latitude}, ${payload.longitude}`}` :
+      payload.type === 'contact' ? `👤 ${payload.fullName} · ${payload.phone}` :
+      payload.type === 'poll' ? `📊 ${payload.name}` :
+      payload.type === 'list' ? `📋 ${payload.title || payload.description}` :
+      payload.type === 'buttons' ? `🔘 ${payload.description}` :
+      payload.type === 'product' ? `🛍️ ${payload.name}` :
+      payload.type === 'signature' ? `📄 ${payload.title}` :
+      labelMap[(payload as any).type] || 'Mensagem rica';
+    const id = sendOptimistic(summary);
+    try {
+      if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
+        const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+        if (!adapter.sendRich) throw new Error('Este canal ainda não suporta este tipo de mensagem.');
+        const data = await adapter.sendRich(activeWhatsAppConn, selectedConvId, payload);
+        markStatus(id, 'sent', data?.data?.key?.id);
+        toast({ title: 'Enviado', description: summary });
+      } else {
+        await new Promise(r => setTimeout(r, 300));
+        markStatus(id, 'sent');
+      }
+    } catch (err: any) {
+      toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
+      markStatus(id, 'error');
+      throw err;
+    }
+  };
+
 
 
 
