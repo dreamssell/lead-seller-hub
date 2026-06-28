@@ -180,6 +180,13 @@ export default function ChatPage() {
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const voip = useVoip();
   const wavoip = useWavoipWebphone();
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [externalAttachment, setExternalAttachment] = useState<File | null>(null);
+
+  useChatShortcuts(!!selectedConvId, {
+    onHelp: () => setShortcutsOpen(true),
+    onSend: () => { /* ChatComposer handles its own Ctrl+Enter via key event */ },
+  });
 
 
 
