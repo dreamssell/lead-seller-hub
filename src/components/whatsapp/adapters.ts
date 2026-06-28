@@ -4,7 +4,19 @@ import { supabase } from '@/integrations/supabase/client';
 export interface WhatsAppProviderAdapter {
   getStatus(conn: WhatsAppConnection): Promise<{ connected: boolean; status: string; phone?: string; error?: string; raw?: any }>;
   sendMessage(conn: WhatsAppConnection, customerId: string, content: string): Promise<any>;
+  sendMedia?(conn: WhatsAppConnection, customerId: string, file: File, caption?: string): Promise<any>;
+  sendAudio?(conn: WhatsAppConnection, customerId: string, blob: Blob): Promise<any>;
   syncContacts(conn: WhatsAppConnection): Promise<any>;
+}
+
+async function fileToBase64(blob: Blob): Promise<string> {
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  let bin = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < buf.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, Array.from(buf.subarray(i, i + chunk)) as any);
+  }
+  return btoa(bin);
 }
 
 class UazAdapter implements WhatsAppProviderAdapter {
