@@ -39,6 +39,13 @@ import { MediaDropzone } from '@/components/chat/MediaDropzone';
 import { KeyboardShortcutsHelp } from '@/components/chat/KeyboardShortcutsHelp';
 import { useChatShortcuts } from '@/hooks/useChatShortcuts';
 import { renderWhatsAppText } from '@/lib/whatsappFormat';
+import { CollaborationBar } from '@/components/chat/CollaborationBar';
+import { WhisperFeed } from '@/components/chat/WhisperFeed';
+import { SupervisorBanner } from '@/components/chat/SupervisorBanner';
+import { WhisperComposer } from '@/components/chat/WhisperComposer';
+import { TransferConversationDialog } from '@/components/chat/TransferConversationDialog';
+import { useIsSupervisor } from '@/hooks/useIsSupervisor';
+
 
 
 import { ScrollArea } from '@/components/ui/scroll-area';
