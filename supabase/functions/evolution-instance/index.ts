@@ -443,6 +443,156 @@ Deno.serve(async (req) => {
       return json({ ok: overallOk, checks });
     }
 
+    if (action === "set_webhook") {
+      try {
+        const r = await registerWebhook(baseUrl, token, instance, connection_id);
+        await logEvent("evolution.webhook_set", "success", "Webhook registrado manualmente");
+        return json({ ok: true, raw: r });
+      } catch (e) {
+        await logEvent("evolution.webhook_set", "error", (e as Error).message);
+        return json({ ok: false, error: (e as Error).message }, 502);
+      }
+    }
+
+    if (action === "import_chats") {
+      // 1) Ensure webhook is set so new messages keep flowing.
+      try { await registerWebhook(baseUrl, token, instance, connection_id); } catch (_) { /* best effort */ }
+
+      const maxChats = Math.max(1, Math.min(Number(body.max_chats) || 50, 200));
+      const perChat = Math.max(1, Math.min(Number(body.messages_per_chat) || 20, 100));
+
+      // 2) Fetch chats. Evolution v2: POST /chat/findChats/{instance} with {where:{}}
+      const chatsRes = await evoFetch(
+        baseUrl,
+        token,
+        `/chat/findChats/${encodeURIComponent(instance)}`,
+        { method: "POST", body: JSON.stringify({ where: {} }) },
+      );
+      const chats: any[] = Array.isArray(chatsRes.data)
+        ? chatsRes.data
+        : Array.isArray(chatsRes.data?.chats)
+          ? chatsRes.data.chats
+          : [];
+
+      if (!chatsRes.ok && !chats.length) {
+        await logEvent("evolution.import", "error", `findChats HTTP ${chatsRes.status}`);
+        return json({ ok: false, error: `Evolution respondeu ${chatsRes.status} ao listar conversas.` }, 502);
+      }
+
+      let importedCustomers = 0;
+      let importedMessages = 0;
+
+      for (const chat of chats.slice(0, maxChats)) {
+        const jid: string = chat.id || chat.remoteJid || chat.remote_jid || "";
+        if (!jid || jid.endsWith("@g.us")) continue; // skip groups
+        const phone = jid.replace("@s.whatsapp.net", "").replace("@c.us", "");
+        if (!/^\d{6,20}$/.test(phone)) continue;
+        const displayName: string = chat.name || chat.pushName || chat.notifyName || `WhatsApp ${phone}`;
+
+        // Upsert customer scoped by sub_company
+        let customerId: string | null = null;
+        const existing = await admin
+          .from("customers")
+          .select("id")
+          .eq("phone", phone)
+          .eq("sub_company_id", conn.sub_company_id as any)
+          .maybeSingle();
+        if (existing.data?.id) {
+          customerId = existing.data.id;
+        } else {
+          const ins = await admin
+            .from("customers")
+            .insert({
+              name: displayName,
+              phone,
+              channel: "whatsapp",
+              owner_id: conn.owner_id,
+              sub_company_id: conn.sub_company_id,
+              origin_connection_id: connection_id,
+              created_by: conn.owner_id || userId,
+            })
+            .select("id")
+            .single();
+          if (ins.error || !ins.data) continue;
+          customerId = ins.data.id;
+          importedCustomers++;
+        }
+
+        // 3) Fetch messages for this chat
+        const msgsRes = await evoFetch(
+          baseUrl,
+          token,
+          `/chat/findMessages/${encodeURIComponent(instance)}`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              where: { key: { remoteJid: jid } },
+              limit: perChat,
+            }),
+          },
+        );
+        const msgs: any[] = Array.isArray(msgsRes.data)
+          ? msgsRes.data
+          : Array.isArray(msgsRes.data?.messages?.records)
+            ? msgsRes.data.messages.records
+            : Array.isArray(msgsRes.data?.messages)
+              ? msgsRes.data.messages
+              : [];
+
+        for (const m of msgs) {
+          const msgId: string = m.key?.id || m.id || m.messageId;
+          if (!msgId || !customerId) continue;
+          const fromMe: boolean = !!m.key?.fromMe;
+          const text: string =
+            m.message?.conversation ||
+            m.message?.extendedTextMessage?.text ||
+            m.message?.imageMessage?.caption ||
+            m.message?.videoMessage?.caption ||
+            m.text ||
+            m.body ||
+            "";
+          if (!text) continue;
+
+          // Idempotency by uaz_msg_id (we reuse the same column for evolution).
+          const dup = await admin
+            .from("chat_messages")
+            .select("id")
+            .eq("uaz_msg_id", msgId)
+            .maybeSingle();
+          if (dup.data) continue;
+
+          const ins = await admin.from("chat_messages").insert({
+            customer_id: customerId,
+            sender_type: fromMe ? "agent" : "client",
+            content: text,
+            uaz_msg_id: msgId,
+            channel: "whatsapp",
+            sub_company_id: conn.sub_company_id,
+            connection_id,
+            metadata: { source: "evolution_import", raw: m },
+            created_at: m.messageTimestamp
+              ? new Date(Number(m.messageTimestamp) * 1000).toISOString()
+              : undefined,
+          });
+          if (!ins.error) importedMessages++;
+        }
+      }
+
+      await logEvent(
+        "evolution.import",
+        "success",
+        `Importados ${importedCustomers} contatos e ${importedMessages} mensagens`,
+        { chats: chats.length, max_chats: maxChats, per_chat: perChat },
+      );
+
+      return json({
+        ok: true,
+        chats_seen: chats.length,
+        customers_imported: importedCustomers,
+        messages_imported: importedMessages,
+      });
+    }
+
     return json({ error: "invalid_action" }, 400);
 
 
