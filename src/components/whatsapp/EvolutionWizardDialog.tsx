@@ -120,12 +120,24 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
 
   // Progressive import state.
   const [importing, setImporting] = useState(false);
+  const [importMode, setImportMode] = useState<'real' | 'dry'>('real');
   const [importProgress, setImportProgress] = useState<{
     customers: number;
     messages: number;
+    media: number;
     processed: number;
     total: number;
-  }>({ customers: 0, messages: 0, processed: 0, total: 0 });
+  }>({ customers: 0, messages: 0, media: 0, processed: 0, total: 0 });
+  const [importReport, setImportReport] = useState<{
+    dry_run: boolean;
+    evolution_totals: { contacts?: number; chats?: number; messages?: number };
+    db_totals?: { customers?: number | null; messages?: number | null; media?: number | null };
+    skipped: Record<string, number>;
+    endpoint_failures: Record<string, { count: number; last_error?: string }>;
+    congruence?: 'congruent' | 'pending' | 'divergent';
+    run_id?: string | null;
+    finished_at?: string;
+  } | null>(null);
   const importCancelRef = useRef<boolean>(false);
 
   const pollTimeoutRef = useRef<number | null>(null);
@@ -152,7 +164,8 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
       setAutoImportHours(Math.max(1, Math.min(168, Number(meta.auto_import_interval_hours) || 6)));
       setImporting(false);
       importCancelRef.current = false;
-      setImportProgress({ customers: 0, messages: 0, processed: 0, total: 0 });
+      setImportProgress({ customers: 0, messages: 0, media: 0, processed: 0, total: 0 });
+      setImportReport(null);
       setStep(conn.status === 'connected' ? 'connected' : 'credentials');
     } else {
       stopAll();
@@ -653,23 +666,32 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
   );
 
   // ---------- Progressive import ----------
-  const runImport = async () => {
+  const runImport = async (mode: 'real' | 'dry' = 'real') => {
     setImporting(true);
+    setImportMode(mode);
     importCancelRef.current = false;
-    setImportProgress({ customers: 0, messages: 0, processed: 0, total: 0 });
+    setImportProgress({ customers: 0, messages: 0, media: 0, processed: 0, total: 0 });
+    setImportReport(null);
 
     let offset = 0;
+    let runId: string | null = null;
     const batchSize = 15;
     const maxChats = 5000;
     const perChat = 500;
-    let safety = 400; // hard cap on loop iterations
+    let safety = 400;
 
+    const acc = {
+      customers: 0, messages: 0, media: 0,
+      skipped: {} as Record<string, number>,
+      endpoint_failures: {} as Record<string, { count: number; last_error?: string }>,
+      evolution_totals: {} as { contacts?: number; chats?: number; messages?: number },
+    };
 
     try {
       while (safety-- > 0) {
         if (importCancelRef.current) {
-          toast.info('Importação cancelada', {
-            description: `${importProgress.customers} contatos · ${importProgress.messages} mensagens importadas até aqui.`,
+          toast.info(mode === 'dry' ? 'Simulação cancelada' : 'Importação cancelada', {
+            description: `${acc.customers} contatos · ${acc.messages} mensagens · ${acc.media} mídias até aqui.`,
           });
           break;
         }
@@ -679,25 +701,61 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
           offset,
           batch_size: batchSize,
           include_groups: true,
+          dry_run: mode === 'dry',
+          download_media: mode !== 'dry',
+          run_id: runId,
         });
         if (error || !data?.ok) {
-          toast.error('Falha ao importar conversas', {
+          toast.error(mode === 'dry' ? 'Falha na simulação' : 'Falha ao importar conversas', {
             description: error?.message || data?.error || 'Tente novamente.',
           });
           break;
         }
-        setImportProgress((prev) => ({
-          customers: prev.customers + (data.batch_customers ?? 0),
-          messages: prev.messages + (data.batch_messages ?? 0),
-          processed: data.next_offset ?? prev.processed,
-          total: data.total_available ?? prev.total,
-        }));
+        runId = data.run_id ?? runId;
+        acc.customers += data.batch_customers ?? 0;
+        acc.messages += data.batch_messages ?? 0;
+        acc.media += data.batch_media ?? 0;
+        if (data.skipped) for (const [k, v] of Object.entries(data.skipped as Record<string, number>)) {
+          acc.skipped[k] = (acc.skipped[k] ?? 0) + (v as number);
+        }
+        if (data.endpoint_failures) for (const [k, v] of Object.entries(data.endpoint_failures as any)) {
+          const prev = acc.endpoint_failures[k] ?? { count: 0 };
+          acc.endpoint_failures[k] = { count: prev.count + (v as any).count, last_error: (v as any).last_error ?? prev.last_error };
+        }
+        if (data.evolution_totals) acc.evolution_totals = { ...acc.evolution_totals, ...data.evolution_totals };
+
+        setImportProgress({
+          customers: acc.customers,
+          messages: acc.messages,
+          media: acc.media,
+          processed: data.next_offset ?? 0,
+          total: data.total_available ?? 0,
+        });
         offset = data.next_offset ?? offset + batchSize;
         if (data.done) {
-          toast.success('Importação concluída', {
-            description: `${importProgress.customers + (data.batch_customers ?? 0)} contatos · ${
-              importProgress.messages + (data.batch_messages ?? 0)
-            } mensagens.`,
+          // Fetch the final audit row to get db_totals + congruence
+          let db_totals: any = undefined;
+          let congruence: any = undefined;
+          if (runId) {
+            const { data: runRow } = await supabase
+              .from('evolution_import_runs' as any)
+              .select('db_totals, congruence, finished_at')
+              .eq('id', runId)
+              .maybeSingle();
+            db_totals = (runRow as any)?.db_totals;
+            congruence = (runRow as any)?.congruence;
+          }
+          setImportReport({
+            dry_run: mode === 'dry',
+            evolution_totals: acc.evolution_totals,
+            db_totals,
+            skipped: acc.skipped,
+            endpoint_failures: acc.endpoint_failures,
+            congruence,
+            run_id: runId,
+          });
+          toast.success(mode === 'dry' ? 'Simulação concluída' : 'Importação concluída', {
+            description: `${acc.customers} contatos · ${acc.messages} mensagens · ${acc.media} mídias.`,
           });
           break;
         }
@@ -758,20 +816,24 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
             </div>
             {importing ? (
               <Button size="sm" variant="destructive" onClick={cancelImport} className="shrink-0">
-                <X className="w-4 h-4 mr-1" /> Cancelar
+                <X className="w-4 h-4 mr-1" /> Cancelar {importMode === 'dry' ? 'simulação' : 'importação'}
               </Button>
             ) : (
-              <Button size="sm" onClick={runImport} className="shrink-0">
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Importar agora
-              </Button>
+              <div className="flex gap-2 shrink-0">
+                <Button size="sm" variant="outline" onClick={() => runImport('dry')}>
+                  <ScanLine className="w-4 h-4 mr-2" /> Simular
+                </Button>
+                <Button size="sm" onClick={() => runImport('real')}>
+                  <RefreshCw className="w-4 h-4 mr-2" /> Importar agora
+                </Button>
+              </div>
             )}
           </div>
 
           {(importing || importProgress.customers > 0 || importProgress.messages > 0) && (
             <div className="space-y-2">
               <Progress value={pct} className="h-2" />
-              <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="grid grid-cols-4 gap-2 text-center">
                 <div className="rounded-md bg-background/60 border border-border/60 py-2">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Contatos</p>
                   <p className="text-sm font-bold tabular-nums">{importProgress.customers}</p>
@@ -779,6 +841,10 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
                 <div className="rounded-md bg-background/60 border border-border/60 py-2">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Mensagens</p>
                   <p className="text-sm font-bold tabular-nums">{importProgress.messages}</p>
+                </div>
+                <div className="rounded-md bg-background/60 border border-border/60 py-2">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Mídias</p>
+                  <p className="text-sm font-bold tabular-nums">{importProgress.media}</p>
                 </div>
                 <div className="rounded-md bg-background/60 border border-border/60 py-2">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Conversas</p>
@@ -790,12 +856,70 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
               </div>
               {importing && (
                 <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                  <Loader2 className="w-3 h-3 animate-spin" /> Processando lote… você pode cancelar a qualquer momento.
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  {importMode === 'dry' ? 'Simulando…' : 'Processando lote…'} você pode cancelar a qualquer momento.
                 </p>
               )}
             </div>
           )}
+
+          {importReport && (
+            <div className="rounded-md border border-border bg-background/60 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold flex items-center gap-2">
+                  Relatório de auditoria
+                  {importReport.dry_run && (
+                    <Badge variant="outline" className="text-[10px]">Simulação</Badge>
+                  )}
+                  {importReport.congruence === 'congruent' && (
+                    <Badge className="text-[10px] bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15">Congruente</Badge>
+                  )}
+                  {importReport.congruence === 'divergent' && (
+                    <Badge className="text-[10px] bg-amber-500/15 text-amber-600 hover:bg-amber-500/15">Divergente</Badge>
+                  )}
+                  {importReport.congruence === 'pending' && (
+                    <Badge variant="outline" className="text-[10px]">Pendente</Badge>
+                  )}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div className="rounded bg-muted/40 p-2">
+                  <p className="font-semibold text-muted-foreground">Evolution API</p>
+                  <p>Contatos: <span className="tabular-nums">{importReport.evolution_totals.contacts ?? '—'}</span></p>
+                  <p>Chats: <span className="tabular-nums">{importReport.evolution_totals.chats ?? '—'}</span></p>
+                </div>
+                <div className="rounded bg-muted/40 p-2">
+                  <p className="font-semibold text-muted-foreground">No banco</p>
+                  <p>Contatos: <span className="tabular-nums">{importReport.db_totals?.customers ?? (importReport.dry_run ? 'n/a (dry-run)' : '—')}</span></p>
+                  <p>Mensagens: <span className="tabular-nums">{importReport.db_totals?.messages ?? (importReport.dry_run ? 'n/a (dry-run)' : '—')}</span></p>
+                </div>
+              </div>
+              {Object.values(importReport.skipped).some((n) => n > 0) && (
+                <div className="text-[11px]">
+                  <p className="font-semibold text-muted-foreground mb-1">Itens ignorados</p>
+                  <div className="flex flex-wrap gap-1">
+                    {Object.entries(importReport.skipped).filter(([, v]) => v > 0).map(([k, v]) => (
+                      <Badge key={k} variant="secondary" className="text-[10px]">
+                        {k.replace('_', ' ')}: {v}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {Object.keys(importReport.endpoint_failures).length > 0 && (
+                <div className="text-[11px]">
+                  <p className="font-semibold text-muted-foreground mb-1">Falhas por endpoint</p>
+                  {Object.entries(importReport.endpoint_failures).map(([k, v]) => (
+                    <p key={k} className="text-amber-600">
+                      <span className="font-mono">{k}</span>: {v.count}× — {v.last_error ?? 'erro temporário'}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
+
 
         <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
           <div className="flex items-start justify-between gap-3">

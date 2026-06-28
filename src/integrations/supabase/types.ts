@@ -901,6 +901,77 @@ export type Database = {
           },
         ]
       }
+      evolution_import_runs: {
+        Row: {
+          congruence: string | null
+          connection_id: string
+          created_at: string
+          db_totals: Json
+          dry_run: boolean
+          endpoint_failures: Json
+          evolution_totals: Json
+          finished_at: string | null
+          id: string
+          imported: Json
+          notes: string | null
+          owner_id: string | null
+          skipped: Json
+          started_at: string
+          started_by: string | null
+          status: string
+          sub_company_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          congruence?: string | null
+          connection_id: string
+          created_at?: string
+          db_totals?: Json
+          dry_run?: boolean
+          endpoint_failures?: Json
+          evolution_totals?: Json
+          finished_at?: string | null
+          id?: string
+          imported?: Json
+          notes?: string | null
+          owner_id?: string | null
+          skipped?: Json
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          sub_company_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          congruence?: string | null
+          connection_id?: string
+          created_at?: string
+          db_totals?: Json
+          dry_run?: boolean
+          endpoint_failures?: Json
+          evolution_totals?: Json
+          finished_at?: string | null
+          id?: string
+          imported?: Json
+          notes?: string | null
+          owner_id?: string | null
+          skipped?: Json
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          sub_company_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evolution_import_runs_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       idempotency_cleanup_logs: {
         Row: {
           clean_date: string | null

@@ -21,7 +21,6 @@ type Action = "create" | "qr" | "state" | "logout" | "delete" | "test" | "set_we
 interface Body {
   action: Action;
   connection_id: string;
-  // Optional overrides used by the wizard before metadata is persisted:
   url?: string;
   token?: string;
   instance?: string;
@@ -30,10 +29,16 @@ interface Body {
   messages_per_chat?: number;
   offset?: number;
   batch_size?: number;
+  include_groups?: boolean;
+  dry_run?: boolean;
+  download_media?: boolean;
+  run_id?: string;            // continuation of an existing audit run
   // set_auto_import options:
   enabled?: boolean;
   interval_hours?: number;
 }
+
+const MEDIA_BUCKET = "whatsapp-media";
 
 
 async function evoFetch(
@@ -58,6 +63,35 @@ async function evoFetch(
     data = { raw: text };
   }
   return { ok: res.ok, status: res.status, data };
+}
+
+/**
+ * Fetch with exponential backoff on transient failures (network, 5xx, 429).
+ * 4xx (except 429) returns immediately — they are deterministic errors.
+ */
+async function evoFetchRetry(
+  baseUrl: string,
+  token: string,
+  path: string,
+  init: RequestInit = {},
+  attempts = 4,
+) {
+  let lastErr: unknown = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const r = await evoFetch(baseUrl, token, path, init);
+      const transient = r.status === 429 || r.status === 0 || (r.status >= 500 && r.status <= 599);
+      if (!transient) return r;
+      lastErr = new Error(`HTTP ${r.status}`);
+    } catch (e) {
+      lastErr = e;
+    }
+    if (i < attempts - 1) {
+      const delay = Math.min(8000, 400 * Math.pow(2, i)) + Math.floor(Math.random() * 250);
+      await new Promise((res) => setTimeout(res, delay));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("evolution request failed");
 }
 
 function inboundWebhookUrl(connectionId: string): string {
@@ -482,24 +516,47 @@ Deno.serve(async (req) => {
     }
 
     if (action === "import_chats") {
-      // 1) Ensure webhook is set so new messages keep flowing.
-      try { await registerWebhook(baseUrl, token, instance, connection_id); } catch (_) { /* best effort */ }
+      // Best-effort webhook re-registration (skipped in dry-run to avoid side-effects).
+      const dryRun = body.dry_run === true;
+      const downloadMedia = body.download_media !== false; // default true
+      if (!dryRun) {
+        try { await registerWebhook(baseUrl, token, instance, connection_id); } catch (_) { /* best effort */ }
+      }
 
       const maxChats = Math.max(1, Math.min(Number(body.max_chats) || 2000, 10000));
       const perChat = Math.max(1, Math.min(Number(body.messages_per_chat) || 200, 1000));
       const offset = Math.max(0, Number(body.offset) || 0);
       const batchSize = Math.max(1, Math.min(Number(body.batch_size) || 15, 50));
-      const includeGroups = body.include_groups !== false; // default true now
+      const includeGroups = body.include_groups !== false;
       const instEnc = encodeURIComponent(instance);
 
-      // Helper to try multiple endpoint shapes — Evolution v1/v2 vary.
+      // --- Audit run management: create on first batch, continue on subsequent ones.
+      let runId = body.run_id ?? null;
+      const skipped: Record<string, number> = {
+        groups: 0, invalid_phone: 0, duplicates: 0,
+        no_messages: 0, parse_failed: 0, media_failed: 0,
+      };
+      const endpointFailures: Record<string, { count: number; last_error?: string }> = {};
+      const noteFailure = (endpoint: string, err: unknown) => {
+        const slot = endpointFailures[endpoint] ?? { count: 0 };
+        slot.count++;
+        slot.last_error = err instanceof Error ? err.message : String(err);
+        endpointFailures[endpoint] = slot;
+      };
+
       const tryEndpoints = async (
+        endpointName: string,
         paths: { path: string; init?: RequestInit }[],
       ) => {
+        let lastErr: unknown = null;
         for (const p of paths) {
-          const r = await evoFetch(baseUrl, token, p.path, p.init);
-          if (r.ok) return r;
+          try {
+            const r = await evoFetchRetry(baseUrl, token, p.path, p.init ?? {});
+            if (r.ok) return r;
+            lastErr = new Error(`HTTP ${r.status}`);
+          } catch (e) { lastErr = e; }
         }
+        if (lastErr) noteFailure(endpointName, lastErr);
         return null;
       };
 
@@ -522,6 +579,18 @@ Deno.serve(async (req) => {
         return null;
       };
 
+      // Classify message media + synth textual content fallback
+      type MediaInfo = { type: string; mime?: string; filename?: string; caption?: string } | null;
+      const classifyMedia = (m: any): MediaInfo => {
+        const msg = m.message || {};
+        if (msg.imageMessage)    return { type: "image", mime: msg.imageMessage.mimetype, caption: msg.imageMessage.caption };
+        if (msg.videoMessage)    return { type: "video", mime: msg.videoMessage.mimetype, caption: msg.videoMessage.caption };
+        if (msg.audioMessage)    return { type: msg.audioMessage.ptt ? "voice" : "audio", mime: msg.audioMessage.mimetype };
+        if (msg.documentMessage) return { type: "document", mime: msg.documentMessage.mimetype, filename: msg.documentMessage.fileName };
+        if (msg.stickerMessage)  return { type: "sticker", mime: msg.stickerMessage.mimetype };
+        if (msg.locationMessage) return { type: "location" };
+        return null;
+      };
       const synthContent = (m: any): string => {
         const msg = m.message || {};
         if (msg.conversation) return msg.conversation;
@@ -531,32 +600,78 @@ Deno.serve(async (req) => {
         if (msg.audioMessage) return msg.audioMessage.ptt ? "[Áudio - mensagem de voz]" : "[Áudio]";
         if (msg.documentMessage) return `[Documento] ${msg.documentMessage.fileName || ""}`.trim();
         if (msg.stickerMessage) return "[Sticker]";
-        if (msg.locationMessage) return "[Localização]";
+        if (msg.locationMessage) {
+          const lat = msg.locationMessage.degreesLatitude;
+          const lng = msg.locationMessage.degreesLongitude;
+          return lat && lng ? `[Localização] ${lat}, ${lng}` : "[Localização]";
+        }
         if (msg.contactMessage || msg.contactsArrayMessage) return "[Contato]";
         if (msg.reactionMessage?.text) return `[Reação] ${msg.reactionMessage.text}`;
         if (msg.pollCreationMessage) return `[Enquete] ${msg.pollCreationMessage.name || ""}`.trim();
         return m.text || m.body || m.message?.text || "[Mensagem]";
       };
 
-      // 2) On first page: seed contacts via /chat/findContacts so we don't depend on
-      //    chats having a "name". This catches the full contact list (34 in the user's case).
-      let seededContacts = 0;
+      // Download media via Evolution base64 endpoint, upload to storage
+      const extFromMime = (mime?: string) => {
+        if (!mime) return "bin";
+        const m = mime.split(";")[0].split("/");
+        return (m[1] || "bin").replace(/[^a-z0-9]/gi, "").slice(0, 6) || "bin";
+      };
+      const downloadAndStoreMedia = async (
+        msgKey: any, msgId: string, info: MediaInfo,
+      ): Promise<{ path: string; size: number; mime?: string } | null> => {
+        if (!info || info.type === "location") return null;
+        try {
+          const r = await evoFetchRetry(baseUrl, token, `/chat/getBase64FromMediaMessage/${instEnc}`, {
+            method: "POST",
+            body: JSON.stringify({ message: { key: msgKey } }),
+          }, 3);
+          const b64 = r.data?.base64 || r.data?.base64String || r.data?.media || r.data?.data;
+          if (!b64 || typeof b64 !== "string") return null;
+          const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+          const ext = info.filename?.includes(".") ? info.filename.split(".").pop()!.slice(0, 6) : extFromMime(info.mime);
+          const path = `${conn.owner_id}/${connection_id}/${msgId}.${ext}`;
+          const up = await admin.storage.from(MEDIA_BUCKET).upload(path, bin, {
+            contentType: info.mime || "application/octet-stream",
+            upsert: true,
+          });
+          if (up.error) throw up.error;
+          return { path, size: bin.byteLength, mime: info.mime };
+        } catch (e) {
+          noteFailure("getBase64FromMediaMessage", e);
+          skipped.media_failed++;
+          return null;
+        }
+      };
+
+      // ---- 1) Evolution totals (for reconciliation) — fetched once per run.
+      let evoTotals: { contacts?: number; chats?: number; messages?: number } = {};
       if (offset === 0) {
-        const contactsRes = await tryEndpoints([
+        const cr = await tryEndpoints("findContacts", [
+          { path: `/chat/findContacts/${instEnc}`, init: { method: "POST", body: JSON.stringify({ where: {} }) } },
+          { path: `/chat/fetchContacts/${instEnc}` },
+        ]);
+        evoTotals.contacts = pickArray(cr?.data).length || undefined;
+      }
+
+      // ---- 2) Seed contacts (only on first batch and not in dry-run for inserts).
+      let seededContacts = 0;
+      let seededContactsPlanned = 0;
+      if (offset === 0) {
+        const contactsRes = await tryEndpoints("findContacts", [
           { path: `/chat/findContacts/${instEnc}`, init: { method: "POST", body: JSON.stringify({ where: {} }) } },
           { path: `/chat/fetchContacts/${instEnc}` },
           { path: `/contacts/${instEnc}` },
         ]);
         const contacts = pickArray(contactsRes?.data);
         if (contacts.length) {
-          // Batch existing lookup
           const phones: string[] = [];
           const byPhone = new Map<string, { name: string }>();
           for (const c of contacts) {
             const jid: string = c.id || c.remoteJid || c.remote_jid || c.jid || "";
             if (!includeGroups && jid.endsWith("@g.us")) continue;
             const phone = parsePhone(jid);
-            if (!phone) continue;
+            if (!phone) { skipped.invalid_phone++; continue; }
             phones.push(phone);
             byPhone.set(phone, {
               name: c.pushName || c.name || c.notifyName || c.verifiedName || `WhatsApp ${phone}`,
@@ -564,24 +679,18 @@ Deno.serve(async (req) => {
           }
           if (phones.length) {
             const { data: existing } = await admin
-              .from("customers")
-              .select("phone")
-              .eq("sub_company_id", conn.sub_company_id as any)
-              .in("phone", phones);
+              .from("customers").select("phone")
+              .eq("sub_company_id", conn.sub_company_id as any).in("phone", phones);
             const existingSet = new Set((existing ?? []).map((r: any) => r.phone));
             const toInsert = [...byPhone.entries()]
               .filter(([p]) => !existingSet.has(p))
               .map(([phone, v]) => ({
-                name: v.name,
-                phone,
-                channel: "whatsapp",
-                owner_id: conn.owner_id,
-                sub_company_id: conn.sub_company_id,
-                origin_connection_id: connection_id,
-                created_by: conn.owner_id || userId,
+                name: v.name, phone, channel: "whatsapp",
+                owner_id: conn.owner_id, sub_company_id: conn.sub_company_id,
+                origin_connection_id: connection_id, created_by: conn.owner_id || userId,
               }));
-            if (toInsert.length) {
-              // chunk to avoid payload limits
+            seededContactsPlanned = toInsert.length;
+            if (!dryRun && toInsert.length) {
               const chunk = 200;
               for (let i = 0; i < toInsert.length; i += chunk) {
                 const part = toInsert.slice(i, i + chunk);
@@ -593,21 +702,21 @@ Deno.serve(async (req) => {
         }
       }
 
-      // 3) Fetch chat list — try v2 POST then v1 GET fallbacks.
-      const chatsRes = await tryEndpoints([
+      // ---- 3) Chat list.
+      const chatsRes = await tryEndpoints("findChats", [
         { path: `/chat/findChats/${instEnc}`, init: { method: "POST", body: JSON.stringify({ where: {} }) } },
         { path: `/chat/findChats/${instEnc}`, init: { method: "POST", body: JSON.stringify({}) } },
         { path: `/chat/fetchChats/${instEnc}` },
         { path: `/chats/${instEnc}` },
       ]);
       const chats: any[] = pickArray(chatsRes?.data);
+      if (offset === 0) evoTotals.chats = chats.length || undefined;
 
       if (!chatsRes && !chats.length) {
         await logEvent("evolution.import", "error", `findChats falhou em todos os endpoints`);
-        return json({ ok: false, error: `Evolution não respondeu ao listar conversas. Verifique a versão da API.` }, 502);
+        return json({ ok: false, error: `Evolution não respondeu ao listar conversas. Verifique a versão da API.`, endpoint_failures: endpointFailures }, 502);
       }
 
-      // Sort by most recent activity if possible (Evolution sometimes returns unsorted)
       chats.sort((a, b) => {
         const ta = Number(a.updatedAt || a.t || a.lastMessageTimestamp || 0);
         const tb = Number(b.updatedAt || b.t || b.lastMessageTimestamp || 0);
@@ -617,101 +726,100 @@ Deno.serve(async (req) => {
       const totalAvailable = Math.min(chats.length, maxChats);
       const slice = chats.slice(offset, offset + batchSize);
 
+      // Create audit run row on first batch (only for real imports; for dry-run we still log but mark dry_run=true).
+      if (offset === 0 && !runId) {
+        const insRun = await admin.from("evolution_import_runs").insert({
+          connection_id, owner_id: conn.owner_id, sub_company_id: conn.sub_company_id,
+          started_by: userId, dry_run: dryRun, status: "running",
+          evolution_totals: evoTotals, notes: dryRun ? "Simulação (dry-run)" : null,
+        }).select("id").single();
+        runId = insRun.data?.id ?? null;
+      }
+
       let importedCustomers = seededContacts;
+      let plannedCustomers = seededContactsPlanned;
       let importedMessages = 0;
+      let plannedMessages = 0;
+      let importedMedia = 0;
       let processedChats = 0;
-      let skippedGroups = 0;
 
       for (const chat of slice) {
         processedChats++;
         const jid: string = chat.id || chat.remoteJid || chat.remote_jid || "";
         const isGroup = jid.endsWith("@g.us");
-        if (isGroup && !includeGroups) { skippedGroups++; continue; }
+        if (isGroup && !includeGroups) { skipped.groups++; continue; }
 
-        // For groups we still need a synthetic "phone" — use jid hash digits
         let phone: string | null;
-        if (isGroup) {
-          phone = jid.replace(/\D/g, "").slice(0, 20) || null;
-        } else {
-          phone = parsePhone(jid);
-        }
-        if (!phone) continue;
+        if (isGroup) phone = jid.replace(/\D/g, "").slice(0, 20) || null;
+        else phone = parsePhone(jid);
+        if (!phone) { skipped.invalid_phone++; continue; }
 
         const displayName: string =
           chat.name || chat.subject || chat.pushName || chat.notifyName ||
           (isGroup ? `Grupo ${phone.slice(-6)}` : `WhatsApp ${phone}`);
 
-        // Upsert customer scoped by sub_company
         let customerId: string | null = null;
-        const existing = await admin
-          .from("customers")
-          .select("id")
-          .eq("phone", phone)
-          .eq("sub_company_id", conn.sub_company_id as any)
-          .maybeSingle();
+        const existing = await admin.from("customers").select("id")
+          .eq("phone", phone).eq("sub_company_id", conn.sub_company_id as any).maybeSingle();
         if (existing.data?.id) {
           customerId = existing.data.id;
-        } else {
-          const ins = await admin
-            .from("customers")
-            .insert({
-              name: displayName,
-              phone,
-              channel: "whatsapp",
-              owner_id: conn.owner_id,
-              sub_company_id: conn.sub_company_id,
-              origin_connection_id: connection_id,
-              created_by: conn.owner_id || userId,
-              metadata: isGroup ? { is_group: true, jid } : undefined,
-            } as any)
-            .select("id")
-            .single();
+        } else if (!dryRun) {
+          const ins = await admin.from("customers").insert({
+            name: displayName, phone, channel: "whatsapp",
+            owner_id: conn.owner_id, sub_company_id: conn.sub_company_id,
+            origin_connection_id: connection_id, created_by: conn.owner_id || userId,
+            metadata: isGroup ? { is_group: true, jid } : undefined,
+          } as any).select("id").single();
           if (ins.error || !ins.data) continue;
           customerId = ins.data.id;
           importedCustomers++;
+          plannedCustomers++;
+        } else {
+          plannedCustomers++; // would create
         }
 
-        // Fetch messages — try v2 + v1 shapes
-        const msgsRes = await tryEndpoints([
-          {
-            path: `/chat/findMessages/${instEnc}`,
-            init: {
-              method: "POST",
-              body: JSON.stringify({ where: { key: { remoteJid: jid } }, limit: perChat }),
-            },
-          },
-          {
-            path: `/chat/findMessages/${instEnc}`,
-            init: {
-              method: "POST",
-              body: JSON.stringify({ where: { remoteJid: jid }, limit: perChat }),
-            },
-          },
-          {
-            path: `/chat/fetchMessages/${instEnc}?remoteJid=${encodeURIComponent(jid)}&limit=${perChat}`,
-          },
+        const msgsRes = await tryEndpoints("findMessages", [
+          { path: `/chat/findMessages/${instEnc}`, init: { method: "POST", body: JSON.stringify({ where: { key: { remoteJid: jid } }, limit: perChat }) } },
+          { path: `/chat/findMessages/${instEnc}`, init: { method: "POST", body: JSON.stringify({ where: { remoteJid: jid }, limit: perChat }) } },
+          { path: `/chat/fetchMessages/${instEnc}?remoteJid=${encodeURIComponent(jid)}&limit=${perChat}` },
         ]);
         const msgs: any[] = pickArray(msgsRes?.data);
-        if (!msgs.length) continue;
+        if (!msgs.length) { skipped.no_messages++; continue; }
 
-        // Batch-check existing messages
         const msgIds: string[] = [];
         for (const m of msgs) {
           const id = m.key?.id || m.id || m.messageId;
           if (id) msgIds.push(id);
         }
-        const { data: dupRows } = await admin
-          .from("chat_messages")
-          .select("uaz_msg_id")
-          .in("uaz_msg_id", msgIds);
+        const { data: dupRows } = await admin.from("chat_messages")
+          .select("uaz_msg_id").in("uaz_msg_id", msgIds);
         const dupSet = new Set((dupRows ?? []).map((r: any) => r.uaz_msg_id));
 
         const toInsert: any[] = [];
         for (const m of msgs) {
           const msgId: string = m.key?.id || m.id || m.messageId;
-          if (!msgId || dupSet.has(msgId)) continue;
+          if (!msgId) { skipped.parse_failed++; continue; }
+          if (dupSet.has(msgId)) { skipped.duplicates++; continue; }
           const fromMe: boolean = !!m.key?.fromMe;
-          const content = synthContent(m);
+          let content = synthContent(m);
+          const mediaInfo = classifyMedia(m);
+          let mediaMeta: any = null;
+
+          if (mediaInfo && downloadMedia && !dryRun && customerId) {
+            const stored = await downloadAndStoreMedia(m.key, msgId, mediaInfo);
+            if (stored) {
+              importedMedia++;
+              mediaMeta = { ...mediaInfo, storage_path: stored.path, size: stored.size };
+            } else {
+              mediaMeta = { ...mediaInfo, storage_path: null };
+            }
+          } else if (mediaInfo) {
+            mediaMeta = mediaInfo;
+          }
+
+          plannedMessages++;
+          if (dryRun || !customerId) continue;
+
           toInsert.push({
             customer_id: customerId,
             sender_type: fromMe ? "agent" : "client",
@@ -720,14 +828,13 @@ Deno.serve(async (req) => {
             channel: "whatsapp",
             sub_company_id: conn.sub_company_id,
             connection_id,
-            metadata: { source: "evolution_import", raw: m },
+            metadata: { source: "evolution_import", media: mediaMeta, raw: m },
             created_at: m.messageTimestamp
               ? new Date(Number(m.messageTimestamp) * 1000).toISOString()
               : undefined,
           });
         }
-        if (toInsert.length) {
-          // chunk inserts
+        if (toInsert.length && !dryRun) {
           const chunk = 200;
           for (let i = 0; i < toInsert.length; i += chunk) {
             const part = toInsert.slice(i, i + chunk);
@@ -740,39 +847,98 @@ Deno.serve(async (req) => {
       const nextOffset = offset + slice.length;
       const done = nextOffset >= totalAvailable || slice.length === 0;
 
-      if (done) {
-        await admin
-          .from("whatsapp_connections")
-          .update({
-            metadata: { ...meta, last_import_at: new Date().toISOString() },
-          })
+      // Update the audit run row with the deltas of this batch.
+      if (runId) {
+        // Read current snapshot then accumulate.
+        const { data: cur } = await admin.from("evolution_import_runs")
+          .select("imported, skipped, endpoint_failures, evolution_totals")
+          .eq("id", runId).maybeSingle();
+        const accImported = {
+          customers: (cur?.imported?.customers ?? 0) + (dryRun ? plannedCustomers : importedCustomers),
+          messages: (cur?.imported?.messages ?? 0) + (dryRun ? plannedMessages : importedMessages),
+          media: (cur?.imported?.media ?? 0) + importedMedia,
+        };
+        const accSkipped: Record<string, number> = { ...(cur?.skipped ?? {}) };
+        for (const [k, v] of Object.entries(skipped)) accSkipped[k] = (accSkipped[k] ?? 0) + v;
+        const accFailures: any = { ...(cur?.endpoint_failures ?? {}) };
+        for (const [k, v] of Object.entries(endpointFailures)) {
+          const prev = accFailures[k] ?? { count: 0 };
+          accFailures[k] = { count: prev.count + v.count, last_error: v.last_error ?? prev.last_error };
+        }
+        const evoTotalsMerged = { ...(cur?.evolution_totals ?? {}), ...evoTotals };
+
+        const update: any = {
+          imported: accImported, skipped: accSkipped,
+          endpoint_failures: accFailures, evolution_totals: evoTotalsMerged,
+        };
+
+        if (done) {
+          // Reconciliation against DB counts (only for real imports; dry-run reports planned vs evolution).
+          let dbCustomers: number | null = null;
+          let dbMessages: number | null = null;
+          if (!dryRun) {
+            const { count: cCount } = await admin.from("customers")
+              .select("id", { count: "exact", head: true })
+              .eq("origin_connection_id", connection_id);
+            const { count: mCount } = await admin.from("chat_messages")
+              .select("id", { count: "exact", head: true })
+              .eq("connection_id", connection_id);
+            dbCustomers = cCount ?? null;
+            dbMessages = mCount ?? null;
+          }
+          update.db_totals = { customers: dbCustomers, messages: dbMessages, media: accImported.media };
+
+          // Congruence: compare DB totals vs Evolution totals (within tolerance ±2 chats/contacts).
+          let congruence: "congruent" | "pending" | "divergent" = "pending";
+          if (!dryRun && evoTotalsMerged.contacts != null && dbCustomers != null) {
+            const diffC = Math.abs(dbCustomers - evoTotalsMerged.contacts);
+            const tol = Math.max(2, Math.round(evoTotalsMerged.contacts * 0.05));
+            congruence = diffC <= tol ? "congruent" : "divergent";
+          }
+          update.congruence = congruence;
+          update.status = Object.keys(accFailures).length === 0 ? "success" : "partial";
+          update.finished_at = new Date().toISOString();
+        }
+
+        await admin.from("evolution_import_runs").update(update).eq("id", runId);
+      }
+
+      if (done && !dryRun) {
+        await admin.from("whatsapp_connections")
+          .update({ metadata: { ...meta, last_import_at: new Date().toISOString() } })
           .eq("id", connection_id);
         await logEvent(
-          "evolution.import",
-          "success",
-          `Importação concluída: ${importedCustomers} contatos, ${importedMessages} mensagens (total chats: ${chats.length})`,
-          { total_chats: chats.length, max_chats: maxChats, per_chat: perChat, skipped_groups: skippedGroups },
+          "evolution.import", "success",
+          `Importação concluída: ${importedCustomers} contatos, ${importedMessages} mensagens, ${importedMedia} mídias (total chats: ${chats.length})`,
+          { total_chats: chats.length, skipped, endpoint_failures: endpointFailures, run_id: runId },
         );
       }
 
       return json({
         ok: true,
+        run_id: runId,
+        dry_run: dryRun,
         chats_seen: chats.length,
+        evolution_totals: evoTotals,
         total_available: totalAvailable,
         offset,
         next_offset: nextOffset,
         done,
         processed_chats: processedChats,
-        skipped_groups: skippedGroups,
-        batch_customers: importedCustomers,
-        batch_messages: importedMessages,
-        customers_imported: importedCustomers,
-        messages_imported: importedMessages,
+        skipped,
+        endpoint_failures: endpointFailures,
+        batch_customers: dryRun ? plannedCustomers : importedCustomers,
+        batch_messages: dryRun ? plannedMessages : importedMessages,
+        batch_media: importedMedia,
+        customers_imported: dryRun ? plannedCustomers : importedCustomers,
+        messages_imported: dryRun ? plannedMessages : importedMessages,
       });
     }
 
 
     return json({ error: "invalid_action" }, 400);
+
+
 
 
 
