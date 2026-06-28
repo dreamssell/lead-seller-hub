@@ -11,7 +11,19 @@ import { Download, QrCode } from 'lucide-react';
 
 type Level = 'L' | 'M' | 'Q' | 'H';
 
-export function QrCodeStudio({ value, filename = 'qr-code' }: { value: string; filename?: string }) {
+export function QrCodeStudio({
+  value,
+  filename = 'qr-code',
+  version,
+  lastPublishedAt,
+}: {
+  value: string;
+  filename?: string;
+  /** Bumped on every publish to force a fresh QR Code render and download filename. */
+  version?: number;
+  /** ISO timestamp of last publish — shown to the user so they know when to redistribute. */
+  lastPublishedAt?: string | null;
+}) {
   const [size, setSize] = useState(280);
   const [level, setLevel] = useState<Level>('M');
   const [fg, setFg] = useState('#000000');
@@ -20,6 +32,8 @@ export function QrCodeStudio({ value, filename = 'qr-code' }: { value: string; f
   const [logoSize, setLogoSize] = useState(56);
   const canvasWrapRef = useRef<HTMLDivElement>(null);
   const svgWrapRef = useRef<HTMLDivElement>(null);
+  const versionKey = version ?? 0;
+  const versionedFilename = version && version > 0 ? `${filename}-v${version}` : filename;
 
   const onLogoFile = (f: File | null) => {
     if (!f) { setLogo(null); return; }
