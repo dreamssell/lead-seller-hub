@@ -322,11 +322,16 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
       {conn.provider === 'evolution' && (
         <EvolutionWizardDialog
           open={showEvolutionWizard}
-          onOpenChange={setShowEvolutionWizard}
+          onOpenChange={(o) => {
+            setShowEvolutionWizard(o);
+            if (!o) setWizardAutoStart(false);
+          }}
           conn={conn}
           onConnected={onSaved}
+          autoStart={wizardAutoStart}
         />
       )}
+
     </Card>
   );
 }
