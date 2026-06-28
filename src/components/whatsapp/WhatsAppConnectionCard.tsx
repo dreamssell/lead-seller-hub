@@ -154,8 +154,17 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
       } else if (data?.connected) {
         toast.success('Conectado!', { description: `Dispositivo: ${data.phone || 'WhatsApp Active'}` });
       } else {
-        toast.warning('Provedor respondeu, mas instância não está aberta');
+        if (conn.provider === 'evolution') {
+          toast.warning('Instância não está aberta — abrindo pareamento por QR Code…', {
+            description: 'Vamos gerar o QR automaticamente. Tenha o WhatsApp em mãos.',
+          });
+          setWizardAutoStart(true);
+          setShowEvolutionWizard(true);
+        } else {
+          toast.warning('Provedor respondeu, mas instância não está aberta');
+        }
       }
+
       onSaved();
     } catch (err: any) {
       setTesting(false);
