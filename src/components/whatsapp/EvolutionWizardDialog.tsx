@@ -723,6 +723,9 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
           acc.endpoint_failures[k] = { count: prev.count + (v as any).count, last_error: (v as any).last_error ?? prev.last_error };
         }
         if (data.evolution_totals) acc.evolution_totals = { ...acc.evolution_totals, ...data.evolution_totals };
+        if (typeof data.batch_messages_seen === 'number') {
+          acc.evolution_totals.messages = (acc.evolution_totals.messages ?? 0) + data.batch_messages_seen;
+        }
 
         setImportProgress({
           customers: acc.customers,
