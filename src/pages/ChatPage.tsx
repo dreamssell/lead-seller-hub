@@ -33,7 +33,12 @@ import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
 import { ChatRightPanel } from '@/components/chat/ChatRightPanel';
 import { SignatureDocumentModal } from '@/components/signature/SignatureDocumentModal';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { StickyNote, Zap, PhoneCall, Headphones, PenLine } from 'lucide-react';
+import { StickyNote, Zap, PhoneCall, Headphones, PenLine, Keyboard } from 'lucide-react';
+import { ChatComposer, ComposerAttachment } from '@/components/chat/ChatComposer';
+import { MediaDropzone } from '@/components/chat/MediaDropzone';
+import { KeyboardShortcutsHelp } from '@/components/chat/KeyboardShortcutsHelp';
+import { useChatShortcuts } from '@/hooks/useChatShortcuts';
+import { renderWhatsAppText } from '@/lib/whatsappFormat';
 
 
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -175,6 +180,13 @@ export default function ChatPage() {
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const voip = useVoip();
   const wavoip = useWavoipWebphone();
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [externalAttachment, setExternalAttachment] = useState<File | null>(null);
+
+  useChatShortcuts(!!selectedConvId, {
+    onHelp: () => setShortcutsOpen(true),
+    onSend: () => { /* ChatComposer handles its own Ctrl+Enter via key event */ },
+  });
 
 
 
@@ -625,6 +637,81 @@ export default function ChatPage() {
     }
 
   };
+
+  // New rich-composer handlers
+  const sendOptimistic = (content: string) => {
+    const id = crypto.randomUUID();
+    setMessages(prev => [...prev, {
+      id, customer_id: selectedConvId, sender_type: 'agent',
+      content, created_at: new Date().toISOString(), status: 'sending',
+    }]);
+    return id;
+  };
+
+  const markStatus = (id: string, status: 'sent' | 'error', overrideId?: string) => {
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, status, id: overrideId || m.id } : m));
+  };
+
+  const handleSendText = async (text: string) => {
+    if (!selectedConvId || !text.trim()) return;
+    const id = sendOptimistic(text);
+    try {
+      if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
+        const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+        const data = await adapter.sendMessage(activeWhatsAppConn, selectedConvId, text);
+        markStatus(id, 'sent', data?.data?.key?.id);
+      } else {
+        await new Promise(r => setTimeout(r, 400));
+        markStatus(id, 'sent');
+      }
+    } catch (err: any) {
+      toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
+      markStatus(id, 'error');
+      throw err;
+    }
+  };
+
+  const handleSendMedia = async (a: ComposerAttachment, caption: string) => {
+    if (!selectedConvId) return;
+    const id = sendOptimistic(`📎 ${a.file.name}${caption ? ` — ${caption}` : ''}`);
+    try {
+      if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
+        const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+        if (!adapter.sendMedia) throw new Error('Este canal não suporta envio de mídia ainda.');
+        const data = await adapter.sendMedia(activeWhatsAppConn, selectedConvId, a.file, caption);
+        markStatus(id, 'sent', data?.data?.key?.id);
+      } else {
+        await new Promise(r => setTimeout(r, 400));
+        markStatus(id, 'sent');
+      }
+    } catch (err: any) {
+      toast({ title: 'Erro ao enviar mídia', description: err.message, variant: 'destructive' });
+      markStatus(id, 'error');
+      throw err;
+    }
+  };
+
+  const handleSendAudio = async (blob: Blob, durationSec: number) => {
+    if (!selectedConvId) return;
+    const id = sendOptimistic(`🎤 Áudio (${durationSec}s)`);
+    try {
+      if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
+        const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+        if (!adapter.sendAudio) throw new Error('Este canal não suporta áudio ainda.');
+        const data = await adapter.sendAudio(activeWhatsAppConn, selectedConvId, blob);
+        markStatus(id, 'sent', data?.data?.key?.id);
+      } else {
+        await new Promise(r => setTimeout(r, 400));
+        markStatus(id, 'sent');
+      }
+    } catch (err: any) {
+      toast({ title: 'Erro ao enviar áudio', description: err.message, variant: 'destructive' });
+      markStatus(id, 'error');
+      throw err;
+    }
+  };
+
+
 
   // Painel principal: mini-cards de canais
   if (!activeChannel) {
@@ -1184,7 +1271,7 @@ export default function ChatPage() {
                     <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm relative group ${
                       m.sender_type !== 'client' ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-secondary text-foreground rounded-bl-md'
                     }`}>
-                      <p>{m.content}</p>
+                      <p className="whitespace-pre-wrap break-words">{renderWhatsAppText(m.content)}</p>
                       <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
                         <p className="text-[10px]">
                           {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -1212,157 +1299,18 @@ export default function ChatPage() {
                 ))}
               </div>
 
-              <div className="border-t border-border p-3">
-                {/* File Preview */}
-                {filePreview && (
-                  <div className="mb-2 p-2 bg-secondary/40 rounded-lg relative flex items-center gap-3">
-                    <div className="w-12 h-12 rounded bg-black/20 overflow-hidden flex items-center justify-center">
-                      <img src={filePreview} alt="Preview" className="w-full h-full object-cover" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{selectedFile?.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{(selectedFile!.size / 1024).toFixed(1)} KB</p>
-                    </div>
-                    <button 
-                      onClick={() => { setSelectedFile(null); setFilePreview(null); }}
-                      className="p-1.5 hover:bg-destructive/10 rounded-full text-destructive"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-                
-                {selectedFile && !filePreview && (
-                  <div className="mb-2 p-2 bg-secondary/40 rounded-lg relative flex items-center gap-3">
-                    <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center">
-                      <FileDown className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{selectedFile?.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{(selectedFile!.size / 1024).toFixed(1)} KB</p>
-                    </div>
-                    <button 
-                      onClick={() => { setSelectedFile(null); }}
-                      className="p-1.5 hover:bg-destructive/10 rounded-full text-destructive"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-
-                {fileError && (
-                  <div className="mb-2 px-3 py-2 bg-destructive/10 text-destructive text-xs rounded-lg flex items-center gap-2">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    {fileError}
-                  </div>
-                )}
-
-                {isScheduling && (
-                  <div className="mb-2 p-3 bg-primary/5 border border-primary/20 rounded-lg flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-2">
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" size="sm" className="h-8 gap-2">
-                            <Calendar className="w-3.5 h-3.5" />
-                            {scheduledDate ? format(scheduledDate, 'dd/MM/yyyy') : 'Escolher data'}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <CalendarComponent 
-                            mode="single"
-                            selected={scheduledDate}
-                            onSelect={setScheduledDate}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <input 
-                        type="time" 
-                        value={scheduledTime}
-                        onChange={(e) => setScheduledTime(e.target.value)}
-                        className="h-8 bg-background border border-border rounded px-2 text-xs outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Agendamento Ativo</span>
-                      <button onClick={() => setIsScheduling(false)} className="text-muted-foreground hover:text-foreground">
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-2">
-                  <div className="relative">
-                    <button className="p-2 rounded-lg hover:bg-secondary">
-                      <Paperclip className="w-4 h-4 text-muted-foreground" />
-                    </button>
-                    <input 
-                      type="file" 
-                      className="absolute inset-0 opacity-0 cursor-pointer" 
-                      onChange={handleFileSelect}
-                    />
-                  </div>
-                  <input
-                    value={messageText}
-                    onChange={(e) => setMessageText(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                    placeholder={isScheduling ? "Digite a mensagem para agendar..." : "Digite sua mensagem..."}
-                    className="flex-1 bg-secondary rounded-xl px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"
-                  />
-                  
-                  {activeChannel === 'telegram' && (
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className={`h-10 w-10 rounded-xl ${isScheduling ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-secondary'}`}
-                      onClick={() => setIsScheduling(!isScheduling)}
-                      title="Agendar Mensagem"
-                    >
-                      <Clock className="w-5 h-5" />
-                    </Button>
-                  )}
-
-                  <button 
-                    onClick={handleSendMessage}
-                    disabled={!messageText && !selectedFile}
-                    className="p-2.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {scheduledMessages.length > 0 && activeChannel === 'telegram' && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {scheduledMessages.filter(sm => sm.customer_id === selectedConvId).map(sm => (
-                      <Badge key={sm.id} variant="secondary" className="text-[9px] py-0 px-2 h-auto min-h-[20px] gap-1.5 font-normal flex-col items-start p-1.5">
-                        <div className="flex items-center justify-between w-full gap-2">
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-2.5 h-2.5 text-primary" />
-                            <span className="font-bold">Agendada: {sm.scheduledFor}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <button 
-                              onClick={() => {
-                                setMessageText(sm.content);
-                                setIsScheduling(true);
-                                setScheduledMessages(prev => prev.filter(m => m.id !== sm.id));
-                              }}
-                              className="text-primary hover:underline font-bold"
-                            >
-                              Editar
-                            </button>
-                            <button onClick={() => setScheduledMessages(prev => prev.filter(m => m.id !== sm.id))}>
-                              <X className="w-2.5 h-2.5 hover:text-destructive" />
-                            </button>
-                          </div>
-                        </div>
-                        <p className="opacity-70 line-clamp-1">{sm.content}</p>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <ChatComposer
+                conversationId={selectedConvId!}
+                text={messageText}
+                onChangeText={setMessageText}
+                onSendText={handleSendText}
+                onSendMedia={handleSendMedia}
+                onSendAudio={handleSendAudio}
+                recentMessages={messages.map((m: any) => ({ sender_type: m.sender_type, content: m.content }))}
+                contactName={selectedConv?.name}
+                externalAttachment={externalAttachment}
+                onConsumeExternalAttachment={() => setExternalAttachment(null)}
+              />
             </>
           )}
         </div>
@@ -1425,6 +1373,9 @@ export default function ChatPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MediaDropzone active={!!selectedConvId} onDrop={(files) => setExternalAttachment(files[0] || null)} />
+      <KeyboardShortcutsHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </AppLayout>
   );
 }
