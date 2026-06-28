@@ -105,11 +105,10 @@ const getConnectionPhoneFromDb = (conn?: WhatsAppConnection | null) => {
 
 const getWhatsAppDbSummary = (connections: WhatsAppConnection[]) => {
   const connected = connections.filter((conn) => String(conn.status).toLowerCase() === 'connected');
-  const visible = connected.length > 0 ? connected : connections;
 
   return {
     status: connections.length === 0 ? 'disconnected' as WhatsAppDbStatus : connected.length > 0 ? 'active' as WhatsAppDbStatus : 'offline' as WhatsAppDbStatus,
-    labels: getUniqueProviderLabels(visible),
+    labels: getUniqueProviderLabels(connections),
     primary: connected[0] || connections[0] || null,
     connectedCount: connected.length,
   };
