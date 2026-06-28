@@ -678,6 +678,7 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
           messages_per_chat: perChat,
           offset,
           batch_size: batchSize,
+          include_groups: true,
         });
         if (error || !data?.ok) {
           toast.error('Falha ao importar conversas', {
