@@ -141,6 +141,9 @@ export default function ChatPage() {
 
 
   const addDebugLog = (type: 'info' | 'error' | 'request', message: string, data?: any) => {
+    // Evita re-render contínuo: só coleta quando o painel de Diagnóstico está aberto,
+    // e quando aberto mantém apenas os 50 eventos mais recentes em memória (sem persistência).
+    if (!showDebugPanel && type !== 'error') return;
     setDebugLogs(prev => [{
       id: crypto.randomUUID(),
       time: new Date().toLocaleTimeString(),
