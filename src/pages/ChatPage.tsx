@@ -638,6 +638,81 @@ export default function ChatPage() {
 
   };
 
+  // New rich-composer handlers
+  const sendOptimistic = (content: string) => {
+    const id = crypto.randomUUID();
+    setMessages(prev => [...prev, {
+      id, customer_id: selectedConvId, sender_type: 'agent',
+      content, created_at: new Date().toISOString(), status: 'sending',
+    }]);
+    return id;
+  };
+
+  const markStatus = (id: string, status: 'sent' | 'error', overrideId?: string) => {
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, status, id: overrideId || m.id } : m));
+  };
+
+  const handleSendText = async (text: string) => {
+    if (!selectedConvId || !text.trim()) return;
+    const id = sendOptimistic(text);
+    try {
+      if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
+        const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+        const data = await adapter.sendMessage(activeWhatsAppConn, selectedConvId, text);
+        markStatus(id, 'sent', data?.data?.key?.id);
+      } else {
+        await new Promise(r => setTimeout(r, 400));
+        markStatus(id, 'sent');
+      }
+    } catch (err: any) {
+      toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
+      markStatus(id, 'error');
+      throw err;
+    }
+  };
+
+  const handleSendMedia = async (a: ComposerAttachment, caption: string) => {
+    if (!selectedConvId) return;
+    const id = sendOptimistic(`📎 ${a.file.name}${caption ? ` — ${caption}` : ''}`);
+    try {
+      if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
+        const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+        if (!adapter.sendMedia) throw new Error('Este canal não suporta envio de mídia ainda.');
+        const data = await adapter.sendMedia(activeWhatsAppConn, selectedConvId, a.file, caption);
+        markStatus(id, 'sent', data?.data?.key?.id);
+      } else {
+        await new Promise(r => setTimeout(r, 400));
+        markStatus(id, 'sent');
+      }
+    } catch (err: any) {
+      toast({ title: 'Erro ao enviar mídia', description: err.message, variant: 'destructive' });
+      markStatus(id, 'error');
+      throw err;
+    }
+  };
+
+  const handleSendAudio = async (blob: Blob, durationSec: number) => {
+    if (!selectedConvId) return;
+    const id = sendOptimistic(`🎤 Áudio (${durationSec}s)`);
+    try {
+      if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
+        const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+        if (!adapter.sendAudio) throw new Error('Este canal não suporta áudio ainda.');
+        const data = await adapter.sendAudio(activeWhatsAppConn, selectedConvId, blob);
+        markStatus(id, 'sent', data?.data?.key?.id);
+      } else {
+        await new Promise(r => setTimeout(r, 400));
+        markStatus(id, 'sent');
+      }
+    } catch (err: any) {
+      toast({ title: 'Erro ao enviar áudio', description: err.message, variant: 'destructive' });
+      markStatus(id, 'error');
+      throw err;
+    }
+  };
+
+
+
   // Painel principal: mini-cards de canais
   if (!activeChannel) {
     return (
