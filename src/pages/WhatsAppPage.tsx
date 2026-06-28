@@ -16,8 +16,11 @@ import { toast } from 'sonner';
 import UazAuditTab from '@/components/settings/UazAuditTab';
 import { WhatsAppConnectionCard } from '@/components/whatsapp/WhatsAppConnectionCard';
 import { WhatsAppConnection, WhatsAppProvider } from '@/components/whatsapp/types';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
 export default function WhatsAppPage() {
+  const { isOwner } = usePlatformOwner();
+
   const [connections, setConnections] = useState<WhatsAppConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [auditFilters, setAuditFilters] = useState<{ tenantId?: string; logId?: string } | null>(null);
