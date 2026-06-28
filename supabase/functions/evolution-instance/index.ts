@@ -65,6 +65,35 @@ async function evoFetch(
   return { ok: res.ok, status: res.status, data };
 }
 
+/**
+ * Fetch with exponential backoff on transient failures (network, 5xx, 429).
+ * 4xx (except 429) returns immediately — they are deterministic errors.
+ */
+async function evoFetchRetry(
+  baseUrl: string,
+  token: string,
+  path: string,
+  init: RequestInit = {},
+  attempts = 4,
+) {
+  let lastErr: unknown = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const r = await evoFetch(baseUrl, token, path, init);
+      const transient = r.status === 429 || r.status === 0 || (r.status >= 500 && r.status <= 599);
+      if (!transient) return r;
+      lastErr = new Error(`HTTP ${r.status}`);
+    } catch (e) {
+      lastErr = e;
+    }
+    if (i < attempts - 1) {
+      const delay = Math.min(8000, 400 * Math.pow(2, i)) + Math.floor(Math.random() * 250);
+      await new Promise((res) => setTimeout(res, delay));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("evolution request failed");
+}
+
 function inboundWebhookUrl(connectionId: string): string {
   const base = Deno.env.get("SUPABASE_URL")!.replace(/\/$/, "");
   return `${base}/functions/v1/handle-inbound-webhook?connection_id=${connectionId}&channel=whatsapp`;
