@@ -1416,6 +1416,13 @@ export default function ChatPage() {
                 contactName={selectedConv?.name}
                 externalAttachment={externalAttachment}
                 onConsumeExternalAttachment={() => setExternalAttachment(null)}
+                extras={
+                  <RichSendMenu
+                    customerId={selectedConvId!}
+                    ownerId={(selectedConv as any)?.owner_id || null}
+                    onSend={handleSendRich}
+                  />
+                }
               />
             </>
           )}
