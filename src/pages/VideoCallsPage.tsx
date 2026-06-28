@@ -352,29 +352,32 @@ export default function VideoCallsPage() {
           </Card>
         </div>
 
-        {/* Diagnostic Logs */}
-        <div className="pt-6 border-t border-border/40 flex flex-col gap-6">
-           <div className="flex justify-between items-center">
-             <h3 className="text-lg font-bold flex items-center gap-2">
-               <Activity className="w-5 h-5 text-primary" /> Sistema de Diagnóstico
-             </h3>
-             <Button 
-               variant="outline" 
-               size="sm" 
-               onClick={async () => {
-                 const result = await runVideoSmokeTest();
-                 if (result.success) {
-                   toast.success('Smoke Test: Conexão e RLS validados com sucesso!');
-                 } else {
-                   toast.error(`Falha no Smoke Test: ${result.error}`);
-                 }
-               }}
-             >
-               Executar Teste de Conexão
-             </Button>
-           </div>
-           <VideoErrorLogs />
-        </div>
+        {/* Diagnostic Logs — restrito ao dono da plataforma */}
+        {isOwner && (
+          <div className="pt-6 border-t border-border/40 flex flex-col gap-6">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <Activity className="w-5 h-5 text-primary" /> Sistema de Diagnóstico
+              </h3>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  const result = await runVideoSmokeTest();
+                  if (result.success) {
+                    toast.success('Smoke Test: Conexão e RLS validados com sucesso!');
+                  } else {
+                    toast.error(`Falha no Smoke Test: ${result.error}`);
+                  }
+                }}
+              >
+                Executar Teste de Conexão
+              </Button>
+            </div>
+            <VideoErrorLogs />
+          </div>
+        )}
+
 
       </div>
     </AppLayout>
