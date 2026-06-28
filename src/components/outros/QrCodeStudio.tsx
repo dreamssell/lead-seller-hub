@@ -46,7 +46,7 @@ export function QrCodeStudio({
     const canvas = canvasWrapRef.current?.querySelector('canvas');
     if (!canvas) return;
     const a = document.createElement('a');
-    a.download = `${filename}.png`;
+    a.download = `${versionedFilename}.png`;
     a.href = canvas.toDataURL('image/png');
     a.click();
   };
@@ -58,7 +58,7 @@ export function QrCodeStudio({
     const xml = serializer.serializeToString(svg);
     const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' });
     const a = document.createElement('a');
-    a.download = `${filename}.svg`;
+    a.download = `${versionedFilename}.svg`;
     a.href = URL.createObjectURL(blob);
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
