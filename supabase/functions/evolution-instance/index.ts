@@ -215,6 +215,16 @@ Deno.serve(async (req) => {
             : `Evolution respondeu ${created.status}`,
         { http_status: created.status, has_qr: qrOk },
       );
+      // Best-effort: register the inbound webhook so messages start arriving
+      // in this platform as soon as the phone is paired. Failures here must not
+      // break the QR flow — they are logged for visibility.
+      try {
+        await registerWebhook(baseUrl, token, instance, connection_id);
+        await logEvent("evolution.webhook_set", "success", "Webhook registrado na Evolution");
+      } catch (e) {
+        await logEvent("evolution.webhook_set", "error", (e as Error).message);
+      }
+
       return json({
         ok: true,
         already_existed: !created.ok && (created.status === 403 || created.status === 409),
