@@ -33,7 +33,12 @@ import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
 import { ChatRightPanel } from '@/components/chat/ChatRightPanel';
 import { SignatureDocumentModal } from '@/components/signature/SignatureDocumentModal';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { StickyNote, Zap, PhoneCall, Headphones, PenLine } from 'lucide-react';
+import { StickyNote, Zap, PhoneCall, Headphones, PenLine, Keyboard } from 'lucide-react';
+import { ChatComposer, ComposerAttachment } from '@/components/chat/ChatComposer';
+import { MediaDropzone } from '@/components/chat/MediaDropzone';
+import { KeyboardShortcutsHelp } from '@/components/chat/KeyboardShortcutsHelp';
+import { useChatShortcuts } from '@/hooks/useChatShortcuts';
+import { renderWhatsAppText } from '@/lib/whatsappFormat';
 
 
 import { ScrollArea } from '@/components/ui/scroll-area';
