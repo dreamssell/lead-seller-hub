@@ -611,20 +611,39 @@ Deno.serve(async (req) => {
         }
       }
 
-      await logEvent(
-        "evolution.import",
-        "success",
-        `Importados ${importedCustomers} contatos e ${importedMessages} mensagens`,
-        { chats: chats.length, max_chats: maxChats, per_chat: perChat },
-      );
+      const nextOffset = offset + slice.length;
+      const done = nextOffset >= totalAvailable || slice.length === 0;
+
+      if (done) {
+        await admin
+          .from("whatsapp_connections")
+          .update({
+            metadata: { ...meta, last_import_at: new Date().toISOString() },
+          })
+          .eq("id", connection_id);
+        await logEvent(
+          "evolution.import",
+          "success",
+          `Importação concluída: ${importedCustomers} contatos, ${importedMessages} mensagens (batch final)`,
+          { total_chats: chats.length, max_chats: maxChats, per_chat: perChat },
+        );
+      }
 
       return json({
         ok: true,
         chats_seen: chats.length,
+        total_available: totalAvailable,
+        offset,
+        next_offset: nextOffset,
+        done,
+        batch_customers: importedCustomers,
+        batch_messages: importedMessages,
+        // legacy aliases:
         customers_imported: importedCustomers,
         messages_imported: importedMessages,
       });
     }
+
 
     return json({ error: "invalid_action" }, 400);
 
