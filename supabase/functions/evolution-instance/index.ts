@@ -16,7 +16,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-type Action = "create" | "qr" | "state" | "logout" | "delete" | "test";
+type Action = "create" | "qr" | "state" | "logout" | "delete" | "test" | "set_webhook" | "import_chats";
 
 interface Body {
   action: Action;
@@ -25,6 +25,9 @@ interface Body {
   url?: string;
   token?: string;
   instance?: string;
+  // import_chats options:
+  max_chats?: number;
+  messages_per_chat?: number;
 }
 
 async function evoFetch(
