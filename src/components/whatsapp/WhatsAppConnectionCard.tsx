@@ -50,6 +50,8 @@ export function statusBadge(status: ConnectionStatus) {
 }
 
 export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: ConnectionCardProps) {
+  const { isOwner } = usePlatformOwner();
+
   const config = PROVIDER_CONFIGS[conn.provider] || PROVIDER_CONFIGS.uaz;
   const [url, setUrl] = useState<string>(conn.metadata?.url ?? config.url);
   const [token, setToken] = useState<string>(conn.metadata?.token ?? '');
