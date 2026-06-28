@@ -887,7 +887,9 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
             <TabsTrigger value="retention" className="text-[11px] sm:text-xs py-1.5">Retenção</TabsTrigger>
           </TabsList>
           <TabsContent value="setup" className="space-y-4 pt-3">
+            {step !== 'failed' && renderStepper()}
             {step === 'credentials' && renderCredentials()}
+
             {step === 'qr' && renderQr()}
             {step === 'connected' && renderConnected()}
             {step === 'failed' && renderFailed()}
