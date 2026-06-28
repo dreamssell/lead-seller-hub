@@ -108,9 +108,10 @@ const App = () => (
               <Route path="/outros" element={<ProtectedRoute pageKey="outros"><OutrosPage /></ProtectedRoute>} />
               <Route path="/outros/:id/editar" element={<ProtectedRoute pageKey="outros"><LandingBuilderPage /></ProtectedRoute>} />
               <Route path="/outros/:id/preview" element={<ProtectedRoute pageKey="outros"><LandingPreviewPage /></ProtectedRoute>} />
-              <Route path="/status" element={<ProtectedRoute><BackendStatusPage /></ProtectedRoute>} />
+              <Route path="/status" element={<ProtectedRoute ownerOnly><BackendStatusPage /></ProtectedRoute>} />
               <Route path="/documentation" element={<ProtectedRoute pageKey="documentation"><DocumentationPage /></ProtectedRoute>} />
-              <Route path="/internal/telemetry" element={<ProtectedRoute><InternalTelemetryPage /></ProtectedRoute>} />
+              <Route path="/internal/telemetry" element={<ProtectedRoute ownerOnly><InternalTelemetryPage /></ProtectedRoute>} />
+
               <Route path="*" element={<NotFound />} />
             </Routes>
             </VideoCallProvider>
