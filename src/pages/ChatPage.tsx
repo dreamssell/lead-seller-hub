@@ -681,7 +681,7 @@ export default function ChatPage() {
           <ChannelIcon className={`w-3.5 h-3.5 ${channelInfo.color}`} />
           <span className={`text-xs font-medium ${channelInfo.color}`}>
             {channelInfo.name} 
-            {channelInfo.key === 'whatsapp' && activeWhatsAppConn && ` (${activeWhatsAppConn.provider.toUpperCase()})`}
+            {channelInfo.key === 'whatsapp' && (connectedProviders.length > 0 || activeWhatsAppConn) && ` (${connectedProviders.length > 0 ? connectedProviders.join(' + ') : activeWhatsAppConn!.provider.toUpperCase()})`}
           </span>
         </div>
         {(channelInfo.key === 'whatsapp' || channelInfo.key === 'telegram') && (
