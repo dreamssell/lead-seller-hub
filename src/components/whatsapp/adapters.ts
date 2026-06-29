@@ -257,11 +257,17 @@ class EvolutionAdapter implements WhatsAppProviderAdapter {
         (json as any)._latency_ms = Date.now() - start;
         return json;
       } catch (err: any) {
+        const msg = String(err?.message || '');
+        if (isConnectionClosedError(msg)) {
+          await markConnectionDisconnected(conn.id, msg);
+          throw new Error('Sua instância do WhatsApp foi desconectada. Reescaneie o QR Code em Conexões & Canais para continuar enviando mensagens.');
+        }
         console.error('[Evolution] Error sending message:', err);
         throw err;
       }
     }));
   }
+
 
 
 
