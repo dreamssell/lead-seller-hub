@@ -460,6 +460,21 @@ export default function ChatPage() {
         addDebugLog('info', 'Conexão WhatsApp atualizada no banco; relendo status persistido.');
         checkProviderStatus('whatsapp');
       })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'customers' }, (payload) => {
+        const c: any = payload.new;
+        const pres = computePresence(c.presence, c.presence_updated_at, c.last_seen_at);
+        setConvs(prev => {
+          const next: any = { ...prev };
+          (Object.keys(next) as ChannelKey[]).forEach(k => {
+            next[k] = next[k].map((conv: any) =>
+              conv.id === c.id
+                ? { ...conv, online: pres.online, presenceLabel: pres.label, presence: c.presence, lastSeenAt: c.last_seen_at }
+                : conv
+            );
+          });
+          return next;
+        });
+      })
       .subscribe();
 
     // Realtime simulation for delivery receipts
