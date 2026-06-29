@@ -1210,17 +1210,26 @@ export default function ChatPage() {
           {selectedConv && (
             <>
               <div className="border-b border-border px-4 py-3 flex items-center justify-between flex-wrap gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={() => setRightPanelOpen(true)}
+                  className="flex items-center gap-3 -mx-2 px-2 py-1 rounded-lg hover:bg-secondary/60 transition text-left"
+                  title="Ver perfil completo do contato"
+                >
+                  <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center ring-1 ring-border">
                     <span className="text-xs font-bold text-primary">{selectedConv.name.split(/[\s.@]/).filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase()).join('')}</span>
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold">{selectedConv.name}</p>
-                    <p className="text-[10px] text-success">{selectedConv.online ? 'Online agora' : 'Offline'}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate">{selectedConv.name}</p>
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                      <Circle className={`w-1.5 h-1.5 ${selectedConv.online ? 'fill-success text-success' : 'fill-muted-foreground text-muted-foreground'}`} />
+                      {selectedConv.online ? 'Online agora' : 'Offline'}
+                      {selectedConv.phone && <span className="opacity-70">· {selectedConv.phone}</span>}
+                    </p>
                   </div>
-                </div>
+                </button>
 
-                <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary/60">
                     <Bot className="w-3.5 h-3.5 text-primary" />
                     <span className="text-xs font-medium">Agente Bot</span>
@@ -1240,10 +1249,6 @@ export default function ChatPage() {
                     </SelectContent>
                   </Select>
 
-                  <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => setTransferOpen(true)}>
-                    <UserCog className="w-3.5 h-3.5" />
-                    Transferir
-                  </Button>
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -1310,7 +1315,7 @@ export default function ChatPage() {
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                  <button className="p-2 rounded-lg hover:bg-secondary" title="Vídeo chamada"><Video className="w-4 h-4 text-muted-foreground" /></button>
+                  <Link to="/video-calls" className="p-2 rounded-lg hover:bg-secondary inline-flex" title="Vídeo chamada"><Video className="w-4 h-4 text-muted-foreground" /></Link>
                   <button
                     onClick={() => setSignatureModalOpen(true)}
                     className="p-2 rounded-lg hover:bg-secondary text-muted-foreground"
@@ -1321,11 +1326,11 @@ export default function ChatPage() {
                   <button
                     onClick={() => setRightPanelOpen((v) => !v)}
                     className={`p-2 rounded-lg hover:bg-secondary ${rightPanelOpen ? 'bg-secondary text-primary' : 'text-muted-foreground'}`}
-                    title="Notas internas e respostas rápidas"
+                    title="Notas internas, CRM e mídia"
                   >
                     <StickyNote className="w-4 h-4" />
                   </button>
-                  
+
                   {activeChannel === 'telegram' && (
                     <div className="flex items-center border-l border-border ml-2 pl-2 gap-1">
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => handleExportHistory('csv')} title="Exportar CSV">
@@ -1337,9 +1342,42 @@ export default function ChatPage() {
                     </div>
                   )}
 
-                  <button className="p-2 rounded-lg hover:bg-secondary"><MoreVertical className="w-4 h-4 text-muted-foreground" /></button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="p-2 rounded-lg hover:bg-secondary" title="Mais opções"><MoreVertical className="w-4 h-4 text-muted-foreground" /></button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">Conversa</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => setRightPanelOpen(true)} className="gap-2 text-xs">
+                        <UserCog className="w-3.5 h-3.5" /> Ver perfil do contato
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setGlobalSearchOpen(true)} className="gap-2 text-xs">
+                        <Search className="w-3.5 h-3.5" /> Buscar nas mensagens (Ctrl+K)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={async () => {
+                          if (!selectedConvId) return;
+                          const { data } = await supabase
+                            .from('chat_messages')
+                            .select('*')
+                            .eq('customer_id', selectedConvId)
+                            .order('created_at', { ascending: true });
+                          if (data) setMessages(data);
+                          toast({ title: 'Histórico atualizado', description: `${data?.length || 0} mensagens carregadas.` });
+                        }}
+                        className="gap-2 text-xs"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" /> Recarregar mensagens
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setShortcutsOpen(true)} className="gap-2 text-xs">
+                        <Keyboard className="w-3.5 h-3.5" /> Atalhos de teclado
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
+
 
               <CollaborationBar
                 customerId={selectedConv.id}

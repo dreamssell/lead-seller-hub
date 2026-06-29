@@ -150,7 +150,6 @@ export function ChatComposer({
     }
   };
 
-  const showAudio = !attachment && !text && !!onSendAudio;
   const variables = { nome: contactName || '', empresa: 'Lead Seller' };
 
   return (
@@ -199,22 +198,22 @@ export function ChatComposer({
           {extras}
         </div>
 
-        {showAudio ? (
-          onSendAudio && <AudioRecorder onSend={onSendAudio} />
-        ) : (
-          <Textarea
-            ref={taRef}
-            data-composer="1"
-            value={text}
-            onChange={(e) => onChangeText(e.target.value)}
-            onKeyDown={onKey}
-            placeholder={attachment ? 'Enter para enviar o anexo · Esc para cancelar' : 'Mensagem · *negrito* _itálico_ ~tachado~ `mono` · / para respostas rápidas'}
-            rows={1}
-            className="flex-1 min-h-[44px] max-h-32 resize-none rounded-xl bg-secondary border-0 focus-visible:ring-2 focus-visible:ring-primary/30 text-sm py-2.5"
-          />
-        )}
+        <Textarea
+          ref={taRef}
+          data-composer="1"
+          value={text}
+          onChange={(e) => onChangeText(e.target.value)}
+          onKeyDown={onKey}
+          placeholder={attachment ? 'Enter para enviar o anexo · Esc para cancelar' : 'Digite sua mensagem · *negrito* _itálico_ ~tachado~ `mono` · / para respostas rápidas'}
+          rows={1}
+          className="flex-1 min-h-[44px] max-h-32 resize-none rounded-xl bg-secondary border-0 focus-visible:ring-2 focus-visible:ring-primary/30 text-sm py-2.5"
+        />
 
         <AIAssistMenu messages={recentMessages} currentText={text} onSuggest={(t) => onChangeText(t)} onSummary={(t) => toast.message('Resumo da conversa', { description: t, duration: 12000 })} />
+
+        {!attachment && !text && onSendAudio && (
+          <AudioRecorder onSend={onSendAudio} />
+        )}
 
         <Button
           type="button"
