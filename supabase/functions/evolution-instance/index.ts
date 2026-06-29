@@ -16,7 +16,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-type Action = "create" | "qr" | "state" | "logout" | "delete" | "test" | "set_webhook" | "import_chats" | "set_auto_import";
+type Action = "create" | "qr" | "state" | "logout" | "delete" | "test" | "set_webhook" | "import_chats" | "set_auto_import" | "subscribe_presence";
 
 interface Body {
   action: Action;
@@ -24,6 +24,8 @@ interface Body {
   url?: string;
   token?: string;
   instance?: string;
+  // subscribe_presence:
+  number?: string;
   // import_chats options:
   max_chats?: number;
   messages_per_chat?: number;
