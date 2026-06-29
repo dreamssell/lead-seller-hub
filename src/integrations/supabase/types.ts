@@ -1105,6 +1105,7 @@ export type Database = {
           address: string | null
           ai_handoff: Json
           assigned_to: string | null
+          avatar_url: string | null
           channel: string | null
           company: string | null
           created_at: string
@@ -1133,6 +1134,7 @@ export type Database = {
           address?: string | null
           ai_handoff?: Json
           assigned_to?: string | null
+          avatar_url?: string | null
           channel?: string | null
           company?: string | null
           created_at?: string
@@ -1161,6 +1163,7 @@ export type Database = {
           address?: string | null
           ai_handoff?: Json
           assigned_to?: string | null
+          avatar_url?: string | null
           channel?: string | null
           company?: string | null
           created_at?: string
