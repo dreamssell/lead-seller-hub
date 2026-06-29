@@ -1161,11 +1161,14 @@ export type Database = {
           email: string | null
           first_response_at: string | null
           id: string
+          last_seen_at: string | null
           name: string
           notes: string | null
           origin_connection_id: string | null
           owner_id: string | null
           phone: string | null
+          presence: string | null
+          presence_updated_at: string | null
           priority: string
           queue_id: string | null
           resolved_at: string | null
@@ -1190,11 +1193,14 @@ export type Database = {
           email?: string | null
           first_response_at?: string | null
           id?: string
+          last_seen_at?: string | null
           name: string
           notes?: string | null
           origin_connection_id?: string | null
           owner_id?: string | null
           phone?: string | null
+          presence?: string | null
+          presence_updated_at?: string | null
           priority?: string
           queue_id?: string | null
           resolved_at?: string | null
@@ -1219,11 +1225,14 @@ export type Database = {
           email?: string | null
           first_response_at?: string | null
           id?: string
+          last_seen_at?: string | null
           name?: string
           notes?: string | null
           origin_connection_id?: string | null
           owner_id?: string | null
           phone?: string | null
+          presence?: string | null
+          presence_updated_at?: string | null
           priority?: string
           queue_id?: string | null
           resolved_at?: string | null
