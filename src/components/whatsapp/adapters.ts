@@ -147,44 +147,38 @@ class EvolutionAdapter implements WhatsAppProviderAdapter {
       Authorization: `Bearer ${token}`,
     };
 
-    // Evolution v2 payload (flat). Fallback to v1 (textMessage wrapper) on 400.
-    // delay=0 + linkPreview=false to avoid server-side artificial typing delay.
-    const v2Body = { number: customer.phone, text: content, delay: 0, linkPreview: false };
-    const v1Body = {
+    // Unified payload that satisfies both Evolution v2 (flat `text`) and v1
+    // (`textMessage.text`) JSON schemas. Sending both shapes in the same body
+    // avoids the "instance requires property text" 400 when the server probes
+    // strict schema validation.
+    const body = {
       number: customer.phone,
-      options: { delay: 0, presence: 'available', linkPreview: false },
+      text: content,
       textMessage: { text: content },
+      options: { delay: 0, presence: 'available', linkPreview: false },
+      delay: 0,
+      linkPreview: false,
     };
 
-    // Remember the last working payload shape per instance to skip the v2->v1 probe.
-    const shapeKey = `evo_shape_${conn.id}`;
-    const cachedShape = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(shapeKey)) || 'v2';
-
     return enqueue(`evo:${conn.id}`, () => sendWithRetry(async () => {
+      const start = Date.now();
       try {
-        const firstBody = cachedShape === 'v1' ? v1Body : v2Body;
-        const secondBody = cachedShape === 'v1' ? v2Body : v1Body;
-        let res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(firstBody) });
-        if (res.status === 400) {
-          res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(secondBody) });
-          if (res.ok && typeof sessionStorage !== 'undefined') {
-            sessionStorage.setItem(shapeKey, cachedShape === 'v1' ? 'v2' : 'v1');
-          }
-        } else if (res.ok && typeof sessionStorage !== 'undefined' && !sessionStorage.getItem(shapeKey)) {
-          sessionStorage.setItem(shapeKey, cachedShape);
-        }
+        const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
           const detail = errData?.response?.message || errData?.message || errData?.error || `Erro Evolution: ${res.status}`;
           throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
         }
-        return await res.json();
+        const json = await res.json();
+        (json as any)._latency_ms = Date.now() - start;
+        return json;
       } catch (err: any) {
         console.error('[Evolution] Error sending message:', err);
         throw err;
       }
     }));
   }
+
 
 
   async sendMedia(conn: WhatsAppConnection, customerId: string, file: File, caption = '') {
@@ -269,16 +263,22 @@ async function sendEvolutionRich(conn: WhatsAppConnection, customerId: string, p
       });
     case 'product': {
       const price = payload.price != null ? ` — R$ ${Number(payload.price).toFixed(2)}` : '';
+      const text = `🛍️ *${payload.name}*${price}`;
       return evolutionPost(ctx, 'sendText', {
         number: ctx.number,
-        textMessage: { text: `🛍️ *${payload.name}*${price}` },
+        text,
+        textMessage: { text },
       });
     }
-    case 'signature':
+    case 'signature': {
+      const text = `📄 *${payload.title}*\n${payload.url}`;
       return evolutionPost(ctx, 'sendText', {
         number: ctx.number,
-        textMessage: { text: `📄 *${payload.title}*\n${payload.url}` },
+        text,
+        textMessage: { text },
       });
+    }
+
     default:
       throw new Error(`Tipo de mensagem rica não suportado: ${payload.type}`);
   }
@@ -297,18 +297,30 @@ async function sendEvolutionMedia(conn: WhatsAppConnection, customerId: string, 
   const isVideo = file.type.startsWith('video/');
   const mediaType = kind === 'audio' ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'document';
   const path = kind === 'audio' ? 'sendWhatsAppAudio' : 'sendMedia';
-  const v2Body = kind === 'audio'
-    ? { number: customer.phone, audio: base64, delay: 0 }
-    : { number: customer.phone, mediatype: mediaType, mimetype: file.type, fileName: file.name, caption, media: base64, delay: 0 };
-  const v1Body = kind === 'audio'
-    ? { number: customer.phone, audioMessage: { audio: base64 }, options: { delay: 0, presence: 'available' } }
-    : { number: customer.phone, mediaMessage: { mediatype: mediaType, fileName: file.name, caption, media: base64 }, options: { delay: 0, presence: 'available' } };
+  // Merged v2 + v1 payload (see sendMessage rationale).
+  const body = kind === 'audio'
+    ? {
+        number: customer.phone,
+        audio: base64,
+        audioMessage: { audio: base64 },
+        options: { delay: 0, presence: 'available' },
+        delay: 0,
+      }
+    : {
+        number: customer.phone,
+        mediatype: mediaType,
+        mimetype: file.type,
+        fileName: file.name,
+        caption,
+        media: base64,
+        mediaMessage: { mediatype: mediaType, fileName: file.name, caption, media: base64 },
+        options: { delay: 0, presence: 'available' },
+        delay: 0,
+      };
   const endpoint = `${url.replace(/\/$/, '')}/message/${path}/${encodeURIComponent(instance)}`;
   const headers = { 'Content-Type': 'application/json', apikey: token, Authorization: `Bearer ${token}` };
-  let res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(v2Body) });
-  if (res.status === 400) {
-    res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(v1Body) });
-  }
+  const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
+
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
     const detail = errData?.response?.message || errData?.message || errData?.error || `Erro Evolution: ${res.status}`;
