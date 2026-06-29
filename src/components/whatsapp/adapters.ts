@@ -46,6 +46,9 @@ async function sendWithRetry<T>(fn: () => Promise<T>, max = 3): Promise<T> {
     }
   }
   throw lastErr;
+}
+
+
 
 class UazAdapter implements WhatsAppProviderAdapter {
   async getStatus(conn: WhatsAppConnection) {
