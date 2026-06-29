@@ -403,6 +403,7 @@ export default function ChatPage() {
 
         const formatted = channelCustomers.map(c => {
           const lastMsg = lastMessages?.find(m => m.customer_id === c.id);
+          const pres = computePresence((c as any).presence, (c as any).presence_updated_at, (c as any).last_seen_at);
           return {
             id: c.id,
             name: c.name || c.phone || 'Cliente sem nome',
@@ -410,7 +411,10 @@ export default function ChatPage() {
             time: lastMsg
               ? new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               : new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            online: false,
+            online: pres.online,
+            presenceLabel: pres.label,
+            presence: (c as any).presence || null,
+            lastSeenAt: (c as any).last_seen_at || null,
             botEnabled: false,
             assignedTo: '',
             phone: c.phone,
