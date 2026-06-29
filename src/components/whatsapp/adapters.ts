@@ -291,18 +291,30 @@ async function sendEvolutionMedia(conn: WhatsAppConnection, customerId: string, 
   const isVideo = file.type.startsWith('video/');
   const mediaType = kind === 'audio' ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'document';
   const path = kind === 'audio' ? 'sendWhatsAppAudio' : 'sendMedia';
-  const v2Body = kind === 'audio'
-    ? { number: customer.phone, audio: base64, delay: 0 }
-    : { number: customer.phone, mediatype: mediaType, mimetype: file.type, fileName: file.name, caption, media: base64, delay: 0 };
-  const v1Body = kind === 'audio'
-    ? { number: customer.phone, audioMessage: { audio: base64 }, options: { delay: 0, presence: 'available' } }
-    : { number: customer.phone, mediaMessage: { mediatype: mediaType, fileName: file.name, caption, media: base64 }, options: { delay: 0, presence: 'available' } };
+  // Merged v2 + v1 payload (see sendMessage rationale).
+  const body = kind === 'audio'
+    ? {
+        number: customer.phone,
+        audio: base64,
+        audioMessage: { audio: base64 },
+        options: { delay: 0, presence: 'available' },
+        delay: 0,
+      }
+    : {
+        number: customer.phone,
+        mediatype: mediaType,
+        mimetype: file.type,
+        fileName: file.name,
+        caption,
+        media: base64,
+        mediaMessage: { mediatype: mediaType, fileName: file.name, caption, media: base64 },
+        options: { delay: 0, presence: 'available' },
+        delay: 0,
+      };
   const endpoint = `${url.replace(/\/$/, '')}/message/${path}/${encodeURIComponent(instance)}`;
   const headers = { 'Content-Type': 'application/json', apikey: token, Authorization: `Bearer ${token}` };
-  let res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(v2Body) });
-  if (res.status === 400) {
-    res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(v1Body) });
-  }
+  const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
+
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
     const detail = errData?.response?.message || errData?.message || errData?.error || `Erro Evolution: ${res.status}`;
