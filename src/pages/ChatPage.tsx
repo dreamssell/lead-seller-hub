@@ -149,7 +149,20 @@ export default function ChatPage() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState('');
   const [collabTransferOpen, setCollabTransferOpen] = useState(false);
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const { isSupervisor, userId: currentUserId } = useIsSupervisor();
+
+  // Ctrl/Cmd+K → busca global
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setGlobalSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   // Global listeners: whispers + mentions for the current user
   useEffect(() => {
