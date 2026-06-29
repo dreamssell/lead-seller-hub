@@ -160,28 +160,30 @@ class EvolutionAdapter implements WhatsAppProviderAdapter {
     const shapeKey = `evo_shape_${conn.id}`;
     const cachedShape = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(shapeKey)) || 'v2';
 
-    try {
-      const firstBody = cachedShape === 'v1' ? v1Body : v2Body;
-      const secondBody = cachedShape === 'v1' ? v2Body : v1Body;
-      let res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(firstBody) });
-      if (res.status === 400) {
-        res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(secondBody) });
-        if (res.ok && typeof sessionStorage !== 'undefined') {
-          sessionStorage.setItem(shapeKey, cachedShape === 'v1' ? 'v2' : 'v1');
+    return enqueue(`evo:${conn.id}`, () => sendWithRetry(async () => {
+      try {
+        const firstBody = cachedShape === 'v1' ? v1Body : v2Body;
+        const secondBody = cachedShape === 'v1' ? v2Body : v1Body;
+        let res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(firstBody) });
+        if (res.status === 400) {
+          res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(secondBody) });
+          if (res.ok && typeof sessionStorage !== 'undefined') {
+            sessionStorage.setItem(shapeKey, cachedShape === 'v1' ? 'v2' : 'v1');
+          }
+        } else if (res.ok && typeof sessionStorage !== 'undefined' && !sessionStorage.getItem(shapeKey)) {
+          sessionStorage.setItem(shapeKey, cachedShape);
         }
-      } else if (res.ok && typeof sessionStorage !== 'undefined' && !sessionStorage.getItem(shapeKey)) {
-        sessionStorage.setItem(shapeKey, cachedShape);
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          const detail = errData?.response?.message || errData?.message || errData?.error || `Erro Evolution: ${res.status}`;
+          throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+        }
+        return await res.json();
+      } catch (err: any) {
+        console.error('[Evolution] Error sending message:', err);
+        throw err;
       }
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        const detail = errData?.response?.message || errData?.message || errData?.error || `Erro Evolution: ${res.status}`;
-        throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
-      }
-      return await res.json();
-    } catch (err: any) {
-      console.error('[Evolution] Error sending message:', err);
-      throw err;
-    }
+    }));
   }
 
 
