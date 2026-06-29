@@ -266,11 +266,11 @@ async function sendEvolutionMedia(conn: WhatsAppConnection, customerId: string, 
   const mediaType = kind === 'audio' ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'document';
   const path = kind === 'audio' ? 'sendWhatsAppAudio' : 'sendMedia';
   const v2Body = kind === 'audio'
-    ? { number: customer.phone, audio: base64, delay: 800 }
-    : { number: customer.phone, mediatype: mediaType, mimetype: file.type, fileName: file.name, caption, media: base64, delay: 800 };
+    ? { number: customer.phone, audio: base64, delay: 0 }
+    : { number: customer.phone, mediatype: mediaType, mimetype: file.type, fileName: file.name, caption, media: base64, delay: 0 };
   const v1Body = kind === 'audio'
-    ? { number: customer.phone, audioMessage: { audio: base64 }, options: { delay: 800, presence: 'recording' } }
-    : { number: customer.phone, mediaMessage: { mediatype: mediaType, fileName: file.name, caption, media: base64 }, options: { delay: 800, presence: 'composing' } };
+    ? { number: customer.phone, audioMessage: { audio: base64 }, options: { delay: 0, presence: 'available' } }
+    : { number: customer.phone, mediaMessage: { mediatype: mediaType, fileName: file.name, caption, media: base64 }, options: { delay: 0, presence: 'available' } };
   const endpoint = `${url.replace(/\/$/, '')}/message/${path}/${encodeURIComponent(instance)}`;
   const headers = { 'Content-Type': 'application/json', apikey: token, Authorization: `Bearer ${token}` };
   let res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(v2Body) });
