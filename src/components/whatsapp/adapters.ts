@@ -110,32 +110,39 @@ class EvolutionAdapter implements WhatsAppProviderAdapter {
     const { data: customer } = await supabase.from('customers').select('phone').eq('id', customerId).single();
     if (!customer?.phone) throw new Error('Cliente não possui telefone cadastrado.');
 
+    const endpoint = `${url.replace(/\/$/, '')}/message/sendText/${encodeURIComponent(instance)}`;
+    const headers = {
+      'Content-Type': 'application/json',
+      apikey: token,
+      Authorization: `Bearer ${token}`,
+    };
+
+    // Evolution v2 payload (flat). Fallback to v1 (textMessage wrapper) on 400.
+    const v2Body = { number: customer.phone, text: content, delay: 1200, linkPreview: false };
+    const v1Body = {
+      number: customer.phone,
+      options: { delay: 1200, presence: 'composing', linkPreview: false },
+      textMessage: { text: content },
+    };
+
     try {
-      const res = await fetch(`${url.replace(/\/$/, '')}/message/sendText/${encodeURIComponent(instance)}`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          apikey: token,
-          Authorization: `Bearer ${token}` 
-        },
-        body: JSON.stringify({
-          number: customer.phone,
-          options: { delay: 1200, presence: 'composing', linkPreview: false },
-          textMessage: { text: content }
-        })
-      });
-      
+      let res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(v2Body) });
+      if (res.status === 400) {
+        // try v1 shape
+        res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(v1Body) });
+      }
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData?.message || `Erro Evolution: ${res.status}`);
+        const detail = errData?.response?.message || errData?.message || errData?.error || `Erro Evolution: ${res.status}`;
+        throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
       }
-      
       return await res.json();
     } catch (err: any) {
       console.error('[Evolution] Error sending message:', err);
       throw err;
     }
   }
+
 
   async sendMedia(conn: WhatsAppConnection, customerId: string, file: File, caption = '') {
     return sendEvolutionMedia(conn, customerId, file, caption, 'media');
@@ -247,17 +254,23 @@ async function sendEvolutionMedia(conn: WhatsAppConnection, customerId: string, 
   const isVideo = file.type.startsWith('video/');
   const mediaType = kind === 'audio' ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'document';
   const path = kind === 'audio' ? 'sendWhatsAppAudio' : 'sendMedia';
-  const body = kind === 'audio'
+  const v2Body = kind === 'audio'
+    ? { number: customer.phone, audio: base64, delay: 800 }
+    : { number: customer.phone, mediatype: mediaType, mimetype: file.type, fileName: file.name, caption, media: base64, delay: 800 };
+  const v1Body = kind === 'audio'
     ? { number: customer.phone, audioMessage: { audio: base64 }, options: { delay: 800, presence: 'recording' } }
     : { number: customer.phone, mediaMessage: { mediatype: mediaType, fileName: file.name, caption, media: base64 }, options: { delay: 800, presence: 'composing' } };
-  const res = await fetch(`${url.replace(/\/$/, '')}/message/${path}/${encodeURIComponent(instance)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: token, Authorization: `Bearer ${token}` },
-    body: JSON.stringify(body),
-  });
+  const endpoint = `${url.replace(/\/$/, '')}/message/${path}/${encodeURIComponent(instance)}`;
+  const headers = { 'Content-Type': 'application/json', apikey: token, Authorization: `Bearer ${token}` };
+  let res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(v2Body) });
+  if (res.status === 400) {
+    res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(v1Body) });
+  }
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
-    throw new Error(errData?.message || `Erro Evolution: ${res.status}`);
+    const detail = errData?.response?.message || errData?.message || errData?.error || `Erro Evolution: ${res.status}`;
+    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+
   }
   return await res.json();
 }
