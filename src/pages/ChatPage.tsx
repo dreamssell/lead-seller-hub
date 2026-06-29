@@ -573,6 +573,19 @@ export default function ChatPage() {
     return () => clearTimeout(t);
   }, [selectedConvId]);
 
+  // Subscribe to recipient presence updates (Evolution) whenever a WhatsApp conversation opens.
+  useEffect(() => {
+    if (!selectedConvId || activeChannel !== 'whatsapp' || !activeWhatsAppConn) return;
+    if (activeWhatsAppConn.provider !== 'evolution') return;
+    const conv = convs.whatsapp.find(c => c.id === selectedConvId);
+    if (!conv?.phone) return;
+    supabase.functions
+      .invoke('evolution-instance', {
+        body: { action: 'subscribe_presence', connection_id: activeWhatsAppConn.id, number: conv.phone },
+      })
+      .catch(() => {});
+  }, [selectedConvId, activeChannel, activeWhatsAppConn, convs.whatsapp]);
+
   const list = activeChannel ? convs[activeChannel] : [];
   const selectedConv = list.find((c) => c.id === selectedConvId) || (selectedConvId ? null : list[0]);
 
