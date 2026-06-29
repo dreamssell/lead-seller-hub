@@ -899,6 +899,7 @@ export default function ChatPage() {
             Total de {channels.reduce((a, c) => a + c.leads, 0)} leads e {channels.reduce((a, c) => a + c.open, 0)} conversas em aberto distribuídos pelos canais conectados.
           </p>
         </div>
+        <GlobalSearchDialog open={globalSearchOpen} onOpenChange={setGlobalSearchOpen} />
       </AppLayout>
     );
   }
