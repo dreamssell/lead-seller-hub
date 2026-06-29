@@ -1267,8 +1267,8 @@ export default function ChatPage() {
                   <div className="min-w-0">
                     <p className="text-sm font-semibold truncate">{selectedConv.name}</p>
                     <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
-                      <Circle className={`w-1.5 h-1.5 ${selectedConv.online ? 'fill-success text-success' : 'fill-muted-foreground text-muted-foreground'}`} />
-                      {selectedConv.online ? 'Online agora' : 'Offline'}
+                      <Circle className={`w-1.5 h-1.5 ${selectedConv.online ? 'fill-success text-success animate-pulse' : 'fill-muted-foreground text-muted-foreground'}`} />
+                      {(selectedConv as any).presenceLabel || (selectedConv.online ? 'Online agora' : 'Offline')}
                       {selectedConv.phone && <span className="opacity-70">· {selectedConv.phone}</span>}
                     </p>
                   </div>
