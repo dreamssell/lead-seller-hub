@@ -20,6 +20,33 @@ async function fileToBase64(blob: Blob): Promise<string> {
   return btoa(bin);
 }
 
+// Per-instance send queue (serialize concurrent sends; reduces "Invalid presence", race
+// conditions and rate-limit churn on the Evolution side).
+const instanceQueues = new Map<string, Promise<any>>();
+function enqueue<T>(key: string, task: () => Promise<T>): Promise<T> {
+  const prev = instanceQueues.get(key) || Promise.resolve();
+  const next = prev.catch(() => undefined).then(task);
+  instanceQueues.set(key, next.catch(() => undefined));
+  return next;
+}
+
+// Retry with exponential backoff for transient errors (network / 5xx / 429).
+async function sendWithRetry<T>(fn: () => Promise<T>, max = 3): Promise<T> {
+  let attempt = 0;
+  let lastErr: any;
+  while (attempt < max) {
+    try { return await fn(); }
+    catch (e: any) {
+      lastErr = e;
+      const msg = String(e?.message || '');
+      const retriable = /network|timeout|fetch|429|5\d\d/i.test(msg);
+      if (!retriable || attempt === max - 1) break;
+      await new Promise(r => setTimeout(r, 400 * Math.pow(2, attempt)));
+      attempt++;
+    }
+  }
+  throw lastErr;
+
 class UazAdapter implements WhatsAppProviderAdapter {
   async getStatus(conn: WhatsAppConnection) {
     const { data, error } = await supabase.functions.invoke('whatsapp-status', {
