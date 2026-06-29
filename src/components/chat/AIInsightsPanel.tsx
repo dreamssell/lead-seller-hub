@@ -79,11 +79,15 @@ export function AIInsightsPanel({ customerId }: Props) {
 
     // schedule follow-up if requested
     if (followupHours && Number(followupHours) > 0) {
+      const { data: cust } = await (supabase as any).from('customers').select('owner_id').eq('id', customerId).maybeSingle();
       await (supabase as any).from('auto_followups').insert({
         customer_id: customerId,
-        scheduled_at: new Date(Date.now() + Number(followupHours) * 3600_000).toISOString(),
-        reason: 'ai_suggested',
-        source_analysis_id: latest.id,
+        owner_id: cust?.owner_id,
+        created_by: user?.id,
+        trigger_message_id: latest.message_id,
+        scheduled_for: new Date(Date.now() + Number(followupHours) * 3600_000).toISOString(),
+        message_template: latest.summary ? `Olá! Retomando nosso atendimento: ${latest.summary}` : 'Olá! Apenas dando um retorno sobre nossa conversa.',
+        status: 'pending',
       }).then((r: any) => r, () => null);
     }
 
