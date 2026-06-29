@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, UserPlus, ArrowRightLeft, StickyNote, FileSignature, Phone, CheckSquare, MessageSquare, Layers } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Loader2, UserPlus, ArrowRightLeft, StickyNote, FileSignature, CheckSquare, MessageSquare, Layers } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -16,6 +17,8 @@ interface TimelineItem {
   at: string;
   meta?: string;
 }
+
+const PAGE = 25;
 
 const ICONS: Record<TimelineItem['kind'], any> = {
   lead_event: ArrowRightLeft,
@@ -38,49 +41,68 @@ const COLORS: Record<TimelineItem['kind'], string> = {
 export function Customer360Timeline({ customerId }: Props) {
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+
+  const fetchPage = useCallback(async (pageIdx: number) => {
+    const from = pageIdx * PAGE;
+    const to = from + PAGE - 1;
+    const [events, notes, sigs, assigns] = await Promise.all([
+      supabase.from('lead_events').select('id,type,from_stage_name,to_stage_name,channel,created_at').eq('lead_id', customerId).order('created_at', { ascending: false }).range(from, to),
+      supabase.from('customer_notes').select('id,content,author_name,created_at').eq('customer_id', customerId).order('created_at', { ascending: false }).range(from, to),
+      supabase.from('signature_documents').select('id,description,status,created_at,lead_id').eq('lead_id', customerId).order('created_at', { ascending: false }).range(from, to).then(r => r, () => ({ data: [], error: null } as any)),
+      supabase.from('conversation_assignments').select('id,reason,to_user_id,to_queue_id,created_at').eq('customer_id', customerId).order('created_at', { ascending: false }).range(from, to),
+    ]);
+
+    const arr: TimelineItem[] = [];
+    (events.data || []).forEach((e: any) => arr.push({
+      id: 'e' + e.id, kind: 'lead_event', at: e.created_at,
+      title: e.type === 'stage_changed' ? `Movido: ${e.from_stage_name || '—'} → ${e.to_stage_name || '—'}` : e.type,
+      meta: e.channel || undefined,
+    }));
+    (notes.data || []).forEach((n: any) => arr.push({
+      id: 'n' + n.id, kind: 'note', at: n.created_at,
+      title: `Nota de ${n.author_name || 'atendente'}`, body: n.content,
+    }));
+    (sigs.data || []).forEach((s: any) => arr.push({
+      id: 's' + s.id, kind: 'signature', at: s.created_at,
+      title: s.description || 'Documento de assinatura', meta: s.status,
+    }));
+    (assigns.data || []).forEach((a: any) => arr.push({
+      id: 'a' + a.id, kind: 'assignment', at: a.created_at,
+      title: a.to_user_id ? 'Transferido para colega' : 'Movido para fila',
+      body: a.reason || undefined,
+    }));
+
+    const got = (events.data?.length || 0) + (notes.data?.length || 0) + (sigs.data?.length || 0) + (assigns.data?.length || 0);
+    arr.sort((a, b) => +new Date(b.at) - +new Date(a.at));
+    return { arr, exhausted: got < PAGE };
+  }, [customerId]);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true); setItems([]); setPage(0); setHasMore(true);
     (async () => {
-      setLoading(true);
-
-      const [events, notes, tasks, sigs, assigns] = await Promise.all([
-        supabase.from('lead_events').select('id,type,from_stage_name,to_stage_name,channel,created_at').eq('lead_id', customerId).order('created_at', { ascending: false }).limit(30),
-        supabase.from('customer_notes').select('id,content,author_name,created_at').eq('customer_id', customerId).order('created_at', { ascending: false }).limit(20),
-        supabase.from('tasks').select('id,title,status,due_date,created_at,description').order('created_at', { ascending: false }).limit(0).then(r => r, () => ({ data: [], error: null } as any)),
-        supabase.from('signature_documents').select('id,description,status,created_at,lead_id').eq('lead_id', customerId).order('created_at', { ascending: false }).limit(20).then(r => r, () => ({ data: [], error: null } as any)),
-        supabase.from('conversation_assignments').select('id,reason,to_user_id,to_queue_id,created_at').eq('customer_id', customerId).order('created_at', { ascending: false }).limit(20),
-      ]);
-
-      const arr: TimelineItem[] = [];
-      (events.data || []).forEach((e: any) => arr.push({
-        id: 'e' + e.id, kind: 'lead_event', at: e.created_at,
-        title: e.type === 'stage_changed' ? `Movido: ${e.from_stage_name || '—'} → ${e.to_stage_name || '—'}` : e.type,
-        meta: e.channel || undefined,
-      }));
-      (notes.data || []).forEach((n: any) => arr.push({
-        id: 'n' + n.id, kind: 'note', at: n.created_at,
-        title: `Nota de ${n.author_name || 'atendente'}`, body: n.content,
-      }));
-      (tasks.data || []).forEach((t: any) => arr.push({
-        id: 't' + t.id, kind: 'task', at: t.created_at,
-        title: t.title, body: t.description, meta: t.status,
-      }));
-      (sigs.data || []).forEach((s: any) => arr.push({
-        id: 's' + s.id, kind: 'signature', at: s.created_at,
-        title: s.description || 'Documento de assinatura', meta: s.status,
-      }));
-      (assigns.data || []).forEach((a: any) => arr.push({
-        id: 'a' + a.id, kind: 'assignment', at: a.created_at,
-        title: a.to_user_id ? 'Transferido para colega' : 'Movido para fila',
-        body: a.reason || undefined,
-      }));
-
-      arr.sort((a, b) => +new Date(b.at) - +new Date(a.at));
-      if (!cancelled) { setItems(arr); setLoading(false); }
+      const { arr, exhausted } = await fetchPage(0);
+      if (cancelled) return;
+      setItems(arr); setHasMore(!exhausted); setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [customerId]);
+  }, [customerId, fetchPage]);
+
+  const loadMore = async () => {
+    setLoadingMore(true);
+    const next = page + 1;
+    const { arr, exhausted } = await fetchPage(next);
+    setItems(prev => {
+      const seen = new Set(prev.map(i => i.id));
+      const merged = [...prev, ...arr.filter(i => !seen.has(i.id))];
+      merged.sort((a, b) => +new Date(b.at) - +new Date(a.at));
+      return merged;
+    });
+    setPage(next); setHasMore(!exhausted); setLoadingMore(false);
+  };
 
   if (loading) {
     return <div className="flex items-center justify-center py-8"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>;
@@ -118,6 +140,19 @@ export function Customer360Timeline({ customerId }: Props) {
             </div>
           );
         })}
+        {hasMore && (
+          <div className="pt-2 pb-3">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full h-7 text-[11px]"
+              onClick={loadMore}
+              disabled={loadingMore}
+            >
+              {loadingMore ? <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> Carregando…</> : 'Carregar mais'}
+            </Button>
+          </div>
+        )}
       </div>
     </ScrollArea>
   );
