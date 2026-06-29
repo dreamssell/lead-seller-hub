@@ -53,9 +53,24 @@ function extractEvolutionError(errData: any, fallback: string) {
   return typeof detail === 'string' ? detail : JSON.stringify(detail);
 }
 
+function isConnectionClosedError(message: string) {
+  return /connection\s*closed|connectionclosed|socket.*closed|not\s*connected|instance.*not.*(open|connected)/i.test(message);
+}
+
+async function markConnectionDisconnected(connectionId?: string, reason?: string) {
+  if (!connectionId) return;
+  try {
+    await supabase
+      .from('whatsapp_connections')
+      .update({ status: 'disconnected', last_error: reason?.slice(0, 500) ?? 'Connection Closed' })
+      .eq('id', connectionId);
+  } catch { /* best-effort */ }
+}
+
 function isEvolutionTextSchemaError(message: string) {
   return /requires property\s+\\?"?(text|textMessage)\\?"?|textMessage|property\s+text/i.test(message);
 }
+
 
 function getCachedTextPayloadMode(instance: string) {
   try {
