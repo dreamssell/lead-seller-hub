@@ -329,6 +329,53 @@ export type Database = {
           },
         ]
       }
+      bot_flow_runs: {
+        Row: {
+          actions_taken: Json
+          created_at: string
+          customer_id: string
+          error: string | null
+          finished_at: string | null
+          flow_id: string
+          id: string
+          owner_id: string
+          status: string
+          trigger_message_id: string | null
+        }
+        Insert: {
+          actions_taken?: Json
+          created_at?: string
+          customer_id: string
+          error?: string | null
+          finished_at?: string | null
+          flow_id: string
+          id?: string
+          owner_id: string
+          status?: string
+          trigger_message_id?: string | null
+        }
+        Update: {
+          actions_taken?: Json
+          created_at?: string
+          customer_id?: string
+          error?: string | null
+          finished_at?: string | null
+          flow_id?: string
+          id?: string
+          owner_id?: string
+          status?: string
+          trigger_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_flow_runs_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "bot_flows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bot_flows: {
         Row: {
           created_at: string
@@ -1822,6 +1869,8 @@ export type Database = {
         Row: {
           created_at: string
           customer_id: string
+          edited_at: string | null
+          edited_by: string | null
           id: string
           intent: string | null
           language: string | null
@@ -1836,6 +1885,8 @@ export type Database = {
         Insert: {
           created_at?: string
           customer_id: string
+          edited_at?: string | null
+          edited_by?: string | null
           id?: string
           intent?: string | null
           language?: string | null
@@ -1850,6 +1901,8 @@ export type Database = {
         Update: {
           created_at?: string
           customer_id?: string
+          edited_at?: string | null
+          edited_by?: string | null
           id?: string
           intent?: string | null
           language?: string | null
