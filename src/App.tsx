@@ -47,6 +47,7 @@ import LandingBuilderPage from "./pages/LandingBuilderPage";
 import LandingPreviewPage from "./pages/LandingPreviewPage";
 import PublicLandingPage from "./pages/PublicLandingPage";
 import InternalTelemetryPage from "./pages/InternalTelemetryPage";
+import BotFlowsPage from "./pages/BotFlowsPage";
 import { CookieConsentBanner } from "./components/CookieConsentBanner";
 
 
