@@ -452,9 +452,21 @@ export default function ChatPage() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
         addDebugLog('info', 'Nova mensagem recebida via Realtime', payload.new);
         if (payload.new.customer_id === selectedConvId) {
-          setMessages(prev => [...prev, payload.new]);
+          setMessages(prev => {
+            const cid = (payload.new as any).client_msg_id;
+            if (cid && prev.some(m => m.client_msg_id === cid || m.id === cid)) {
+              return prev.map(m => (m.client_msg_id === cid || m.id === cid) ? { ...m, ...payload.new, status: m.status } : m);
+            }
+            if (prev.some(m => m.id === payload.new.id)) return prev;
+            return [...prev, payload.new];
+          });
         }
         if (activeChannel) loadConversations(activeChannel);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages' }, (payload) => {
+        if (payload.new.customer_id === selectedConvId) {
+          setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m));
+        }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_connections' }, () => {
         addDebugLog('info', 'Conexão WhatsApp atualizada no banco; relendo status persistido.');
