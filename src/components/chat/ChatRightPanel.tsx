@@ -201,46 +201,119 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
         </Button>
       </div>
 
-      <div className="px-3 py-3 border-b border-border bg-secondary/30">
+      <div className="px-3 py-3 border-b border-border bg-gradient-to-b from-secondary/40 to-transparent">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-14 h-14 rounded-full bg-primary/20 ring-2 ring-primary/30 flex items-center justify-center shrink-0">
-            <span className="text-base font-bold text-primary">
-              {customerName.split(/[\s.@]/).filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase()).join('')}
-            </span>
+          <div className="w-16 h-16 rounded-full bg-primary/20 ring-2 ring-primary/30 overflow-hidden flex items-center justify-center shrink-0">
+            {profile?.avatar_url && !avatarBroken ? (
+              <img
+                src={profile.avatar_url}
+                alt={customerName}
+                className="w-full h-full object-cover"
+                onError={() => setAvatarBroken(true)}
+              />
+            ) : (
+              <span className="text-lg font-bold text-primary">
+                {customerName.split(/[\s.@]/).filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase()).join('') || '?'}
+              </span>
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold truncate">{customerName}</p>
             {profile?.company && <p className="text-[11px] text-muted-foreground truncate">{profile.company}</p>}
-            {profile?.channel && (
-              <span className="inline-block mt-1 text-[9px] uppercase tracking-wider bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-                {profile.channel}
-              </span>
-            )}
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              {profile?.channel && (
+                <span className="text-[9px] uppercase tracking-wider bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                  {profile.channel}
+                </span>
+              )}
+              {profile?.created_at && (
+                <span className="text-[9px] text-muted-foreground">
+                  Desde {new Date(profile.created_at).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })}
+                </span>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* Quick actions à la WhatsApp */}
+        <div className="grid grid-cols-4 gap-1.5 mb-3">
+          <a
+            href={profile?.phone ? `tel:${profile.phone}` : undefined}
+            aria-disabled={!profile?.phone}
+            className={`flex flex-col items-center gap-1 py-2 rounded-lg border border-border text-[10px] transition ${profile?.phone ? 'hover:bg-primary/10 hover:text-primary cursor-pointer' : 'opacity-40 pointer-events-none'}`}
+            title="Ligar"
+          >
+            <Phone className="w-4 h-4" />
+            Ligar
+          </a>
+          <a
+            href={profile?.phone ? `https://wa.me/${profile.phone.replace(/\D/g, '')}` : undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-disabled={!profile?.phone}
+            className={`flex flex-col items-center gap-1 py-2 rounded-lg border border-border text-[10px] transition ${profile?.phone ? 'hover:bg-emerald-500/10 hover:text-emerald-500 cursor-pointer' : 'opacity-40 pointer-events-none'}`}
+            title="Abrir no WhatsApp Web"
+          >
+            <MessageSquare className="w-4 h-4" />
+            WhatsApp
+          </a>
+          <a
+            href={profile?.email ? `mailto:${profile.email}` : undefined}
+            aria-disabled={!profile?.email}
+            className={`flex flex-col items-center gap-1 py-2 rounded-lg border border-border text-[10px] transition ${profile?.email ? 'hover:bg-primary/10 hover:text-primary cursor-pointer' : 'opacity-40 pointer-events-none'}`}
+            title="Enviar e-mail"
+          >
+            <Mail className="w-4 h-4" />
+            E-mail
+          </a>
+          <button
+            type="button"
+            onClick={() => {
+              const text = [customerName, profile?.phone, profile?.email].filter(Boolean).join(' · ');
+              navigator.clipboard.writeText(text);
+              sonnerToast.success('Contato copiado');
+            }}
+            className="flex flex-col items-center gap-1 py-2 rounded-lg border border-border text-[10px] hover:bg-secondary transition"
+            title="Copiar dados do contato"
+          >
+            <Copy className="w-4 h-4" />
+            Copiar
+          </button>
+        </div>
+
+        {/* Detalhes */}
         <div className="space-y-1.5 text-[11px]">
-          {profile?.phone && (
+          {profile?.phone ? (
             <a href={`tel:${profile.phone}`} className="flex items-center gap-2 text-foreground hover:text-primary transition">
-              <span className="text-muted-foreground">📞</span>
+              <Phone className="w-3 h-3 text-muted-foreground" />
               <span className="font-mono">{profile.phone}</span>
             </a>
+          ) : (
+            <div className="flex items-center gap-2 text-muted-foreground italic">
+              <Phone className="w-3 h-3" />
+              <span>Sem telefone</span>
+            </div>
           )}
           {profile?.email && (
             <a href={`mailto:${profile.email}`} className="flex items-center gap-2 text-foreground hover:text-primary transition truncate">
-              <span className="text-muted-foreground">✉️</span>
+              <Mail className="w-3 h-3 text-muted-foreground" />
               <span className="truncate">{profile.email}</span>
             </a>
           )}
-          {profile?.created_at && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <span>🗓️</span>
-              <span>Cliente desde {new Date(profile.created_at).toLocaleDateString('pt-BR')}</span>
+          {profile?.document && (
+            <div className="flex items-center gap-2 text-foreground">
+              <IdCard className="w-3 h-3 text-muted-foreground" />
+              <span className="font-mono">{profile.document}</span>
             </div>
           )}
-          {!profile?.phone && !profile?.email && (
-            <p className="text-muted-foreground italic">Sem informações de contato cadastradas.</p>
+          {profile?.address && (
+            <div className="flex items-start gap-2 text-foreground">
+              <MapPin className="w-3 h-3 text-muted-foreground mt-0.5 shrink-0" />
+              <span className="truncate">{profile.address}</span>
+            </div>
           )}
         </div>
+
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="flex-1 flex flex-col">
