@@ -147,44 +147,38 @@ class EvolutionAdapter implements WhatsAppProviderAdapter {
       Authorization: `Bearer ${token}`,
     };
 
-    // Evolution v2 payload (flat). Fallback to v1 (textMessage wrapper) on 400.
-    // delay=0 + linkPreview=false to avoid server-side artificial typing delay.
-    const v2Body = { number: customer.phone, text: content, delay: 0, linkPreview: false };
-    const v1Body = {
+    // Unified payload that satisfies both Evolution v2 (flat `text`) and v1
+    // (`textMessage.text`) JSON schemas. Sending both shapes in the same body
+    // avoids the "instance requires property text" 400 when the server probes
+    // strict schema validation.
+    const body = {
       number: customer.phone,
-      options: { delay: 0, presence: 'available', linkPreview: false },
+      text: content,
       textMessage: { text: content },
+      options: { delay: 0, presence: 'available', linkPreview: false },
+      delay: 0,
+      linkPreview: false,
     };
 
-    // Remember the last working payload shape per instance to skip the v2->v1 probe.
-    const shapeKey = `evo_shape_${conn.id}`;
-    const cachedShape = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(shapeKey)) || 'v2';
-
     return enqueue(`evo:${conn.id}`, () => sendWithRetry(async () => {
+      const start = Date.now();
       try {
-        const firstBody = cachedShape === 'v1' ? v1Body : v2Body;
-        const secondBody = cachedShape === 'v1' ? v2Body : v1Body;
-        let res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(firstBody) });
-        if (res.status === 400) {
-          res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(secondBody) });
-          if (res.ok && typeof sessionStorage !== 'undefined') {
-            sessionStorage.setItem(shapeKey, cachedShape === 'v1' ? 'v2' : 'v1');
-          }
-        } else if (res.ok && typeof sessionStorage !== 'undefined' && !sessionStorage.getItem(shapeKey)) {
-          sessionStorage.setItem(shapeKey, cachedShape);
-        }
+        const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
           const detail = errData?.response?.message || errData?.message || errData?.error || `Erro Evolution: ${res.status}`;
           throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
         }
-        return await res.json();
+        const json = await res.json();
+        (json as any)._latency_ms = Date.now() - start;
+        return json;
       } catch (err: any) {
         console.error('[Evolution] Error sending message:', err);
         throw err;
       }
     }));
   }
+
 
 
   async sendMedia(conn: WhatsAppConnection, customerId: string, file: File, caption = '') {
