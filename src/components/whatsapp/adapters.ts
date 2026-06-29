@@ -1,4 +1,4 @@
-import { WhatsAppConnection, ConnectionStatus } from './types';
+import { WhatsAppConnection } from './types';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface WhatsAppProviderAdapter {
@@ -46,6 +46,112 @@ async function sendWithRetry<T>(fn: () => Promise<T>, max = 3): Promise<T> {
     }
   }
   throw lastErr;
+}
+
+function extractEvolutionError(errData: any, fallback: string) {
+  const detail = errData?.response?.message ?? errData?.message ?? errData?.error ?? fallback;
+  return typeof detail === 'string' ? detail : JSON.stringify(detail);
+}
+
+function isEvolutionTextSchemaError(message: string) {
+  return /requires property\s+\\?"?(text|textMessage)\\?"?|textMessage|property\s+text/i.test(message);
+}
+
+function getCachedTextPayloadMode(instance: string) {
+  try {
+    return sessionStorage.getItem(`evolution:text-payload:${instance}`) as 'flat' | 'nested' | 'merged' | null;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedTextPayloadMode(instance: string, mode: 'flat' | 'nested' | 'merged') {
+  try {
+    sessionStorage.setItem(`evolution:text-payload:${instance}`, mode);
+  } catch {
+    // sessionStorage may be unavailable in tests/private contexts.
+  }
+}
+
+function buildEvolutionTextPayloads(number: string, text: string, preferred?: 'flat' | 'nested' | 'merged' | null) {
+  const payloads = [
+    {
+      mode: 'flat' as const,
+      body: {
+        number,
+        text,
+        delay: 0,
+        linkPreview: false,
+        mentioned: [],
+      },
+    },
+    {
+      mode: 'nested' as const,
+      body: {
+        number,
+        textMessage: { text },
+        delay: 0,
+        linkPreview: false,
+        mentioned: [],
+      },
+    },
+    {
+      mode: 'merged' as const,
+      body: {
+        number,
+        text,
+        textMessage: { text },
+        delay: 0,
+        linkPreview: false,
+        mentioned: [],
+        options: { delay: 0, presence: 'available', linkPreview: false },
+      },
+    },
+  ];
+
+  if (!preferred) return payloads;
+  return [...payloads.filter((p) => p.mode === preferred), ...payloads.filter((p) => p.mode !== preferred)];
+}
+
+async function postEvolutionJson(
+  url: string,
+  instance: string,
+  token: string,
+  endpoint: string,
+  body: any,
+) {
+  const res = await fetch(`${url}/message/${endpoint}/${encodeURIComponent(instance)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: token, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(extractEvolutionError(errData, `Erro Evolution: ${res.status}`));
+  }
+
+  return await res.json();
+}
+
+async function postEvolutionText(ctx: { url: string; token: string; instance: string; number: string }, text: string) {
+  const payloads = buildEvolutionTextPayloads(ctx.number, text, getCachedTextPayloadMode(ctx.instance));
+  let lastError: any;
+
+  for (const payload of payloads) {
+    try {
+      const json = await postEvolutionJson(ctx.url, ctx.instance, ctx.token, 'sendText', payload.body);
+      setCachedTextPayloadMode(ctx.instance, payload.mode);
+      return json;
+    } catch (err: any) {
+      lastError = err;
+      if (!isEvolutionTextSchemaError(String(err?.message || ''))) {
+        throw err;
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 
@@ -127,49 +233,12 @@ class EvolutionAdapter implements WhatsAppProviderAdapter {
   }
 
   async sendMessage(conn: WhatsAppConnection, customerId: string, content: string) {
-    const rawUrl = (conn.metadata?.url || '').trim();
-    const url = rawUrl && !/^https?:\/\//i.test(rawUrl) ? `https://${rawUrl}` : rawUrl;
-    const token = conn.metadata?.token;
-    const instance = conn.metadata?.instance || conn.metadata?.phone_number_id;
-    
-    if (!url || !token || !instance) {
-      throw new Error('Configurações da Evolution API incompletas.');
-    }
-
-    // First we need to get the customer phone
-    const { data: customer } = await supabase.from('customers').select('phone').eq('id', customerId).single();
-    if (!customer?.phone) throw new Error('Cliente não possui telefone cadastrado.');
-
-    const endpoint = `${url.replace(/\/$/, '')}/message/sendText/${encodeURIComponent(instance)}`;
-    const headers = {
-      'Content-Type': 'application/json',
-      apikey: token,
-      Authorization: `Bearer ${token}`,
-    };
-
-    // Unified payload that satisfies both Evolution v2 (flat `text`) and v1
-    // (`textMessage.text`) JSON schemas. Sending both shapes in the same body
-    // avoids the "instance requires property text" 400 when the server probes
-    // strict schema validation.
-    const body = {
-      number: customer.phone,
-      text: content,
-      textMessage: { text: content },
-      options: { delay: 0, presence: 'available', linkPreview: false },
-      delay: 0,
-      linkPreview: false,
-    };
+    const ctx = await evolutionContext(conn, customerId);
 
     return enqueue(`evo:${conn.id}`, () => sendWithRetry(async () => {
       const start = Date.now();
       try {
-        const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          const detail = errData?.response?.message || errData?.message || errData?.error || `Erro Evolution: ${res.status}`;
-          throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
-        }
-        const json = await res.json();
+        const json = await postEvolutionText(ctx, content);
         (json as any)._latency_ms = Date.now() - start;
         return json;
       } catch (err: any) {
@@ -211,16 +280,7 @@ async function evolutionContext(conn: WhatsAppConnection, customerId: string) {
 }
 
 async function evolutionPost(ctx: { url: string; token: string; instance: string }, endpoint: string, body: any) {
-  const res = await fetch(`${ctx.url}/message/${endpoint}/${encodeURIComponent(ctx.instance)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: ctx.token, Authorization: `Bearer ${ctx.token}` },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(errData?.message || `Erro Evolution: ${res.status}`);
-  }
-  return await res.json();
+  return postEvolutionJson(ctx.url, ctx.instance, ctx.token, endpoint, body);
 }
 
 async function sendEvolutionRich(conn: WhatsAppConnection, customerId: string, payload: any) {
@@ -264,19 +324,11 @@ async function sendEvolutionRich(conn: WhatsAppConnection, customerId: string, p
     case 'product': {
       const price = payload.price != null ? ` — R$ ${Number(payload.price).toFixed(2)}` : '';
       const text = `🛍️ *${payload.name}*${price}`;
-      return evolutionPost(ctx, 'sendText', {
-        number: ctx.number,
-        text,
-        textMessage: { text },
-      });
+      return postEvolutionText(ctx, text);
     }
     case 'signature': {
       const text = `📄 *${payload.title}*\n${payload.url}`;
-      return evolutionPost(ctx, 'sendText', {
-        number: ctx.number,
-        text,
-        textMessage: { text },
-      });
+      return postEvolutionText(ctx, text);
     }
 
     default:
@@ -323,8 +375,7 @@ async function sendEvolutionMedia(conn: WhatsAppConnection, customerId: string, 
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
-    const detail = errData?.response?.message || errData?.message || errData?.error || `Erro Evolution: ${res.status}`;
-    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+    throw new Error(extractEvolutionError(errData, `Erro Evolution: ${res.status}`));
 
   }
   return await res.json();
