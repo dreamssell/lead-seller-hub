@@ -388,15 +388,18 @@ export default function ChatPage() {
             id: c.id,
             name: c.name || c.phone || 'Cliente sem nome',
             msg: lastMsg?.content || 'Sem mensagens ainda',
-            time: lastMsg 
+            time: lastMsg
               ? new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               : new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             online: false,
             botEnabled: false,
             assignedTo: '',
-            phone: c.phone
+            phone: c.phone,
+            avatar_url: (c as any).avatar_url || null,
+            email: c.email || null,
           };
         });
+
         
         setConvs(prev => ({ ...prev, [channel]: formatted }));
         addDebugLog('info', `Conversas ${channel} formatadas e carregadas na UI`);
