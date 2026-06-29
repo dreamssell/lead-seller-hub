@@ -778,34 +778,51 @@ export default function ChatPage() {
   };
 
   // New rich-composer handlers
-  const sendOptimistic = (content: string) => {
+  const sendOptimistic = async (content: string) => {
     const id = crypto.randomUUID();
     setMessages(prev => [...prev, {
-      id, customer_id: selectedConvId, sender_type: 'agent',
-      content, created_at: new Date().toISOString(), status: 'sending',
+      id, client_msg_id: id, customer_id: selectedConvId, sender_type: 'agent',
+      content, channel: activeChannel, created_at: new Date().toISOString(), status: 'sending',
     }]);
+    try {
+      await supabase.from('chat_messages').insert({
+        client_msg_id: id,
+        customer_id: selectedConvId,
+        sender_type: 'agent',
+        content,
+        channel: activeChannel,
+        connection_id: activeWhatsAppConn?.id ?? null,
+        metadata: { status: 'sending' },
+      });
+    } catch {}
     return id;
   };
 
-  const markStatus = (id: string, status: 'sent' | 'error', overrideId?: string) => {
-    setMessages(prev => prev.map(m => m.id === id ? { ...m, status, id: overrideId || m.id } : m));
+  const markStatus = async (id: string, status: 'sent' | 'error', overrideId?: string, extra?: Record<string, any>) => {
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, status, uaz_msg_id: overrideId || m.uaz_msg_id, ...(extra || {}) } : m));
+    try {
+      await supabase.from('chat_messages')
+        .update({ uaz_msg_id: overrideId ?? null, metadata: { status, ...(extra || {}) } })
+        .eq('client_msg_id', id);
+    } catch {}
   };
 
   const handleSendText = async (text: string) => {
     if (!selectedConvId || !text.trim()) return;
-    const id = sendOptimistic(text);
+    const id = await sendOptimistic(text);
     try {
       if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+        const t0 = Date.now();
         const data = await adapter.sendMessage(activeWhatsAppConn, selectedConvId, text);
-        markStatus(id, 'sent', data?.data?.key?.id);
+        await markStatus(id, 'sent', data?.data?.key?.id || data?.key?.id, { latency_ms: Date.now() - t0 });
       } else {
         await new Promise(r => setTimeout(r, 400));
-        markStatus(id, 'sent');
+        await markStatus(id, 'sent');
       }
     } catch (err: any) {
       toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
-      markStatus(id, 'error');
+      await markStatus(id, 'error', undefined, { error: err.message });
       throw err;
     }
   };
