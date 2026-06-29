@@ -506,6 +506,17 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (action === "subscribe_presence") {
+      const number = (body.number || "").replace(/\D/g, "");
+      if (!number) return json({ ok: false, error: "missing_number" }, 400);
+      // Evolution v2: POST /chat/presenceSubscribe/{instance} { number }
+      const r = await evoFetch(baseUrl, token, `/chat/presenceSubscribe/${encodeURIComponent(instance)}`, {
+        method: "POST",
+        body: JSON.stringify({ number }),
+      });
+      return json({ ok: r.ok, status: r.status, raw: r.data });
+    }
+
     if (action === "set_auto_import") {
       const enabled = body.enabled !== false;
       const intervalHours = Math.max(1, Math.min(Number(body.interval_hours) || 6, 168));
