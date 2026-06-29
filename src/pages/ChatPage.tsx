@@ -525,6 +525,16 @@ export default function ChatPage() {
     }
   }, [selectedConvId]);
 
+  // Autofocus composer when a conversation is selected
+  useEffect(() => {
+    if (!selectedConvId) return;
+    const t = setTimeout(() => {
+      const el = document.querySelector<HTMLTextAreaElement>('textarea[data-composer="1"]');
+      el?.focus();
+    }, 120);
+    return () => clearTimeout(t);
+  }, [selectedConvId]);
+
   const list = activeChannel ? convs[activeChannel] : [];
   const selectedConv = list.find((c) => c.id === selectedConvId) || (selectedConvId ? null : list[0]);
 
