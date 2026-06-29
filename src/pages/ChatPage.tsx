@@ -1,4 +1,5 @@
 import { AppLayout } from '@/components/layout/AppLayout';
+import { GlobalSearchDialog } from '@/components/chat/GlobalSearchDialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Paperclip, Phone, Video, MoreVertical, Search, Circle,
@@ -148,7 +149,20 @@ export default function ChatPage() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState('');
   const [collabTransferOpen, setCollabTransferOpen] = useState(false);
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const { isSupervisor, userId: currentUserId } = useIsSupervisor();
+
+  // Ctrl/Cmd+K → busca global
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setGlobalSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   // Global listeners: whispers + mentions for the current user
   useEffect(() => {
@@ -885,6 +899,7 @@ export default function ChatPage() {
             Total de {channels.reduce((a, c) => a + c.leads, 0)} leads e {channels.reduce((a, c) => a + c.open, 0)} conversas em aberto distribuídos pelos canais conectados.
           </p>
         </div>
+        <GlobalSearchDialog open={globalSearchOpen} onOpenChange={setGlobalSearchOpen} />
       </AppLayout>
     );
   }
@@ -1501,6 +1516,7 @@ export default function ChatPage() {
 
       <MediaDropzone active={!!selectedConvId} onDrop={(files) => setExternalAttachment(files[0] || null)} />
       <KeyboardShortcutsHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+      <GlobalSearchDialog open={globalSearchOpen} onOpenChange={setGlobalSearchOpen} />
     </AppLayout>
   );
 }

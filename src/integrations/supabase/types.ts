@@ -269,6 +269,111 @@ export type Database = {
         }
         Relationships: []
       }
+      auto_followups: {
+        Row: {
+          cancelled_reason: string | null
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          message_template: string
+          owner_id: string
+          scheduled_for: string
+          sent_at: string | null
+          status: string
+          trigger_message_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          cancelled_reason?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          message_template: string
+          owner_id: string
+          scheduled_for: string
+          sent_at?: string | null
+          status?: string
+          trigger_message_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cancelled_reason?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          message_template?: string
+          owner_id?: string
+          scheduled_for?: string
+          sent_at?: string | null
+          status?: string
+          trigger_message_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auto_followups_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auto_followups_trigger_message_id_fkey"
+            columns: ["trigger_message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bot_flows: {
+        Row: {
+          created_at: string
+          description: string | null
+          edges: Json
+          id: string
+          is_active: boolean
+          name: string
+          nodes: Json
+          owner_id: string
+          sub_company_id: string | null
+          trigger_channel: string | null
+          trigger_keywords: string[]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          edges?: Json
+          id?: string
+          is_active?: boolean
+          name: string
+          nodes?: Json
+          owner_id: string
+          sub_company_id?: string | null
+          trigger_channel?: string | null
+          trigger_keywords?: string[]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          edges?: Json
+          id?: string
+          is_active?: boolean
+          name?: string
+          nodes?: Json
+          owner_id?: string
+          sub_company_id?: string | null
+          trigger_channel?: string | null
+          trigger_keywords?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       channel_routing: {
         Row: {
           channel: string
@@ -343,6 +448,7 @@ export type Database = {
           customer_id: string | null
           id: string
           metadata: Json | null
+          search_tsv: unknown
           sender_type: string
           sub_company_id: string | null
           uaz_msg_id: string | null
@@ -356,6 +462,7 @@ export type Database = {
           customer_id?: string | null
           id?: string
           metadata?: Json | null
+          search_tsv?: unknown
           sender_type: string
           sub_company_id?: string | null
           uaz_msg_id?: string | null
@@ -369,6 +476,7 @@ export type Database = {
           customer_id?: string | null
           id?: string
           metadata?: Json | null
+          search_tsv?: unknown
           sender_type?: string
           sub_company_id?: string | null
           uaz_msg_id?: string | null
@@ -689,6 +797,54 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversation_markers: {
+        Row: {
+          color: string | null
+          created_at: string
+          customer_id: string
+          id: string
+          label: string
+          message_id: string | null
+          note: string | null
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          customer_id: string
+          id?: string
+          label: string
+          message_id?: string | null
+          note?: string | null
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          customer_id?: string
+          id?: string
+          label?: string
+          message_id?: string | null
+          note?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_markers_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_markers_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
             referencedColumns: ["id"]
           },
         ]
@@ -1659,6 +1815,66 @@ export type Database = {
           },
         ]
       }
+      message_ai_analysis: {
+        Row: {
+          created_at: string
+          customer_id: string
+          id: string
+          intent: string | null
+          language: string | null
+          message_id: string
+          owner_id: string | null
+          raw: Json | null
+          sentiment: string | null
+          sentiment_score: number | null
+          suggested_tags: string[]
+          summary: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          id?: string
+          intent?: string | null
+          language?: string | null
+          message_id: string
+          owner_id?: string | null
+          raw?: Json | null
+          sentiment?: string | null
+          sentiment_score?: number | null
+          suggested_tags?: string[]
+          summary?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          id?: string
+          intent?: string | null
+          language?: string | null
+          message_id?: string
+          owner_id?: string | null
+          raw?: Json | null
+          sentiment?: string | null
+          sentiment_score?: number | null
+          suggested_tags?: string[]
+          summary?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_ai_analysis_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_ai_analysis_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: true
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       note_mentions: {
         Row: {
           created_at: string
@@ -1857,6 +2073,38 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      pinned_conversations: {
+        Row: {
+          created_at: string
+          customer_id: string
+          id: string
+          position: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          id?: string
+          position?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          id?: string
+          position?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pinned_conversations_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pipeline_audit_logs: {
         Row: {
@@ -2249,6 +2497,45 @@ export type Database = {
           target_queue_id?: string | null
           target_user_id?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      saved_filters: {
+        Row: {
+          color: string | null
+          created_at: string
+          filters: Json
+          icon: string | null
+          id: string
+          is_pinned: boolean
+          name: string
+          owner_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          filters?: Json
+          icon?: string | null
+          id?: string
+          is_pinned?: boolean
+          name: string
+          owner_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          filters?: Json
+          icon?: string | null
+          id?: string
+          is_pinned?: boolean
+          name?: string
+          owner_id?: string | null
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -4329,6 +4616,19 @@ export type Database = {
           record_label: string
           table_name: string
           total_count: number
+        }[]
+      }
+      search_chat_messages_global: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: {
+          channel: string
+          content: string
+          created_at: string
+          customer_id: string
+          customer_name: string
+          id: string
+          rank: number
+          sender_type: string
         }[]
       }
       try_acquire_provision_lock: {
