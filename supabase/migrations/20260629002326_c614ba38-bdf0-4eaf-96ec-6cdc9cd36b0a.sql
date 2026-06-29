@@ -1,0 +1,2 @@
+ALTER TABLE public.customers ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+COMMENT ON COLUMN public.customers.avatar_url IS 'Foto/perfil do contato importada de canais externos (ex: Evolution profilePicUrl).';

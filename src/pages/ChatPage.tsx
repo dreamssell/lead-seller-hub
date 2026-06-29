@@ -71,7 +71,7 @@ const channels: Array<{
 
 
 
-const conversationsByChannel: Record<ChannelKey, Array<{ id: string; name: string; msg: string; time: string; online: boolean; botEnabled: boolean; assignedTo: string; phone?: string }>> = {
+const conversationsByChannel: Record<ChannelKey, Array<{ id: string; name: string; msg: string; time: string; online: boolean; botEnabled: boolean; assignedTo: string; phone?: string; avatar_url?: string | null; email?: string | null }>> = {
   whatsapp: [],
   instagram: [],
   facebook: [],
@@ -388,15 +388,18 @@ export default function ChatPage() {
             id: c.id,
             name: c.name || c.phone || 'Cliente sem nome',
             msg: lastMsg?.content || 'Sem mensagens ainda',
-            time: lastMsg 
+            time: lastMsg
               ? new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               : new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             online: false,
             botEnabled: false,
             assignedTo: '',
-            phone: c.phone
+            phone: c.phone,
+            avatar_url: (c as any).avatar_url || null,
+            email: c.email || null,
           };
         });
+
         
         setConvs(prev => ({ ...prev, [channel]: formatted }));
         addDebugLog('info', `Conversas ${channel} formatadas e carregadas na UI`);
@@ -520,6 +523,16 @@ export default function ChatPage() {
       }
       loadMessages();
     }
+  }, [selectedConvId]);
+
+  // Autofocus composer when a conversation is selected
+  useEffect(() => {
+    if (!selectedConvId) return;
+    const t = setTimeout(() => {
+      const el = document.querySelector<HTMLTextAreaElement>('textarea[data-composer="1"]');
+      el?.focus();
+    }, 120);
+    return () => clearTimeout(t);
   }, [selectedConvId]);
 
   const list = activeChannel ? convs[activeChannel] : [];
@@ -1216,8 +1229,17 @@ export default function ChatPage() {
                   className="flex items-center gap-3 -mx-2 px-2 py-1 rounded-lg hover:bg-secondary/60 transition text-left"
                   title="Ver perfil completo do contato"
                 >
-                  <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center ring-1 ring-border">
-                    <span className="text-xs font-bold text-primary">{selectedConv.name.split(/[\s.@]/).filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase()).join('')}</span>
+                  <div className="w-9 h-9 rounded-full bg-primary/20 ring-1 ring-border overflow-hidden flex items-center justify-center shrink-0">
+                    {(selectedConv as any).avatar_url ? (
+                      <img
+                        src={(selectedConv as any).avatar_url}
+                        alt={selectedConv.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { (e.currentTarget.style.display = 'none'); }}
+                      />
+                    ) : (
+                      <span className="text-xs font-bold text-primary">{selectedConv.name.split(/[\s.@]/).filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase()).join('')}</span>
+                    )}
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold truncate">{selectedConv.name}</p>
