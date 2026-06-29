@@ -263,16 +263,22 @@ async function sendEvolutionRich(conn: WhatsAppConnection, customerId: string, p
       });
     case 'product': {
       const price = payload.price != null ? ` — R$ ${Number(payload.price).toFixed(2)}` : '';
+      const text = `🛍️ *${payload.name}*${price}`;
       return evolutionPost(ctx, 'sendText', {
         number: ctx.number,
-        textMessage: { text: `🛍️ *${payload.name}*${price}` },
+        text,
+        textMessage: { text },
       });
     }
-    case 'signature':
+    case 'signature': {
+      const text = `📄 *${payload.title}*\n${payload.url}`;
       return evolutionPost(ctx, 'sendText', {
         number: ctx.number,
-        textMessage: { text: `📄 *${payload.title}*\n${payload.url}` },
+        text,
+        textMessage: { text },
       });
+    }
+
     default:
       throw new Error(`Tipo de mensagem rica não suportado: ${payload.type}`);
   }
