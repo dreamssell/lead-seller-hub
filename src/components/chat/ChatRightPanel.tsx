@@ -186,7 +186,7 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
     <div className="w-[340px] border-l border-border bg-background/95 backdrop-blur-md flex flex-col">
       <div className="p-3 border-b border-border flex items-center justify-between">
         <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Painel do atendente</p>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Perfil do contato</p>
           <p className="text-sm font-semibold truncate">{customerName}</p>
         </div>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
@@ -194,7 +194,48 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
         </Button>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="flex-1 flex flex-col">
+      <div className="px-3 py-3 border-b border-border bg-secondary/30">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-14 h-14 rounded-full bg-primary/20 ring-2 ring-primary/30 flex items-center justify-center shrink-0">
+            <span className="text-base font-bold text-primary">
+              {customerName.split(/[\s.@]/).filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase()).join('')}
+            </span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold truncate">{customerName}</p>
+            {profile?.company && <p className="text-[11px] text-muted-foreground truncate">{profile.company}</p>}
+            {profile?.channel && (
+              <span className="inline-block mt-1 text-[9px] uppercase tracking-wider bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                {profile.channel}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="space-y-1.5 text-[11px]">
+          {profile?.phone && (
+            <a href={`tel:${profile.phone}`} className="flex items-center gap-2 text-foreground hover:text-primary transition">
+              <span className="text-muted-foreground">📞</span>
+              <span className="font-mono">{profile.phone}</span>
+            </a>
+          )}
+          {profile?.email && (
+            <a href={`mailto:${profile.email}`} className="flex items-center gap-2 text-foreground hover:text-primary transition truncate">
+              <span className="text-muted-foreground">✉️</span>
+              <span className="truncate">{profile.email}</span>
+            </a>
+          )}
+          {profile?.created_at && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span>🗓️</span>
+              <span>Cliente desde {new Date(profile.created_at).toLocaleDateString('pt-BR')}</span>
+            </div>
+          )}
+          {!profile?.phone && !profile?.email && (
+            <p className="text-muted-foreground italic">Sem informações de contato cadastradas.</p>
+          )}
+        </div>
+      </div>
+
         <TabsList className="grid grid-cols-5 mx-3 mt-3">
           <TabsTrigger value="notes" className="gap-1 text-[10px] px-1" title="Notas">
             <StickyNote className="w-3.5 h-3.5" />
