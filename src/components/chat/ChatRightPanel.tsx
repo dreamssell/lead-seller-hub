@@ -236,7 +236,9 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
         </div>
       </div>
 
+      <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="flex-1 flex flex-col">
         <TabsList className="grid grid-cols-5 mx-3 mt-3">
+
           <TabsTrigger value="notes" className="gap-1 text-[10px] px-1" title="Notas">
             <StickyNote className="w-3.5 h-3.5" />
           </TabsTrigger>
