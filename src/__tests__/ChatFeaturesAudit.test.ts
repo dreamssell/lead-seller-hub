@@ -53,7 +53,7 @@ describe('Chat Features Audit', () => {
         })
       })
     );
-    const firstBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const firstBody = JSON.parse((fetchMock.mock.calls[0] as any)[1].body);
     expect(firstBody).toEqual(expect.objectContaining({
       number: '5511999999999',
       text: 'Hello World',
@@ -89,8 +89,8 @@ describe('Chat Features Audit', () => {
     const result = await adapter.sendMessage(mockConn as any, 'customer-456', 'Fallback Test');
     expect(result.status).toBe('sent');
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(expect.objectContaining({ text: 'Fallback Test' }));
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual(expect.objectContaining({
+    expect(JSON.parse((fetchMock.mock.calls[0] as any)[1].body)).toEqual(expect.objectContaining({ text: 'Fallback Test' }));
+    expect(JSON.parse((fetchMock.mock.calls[1] as any)[1].body)).toEqual(expect.objectContaining({
       textMessage: { text: 'Fallback Test' },
     }));
   });
