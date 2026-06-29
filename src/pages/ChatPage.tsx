@@ -1315,7 +1315,7 @@ export default function ChatPage() {
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                  <button className="p-2 rounded-lg hover:bg-secondary" title="Vídeo chamada"><Video className="w-4 h-4 text-muted-foreground" /></button>
+                  <Link to="/video-calls" className="p-2 rounded-lg hover:bg-secondary inline-flex" title="Vídeo chamada"><Video className="w-4 h-4 text-muted-foreground" /></Link>
                   <button
                     onClick={() => setSignatureModalOpen(true)}
                     className="p-2 rounded-lg hover:bg-secondary text-muted-foreground"
@@ -1326,11 +1326,11 @@ export default function ChatPage() {
                   <button
                     onClick={() => setRightPanelOpen((v) => !v)}
                     className={`p-2 rounded-lg hover:bg-secondary ${rightPanelOpen ? 'bg-secondary text-primary' : 'text-muted-foreground'}`}
-                    title="Notas internas e respostas rápidas"
+                    title="Notas internas, CRM e mídia"
                   >
                     <StickyNote className="w-4 h-4" />
                   </button>
-                  
+
                   {activeChannel === 'telegram' && (
                     <div className="flex items-center border-l border-border ml-2 pl-2 gap-1">
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => handleExportHistory('csv')} title="Exportar CSV">
@@ -1342,9 +1342,42 @@ export default function ChatPage() {
                     </div>
                   )}
 
-                  <button className="p-2 rounded-lg hover:bg-secondary"><MoreVertical className="w-4 h-4 text-muted-foreground" /></button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="p-2 rounded-lg hover:bg-secondary" title="Mais opções"><MoreVertical className="w-4 h-4 text-muted-foreground" /></button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">Conversa</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => setRightPanelOpen(true)} className="gap-2 text-xs">
+                        <UserCog className="w-3.5 h-3.5" /> Ver perfil do contato
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setGlobalSearchOpen(true)} className="gap-2 text-xs">
+                        <Search className="w-3.5 h-3.5" /> Buscar nas mensagens (Ctrl+K)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={async () => {
+                          if (!selectedConvId) return;
+                          const { data } = await supabase
+                            .from('chat_messages')
+                            .select('*')
+                            .eq('customer_id', selectedConvId)
+                            .order('created_at', { ascending: true });
+                          if (data) setMessages(data);
+                          toast({ title: 'Histórico atualizado', description: `${data?.length || 0} mensagens carregadas.` });
+                        }}
+                        className="gap-2 text-xs"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" /> Recarregar mensagens
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setShortcutsOpen(true)} className="gap-2 text-xs">
+                        <Keyboard className="w-3.5 h-3.5" /> Atalhos de teclado
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
+
 
               <CollaborationBar
                 customerId={selectedConv.id}
