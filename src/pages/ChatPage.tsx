@@ -829,7 +829,7 @@ export default function ChatPage() {
 
   const handleSendMedia = async (a: ComposerAttachment, caption: string) => {
     if (!selectedConvId) return;
-    const id = sendOptimistic(`📎 ${a.file.name}${caption ? ` — ${caption}` : ''}`);
+    const id = await sendOptimistic(`📎 ${a.file.name}${caption ? ` — ${caption}` : ''}`);
     try {
       if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
@@ -849,7 +849,7 @@ export default function ChatPage() {
 
   const handleSendAudio = async (blob: Blob, durationSec: number) => {
     if (!selectedConvId) return;
-    const id = sendOptimistic(`🎤 Áudio (${durationSec}s)`);
+    const id = await sendOptimistic(`🎤 Áudio (${durationSec}s)`);
     try {
       if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
@@ -887,7 +887,7 @@ export default function ChatPage() {
       payload.type === 'product' ? `🛍️ ${payload.name}` :
       payload.type === 'signature' ? `📄 ${payload.title}` :
       labelMap[(payload as any).type] || 'Mensagem rica';
-    const id = sendOptimistic(summary);
+    const id = await sendOptimistic(summary);
     try {
       if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
