@@ -71,7 +71,8 @@ const channels: Array<{
 
 
 
-const conversationsByChannel: Record<ChannelKey, Array<{ id: string; name: string; msg: string; time: string; online: boolean; botEnabled: boolean; assignedTo: string; phone?: string; avatar_url?: string | null; email?: string | null }>> = {
+type ConvItem = { id: string; name: string; msg: string; time: string; online: boolean; botEnabled: boolean; assignedTo: string; phone?: string; avatar_url?: string | null; email?: string | null; presence?: string | null; presenceLabel?: string; lastSeenAt?: string | null };
+const conversationsByChannel: Record<ChannelKey, Array<ConvItem>> = {
   whatsapp: [],
   instagram: [],
   facebook: [],
@@ -81,6 +82,24 @@ const conversationsByChannel: Record<ChannelKey, Array<{ id: string; name: strin
   tiktok: [],
   widget: [],
 };
+
+function computePresence(presence?: string | null, presenceAt?: string | null, lastSeenAt?: string | null): { online: boolean; label: string } {
+  const now = Date.now();
+  const presAt = presenceAt ? new Date(presenceAt).getTime() : 0;
+  const seenAt = lastSeenAt ? new Date(lastSeenAt).getTime() : 0;
+  const fresh = now - presAt < 2 * 60 * 1000; // 2 min
+  if (fresh && presence === 'composing') return { online: true, label: 'digitando…' };
+  if (fresh && presence === 'recording') return { online: true, label: 'gravando áudio…' };
+  if (fresh && (presence === 'available' || presence === 'online')) return { online: true, label: 'Online agora' };
+  if (seenAt) {
+    const diff = now - seenAt;
+    if (diff < 60_000) return { online: false, label: 'visto agora' };
+    if (diff < 3600_000) return { online: false, label: `visto há ${Math.floor(diff / 60_000)} min` };
+    if (diff < 86_400_000) return { online: false, label: `visto há ${Math.floor(diff / 3600_000)} h` };
+    return { online: false, label: `visto em ${new Date(seenAt).toLocaleDateString('pt-BR')}` };
+  }
+  return { online: false, label: 'Sem status' };
+}
 
 
 const aiAgents = [
@@ -384,6 +403,7 @@ export default function ChatPage() {
 
         const formatted = channelCustomers.map(c => {
           const lastMsg = lastMessages?.find(m => m.customer_id === c.id);
+          const pres = computePresence((c as any).presence, (c as any).presence_updated_at, (c as any).last_seen_at);
           return {
             id: c.id,
             name: c.name || c.phone || 'Cliente sem nome',
@@ -391,7 +411,10 @@ export default function ChatPage() {
             time: lastMsg
               ? new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               : new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            online: false,
+            online: pres.online,
+            presenceLabel: pres.label,
+            presence: (c as any).presence || null,
+            lastSeenAt: (c as any).last_seen_at || null,
             botEnabled: false,
             assignedTo: '',
             phone: c.phone,
@@ -436,6 +459,21 @@ export default function ChatPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_connections' }, () => {
         addDebugLog('info', 'Conexão WhatsApp atualizada no banco; relendo status persistido.');
         checkProviderStatus('whatsapp');
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'customers' }, (payload) => {
+        const c: any = payload.new;
+        const pres = computePresence(c.presence, c.presence_updated_at, c.last_seen_at);
+        setConvs(prev => {
+          const next: any = { ...prev };
+          (Object.keys(next) as ChannelKey[]).forEach(k => {
+            next[k] = next[k].map((conv: any) =>
+              conv.id === c.id
+                ? { ...conv, online: pres.online, presenceLabel: pres.label, presence: c.presence, lastSeenAt: c.last_seen_at }
+                : conv
+            );
+          });
+          return next;
+        });
       })
       .subscribe();
 
@@ -534,6 +572,19 @@ export default function ChatPage() {
     }, 120);
     return () => clearTimeout(t);
   }, [selectedConvId]);
+
+  // Subscribe to recipient presence updates (Evolution) whenever a WhatsApp conversation opens.
+  useEffect(() => {
+    if (!selectedConvId || activeChannel !== 'whatsapp' || !activeWhatsAppConn) return;
+    if (activeWhatsAppConn.provider !== 'evolution') return;
+    const conv = convs.whatsapp.find(c => c.id === selectedConvId);
+    if (!conv?.phone) return;
+    supabase.functions
+      .invoke('evolution-instance', {
+        body: { action: 'subscribe_presence', connection_id: activeWhatsAppConn.id, number: conv.phone },
+      })
+      .catch(() => {});
+  }, [selectedConvId, activeChannel, activeWhatsAppConn, convs.whatsapp]);
 
   const list = activeChannel ? convs[activeChannel] : [];
   const selectedConv = list.find((c) => c.id === selectedConvId) || (selectedConvId ? null : list[0]);
@@ -1244,8 +1295,8 @@ export default function ChatPage() {
                   <div className="min-w-0">
                     <p className="text-sm font-semibold truncate">{selectedConv.name}</p>
                     <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
-                      <Circle className={`w-1.5 h-1.5 ${selectedConv.online ? 'fill-success text-success' : 'fill-muted-foreground text-muted-foreground'}`} />
-                      {selectedConv.online ? 'Online agora' : 'Offline'}
+                      <Circle className={`w-1.5 h-1.5 ${selectedConv.online ? 'fill-success text-success animate-pulse' : 'fill-muted-foreground text-muted-foreground'}`} />
+                      {(selectedConv as any).presenceLabel || (selectedConv.online ? 'Online agora' : 'Offline')}
                       {selectedConv.phone && <span className="opacity-70">· {selectedConv.phone}</span>}
                     </p>
                   </div>

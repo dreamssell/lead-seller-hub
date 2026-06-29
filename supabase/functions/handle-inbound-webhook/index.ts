@@ -75,6 +75,36 @@ Deno.serve(async (req) => {
       routing = (rs || []).find((r: any) => r.sub_company_id === subCompanyId) || (rs || [])[0] || null;
     }
 
+    // ---------- Presence updates (online/typing/recording/offline) ----------
+    if (eventType === "presence.update" || eventType === "presence") {
+      const presList: any[] = Array.isArray(payload.data?.presences)
+        ? payload.data.presences
+        : payload.data?.id
+          ? [{ id: payload.data.id, presences: payload.data.presences || payload.data.presence }]
+          : [];
+      const jidRoot = payload.data?.id || remoteJid;
+      const presObj = payload.data?.presences || payload.data?.presence;
+
+      // Evolution shape: data: { id: '55@s.whatsapp.net', presences: { '55@s.whatsapp.net': { lastKnownPresence: 'available' } } }
+      let parsedPresence: string | null = null;
+      if (presObj && typeof presObj === 'object') {
+        const inner = presObj[jidRoot] || Object.values(presObj)[0];
+        parsedPresence = (inner as any)?.lastKnownPresence || (inner as any)?.presence || null;
+      } else if (typeof presObj === 'string') {
+        parsedPresence = presObj;
+      }
+
+      if (jidRoot && parsedPresence) {
+        const phone = String(jidRoot).replace("@s.whatsapp.net", "").replace("@g.us", "");
+        const now = new Date().toISOString();
+        const updates: any = { presence: parsedPresence, presence_updated_at: now };
+        if (parsedPresence === 'available' || parsedPresence === 'composing' || parsedPresence === 'recording') {
+          updates.last_seen_at = now;
+        }
+        await supabaseAdmin.from("customers").update(updates).eq("phone", phone);
+      }
+    }
+
     if ((eventType === "messages.upsert" || eventType === "message" || eventType === "messages.received") && msgId) {
       // Idempotency
       const { data: existing } = await supabaseAdmin
@@ -111,6 +141,9 @@ Deno.serve(async (req) => {
               sub_company_id: subCompanyId,
               origin_connection_id: connectionId,
               created_by: ownerId || "00000000-0000-0000-0000-000000000000",
+              last_seen_at: new Date().toISOString(),
+              presence: 'available',
+              presence_updated_at: new Date().toISOString(),
             })
             .select()
             .single();
@@ -135,6 +168,12 @@ Deno.serve(async (req) => {
               notes: `Lead criado automaticamente via ${channel}. Primeira mensagem: "${messageText.substring(0, 200)}"`,
             });
           }
+        } else {
+          // Receber mensagem implica que o contato está/estava online — atualiza last_seen e presence
+          await supabaseAdmin
+            .from("customers")
+            .update({ last_seen_at: new Date().toISOString(), presence: 'available', presence_updated_at: new Date().toISOString() })
+            .eq("id", customer.id);
         }
 
         if (customer) {

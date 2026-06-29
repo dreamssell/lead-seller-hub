@@ -16,7 +16,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-type Action = "create" | "qr" | "state" | "logout" | "delete" | "test" | "set_webhook" | "import_chats" | "set_auto_import";
+type Action = "create" | "qr" | "state" | "logout" | "delete" | "test" | "set_webhook" | "import_chats" | "set_auto_import" | "subscribe_presence";
 
 interface Body {
   action: Action;
@@ -24,6 +24,8 @@ interface Body {
   url?: string;
   token?: string;
   instance?: string;
+  // subscribe_presence:
+  number?: string;
   // import_chats options:
   max_chats?: number;
   messages_per_chat?: number;
@@ -502,6 +504,17 @@ Deno.serve(async (req) => {
         await logEvent("evolution.webhook_set", "error", (e as Error).message);
         return json({ ok: false, error: (e as Error).message }, 502);
       }
+    }
+
+    if (action === "subscribe_presence") {
+      const number = (body.number || "").replace(/\D/g, "");
+      if (!number) return json({ ok: false, error: "missing_number" }, 400);
+      // Evolution v2: POST /chat/presenceSubscribe/{instance} { number }
+      const r = await evoFetch(baseUrl, token, `/chat/presenceSubscribe/${encodeURIComponent(instance)}`, {
+        method: "POST",
+        body: JSON.stringify({ number }),
+      });
+      return json({ ok: r.ok, status: r.status, raw: r.data });
     }
 
     if (action === "set_auto_import") {
