@@ -69,9 +69,10 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
   }, []);
 
   useEffect(() => {
+    setAvatarBroken(false);
     supabase
       .from('customers')
-      .select('owner_id, phone, email, company, channel, created_at')
+      .select('owner_id, phone, email, company, channel, created_at, avatar_url, address, document')
       .eq('id', customerId)
       .maybeSingle()
       .then(({ data }) => {
@@ -83,10 +84,14 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
             company: (data as any).company,
             channel: (data as any).channel,
             created_at: (data as any).created_at,
+            avatar_url: (data as any).avatar_url || null,
+            address: (data as any).address || null,
+            document: (data as any).document || null,
           });
         }
       });
   }, [customerId]);
+
 
 
 
