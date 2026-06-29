@@ -1229,8 +1229,17 @@ export default function ChatPage() {
                   className="flex items-center gap-3 -mx-2 px-2 py-1 rounded-lg hover:bg-secondary/60 transition text-left"
                   title="Ver perfil completo do contato"
                 >
-                  <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center ring-1 ring-border">
-                    <span className="text-xs font-bold text-primary">{selectedConv.name.split(/[\s.@]/).filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase()).join('')}</span>
+                  <div className="w-9 h-9 rounded-full bg-primary/20 ring-1 ring-border overflow-hidden flex items-center justify-center shrink-0">
+                    {(selectedConv as any).avatar_url ? (
+                      <img
+                        src={(selectedConv as any).avatar_url}
+                        alt={selectedConv.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { (e.currentTarget.style.display = 'none'); }}
+                      />
+                    ) : (
+                      <span className="text-xs font-bold text-primary">{selectedConv.name.split(/[\s.@]/).filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase()).join('')}</span>
+                    )}
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold truncate">{selectedConv.name}</p>
