@@ -13,6 +13,8 @@ import { ptBR } from 'date-fns/locale';
 import { MentionTextarea } from './MentionTextarea';
 import { AssignmentTimeline } from './AssignmentTimeline';
 import { Customer360Timeline } from './Customer360Timeline';
+import { AIInsightsPanel } from './AIInsightsPanel';
+import { Sparkles } from 'lucide-react';
 import { MediaGallery } from './MediaGallery';
 
 
@@ -317,13 +319,16 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="flex-1 flex flex-col">
-        <TabsList className="grid grid-cols-5 mx-3 mt-3">
+        <TabsList className="grid grid-cols-6 mx-3 mt-3">
 
           <TabsTrigger value="notes" className="gap-1 text-[10px] px-1" title="Notas">
             <StickyNote className="w-3.5 h-3.5" />
           </TabsTrigger>
           <TabsTrigger value="replies" className="gap-1 text-[10px] px-1" title="Respostas rápidas">
             <Zap className="w-3.5 h-3.5" />
+          </TabsTrigger>
+          <TabsTrigger value="ai" className="gap-1 text-[10px] px-1" title="Insights de IA">
+            <Sparkles className="w-3.5 h-3.5" />
           </TabsTrigger>
           <TabsTrigger value="crm" className="gap-1 text-[10px] px-1" title="CRM 360°">
             <Layers className="w-3.5 h-3.5" />
@@ -453,6 +458,10 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
               </div>
             )}
           </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="ai" className="flex-1 flex flex-col mt-3 px-3 pb-3 data-[state=inactive]:hidden">
+          <AIInsightsPanel customerId={customerId} />
         </TabsContent>
 
         <TabsContent value="crm" className="flex-1 flex flex-col mt-3 px-3 pb-3 data-[state=inactive]:hidden">
