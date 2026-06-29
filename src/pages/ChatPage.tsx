@@ -71,7 +71,8 @@ const channels: Array<{
 
 
 
-const conversationsByChannel: Record<ChannelKey, Array<{ id: string; name: string; msg: string; time: string; online: boolean; botEnabled: boolean; assignedTo: string; phone?: string; avatar_url?: string | null; email?: string | null }>> = {
+type ConvItem = { id: string; name: string; msg: string; time: string; online: boolean; botEnabled: boolean; assignedTo: string; phone?: string; avatar_url?: string | null; email?: string | null; presence?: string | null; presenceLabel?: string; lastSeenAt?: string | null };
+const conversationsByChannel: Record<ChannelKey, Array<ConvItem>> = {
   whatsapp: [],
   instagram: [],
   facebook: [],
@@ -81,6 +82,24 @@ const conversationsByChannel: Record<ChannelKey, Array<{ id: string; name: strin
   tiktok: [],
   widget: [],
 };
+
+function computePresence(presence?: string | null, presenceAt?: string | null, lastSeenAt?: string | null): { online: boolean; label: string } {
+  const now = Date.now();
+  const presAt = presenceAt ? new Date(presenceAt).getTime() : 0;
+  const seenAt = lastSeenAt ? new Date(lastSeenAt).getTime() : 0;
+  const fresh = now - presAt < 2 * 60 * 1000; // 2 min
+  if (fresh && presence === 'composing') return { online: true, label: 'digitando…' };
+  if (fresh && presence === 'recording') return { online: true, label: 'gravando áudio…' };
+  if (fresh && (presence === 'available' || presence === 'online')) return { online: true, label: 'Online agora' };
+  if (seenAt) {
+    const diff = now - seenAt;
+    if (diff < 60_000) return { online: false, label: 'visto agora' };
+    if (diff < 3600_000) return { online: false, label: `visto há ${Math.floor(diff / 60_000)} min` };
+    if (diff < 86_400_000) return { online: false, label: `visto há ${Math.floor(diff / 3600_000)} h` };
+    return { online: false, label: `visto em ${new Date(seenAt).toLocaleDateString('pt-BR')}` };
+  }
+  return { online: false, label: 'Sem status' };
+}
 
 
 const aiAgents = [
