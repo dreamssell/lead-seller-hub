@@ -41,7 +41,8 @@ interface Props {
 export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }: Props) {
   const [tab, setTab] = useState<'notes' | 'replies' | 'history' | 'crm' | 'media'>('crm');
   const [ownerId, setOwnerId] = useState<string | null>(null);
-  const [profile, setProfile] = useState<{ phone?: string; email?: string; company?: string; channel?: string; created_at?: string } | null>(null);
+  const [profile, setProfile] = useState<{ phone?: string; email?: string; company?: string; channel?: string; created_at?: string; avatar_url?: string | null; address?: string; document?: string } | null>(null);
+  const [avatarBroken, setAvatarBroken] = useState(false);
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [replies, setReplies] = useState<QuickReply[]>([]);
