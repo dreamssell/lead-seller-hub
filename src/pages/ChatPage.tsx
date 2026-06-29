@@ -71,7 +71,7 @@ const channels: Array<{
 
 
 
-const conversationsByChannel: Record<ChannelKey, Array<{ id: string; name: string; msg: string; time: string; online: boolean; botEnabled: boolean; assignedTo: string; phone?: string }>> = {
+const conversationsByChannel: Record<ChannelKey, Array<{ id: string; name: string; msg: string; time: string; online: boolean; botEnabled: boolean; assignedTo: string; phone?: string; avatar_url?: string | null; email?: string | null }>> = {
   whatsapp: [],
   instagram: [],
   facebook: [],
