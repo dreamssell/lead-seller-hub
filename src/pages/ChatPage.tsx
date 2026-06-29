@@ -452,9 +452,21 @@ export default function ChatPage() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
         addDebugLog('info', 'Nova mensagem recebida via Realtime', payload.new);
         if (payload.new.customer_id === selectedConvId) {
-          setMessages(prev => [...prev, payload.new]);
+          setMessages(prev => {
+            const cid = (payload.new as any).client_msg_id;
+            if (cid && prev.some(m => m.client_msg_id === cid || m.id === cid)) {
+              return prev.map(m => (m.client_msg_id === cid || m.id === cid) ? { ...m, ...payload.new, status: m.status } : m);
+            }
+            if (prev.some(m => m.id === payload.new.id)) return prev;
+            return [...prev, payload.new];
+          });
         }
         if (activeChannel) loadConversations(activeChannel);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages' }, (payload) => {
+        if (payload.new.customer_id === selectedConvId) {
+          setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m));
+        }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_connections' }, () => {
         addDebugLog('info', 'Conexão WhatsApp atualizada no banco; relendo status persistido.');
@@ -700,103 +712,124 @@ export default function ChatPage() {
     // 1. Feedback imediato na UI (otimista)
     const newMessage = {
       id: clientMsgId,
+      client_msg_id: clientMsgId,
       customer_id: selectedConvId,
       sender_type: 'agent',
       content: messageText,
+      channel: activeChannel,
       created_at: new Date().toISOString(),
-      status: 'sending'
+      status: 'sending',
+      _sentAt: Date.now(),
     };
     
     setMessages(prev => [...prev, newMessage]);
     const currentText = messageText;
     setMessageText('');
 
+    // Persist optimistic row so refresh keeps the message
+    try {
+      await supabase.from('chat_messages').insert({
+        client_msg_id: clientMsgId,
+        customer_id: selectedConvId,
+        sender_type: 'agent',
+        content: currentText,
+        channel: activeChannel,
+        connection_id: activeWhatsAppConn?.id ?? null,
+        metadata: { status: 'sending' },
+      });
+    } catch (e) { /* persistence is best-effort */ }
+
     // 2. Chamar Adapter para envio
     try {
       if (activeChannel === 'whatsapp') {
         if (!activeWhatsAppConn) throw new Error('Conexão ativa não encontrada');
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+        const t0 = Date.now();
         const data = await adapter.sendMessage(activeWhatsAppConn, selectedConvId, currentText);
+        const latency = Date.now() - t0;
+        const evoId = data?.data?.key?.id || data?.key?.id;
         setMessages(prev => prev.map(m => 
-          m.id === clientMsgId ? { ...m, status: 'sent', id: data?.data?.key?.id || m.id } : m
+          m.id === clientMsgId ? { ...m, status: 'sent', uaz_msg_id: evoId, _latency: latency } : m
         ));
+        await supabase.from('chat_messages')
+          .update({ uaz_msg_id: evoId, metadata: { status: 'sent', latency_ms: latency } })
+          .eq('client_msg_id', clientMsgId);
       } else if (activeChannel === 'telegram') {
-        // Mock Telegram Send with delivery status simulation
         addDebugLog('request', 'Enviando mensagem via Telegram API...');
         await new Promise(r => setTimeout(r, 500));
-        
-        setMessages(prev => prev.map(m => 
-          m.id === clientMsgId ? { ...m, status: 'sent' } : m
-        ));
-
-        // Simulate delivery
-        setTimeout(() => {
-          setMessages(prev => prev.map(m => 
-            m.id === clientMsgId ? { ...m, status: 'delivered' } : m
-          ));
-        }, 1500);
-
-        // Simulate read
-        setTimeout(() => {
-          setMessages(prev => prev.map(m => 
-            m.id === clientMsgId ? { ...m, status: 'read' } : m
-          ));
-        }, 3000);
-        
-        addDebugLog('info', 'Telegram: Fluxo de status concluído (Sent -> Delivered -> Read).');
+        setMessages(prev => prev.map(m => m.id === clientMsgId ? { ...m, status: 'sent' } : m));
+        setTimeout(() => setMessages(prev => prev.map(m => m.id === clientMsgId ? { ...m, status: 'delivered' } : m)), 1500);
+        setTimeout(() => setMessages(prev => prev.map(m => m.id === clientMsgId ? { ...m, status: 'read' } : m)), 3000);
       } else {
-        // Fallback for other channels
         await new Promise(r => setTimeout(r, 400));
-        setMessages(prev => prev.map(m => 
-          m.id === clientMsgId ? { ...m, status: 'sent' } : m
-        ));
+        setMessages(prev => prev.map(m => m.id === clientMsgId ? { ...m, status: 'sent' } : m));
       }
 
     } catch (err: any) {
       toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
       setMessages(prev => prev.map(m => 
-        m.id === clientMsgId ? { ...m, status: 'error' } : m
+        m.id === clientMsgId ? { ...m, status: 'error', _error: err.message } : m
       ));
+      await supabase.from('chat_messages')
+        .update({ metadata: { status: 'error', error: err.message } })
+        .eq('client_msg_id', clientMsgId);
     }
 
   };
 
   // New rich-composer handlers
-  const sendOptimistic = (content: string) => {
+  const sendOptimistic = async (content: string) => {
     const id = crypto.randomUUID();
     setMessages(prev => [...prev, {
-      id, customer_id: selectedConvId, sender_type: 'agent',
-      content, created_at: new Date().toISOString(), status: 'sending',
+      id, client_msg_id: id, customer_id: selectedConvId, sender_type: 'agent',
+      content, channel: activeChannel, created_at: new Date().toISOString(), status: 'sending',
     }]);
+    try {
+      await supabase.from('chat_messages').insert({
+        client_msg_id: id,
+        customer_id: selectedConvId,
+        sender_type: 'agent',
+        content,
+        channel: activeChannel,
+        connection_id: activeWhatsAppConn?.id ?? null,
+        metadata: { status: 'sending' },
+      });
+    } catch {}
     return id;
   };
 
-  const markStatus = (id: string, status: 'sent' | 'error', overrideId?: string) => {
-    setMessages(prev => prev.map(m => m.id === id ? { ...m, status, id: overrideId || m.id } : m));
+  const markStatus = async (id: string, status: 'sent' | 'error', overrideId?: string, extra?: Record<string, any>) => {
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, status, uaz_msg_id: overrideId || m.uaz_msg_id, ...(extra || {}) } : m));
+    try {
+      await supabase.from('chat_messages')
+        .update({ uaz_msg_id: overrideId ?? null, metadata: { status, ...(extra || {}) } })
+        .eq('client_msg_id', id);
+    } catch {}
   };
 
   const handleSendText = async (text: string) => {
     if (!selectedConvId || !text.trim()) return;
-    const id = sendOptimistic(text);
+    const id = await sendOptimistic(text);
     try {
       if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+        const t0 = Date.now();
         const data = await adapter.sendMessage(activeWhatsAppConn, selectedConvId, text);
-        markStatus(id, 'sent', data?.data?.key?.id);
+        await markStatus(id, 'sent', data?.data?.key?.id || data?.key?.id, { latency_ms: Date.now() - t0 });
       } else {
         await new Promise(r => setTimeout(r, 400));
-        markStatus(id, 'sent');
+        await markStatus(id, 'sent');
       }
     } catch (err: any) {
       toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
-      markStatus(id, 'error');
+      await markStatus(id, 'error', undefined, { error: err.message });
       throw err;
     }
   };
 
   const handleSendMedia = async (a: ComposerAttachment, caption: string) => {
     if (!selectedConvId) return;
-    const id = sendOptimistic(`📎 ${a.file.name}${caption ? ` — ${caption}` : ''}`);
+    const id = await sendOptimistic(`📎 ${a.file.name}${caption ? ` — ${caption}` : ''}`);
     try {
       if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
@@ -816,7 +849,7 @@ export default function ChatPage() {
 
   const handleSendAudio = async (blob: Blob, durationSec: number) => {
     if (!selectedConvId) return;
-    const id = sendOptimistic(`🎤 Áudio (${durationSec}s)`);
+    const id = await sendOptimistic(`🎤 Áudio (${durationSec}s)`);
     try {
       if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
@@ -854,7 +887,7 @@ export default function ChatPage() {
       payload.type === 'product' ? `🛍️ ${payload.name}` :
       payload.type === 'signature' ? `📄 ${payload.title}` :
       labelMap[(payload as any).type] || 'Mensagem rica';
-    const id = sendOptimistic(summary);
+    const id = await sendOptimistic(summary);
     try {
       if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
