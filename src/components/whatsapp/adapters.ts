@@ -135,8 +135,12 @@ class EvolutionAdapter implements WhatsAppProviderAdapter {
       const secondBody = cachedShape === 'v1' ? v2Body : v1Body;
       let res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(firstBody) });
       if (res.status === 400) {
-        // try v1 shape
-        res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(v1Body) });
+        res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(secondBody) });
+        if (res.ok && typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem(shapeKey, cachedShape === 'v1' ? 'v2' : 'v1');
+        }
+      } else if (res.ok && typeof sessionStorage !== 'undefined' && !sessionStorage.getItem(shapeKey)) {
+        sessionStorage.setItem(shapeKey, cachedShape);
       }
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
