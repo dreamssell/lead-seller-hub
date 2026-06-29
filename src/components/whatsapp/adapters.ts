@@ -118,15 +118,22 @@ class EvolutionAdapter implements WhatsAppProviderAdapter {
     };
 
     // Evolution v2 payload (flat). Fallback to v1 (textMessage wrapper) on 400.
-    const v2Body = { number: customer.phone, text: content, delay: 1200, linkPreview: false };
+    // delay=0 + linkPreview=false to avoid server-side artificial typing delay.
+    const v2Body = { number: customer.phone, text: content, delay: 0, linkPreview: false };
     const v1Body = {
       number: customer.phone,
-      options: { delay: 1200, presence: 'composing', linkPreview: false },
+      options: { delay: 0, presence: 'available', linkPreview: false },
       textMessage: { text: content },
     };
 
+    // Remember the last working payload shape per instance to skip the v2->v1 probe.
+    const shapeKey = `evo_shape_${conn.id}`;
+    const cachedShape = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(shapeKey)) || 'v2';
+
     try {
-      let res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(v2Body) });
+      const firstBody = cachedShape === 'v1' ? v1Body : v2Body;
+      const secondBody = cachedShape === 'v1' ? v2Body : v1Body;
+      let res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(firstBody) });
       if (res.status === 400) {
         // try v1 shape
         res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(v1Body) });
