@@ -53,6 +53,12 @@ function extractEvolutionError(errData: any, fallback: string) {
   return typeof detail === 'string' ? detail : JSON.stringify(detail);
 }
 
+function ensureEvolutionText(value: unknown, fallback = 'Mensagem'): string {
+  const text = typeof value === 'string' ? value : value == null ? '' : String(value);
+  const normalized = text.replace(/\u0000/g, '').trim();
+  return normalized.length > 0 ? normalized : fallback;
+}
+
 function isConnectionClosedError(message: string) {
   return /connection\s*closed|connectionclosed|socket.*closed|not\s*connected|instance.*not.*(open|connected)/i.test(message);
 }
@@ -89,12 +95,13 @@ function setCachedTextPayloadMode(instance: string, mode: 'flat' | 'nested' | 'm
 }
 
 function buildEvolutionTextPayloads(number: string, text: string, preferred?: 'flat' | 'nested' | 'merged' | null) {
+  const safeText = ensureEvolutionText(text);
   const payloads = [
     {
       mode: 'flat' as const,
       body: {
         number,
-        text,
+        text: safeText,
         delay: 0,
         linkPreview: false,
       },
@@ -103,7 +110,7 @@ function buildEvolutionTextPayloads(number: string, text: string, preferred?: 'f
       mode: 'nested' as const,
       body: {
         number,
-        textMessage: { text },
+        textMessage: { text: safeText },
         delay: 0,
         linkPreview: false,
       },
@@ -112,8 +119,8 @@ function buildEvolutionTextPayloads(number: string, text: string, preferred?: 'f
       mode: 'merged' as const,
       body: {
         number,
-        text,
-        textMessage: { text },
+        text: safeText,
+        textMessage: { text: safeText },
         delay: 0,
         linkPreview: false,
         options: { delay: 0, presence: 'available', linkPreview: false },
@@ -125,6 +132,49 @@ function buildEvolutionTextPayloads(number: string, text: string, preferred?: 'f
   return [...payloads.filter((p) => p.mode === preferred), ...payloads.filter((p) => p.mode !== preferred)];
 }
 
+function stripInvalidMentioned(body: any) {
+  if (!body || typeof body !== 'object') return body;
+  const copy = Array.isArray(body) ? [...body] : { ...body };
+  const mentioned = (copy as any).mentioned;
+  if (Array.isArray(mentioned) && mentioned.length === 0) delete (copy as any).mentioned;
+  if (typeof mentioned === 'string' && mentioned.trim().length === 0) delete (copy as any).mentioned;
+  if ((copy as any).options && typeof (copy as any).options === 'object') {
+    const options = { ...(copy as any).options };
+    if (Array.isArray(options.mentioned) && options.mentioned.length === 0) delete options.mentioned;
+    if (typeof options.mentioned === 'string' && options.mentioned.trim().length === 0) delete options.mentioned;
+    (copy as any).options = options;
+  }
+  return copy;
+}
+
+function payloadDiagnostics(body: any) {
+  const mentioned = body?.mentioned ?? body?.options?.mentioned;
+  const text = body?.text ?? body?.textMessage?.text ?? body?.caption ?? body?.mediaMessage?.caption ?? '';
+  const media = body?.media ?? body?.mediaMessage?.media;
+  const audio = body?.audio ?? body?.audioMessage?.audio;
+  return {
+    keys: body && typeof body === 'object' ? Object.keys(body) : [],
+    numberDigits: String(body?.number || '').replace(/\D/g, '').length,
+    hasText: typeof text === 'string' && text.trim().length > 0,
+    textLength: typeof text === 'string' ? text.length : 0,
+    mentionedType: Array.isArray(mentioned) ? 'array' : typeof mentioned,
+    mentionedLength: Array.isArray(mentioned) || typeof mentioned === 'string' ? mentioned.length : mentioned == null ? 0 : undefined,
+    hasMentioned: mentioned != null,
+    mediaBytesApprox: typeof media === 'string' ? Math.round((media.length * 3) / 4) : undefined,
+    audioBytesApprox: typeof audio === 'string' ? Math.round((audio.length * 3) / 4) : undefined,
+    buttonsCount: body?.buttonsMessage?.buttons?.length,
+    listRowsCount: body?.listMessage?.sections?.reduce?.((acc: number, s: any) => acc + (s.rows?.length || 0), 0),
+  };
+}
+
+function logEvolutionPayload(endpoint: string, instance: string, body: any, phase: 'request' | 'error' = 'request', extra?: any) {
+  const diagnostics = payloadDiagnostics(body);
+  const safeInstance = instance ? `${String(instance).slice(0, 4)}…${String(instance).slice(-3)}` : '—';
+  const message = `[Evolution][${phase}] ${endpoint}/${safeInstance}`;
+  if (phase === 'error') console.error(message, { diagnostics, extra });
+  else console.info(message, { diagnostics });
+}
+
 async function postEvolutionJson(
   url: string,
   instance: string,
@@ -132,14 +182,17 @@ async function postEvolutionJson(
   endpoint: string,
   body: any,
 ) {
+  const safeBody = stripInvalidMentioned(body);
+  logEvolutionPayload(endpoint, instance, safeBody, 'request');
   const res = await fetch(`${url}/message/${endpoint}/${encodeURIComponent(instance)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: token, Authorization: `Bearer ${token}` },
-    body: JSON.stringify(body),
+    body: JSON.stringify(safeBody),
   });
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
+    logEvolutionPayload(endpoint, instance, safeBody, 'error', { status: res.status, error: errData });
     throw new Error(extractEvolutionError(errData, `Erro Evolution: ${res.status}`));
   }
 
@@ -147,7 +200,7 @@ async function postEvolutionJson(
 }
 
 async function postEvolutionText(ctx: { url: string; token: string; instance: string; number: string }, text: string) {
-  const payloads = buildEvolutionTextPayloads(ctx.number, text, getCachedTextPayloadMode(ctx.instance));
+  const payloads = buildEvolutionTextPayloads(ctx.number, ensureEvolutionText(text), getCachedTextPayloadMode(ctx.instance));
   let lastError: any;
 
   for (const payload of payloads) {
