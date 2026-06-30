@@ -123,14 +123,14 @@ export function ChatComposer({
     if (attachment && onSendMedia) {
       setSending(true);
       try { await onSendMedia(attachment, caption || text); resetAfterSend(); }
-      catch (e: any) { toast.error(e?.message || 'Falha ao enviar anexo'); }
+      catch { /* toast já exibido pelo handler do ChatPage */ }
       finally { setSending(false); }
       return;
     }
     if (!text.trim()) return;
     setSending(true);
     try { await onSendText(text); resetAfterSend(); }
-    catch (e: any) { toast.error(e?.message || 'Falha ao enviar'); }
+    catch { /* toast já exibido pelo handler do ChatPage */ }
     finally { setSending(false); }
   };
 
