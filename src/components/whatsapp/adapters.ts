@@ -301,58 +301,85 @@ async function evolutionPost(ctx: { url: string; token: string; instance: string
   return postEvolutionJson(ctx.url, ctx.instance, ctx.token, endpoint, body);
 }
 
-async function sendEvolutionRich(conn: WhatsAppConnection, customerId: string, payload: any) {
-  const ctx = await evolutionContext(conn, customerId);
+function richToText(payload: any): string {
   switch (payload.type) {
     case 'location':
-      return evolutionPost(ctx, 'sendLocation', {
-        number: ctx.number,
-        locationMessage: {
-          latitude: payload.latitude, longitude: payload.longitude,
-          name: payload.name || '', address: payload.address || '',
-        },
-      });
+      return `📍 ${payload.name || 'Localização'}${payload.address ? `\n${payload.address}` : ''}\nhttps://maps.google.com/?q=${payload.latitude},${payload.longitude}`;
     case 'contact':
-      return evolutionPost(ctx, 'sendContact', {
-        number: ctx.number,
-        contactMessage: [{ fullName: payload.fullName, wuid: payload.phone, phoneNumber: payload.phone }],
-      });
+      return `👤 ${payload.fullName}\n${payload.phone}`;
     case 'poll':
-      return evolutionPost(ctx, 'sendPoll', {
-        number: ctx.number,
-        pollMessage: { name: payload.name, selectableCount: payload.selectableCount || 1, values: payload.values },
-      });
+      return `📊 *${payload.name}*\n${(payload.values || []).map((v: string, i: number) => `${i + 1}. ${v}`).join('\n')}`;
     case 'list':
-      return evolutionPost(ctx, 'sendList', {
-        number: ctx.number,
-        listMessage: {
-          title: payload.title || '', description: payload.description, buttonText: payload.buttonText || 'Ver',
-          footerText: '',
-          sections: [{ title: payload.title || 'Opções', rows: payload.rows }],
-        },
-      });
+      return `📋 *${payload.title || 'Opções'}*${payload.description ? `\n${payload.description}` : ''}\n${(payload.rows || []).map((r: any, i: number) => `${i + 1}. ${r.title || r.text || ''}`).join('\n')}`;
     case 'buttons':
-      return evolutionPost(ctx, 'sendButtons', {
-        number: ctx.number,
-        buttonsMessage: {
-          title: payload.title || '', description: payload.description, footerText: payload.footer || '',
-          buttons: payload.buttons.map((b: any) => ({ buttonId: b.id, buttonText: { displayText: b.text }, type: 1 })),
-        },
-      });
+      return `*${payload.title || ''}*${payload.description ? `\n${payload.description}` : ''}\n${(payload.buttons || []).map((b: any, i: number) => `${i + 1}. ${b.text}`).join('\n')}`;
     case 'product': {
       const price = payload.price != null ? ` — R$ ${Number(payload.price).toFixed(2)}` : '';
-      const text = `🛍️ *${payload.name}*${price}`;
-      return postEvolutionText(ctx, text);
+      return `🛍️ *${payload.name}*${price}`;
     }
-    case 'signature': {
-      const text = `📄 *${payload.title}*\n${payload.url}`;
-      return postEvolutionText(ctx, text);
-    }
-
+    case 'signature':
+      return `📄 *${payload.title}*\n${payload.url}`;
     default:
-      throw new Error(`Tipo de mensagem rica não suportado: ${payload.type}`);
+      return JSON.stringify(payload);
   }
 }
+
+async function sendEvolutionRich(conn: WhatsAppConnection, customerId: string, payload: any) {
+  const ctx = await evolutionContext(conn, customerId);
+  const tryRich = async () => {
+    switch (payload.type) {
+      case 'location':
+        return evolutionPost(ctx, 'sendLocation', {
+          number: ctx.number,
+          locationMessage: { latitude: payload.latitude, longitude: payload.longitude, name: payload.name || '', address: payload.address || '' },
+        });
+      case 'contact':
+        return evolutionPost(ctx, 'sendContact', {
+          number: ctx.number,
+          contactMessage: [{ fullName: payload.fullName, wuid: payload.phone, phoneNumber: payload.phone }],
+        });
+      case 'poll':
+        return evolutionPost(ctx, 'sendPoll', {
+          number: ctx.number,
+          pollMessage: { name: payload.name, selectableCount: payload.selectableCount || 1, values: payload.values },
+        });
+      case 'list':
+        return evolutionPost(ctx, 'sendList', {
+          number: ctx.number,
+          listMessage: {
+            title: payload.title || '', description: payload.description, buttonText: payload.buttonText || 'Ver',
+            footerText: '', sections: [{ title: payload.title || 'Opções', rows: payload.rows }],
+          },
+        });
+      case 'buttons':
+        return evolutionPost(ctx, 'sendButtons', {
+          number: ctx.number,
+          buttonsMessage: {
+            title: payload.title || '', description: payload.description, footerText: payload.footer || '',
+            buttons: payload.buttons.map((b: any) => ({ buttonId: b.id, buttonText: { displayText: b.text }, type: 1 })),
+          },
+        });
+      case 'product':
+      case 'signature':
+        return postEvolutionText(ctx, richToText(payload));
+      default:
+        throw new Error(`Tipo de mensagem rica não suportado: ${payload.type}`);
+    }
+  };
+
+  try {
+    return await tryRich();
+  } catch (err: any) {
+    const msg = String(err?.message || '');
+    // If strict schema rejects rich payload, gracefully fall back to plain text so the
+    // user's message always reaches the recipient.
+    if (isEvolutionTextSchemaError(msg) || /requires property|invalid|schema|400/i.test(msg)) {
+      return postEvolutionText(ctx, richToText(payload));
+    }
+    throw err;
+  }
+}
+
 
 async function sendEvolutionMedia(conn: WhatsAppConnection, customerId: string, file: File, caption: string, kind: 'media' | 'audio') {
   const rawUrl = (conn.metadata?.url || '').trim();

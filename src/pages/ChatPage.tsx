@@ -450,22 +450,26 @@ export default function ChatPage() {
     const channel = supabase
       .channel('chat_updates')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
-        addDebugLog('info', 'Nova mensagem recebida via Realtime', payload.new);
-        if (payload.new.customer_id === selectedConvId) {
+        const row: any = payload.new;
+        if (!row) return;
+        addDebugLog('info', 'Nova mensagem recebida via Realtime', row);
+        if (row.customer_id === selectedConvId) {
           setMessages(prev => {
-            const cid = (payload.new as any).client_msg_id;
+            const cid = row.client_msg_id;
             if (cid && prev.some(m => m.client_msg_id === cid || m.id === cid)) {
-              return prev.map(m => (m.client_msg_id === cid || m.id === cid) ? { ...m, ...payload.new, status: m.status } : m);
+              return prev.map(m => (m.client_msg_id === cid || m.id === cid) ? { ...m, ...row, status: m.status } : m);
             }
-            if (prev.some(m => m.id === payload.new.id)) return prev;
-            return [...prev, payload.new];
+            if (prev.some(m => m.id === row.id)) return prev;
+            return [...prev, row];
           });
         }
         if (activeChannel) loadConversations(activeChannel);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages' }, (payload) => {
-        if (payload.new.customer_id === selectedConvId) {
-          setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m));
+        const row: any = payload.new;
+        if (!row?.id) return;
+        if (row.customer_id === selectedConvId) {
+          setMessages(prev => prev.map(m => m.id === row.id ? { ...m, ...row } : m));
         }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_connections' }, () => {
@@ -474,6 +478,7 @@ export default function ChatPage() {
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'customers' }, (payload) => {
         const c: any = payload.new;
+        if (!c?.id) return;
         const pres = computePresence(c.presence, c.presence_updated_at, c.last_seen_at);
         setConvs(prev => {
           const next: any = { ...prev };
@@ -1283,7 +1288,12 @@ export default function ChatPage() {
                     <span className="text-[10px] text-muted-foreground">{c.time}</span>
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{c.msg}</p>
-                  <div className="flex items-center gap-1 mt-1">
+                  <div className="flex items-center gap-1 mt-1 flex-wrap">
+                    {(c as any).presenceLabel && (
+                      <Badge variant="outline" className={`text-[9px] py-0 px-1.5 h-4 ${c.online ? 'text-success border-success/40' : 'text-muted-foreground'}`}>
+                        {(c as any).presenceLabel}
+                      </Badge>
+                    )}
                     {c.botEnabled ? (
                       <Badge variant="secondary" className="text-[9px] py-0 px-1.5 h-4 gap-0.5">
                         <Bot className="w-2.5 h-2.5" />
