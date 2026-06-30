@@ -1529,7 +1529,7 @@ export default function ChatPage() {
                             .select('*')
                             .eq('customer_id', selectedConvId)
                             .order('created_at', { ascending: true });
-                          if (data) setMessages(data);
+                          if (data) setMessages((data || []).map(hydrateChatMessage));
                           toast({ title: 'Histórico atualizado', description: `${data?.length || 0} mensagens carregadas.` });
                         }}
                         className="gap-2 text-xs"
