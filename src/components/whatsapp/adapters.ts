@@ -355,11 +355,12 @@ async function evolutionPost(ctx: { url: string; token: string; instance: string
 }
 
 function richToText(payload: any): string {
+  const text = (() => {
   switch (payload.type) {
     case 'location':
       return `📍 ${payload.name || 'Localização'}${payload.address ? `\n${payload.address}` : ''}\nhttps://maps.google.com/?q=${payload.latitude},${payload.longitude}`;
     case 'contact':
-      return `👤 ${payload.fullName}\n${payload.phone}`;
+      return `👤 ${payload.fullName || 'Contato'}\n${payload.phone || ''}`;
     case 'poll':
       return `📊 *${payload.name}*\n${(payload.values || []).map((v: string, i: number) => `${i + 1}. ${v}`).join('\n')}`;
     case 'list':
@@ -375,6 +376,8 @@ function richToText(payload: any): string {
     default:
       return JSON.stringify(payload);
   }
+  })();
+  return ensureEvolutionText(text, 'Mensagem interativa');
 }
 
 async function sendEvolutionRich(conn: WhatsAppConnection, customerId: string, payload: any) {
@@ -435,13 +438,7 @@ async function sendEvolutionRich(conn: WhatsAppConnection, customerId: string, p
 
 
 async function sendEvolutionMedia(conn: WhatsAppConnection, customerId: string, file: File, caption: string, kind: 'media' | 'audio') {
-  const rawUrl = (conn.metadata?.url || '').trim();
-  const url = rawUrl && !/^https?:\/\//i.test(rawUrl) ? `https://${rawUrl}` : rawUrl;
-  const token = conn.metadata?.token;
-  const instance = conn.metadata?.instance || conn.metadata?.phone_number_id;
-  if (!url || !token || !instance) throw new Error('Configurações da Evolution API incompletas.');
-  const { data: customer } = await supabase.from('customers').select('phone').eq('id', customerId).single();
-  if (!customer?.phone) throw new Error('Cliente não possui telefone cadastrado.');
+  const ctx = await evolutionContext(conn, customerId);
   const base64 = await fileToBase64(file);
   const isImage = file.type.startsWith('image/');
   const isVideo = file.type.startsWith('video/');
@@ -450,14 +447,14 @@ async function sendEvolutionMedia(conn: WhatsAppConnection, customerId: string, 
   // Merged v2 + v1 payload (see sendMessage rationale).
   const body = kind === 'audio'
     ? {
-        number: customer.phone,
+        number: ctx.number,
         audio: base64,
         audioMessage: { audio: base64 },
         options: { delay: 0, presence: 'available' },
         delay: 0,
       }
     : {
-        number: customer.phone,
+        number: ctx.number,
         mediatype: mediaType,
         mimetype: file.type,
         fileName: file.name,
@@ -467,16 +464,7 @@ async function sendEvolutionMedia(conn: WhatsAppConnection, customerId: string, 
         options: { delay: 0, presence: 'available' },
         delay: 0,
       };
-  const endpoint = `${url.replace(/\/$/, '')}/message/${path}/${encodeURIComponent(instance)}`;
-  const headers = { 'Content-Type': 'application/json', apikey: token, Authorization: `Bearer ${token}` };
-  const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
-
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(extractEvolutionError(errData, `Erro Evolution: ${res.status}`));
-
-  }
-  return await res.json();
+  return evolutionPost(ctx, path, body);
 }
 
 export const getProviderAdapter = (provider: string): WhatsAppProviderAdapter => {
