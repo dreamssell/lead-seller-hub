@@ -478,6 +478,7 @@ export default function ChatPage() {
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'customers' }, (payload) => {
         const c: any = payload.new;
+        if (!c?.id) return;
         const pres = computePresence(c.presence, c.presence_updated_at, c.last_seen_at);
         setConvs(prev => {
           const next: any = { ...prev };
