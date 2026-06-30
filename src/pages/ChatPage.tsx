@@ -838,6 +838,7 @@ export default function ChatPage() {
     setMessages(prev => [...prev, {
       id, client_msg_id: id, customer_id: selectedConvId, sender_type: 'agent',
       content, channel: activeChannel, created_at: new Date().toISOString(), status: 'sending',
+      _sentAt: Date.now(),
     }]);
     try {
       await supabase.from('chat_messages').insert({
@@ -854,7 +855,7 @@ export default function ChatPage() {
   };
 
   const markStatus = async (id: string, status: 'sent' | 'error', overrideId?: string, extra?: Record<string, any>) => {
-    setMessages(prev => prev.map(m => m.id === id ? { ...m, status, uaz_msg_id: overrideId || m.uaz_msg_id, ...(extra || {}) } : m));
+    setMessages(prev => prev.map(m => (m.id === id || m.client_msg_id === id) ? hydrateChatMessage({ ...m, status, uaz_msg_id: overrideId || m.uaz_msg_id, ...(extra || {}) }) : m));
     try {
       await supabase.from('chat_messages')
         .update({ uaz_msg_id: overrideId ?? null, metadata: { status, ...(extra || {}) } })
@@ -862,23 +863,70 @@ export default function ChatPage() {
     } catch {}
   };
 
+  const sendTextThroughActiveChannel = async (customerId: string, text: string) => {
+    if (activeChannel === 'whatsapp') {
+      if (!activeWhatsAppConn) throw new Error('Conexão ativa não encontrada');
+      const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+      addDebugLog('request', '[WhatsApp] Enviando texto pela conexão ativa', {
+        provider: activeWhatsAppConn.provider,
+        connection_id: activeWhatsAppConn.id,
+        customer_id: customerId,
+        text_length: text.length,
+        has_text: text.trim().length > 0,
+      });
+      return adapter.sendMessage(activeWhatsAppConn, customerId, text);
+    }
+    await new Promise(r => setTimeout(r, 400));
+    return { key: { id: crypto.randomUUID() } };
+  };
+
   const handleSendText = async (text: string) => {
     if (!selectedConvId || !text.trim()) return;
     const id = await sendOptimistic(text);
     try {
-      if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
-        const adapter = getProviderAdapter(activeWhatsAppConn.provider);
-        const t0 = Date.now();
-        const data = await adapter.sendMessage(activeWhatsAppConn, selectedConvId, text);
-        await markStatus(id, 'sent', data?.data?.key?.id || data?.key?.id, { latency_ms: Date.now() - t0 });
-      } else {
-        await new Promise(r => setTimeout(r, 400));
-        await markStatus(id, 'sent');
-      }
+      const t0 = Date.now();
+      const data = await sendTextThroughActiveChannel(selectedConvId, text);
+      await markStatus(id, 'sent', extractProviderMessageId(data), { latency_ms: Date.now() - t0, provider_response_ok: true });
     } catch (err: any) {
-      toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
-      await markStatus(id, 'error', undefined, { error: err.message });
+      const normalized = showSendErrorToast(err);
+      await markStatus(id, 'error', undefined, {
+        error: normalized.message,
+        error_detail: normalized.detail,
+        error_code: normalized.code,
+        blocked_by: normalized.blockedBy,
+        retryable: normalized.retryable,
+      });
       throw err;
+    }
+  };
+
+  const retryFailedMessage = async (message: any) => {
+    if (!message?.content || !selectedConvId) return;
+    const msgId = message.client_msg_id || message.id;
+    setMessages(prev => prev.map(m => (m.id === message.id || m.client_msg_id === msgId) ? { ...m, status: 'sending', _error: null, _blockedBy: null, _retrying: true } : m));
+    await supabase.from('chat_messages')
+      .update({ metadata: { ...getMessageMetadata(message), status: 'sending', retrying: true, retry_started_at: new Date().toISOString() } })
+      .eq('client_msg_id', msgId);
+
+    try {
+      const t0 = Date.now();
+      const data = await sendTextThroughActiveChannel(message.customer_id || selectedConvId, message.content);
+      await markStatus(msgId, 'sent', extractProviderMessageId(data), {
+        latency_ms: Date.now() - t0,
+        retried_at: new Date().toISOString(),
+        provider_response_ok: true,
+      });
+      toast({ title: 'Mensagem reenviada', description: 'A fila retomou o envio desta mensagem.' });
+    } catch (err: any) {
+      const normalized = showSendErrorToast(err);
+      await markStatus(msgId, 'error', undefined, {
+        error: normalized.message,
+        error_detail: normalized.detail,
+        error_code: normalized.code,
+        blocked_by: normalized.blockedBy,
+        retryable: normalized.retryable,
+        retried_at: new Date().toISOString(),
+      });
     }
   };
 
@@ -890,14 +938,14 @@ export default function ChatPage() {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
         if (!adapter.sendMedia) throw new Error('Este canal não suporta envio de mídia ainda.');
         const data = await adapter.sendMedia(activeWhatsAppConn, selectedConvId, a.file, caption);
-        markStatus(id, 'sent', data?.data?.key?.id);
+        markStatus(id, 'sent', extractProviderMessageId(data));
       } else {
         await new Promise(r => setTimeout(r, 400));
         markStatus(id, 'sent');
       }
     } catch (err: any) {
-      toast({ title: 'Erro ao enviar mídia', description: err.message, variant: 'destructive' });
-      markStatus(id, 'error');
+      const normalized = showSendErrorToast(err);
+      markStatus(id, 'error', undefined, { error: normalized.message, error_detail: normalized.detail, error_code: normalized.code, blocked_by: normalized.blockedBy, retryable: normalized.retryable });
       throw err;
     }
   };
@@ -910,14 +958,14 @@ export default function ChatPage() {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
         if (!adapter.sendAudio) throw new Error('Este canal não suporta áudio ainda.');
         const data = await adapter.sendAudio(activeWhatsAppConn, selectedConvId, blob);
-        markStatus(id, 'sent', data?.data?.key?.id);
+        markStatus(id, 'sent', extractProviderMessageId(data));
       } else {
         await new Promise(r => setTimeout(r, 400));
         markStatus(id, 'sent');
       }
     } catch (err: any) {
-      toast({ title: 'Erro ao enviar áudio', description: err.message, variant: 'destructive' });
-      markStatus(id, 'error');
+      const normalized = showSendErrorToast(err);
+      markStatus(id, 'error', undefined, { error: normalized.message, error_detail: normalized.detail, error_code: normalized.code, blocked_by: normalized.blockedBy, retryable: normalized.retryable });
       throw err;
     }
   };
@@ -948,15 +996,15 @@ export default function ChatPage() {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
         if (!adapter.sendRich) throw new Error('Este canal ainda não suporta este tipo de mensagem.');
         const data = await adapter.sendRich(activeWhatsAppConn, selectedConvId, payload);
-        markStatus(id, 'sent', data?.data?.key?.id);
+        markStatus(id, 'sent', extractProviderMessageId(data));
         toast({ title: 'Enviado', description: summary });
       } else {
         await new Promise(r => setTimeout(r, 300));
         markStatus(id, 'sent');
       }
     } catch (err: any) {
-      toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
-      markStatus(id, 'error');
+      const normalized = showSendErrorToast(err);
+      markStatus(id, 'error', undefined, { error: normalized.message, error_detail: normalized.detail, error_code: normalized.code, blocked_by: normalized.blockedBy, retryable: normalized.retryable });
       throw err;
     }
   };
