@@ -320,6 +320,17 @@ export default function ChatPage() {
     }, ...prev].slice(0, 50));
   };
 
+  const showSendErrorToast = (err: unknown) => {
+    const normalized = normalizeChatSendError(err);
+    toast({
+      title: normalized.title,
+      description: normalized.message,
+      variant: 'destructive',
+    });
+    addDebugLog('error', `[WhatsApp] ${normalized.code}: ${normalized.detail}`, normalized);
+    return normalized;
+  };
+
   useEffect(() => {
     async function checkProviderStatus(channel: ChannelKey, isManual = false) {
       if (isManual) setIsRefreshing(true);
