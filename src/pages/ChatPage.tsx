@@ -1288,7 +1288,12 @@ export default function ChatPage() {
                     <span className="text-[10px] text-muted-foreground">{c.time}</span>
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{c.msg}</p>
-                  <div className="flex items-center gap-1 mt-1">
+                  <div className="flex items-center gap-1 mt-1 flex-wrap">
+                    {(c as any).presenceLabel && (
+                      <Badge variant="outline" className={`text-[9px] py-0 px-1.5 h-4 ${c.online ? 'text-success border-success/40' : 'text-muted-foreground'}`}>
+                        {(c as any).presenceLabel}
+                      </Badge>
+                    )}
                     {c.botEnabled ? (
                       <Badge variant="secondary" className="text-[9px] py-0 px-1.5 h-4 gap-0.5">
                         <Bot className="w-2.5 h-2.5" />
