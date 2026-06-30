@@ -47,6 +47,7 @@ import { SupervisorBanner } from '@/components/chat/SupervisorBanner';
 import { WhisperComposer } from '@/components/chat/WhisperComposer';
 import { TransferConversationDialog } from '@/components/chat/TransferConversationDialog';
 import { useIsSupervisor } from '@/hooks/useIsSupervisor';
+import { normalizeChatSendError, NormalizedChatError } from '@/lib/chatErrorMapper';
 
 
 
@@ -159,6 +160,44 @@ const getWhatsAppStatusClasses = (status: WhatsAppDbStatus) => {
   if (status === 'offline') return 'bg-warning/10 border-warning/20 text-warning';
   return 'bg-destructive/10 border-destructive/20 text-destructive';
 };
+
+const getMessageMetadata = (message: any): Record<string, any> => {
+  const meta = message?.metadata;
+  return meta && typeof meta === 'object' && !Array.isArray(meta) ? meta : {};
+};
+
+const hydrateChatMessage = (row: any) => {
+  const meta = getMessageMetadata(row);
+  const status = row?.status || meta.status || (row?.sender_type === 'client' ? 'read' : row?.uaz_msg_id ? 'sent' : 'sent');
+  return {
+    ...row,
+    status,
+    _error: row?._error || meta.error || meta.error_detail || null,
+    _errorCode: row?._errorCode || meta.error_code || null,
+    _blockedBy: row?._blockedBy || meta.blocked_by || meta.blockedBy || null,
+    _latency: row?._latency || meta.latency_ms || null,
+  };
+};
+
+const getMessageErrorInfo = (message: any): NormalizedChatError | null => {
+  const meta = getMessageMetadata(message);
+  const detail = message?._error || meta.error_detail || meta.error || meta.last_error;
+  if (!detail && message?.status !== 'error' && meta.status !== 'error') return null;
+  const normalized = normalizeChatSendError(detail || 'Falha ao enviar mensagem.');
+  return {
+    ...normalized,
+    blockedBy: message?._blockedBy || meta.blocked_by || normalized.blockedBy,
+  };
+};
+
+const extractProviderMessageId = (data: any) => (
+  data?.data?.key?.id ||
+  data?.key?.id ||
+  data?.message?.key?.id ||
+  data?.id ||
+  data?.messageId ||
+  undefined
+);
 
 export default function ChatPage() {
   const [activeChannel, setActiveChannel] = useState<ChannelKey | null>(null);
