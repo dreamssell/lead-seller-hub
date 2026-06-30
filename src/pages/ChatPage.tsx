@@ -507,10 +507,10 @@ export default function ChatPage() {
           setMessages(prev => {
             const cid = row.client_msg_id;
             if (cid && prev.some(m => m.client_msg_id === cid || m.id === cid)) {
-              return prev.map(m => (m.client_msg_id === cid || m.id === cid) ? { ...m, ...row, status: m.status } : m);
+              return prev.map(m => (m.client_msg_id === cid || m.id === cid) ? hydrateChatMessage({ ...m, ...row, status: m.status }) : m);
             }
             if (prev.some(m => m.id === row.id)) return prev;
-            return [...prev, row];
+            return [...prev, hydrateChatMessage(row)];
           });
         }
         if (activeChannel) loadConversations(activeChannel);
@@ -519,7 +519,7 @@ export default function ChatPage() {
         const row: any = payload.new;
         if (!row?.id) return;
         if (row.customer_id === selectedConvId) {
-          setMessages(prev => prev.map(m => m.id === row.id ? { ...m, ...row } : m));
+          setMessages(prev => prev.map(m => (m.id === row.id || (row.client_msg_id && m.client_msg_id === row.client_msg_id)) ? hydrateChatMessage({ ...m, ...row }) : m));
         }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_connections' }, () => {
@@ -624,7 +624,7 @@ export default function ChatPage() {
           .select('*')
           .eq('customer_id', selectedConvId)
           .order('created_at', { ascending: true });
-        if (data) setMessages(data);
+        if (data) setMessages((data || []).map(hydrateChatMessage));
       }
       loadMessages();
     }
