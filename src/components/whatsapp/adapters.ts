@@ -97,7 +97,6 @@ function buildEvolutionTextPayloads(number: string, text: string, preferred?: 'f
         text,
         delay: 0,
         linkPreview: false,
-        mentioned: [],
       },
     },
     {
@@ -107,7 +106,6 @@ function buildEvolutionTextPayloads(number: string, text: string, preferred?: 'f
         textMessage: { text },
         delay: 0,
         linkPreview: false,
-        mentioned: [],
       },
     },
     {
@@ -118,7 +116,6 @@ function buildEvolutionTextPayloads(number: string, text: string, preferred?: 'f
         textMessage: { text },
         delay: 0,
         linkPreview: false,
-        mentioned: [],
         options: { delay: 0, presence: 'available', linkPreview: false },
       },
     },
