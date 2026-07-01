@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // Mock supabase before importing the module under test.
 const updateMock = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({}) });
@@ -34,6 +34,10 @@ describe('EvolutionAdapter — payload schema', () => {
       json: async () => ({ key: { id: 'msg-1' } }),
     });
     (global as any).fetch = fetchMock;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('sends text without forbidden empty `mentioned` field', async () => {
