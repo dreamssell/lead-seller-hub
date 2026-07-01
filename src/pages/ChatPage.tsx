@@ -1691,7 +1691,7 @@ export default function ChatPage() {
                         {m.sender_type !== 'client' && m.status === 'sending' && (
                           <div className="mt-2 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-2 py-1 text-[10px] flex items-center gap-1.5">
                             <RefreshCw className="w-3 h-3 animate-spin" />
-                            Aguardando confirmação da Evolution
+                            Enviando pelo provedor…
                           </div>
                         )}
 
