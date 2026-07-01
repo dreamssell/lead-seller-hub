@@ -31,6 +31,19 @@ export function NewConversationDialog({ open, onOpenChange, connection, onCreate
   const showError = touched && !!phone && !validation.ok;
   const showSuccess = !!phone && validation.ok;
 
+  // Dynamic example based on the specific validation error the user hit.
+  const dynamicExample = useMemo(() => {
+    switch (validation.errorCode) {
+      case 'missing_ddi':      return 'Comece pelo DDI. Ex: +55 11 9XXXX-XXXX';
+      case 'invalid_ddd':      return 'Use um DDD válido do Brasil. Ex: +55 11 9XXXX-XXXX';
+      case 'invalid_br_mobile':return 'Celular BR começa com 9. Ex: +55 11 9XXXX-XXXX';
+      case 'too_short':        return 'Faltam dígitos. Ex: +55 11 9XXXX-XXXX';
+      case 'too_long':         return 'Máximo 15 dígitos (E.164). Ex: +55 11 9XXXX-XXXX';
+      case 'invalid_chars':    return 'Use apenas dígitos, espaços, hífens ou parênteses.';
+      default:                 return 'Formato aceito: +55 DDD 9XXXX-XXXX';
+    }
+  }, [validation.errorCode]);
+
   const reset = () => {
     setPhone(''); setName(''); setFirstMessage(''); setStep('form'); setLoading(false); setTouched(false);
   };
