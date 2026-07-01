@@ -27,6 +27,8 @@ describe('EvolutionAdapter — payload schema', () => {
 
   beforeEach(() => {
     sessionStorage.clear();
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
     fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ key: { id: 'msg-1' } }),
@@ -41,6 +43,15 @@ describe('EvolutionAdapter — payload schema', () => {
     const body = JSON.parse(init.body);
     expect(body.number).toBe('5511999999999');
     expect(body.text).toBe('olá');
+    expect(body).not.toHaveProperty('mentioned');
+  });
+
+  it('always provides a non-empty text fallback when Evolution requires text', async () => {
+    const adapter = getProviderAdapter('evolution');
+    await adapter.sendMessage(conn, 'cust-1', '   ');
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.text || body.textMessage?.text).toBe('Mensagem');
     expect(body).not.toHaveProperty('mentioned');
   });
 
@@ -85,6 +96,39 @@ describe('EvolutionAdapter — payload schema', () => {
     expect(lastCall[0]).toContain('/sendText/');
     const body = JSON.parse(lastCall[1].body);
     expect(body.text || body.textMessage?.text).toMatch(/A/);
+    expect(body).not.toHaveProperty('mentioned');
+  });
+
+  it('sends media with a valid schema and without empty mentioned fields', async () => {
+    const adapter = getProviderAdapter('evolution');
+    const file = new File(['hello'], 'foto.png', { type: 'image/png' });
+
+    await adapter.sendMedia!(conn, 'cust-1', file, 'legenda');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(url).toContain('/message/sendMedia/');
+    expect(body.number).toBe('5511999999999');
+    expect(body.mediatype).toBe('image');
+    expect(body.caption).toBe('legenda');
+    expect(body.media).toEqual(expect.any(String));
+    expect(body).not.toHaveProperty('mentioned');
+    expect(body.options).not.toHaveProperty('mentioned');
+  });
+
+  it('sends audio with a valid schema and without empty mentioned fields', async () => {
+    const adapter = getProviderAdapter('evolution');
+    const blob = new Blob(['audio'], { type: 'audio/webm' });
+
+    await adapter.sendAudio!(conn, 'cust-1', blob);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(url).toContain('/message/sendWhatsAppAudio/');
+    expect(body.number).toBe('5511999999999');
+    expect(body.audio).toEqual(expect.any(String));
+    expect(body).not.toHaveProperty('mentioned');
+    expect(body.options).not.toHaveProperty('mentioned');
   });
 
   it('detects connection closed and marks connection disconnected', async () => {
