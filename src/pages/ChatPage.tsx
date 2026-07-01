@@ -453,10 +453,14 @@ export default function ChatPage() {
           .select('customer_id, content, created_at')
           .order('created_at', { ascending: false });
 
-        const formatted = channelCustomers.map(c => {
+        const byIdentity = new Map<string, any>();
+        channelCustomers.forEach(c => {
           const lastMsg = lastMessages?.find(m => m.customer_id === c.id);
           const pres = computePresence((c as any).presence, (c as any).presence_updated_at, (c as any).last_seen_at);
-          return {
+          const phoneDigits = String(c.phone || '').replace(/\D/g, '');
+          const identity = `${channel}:${phoneDigits || c.email || c.id}`;
+          const sortAt = lastMsg?.created_at || c.updated_at;
+          const row = {
             id: c.id,
             name: c.name || c.phone || 'Cliente sem nome',
             msg: lastMsg?.content || 'Sem mensagens ainda',
@@ -472,12 +476,23 @@ export default function ChatPage() {
             phone: c.phone,
             avatar_url: (c as any).avatar_url || null,
             email: c.email || null,
+            _sortAt: sortAt,
+            _duplicateKey: identity,
           };
+          const current = byIdentity.get(identity);
+          if (!current || Date.parse(sortAt) > Date.parse(current._sortAt || '')) byIdentity.set(identity, row);
         });
+
+        const formatted = Array.from(byIdentity.values())
+          .sort((a, b) => Date.parse(b._sortAt || '') - Date.parse(a._sortAt || ''))
+          .map(({ _sortAt, _duplicateKey, ...row }) => row);
 
         
         setConvs(prev => ({ ...prev, [channel]: formatted }));
-        addDebugLog('info', `Conversas ${channel} formatadas e carregadas na UI`);
+        addDebugLog('info', `Conversas ${channel} formatadas e carregadas na UI`, {
+          contatos_carregados: channelCustomers.length,
+          conversas_unificadas: formatted.length,
+        });
       }
     }
 

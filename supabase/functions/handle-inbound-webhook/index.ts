@@ -33,6 +33,10 @@ const getConnectionPhone = (conn: any) => normalizePhone(
   conn?.metadata?.me?.jid
 );
 
+const applyNullableScope = (query: any, column: string, value: string | null | undefined) => (
+  value ? query.eq(column, value) : query.is(column, null)
+);
+
 const extractStatusMessageId = (data: any) => (
   data?.key?.id ||
   data?.id ||
@@ -147,7 +151,7 @@ Deno.serve(async (req) => {
       }
 
       if (jidRoot && parsedPresence) {
-        const phone = String(jidRoot).replace("@s.whatsapp.net", "").replace("@g.us", "");
+        const phone = normalizePhone(jidRoot);
         if (connectionPhone && normalizePhone(phone) === connectionPhone) {
           responseBody = JSON.stringify({ success: true, skipped: "own_presence" });
           return new Response(responseBody, { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -157,7 +161,10 @@ Deno.serve(async (req) => {
         if (parsedPresence === 'available' || parsedPresence === 'composing' || parsedPresence === 'recording') {
           updates.last_seen_at = now;
         }
-        await supabaseAdmin.from("customers").update(updates).eq("phone", phone);
+        let presenceQuery = supabaseAdmin.from("customers").update(updates).eq("phone", phone);
+        if (ownerId) presenceQuery = presenceQuery.eq("owner_id", ownerId);
+        presenceQuery = applyNullableScope(presenceQuery, "sub_company_id", subCompanyId);
+        await presenceQuery;
       }
     }
 
@@ -188,13 +195,20 @@ Deno.serve(async (req) => {
         }
         const senderType = fromMe ? "agent" : "client";
 
-        // Find or create customer scoped by sub_company
-        let { data: customer } = await supabaseAdmin
+        // Find or create customer scoped by owner + sub-company. Never use
+        // maybeSingle() over an unconstrained phone lookup: existing legacy
+        // duplicates can make PostgREST return "multiple rows" and the old
+        // flow would create yet another contact.
+        let customerQuery = supabaseAdmin
           .from("customers")
           .select("id, sub_company_id, owner_id")
           .eq("phone", phone)
-          .eq("sub_company_id", subCompanyId as any)
-          .maybeSingle();
+          .order("updated_at", { ascending: false })
+          .limit(1);
+        if (ownerId) customerQuery = customerQuery.eq("owner_id", ownerId);
+        customerQuery = applyNullableScope(customerQuery, "sub_company_id", subCompanyId);
+        let { data: customerRows } = await customerQuery;
+        let customer = (customerRows || [])[0] || null;
 
         if (!customer) {
           const { data: newCustomer, error: custError } = await supabaseAdmin
@@ -213,8 +227,23 @@ Deno.serve(async (req) => {
             })
             .select()
             .single();
-          if (custError) throw custError;
-          customer = newCustomer;
+          if (custError) {
+            // If a concurrent webhook/import inserted the same number first,
+            // re-read deterministically instead of creating another contact.
+            let retryQuery = supabaseAdmin
+              .from("customers")
+              .select("id, sub_company_id, owner_id")
+              .eq("phone", phone)
+              .order("updated_at", { ascending: false })
+              .limit(1);
+            if (ownerId) retryQuery = retryQuery.eq("owner_id", ownerId);
+            retryQuery = applyNullableScope(retryQuery, "sub_company_id", subCompanyId);
+            const { data: retryRows } = await retryQuery;
+            customer = (retryRows || [])[0] || null;
+            if (!customer) throw custError;
+          } else {
+            customer = newCustomer;
+          }
 
           // ---------- Auto-create Lead in configured funnel ----------
           if (routing?.pipeline_id) {
