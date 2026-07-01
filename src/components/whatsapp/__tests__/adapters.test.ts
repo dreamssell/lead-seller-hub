@@ -120,7 +120,8 @@ describe('EvolutionAdapter — payload schema', () => {
 
   it('sends media with a valid schema and without empty mentioned fields', async () => {
     const adapter = getProviderAdapter('evolution');
-    const file = new File(['hello'], 'foto.png', { type: 'image/png' });
+    const file = new File(['hello'], 'foto.png', { type: 'image/png' }) as any;
+    file.arrayBuffer = async () => new TextEncoder().encode('hello').buffer;
 
     await adapter.sendMedia!(conn, 'cust-1', file, 'legenda');
 
@@ -137,7 +138,8 @@ describe('EvolutionAdapter — payload schema', () => {
 
   it('sends audio with a valid schema and without empty mentioned fields', async () => {
     const adapter = getProviderAdapter('evolution');
-    const blob = new Blob(['audio'], { type: 'audio/webm' });
+    const blob = new Blob(['audio'], { type: 'audio/webm' }) as any;
+    blob.arrayBuffer = async () => new TextEncoder().encode('audio').buffer;
 
     await adapter.sendAudio!(conn, 'cust-1', blob);
 
