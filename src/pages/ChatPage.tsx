@@ -48,6 +48,8 @@ import { WhisperComposer } from '@/components/chat/WhisperComposer';
 import { TransferConversationDialog } from '@/components/chat/TransferConversationDialog';
 import { useIsSupervisor } from '@/hooks/useIsSupervisor';
 import { normalizeChatSendError, NormalizedChatError } from '@/lib/chatErrorMapper';
+import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
+import { Plus } from 'lucide-react';
 
 
 
