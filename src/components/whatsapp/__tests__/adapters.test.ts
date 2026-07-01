@@ -50,6 +50,19 @@ describe('EvolutionAdapter — payload schema', () => {
     expect(body).not.toHaveProperty('mentioned');
   });
 
+  it('removes invalid mentioned recursively before sending', async () => {
+    const adapter = getProviderAdapter('evolution');
+    sessionStorage.setItem('evolution:text-payload:inst-A', 'merged');
+
+    await adapter.sendMessage(conn, 'cust-1', 'olá');
+
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.options).toBeDefined();
+    expect(body.options).not.toHaveProperty('mentioned');
+    expect(JSON.stringify(body)).not.toContain('"mentioned":[]');
+  });
+
   it('always provides a non-empty text fallback when Evolution requires text', async () => {
     const adapter = getProviderAdapter('evolution');
     await adapter.sendMessage(conn, 'cust-1', '   ');
