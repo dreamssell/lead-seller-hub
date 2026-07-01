@@ -72,7 +72,7 @@ const extractEvolutionError = (data: any, fallback: string) => {
   return typeof detail === "string" ? detail : JSON.stringify(detail);
 };
 
-const isEvolutionTextSchemaError = (message: string) => /requires property\s+\\?"?(text|textMessage)\\?"?|textMessage|property\s+text|mentioned/i.test(message);
+const isEvolutionTextSchemaError = (message: string) => /requires property\s+\\?"?(text|textMessage)\\?"?|textMessage|property\s+text|mentioned|cannot read propert|typeerror|undefined \(reading|bad ?request|validation|invalid.*(payload|body|schema)/i.test(message);
 
 function buildEvolutionTextPayloads(number: string, text: string) {
   const safeText = ensureText(text);
