@@ -26,6 +26,8 @@ describe('EvolutionAdapter — payload schema', () => {
   let fetchMock: any;
 
   beforeEach(() => {
+    singleMock.mockResolvedValue({ data: { phone: '5511999999999' } });
+    updateMock.mockReturnValue({ eq: vi.fn().mockResolvedValue({}) });
     sessionStorage.clear();
     vi.spyOn(console, 'info').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
