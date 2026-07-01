@@ -3,11 +3,11 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { ChatComposer } from '../ChatComposer';
 
-const toastMock = {
+const toastMock = vi.hoisted(() => ({
   error: vi.fn(),
   message: vi.fn(),
   success: vi.fn(),
-};
+}));
 
 vi.mock('sonner', () => ({ toast: toastMock }));
 vi.mock('../FormatToolbar', () => ({ FormatToolbar: () => null }));
