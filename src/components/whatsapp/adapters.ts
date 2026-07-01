@@ -132,19 +132,41 @@ function buildEvolutionTextPayloads(number: string, text: string, preferred?: 'f
   return [...payloads.filter((p) => p.mode === preferred), ...payloads.filter((p) => p.mode !== preferred)];
 }
 
-function stripInvalidMentioned(body: any) {
+function stripInvalidMentioned(body: any): any {
   if (!body || typeof body !== 'object') return body;
   const copy = Array.isArray(body) ? [...body] : { ...body };
-  const mentioned = (copy as any).mentioned;
-  if (Array.isArray(mentioned) && mentioned.length === 0) delete (copy as any).mentioned;
-  if (typeof mentioned === 'string' && mentioned.trim().length === 0) delete (copy as any).mentioned;
-  if ((copy as any).options && typeof (copy as any).options === 'object') {
-    const options = { ...(copy as any).options };
-    if (Array.isArray(options.mentioned) && options.mentioned.length === 0) delete options.mentioned;
-    if (typeof options.mentioned === 'string' && options.mentioned.trim().length === 0) delete options.mentioned;
-    (copy as any).options = options;
+  for (const key of Object.keys(copy)) {
+    const value = (copy as any)[key];
+    if (key === 'mentioned') {
+      if (Array.isArray(value) && value.length === 0) {
+        delete (copy as any)[key];
+        continue;
+      }
+      if (typeof value === 'string' && value.trim().length === 0) {
+        delete (copy as any)[key];
+        continue;
+      }
+    }
+    if (value && typeof value === 'object') (copy as any)[key] = stripInvalidMentioned(value);
   }
   return copy;
+}
+
+function collectMentionedDiagnostics(body: any, path = '$'): Array<{ path: string; type: string; length?: number }> {
+  if (!body || typeof body !== 'object') return [];
+  const out: Array<{ path: string; type: string; length?: number }> = [];
+  for (const [key, value] of Object.entries(body)) {
+    const nextPath = `${path}.${key}`;
+    if (key === 'mentioned') {
+      out.push({
+        path: nextPath,
+        type: Array.isArray(value) ? 'array' : typeof value,
+        length: Array.isArray(value) || typeof value === 'string' ? value.length : undefined,
+      });
+    }
+    if (value && typeof value === 'object') out.push(...collectMentionedDiagnostics(value, nextPath));
+  }
+  return out;
 }
 
 function payloadDiagnostics(body: any) {
@@ -155,11 +177,14 @@ function payloadDiagnostics(body: any) {
   return {
     keys: body && typeof body === 'object' ? Object.keys(body) : [],
     numberDigits: String(body?.number || '').replace(/\D/g, '').length,
+    numberMasked: body?.number ? `${String(body.number).replace(/\D/g, '').slice(0, 4)}…${String(body.number).replace(/\D/g, '').slice(-4)}` : undefined,
     hasText: typeof text === 'string' && text.trim().length > 0,
     textLength: typeof text === 'string' ? text.length : 0,
+    captionLength: typeof body?.caption === 'string' ? body.caption.length : undefined,
     mentionedType: Array.isArray(mentioned) ? 'array' : typeof mentioned,
     mentionedLength: Array.isArray(mentioned) || typeof mentioned === 'string' ? mentioned.length : mentioned == null ? 0 : undefined,
     hasMentioned: mentioned != null,
+    mentionedPaths: collectMentionedDiagnostics(body),
     mediaBytesApprox: typeof media === 'string' ? Math.round((media.length * 3) / 4) : undefined,
     audioBytesApprox: typeof audio === 'string' ? Math.round((audio.length * 3) / 4) : undefined,
     buttonsCount: body?.buttonsMessage?.buttons?.length,
