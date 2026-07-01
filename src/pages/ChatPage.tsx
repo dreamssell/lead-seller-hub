@@ -1840,6 +1840,15 @@ export default function ChatPage() {
       <MediaDropzone active={!!selectedConvId} onDrop={(files) => setExternalAttachment(files[0] || null)} />
       <KeyboardShortcutsHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       <GlobalSearchDialog open={globalSearchOpen} onOpenChange={setGlobalSearchOpen} />
+      <NewConversationDialog
+        open={newConversationOpen}
+        onOpenChange={setNewConversationOpen}
+        connection={activeWhatsAppConn}
+        onCreated={(customerId) => {
+          setSelectedConvId(customerId);
+          setActiveChannel('whatsapp');
+        }}
+      />
     </AppLayout>
   );
 }
