@@ -50,7 +50,22 @@ export function NewConversationDialog({ open, onOpenChange, connection, onCreate
 
   const handleSubmit = async () => {
     setTouched(true);
+    const startedAt = Date.now();
+    const logBase = {
+      scope: 'NewConversationDialog',
+      phone_original: phone,
+      phone_normalized: validation.e164 ?? null,
+      owner_id: connection?.owner_id ?? null,
+      sub_company_id: connection?.sub_company_id ?? null,
+      connection_id: connection?.id ?? null,
+    };
+
     if (!validation.ok || !validation.e164) {
+      console.warn('[NewConversationDialog] rejected (client)', {
+        ...logBase,
+        reason: validation.errorCode,
+        message: validation.errorMessage,
+      });
       toast({
         title: 'Número inválido',
         description: validation.errorMessage || 'Verifique DDI e DDD.',
@@ -59,50 +74,39 @@ export function NewConversationDialog({ open, onOpenChange, connection, onCreate
       return;
     }
     if (!connection) {
+      console.warn('[NewConversationDialog] rejected (no connection)', logBase);
       toast({ title: 'Sem conexão ativa', description: 'Selecione uma conexão WhatsApp antes de iniciar.', variant: 'destructive' });
       return;
     }
 
-    const normalized = validation.e164;
-
     setLoading(true);
     setStep('creating');
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData?.user?.id;
-      if (!userId) throw new Error('Sessão expirada.');
+      const { data, error } = await supabase.functions.invoke('start-conversation', {
+        body: {
+          phone_raw: phone,
+          name: name.trim() || null,
+          connection_id: connection.id,
+          first_message: firstMessage.trim() || null,
+        },
+      });
 
-      const ownerId = connection.owner_id || userId;
-      const { data: existing } = await supabase
-        .from('customers')
-        .select('id, name, phone')
-        .eq('owner_id', ownerId)
-        .eq('phone', normalized)
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      let customerId = existing?.id as string | undefined;
-
-      if (!customerId) {
-        const { data: inserted, error } = await supabase
-          .from('customers')
-          .insert({
-            name: name.trim() || `Contato ${normalized.slice(-4)}`,
-            phone: normalized,
-            channel: 'whatsapp',
-            owner_id: ownerId,
-            sub_company_id: connection.sub_company_id ?? null,
-            origin_connection_id: connection.id,
-            created_by: userId,
-          } as any)
-          .select('id')
-          .single();
-        if (error) throw error;
-        customerId = inserted.id;
-      } else if (name.trim() && existing?.name !== name.trim()) {
-        await supabase.from('customers').update({ name: name.trim() }).eq('id', customerId);
+      if (error || !data?.ok) {
+        const msg = (data as any)?.error || error?.message || 'Falha ao iniciar conversa.';
+        const code = (data as any)?.code;
+        console.error('[NewConversationDialog] backend rejected', { ...logBase, code, message: msg });
+        toast({ title: 'Não foi possível iniciar a conversa', description: msg, variant: 'destructive' });
+        setStep('form');
+        return;
       }
+
+      const customerId = data.customer_id as string;
+      console.info('[NewConversationDialog] customer ready', {
+        ...logBase,
+        customer_id: customerId,
+        created: data.created,
+        duration_ms: Date.now() - startedAt,
+      });
 
       if (firstMessage.trim() && customerId) {
         setStep('sending');
@@ -110,6 +114,7 @@ export function NewConversationDialog({ open, onOpenChange, connection, onCreate
           const adapter = getProviderAdapter(connection.provider);
           await adapter.sendMessage(connection, customerId, firstMessage.trim());
         } catch (err: any) {
+          console.error('[NewConversationDialog] send failed', { ...logBase, customer_id: customerId, err: err?.message });
           toast({
             title: 'Contato criado, mas o envio falhou',
             description: err?.message || 'Você pode reenviar pelo chat.',
@@ -119,10 +124,11 @@ export function NewConversationDialog({ open, onOpenChange, connection, onCreate
       }
 
       toast({ title: 'Conversa iniciada', description: `Contato ${validation.formatted} pronto no chat.` });
-      onCreated(customerId!);
+      onCreated(customerId);
       onOpenChange(false);
       reset();
     } catch (err: any) {
+      console.error('[NewConversationDialog] fatal', { ...logBase, err: err?.message });
       toast({ title: 'Falha ao iniciar conversa', description: err?.message || 'Erro desconhecido', variant: 'destructive' });
       setStep('form');
     } finally {
