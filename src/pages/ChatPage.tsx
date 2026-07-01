@@ -1634,42 +1634,75 @@ export default function ChatPage() {
                   </div>
                 )}
                 
-                {messages.map((m) => (
-                  <motion.div
-                    key={m.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`flex ${m.sender_type !== 'client' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm relative group ${
-                      m.sender_type !== 'client' ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-secondary text-foreground rounded-bl-md'
-                    }`}>
-                      <p className="whitespace-pre-wrap break-words">{renderWhatsAppText(m.content)}</p>
-                      <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
-                        <p className="text-[10px]">
-                          {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                        {m.sender_type !== 'client' && (
-                          <div className="ml-1">
-                            {m.status === 'sending' ? (
-                              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                            ) : m.status === 'error' ? (
-                              <AlertCircle className="w-2.5 h-2.5 text-destructive-foreground" />
-                            ) : m.status === 'sent' ? (
-                              <Check className="w-2.5 h-2.5" />
-                            ) : m.status === 'delivered' ? (
-                              <div className="flex -space-x-1.5"><Check className="w-2.5 h-2.5" /><Check className="w-2.5 h-2.5" /></div>
-                            ) : m.status === 'read' ? (
-                              <div className="flex -space-x-1.5 text-sky-300"><Check className="w-2.5 h-2.5" /><Check className="w-2.5 h-2.5" /></div>
-                            ) : (
-                              <CheckCircle2 className="w-2.5 h-2.5" />
+                {messages.map((m) => {
+                  const errorInfo = getMessageErrorInfo(m);
+                  return (
+                    <motion.div
+                      key={m.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`flex ${m.sender_type !== 'client' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm relative group ${
+                        m.sender_type !== 'client' ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-secondary text-foreground rounded-bl-md'
+                      }`}>
+                        <p className="whitespace-pre-wrap break-words">{renderWhatsAppText(m.content)}</p>
+                        <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
+                          <p className="text-[10px]">
+                            {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                          {m.sender_type !== 'client' && (
+                            <div className="ml-1">
+                              {m.status === 'sending' ? (
+                                <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                              ) : m.status === 'error' ? (
+                                <AlertCircle className="w-2.5 h-2.5 text-destructive-foreground" />
+                              ) : m.status === 'sent' ? (
+                                <Check className="w-2.5 h-2.5" />
+                              ) : m.status === 'delivered' ? (
+                                <div className="flex -space-x-1.5"><Check className="w-2.5 h-2.5" /><Check className="w-2.5 h-2.5" /></div>
+                              ) : m.status === 'read' ? (
+                                <div className="flex -space-x-1.5 text-sky-300"><Check className="w-2.5 h-2.5" /><Check className="w-2.5 h-2.5" /></div>
+                              ) : (
+                                <CheckCircle2 className="w-2.5 h-2.5" />
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {m.sender_type !== 'client' && m.status === 'sending' && (
+                          <div className="mt-2 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-2 py-1 text-[10px] flex items-center gap-1.5">
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                            Aguardando confirmação da Evolution
+                          </div>
+                        )}
+
+                        {m.sender_type !== 'client' && errorInfo && (
+                          <div className="mt-2 rounded-lg border border-destructive/30 bg-destructive/15 px-2 py-1.5 text-[10px] text-primary-foreground space-y-1">
+                            <div className="flex items-start gap-1.5">
+                              <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="font-semibold">Bloqueio: {errorInfo.blockedBy || 'falha no envio'}</p>
+                                <p className="opacity-90 break-words">{errorInfo.detail}</p>
+                              </div>
+                            </div>
+                            {errorInfo.retryable && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                className="h-6 text-[10px] px-2 mt-1"
+                                onClick={() => retryFailedMessage(m)}
+                              >
+                                <RefreshCw className="w-3 h-3 mr-1" /> Retentar com correção
+                              </Button>
                             )}
                           </div>
                         )}
                       </div>
-                    </div>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  );
+                })}
               </div>
 
               <ChatComposer
