@@ -31,13 +31,41 @@ export function NewConversationDialog({ open, onOpenChange, connection, onCreate
   const showError = touched && !!phone && !validation.ok;
   const showSuccess = !!phone && validation.ok;
 
+  // Dynamic example based on the specific validation error the user hit.
+  const dynamicExample = useMemo(() => {
+    switch (validation.errorCode) {
+      case 'missing_ddi':      return 'Comece pelo DDI. Ex: +55 11 9XXXX-XXXX';
+      case 'invalid_ddd':      return 'Use um DDD válido do Brasil. Ex: +55 11 9XXXX-XXXX';
+      case 'invalid_br_mobile':return 'Celular BR começa com 9. Ex: +55 11 9XXXX-XXXX';
+      case 'too_short':        return 'Faltam dígitos. Ex: +55 11 9XXXX-XXXX';
+      case 'too_long':         return 'Máximo 15 dígitos (E.164). Ex: +55 11 9XXXX-XXXX';
+      case 'invalid_chars':    return 'Use apenas dígitos, espaços, hífens ou parênteses.';
+      default:                 return 'Formato aceito: +55 DDD 9XXXX-XXXX';
+    }
+  }, [validation.errorCode]);
+
   const reset = () => {
     setPhone(''); setName(''); setFirstMessage(''); setStep('form'); setLoading(false); setTouched(false);
   };
 
   const handleSubmit = async () => {
     setTouched(true);
+    const startedAt = Date.now();
+    const logBase = {
+      scope: 'NewConversationDialog',
+      phone_original: phone,
+      phone_normalized: validation.e164 ?? null,
+      owner_id: connection?.owner_id ?? null,
+      sub_company_id: connection?.sub_company_id ?? null,
+      connection_id: connection?.id ?? null,
+    };
+
     if (!validation.ok || !validation.e164) {
+      console.warn('[NewConversationDialog] rejected (client)', {
+        ...logBase,
+        reason: validation.errorCode,
+        message: validation.errorMessage,
+      });
       toast({
         title: 'Número inválido',
         description: validation.errorMessage || 'Verifique DDI e DDD.',
@@ -46,50 +74,39 @@ export function NewConversationDialog({ open, onOpenChange, connection, onCreate
       return;
     }
     if (!connection) {
+      console.warn('[NewConversationDialog] rejected (no connection)', logBase);
       toast({ title: 'Sem conexão ativa', description: 'Selecione uma conexão WhatsApp antes de iniciar.', variant: 'destructive' });
       return;
     }
 
-    const normalized = validation.e164;
-
     setLoading(true);
     setStep('creating');
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData?.user?.id;
-      if (!userId) throw new Error('Sessão expirada.');
+      const { data, error } = await supabase.functions.invoke('start-conversation', {
+        body: {
+          phone_raw: phone,
+          name: name.trim() || null,
+          connection_id: connection.id,
+          first_message: firstMessage.trim() || null,
+        },
+      });
 
-      const ownerId = connection.owner_id || userId;
-      const { data: existing } = await supabase
-        .from('customers')
-        .select('id, name, phone')
-        .eq('owner_id', ownerId)
-        .eq('phone', normalized)
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      let customerId = existing?.id as string | undefined;
-
-      if (!customerId) {
-        const { data: inserted, error } = await supabase
-          .from('customers')
-          .insert({
-            name: name.trim() || `Contato ${normalized.slice(-4)}`,
-            phone: normalized,
-            channel: 'whatsapp',
-            owner_id: ownerId,
-            sub_company_id: connection.sub_company_id ?? null,
-            origin_connection_id: connection.id,
-            created_by: userId,
-          } as any)
-          .select('id')
-          .single();
-        if (error) throw error;
-        customerId = inserted.id;
-      } else if (name.trim() && existing?.name !== name.trim()) {
-        await supabase.from('customers').update({ name: name.trim() }).eq('id', customerId);
+      if (error || !data?.ok) {
+        const msg = (data as any)?.error || error?.message || 'Falha ao iniciar conversa.';
+        const code = (data as any)?.code;
+        console.error('[NewConversationDialog] backend rejected', { ...logBase, code, message: msg });
+        toast({ title: 'Não foi possível iniciar a conversa', description: msg, variant: 'destructive' });
+        setStep('form');
+        return;
       }
+
+      const customerId = data.customer_id as string;
+      console.info('[NewConversationDialog] customer ready', {
+        ...logBase,
+        customer_id: customerId,
+        created: data.created,
+        duration_ms: Date.now() - startedAt,
+      });
 
       if (firstMessage.trim() && customerId) {
         setStep('sending');
@@ -97,6 +114,7 @@ export function NewConversationDialog({ open, onOpenChange, connection, onCreate
           const adapter = getProviderAdapter(connection.provider);
           await adapter.sendMessage(connection, customerId, firstMessage.trim());
         } catch (err: any) {
+          console.error('[NewConversationDialog] send failed', { ...logBase, customer_id: customerId, err: err?.message });
           toast({
             title: 'Contato criado, mas o envio falhou',
             description: err?.message || 'Você pode reenviar pelo chat.',
@@ -106,10 +124,11 @@ export function NewConversationDialog({ open, onOpenChange, connection, onCreate
       }
 
       toast({ title: 'Conversa iniciada', description: `Contato ${validation.formatted} pronto no chat.` });
-      onCreated(customerId!);
+      onCreated(customerId);
       onOpenChange(false);
       reset();
     } catch (err: any) {
+      console.error('[NewConversationDialog] fatal', { ...logBase, err: err?.message });
       toast({ title: 'Falha ao iniciar conversa', description: err?.message || 'Erro desconhecido', variant: 'destructive' });
       setStep('form');
     } finally {
@@ -146,7 +165,7 @@ export function NewConversationDialog({ open, onOpenChange, connection, onCreate
               <PhoneCall className={cn('w-4 h-4 shrink-0', showError ? 'text-destructive' : showSuccess ? 'text-emerald-500' : 'text-muted-foreground')} />
               <Input
                 id="new-conv-phone"
-                placeholder="+55 27 99778-4501"
+                placeholder="+DDI DDD 9XXXX-XXXX"
                 inputMode="tel"
                 autoComplete="tel"
                 value={phone}
@@ -164,7 +183,8 @@ export function NewConversationDialog({ open, onOpenChange, connection, onCreate
             {showError ? (
               <div id="new-conv-phone-help" className="text-[11px] text-destructive space-y-0.5">
                 <p className="font-medium">{validation.errorMessage}</p>
-                {validation.hint && <p className="text-destructive/80">{validation.hint}</p>}
+                <p className="text-destructive/80">{dynamicExample}</p>
+                {validation.hint && <p className="text-destructive/70">{validation.hint}</p>}
               </div>
             ) : showSuccess ? (
               <p id="new-conv-phone-help" className="text-[11px] text-emerald-600 dark:text-emerald-400">
@@ -175,8 +195,8 @@ export function NewConversationDialog({ open, onOpenChange, connection, onCreate
               </p>
             ) : (
               <p id="new-conv-phone-help" className="text-[10px] text-muted-foreground leading-relaxed">
-                <strong>DDI</strong> (código do país, ex: 55) + <strong>DDD</strong> (ex: 27) + número.<br />
-                Aceita: <code className="text-[10px]">5527997784501</code> · <code className="text-[10px]">(27) 99778-4501</code> · <code className="text-[10px]">+55 27 99778-4501</code>
+                Formato aceito: <code className="text-[10px]">+55 DDD 9XXXX-XXXX</code><br />
+                Inclua <strong>DDI</strong> (país) + <strong>DDD</strong> + número. Celulares BR começam com 9.
               </p>
             )}
           </div>
