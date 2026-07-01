@@ -509,7 +509,7 @@ export default function ChatPage() {
           setMessages(prev => {
             const cid = row.client_msg_id;
             if (cid && prev.some(m => m.client_msg_id === cid || m.id === cid)) {
-              return prev.map(m => (m.client_msg_id === cid || m.id === cid) ? hydrateChatMessage({ ...m, ...row, status: m.status }) : m);
+              return prev.map(m => (m.client_msg_id === cid || m.id === cid) ? hydrateChatMessage({ ...m, ...row, status: row.metadata?.status || row.status || m.status }) : m);
             }
             if (prev.some(m => m.id === row.id)) return prev;
             return [...prev, hydrateChatMessage(row)];
