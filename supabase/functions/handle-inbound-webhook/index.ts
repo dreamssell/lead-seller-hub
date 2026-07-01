@@ -33,6 +33,27 @@ const getConnectionPhone = (conn: any) => normalizePhone(
   conn?.metadata?.me?.jid
 );
 
+const extractStatusMessageId = (data: any) => (
+  data?.key?.id ||
+  data?.id ||
+  data?.messageId ||
+  data?.message_id ||
+  data?.status?.id ||
+  data?.status?.messageId ||
+  data?.statuses?.[0]?.id ||
+  data?.statuses?.[0]?.messageId
+);
+
+const normalizeDeliveryStatus = (value: unknown): string | null => {
+  const status = String(value || "").toLowerCase();
+  if (!status) return null;
+  if (/read|played/.test(status)) return "read";
+  if (/deliver|delivery|server_ack|device_ack/.test(status)) return "delivered";
+  if (/sent|pending|ack/.test(status)) return "sent";
+  if (/error|fail|reject/.test(status)) return "error";
+  return null;
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -233,6 +254,31 @@ Deno.serve(async (req) => {
             metadata: { raw: payload.data, routing_applied: !!routing, from_me: fromMe, direction: fromMe ? "outbound_native" : "inbound", status: fromMe ? "sent" : "read" },
           });
         }
+      }
+    }
+
+    if (/messages\.(update|ack)|message\.(update|ack)|send\.message|status/i.test(eventType)) {
+      const statusMsgId = extractStatusMessageId(payload.data);
+      const deliveryStatus = normalizeDeliveryStatus(
+        payload.data?.status ||
+        payload.data?.ack ||
+        payload.data?.deliveryStatus ||
+        payload.data?.messageStatus ||
+        payload.data?.statuses?.[0]?.status
+      );
+      if (statusMsgId && deliveryStatus) {
+        const updates: any = {
+          metadata: {
+            delivery_status: deliveryStatus,
+            status: deliveryStatus,
+            confirmed_at: new Date().toISOString(),
+            raw_status: payload.data,
+          },
+        };
+        await supabaseAdmin
+          .from("chat_messages")
+          .update(updates)
+          .eq("uaz_msg_id", statusMsgId);
       }
     }
 
