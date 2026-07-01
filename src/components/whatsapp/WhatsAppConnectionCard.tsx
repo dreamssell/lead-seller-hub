@@ -62,6 +62,7 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
   );
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [fixingWebhook, setFixingWebhook] = useState(false);
   const [showEvolutionWizard, setShowEvolutionWizard] = useState(false);
   const [wizardAutoStart, setWizardAutoStart] = useState(false);
 
