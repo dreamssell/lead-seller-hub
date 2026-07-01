@@ -1,4 +1,4 @@
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Flag } from 'lucide-react';
 
 export const PRIORITY_META: Record<string, { label: string; color: string }> = {
@@ -14,7 +14,7 @@ export function PrioritySelect({ value, onChange }: { value: string; onChange: (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger className="h-8 text-xs w-[130px] gap-1.5">
         <Flag className={`w-3 h-3 ${meta.color}`} />
-        <SelectValue />
+        <span>{meta.label}</span>
       </SelectTrigger>
       <SelectContent>
         {Object.entries(PRIORITY_META).map(([k, m]) => (

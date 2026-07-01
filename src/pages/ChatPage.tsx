@@ -47,6 +47,7 @@ import { SupervisorBanner } from '@/components/chat/SupervisorBanner';
 import { WhisperComposer } from '@/components/chat/WhisperComposer';
 import { TransferConversationDialog } from '@/components/chat/TransferConversationDialog';
 import { useIsSupervisor } from '@/hooks/useIsSupervisor';
+import { normalizeChatSendError, NormalizedChatError } from '@/lib/chatErrorMapper';
 
 
 
@@ -132,8 +133,8 @@ const getUniqueProviderLabels = (connections: WhatsAppConnection[]) => (
 );
 
 const getConnectionPhoneFromDb = (conn?: WhatsAppConnection | null) => {
-  if (!conn?.metadata) return undefined;
-  return conn.metadata.phone || conn.metadata.phone_number || conn.metadata.number || conn.metadata.owner;
+  if (!conn) return undefined;
+  return conn.phone_number || conn.metadata?.phone || conn.metadata?.phone_number || conn.metadata?.number || conn.metadata?.owner || conn.metadata?.wuid || conn.metadata?.me?.id || conn.metadata?.me?.jid;
 };
 
 const getWhatsAppDbSummary = (connections: WhatsAppConnection[]) => {
@@ -159,6 +160,46 @@ const getWhatsAppStatusClasses = (status: WhatsAppDbStatus) => {
   if (status === 'offline') return 'bg-warning/10 border-warning/20 text-warning';
   return 'bg-destructive/10 border-destructive/20 text-destructive';
 };
+
+const getMessageMetadata = (message: any): Record<string, any> => {
+  const meta = message?.metadata;
+  return meta && typeof meta === 'object' && !Array.isArray(meta) ? meta : {};
+};
+
+const hydrateChatMessage = (row: any) => {
+  const meta = getMessageMetadata(row);
+  const status = row?.status || meta.status || (row?.sender_type === 'client' ? 'read' : row?.uaz_msg_id ? 'sent' : 'sent');
+  return {
+    ...row,
+    status,
+    _error: row?._error || meta.error || meta.error_detail || null,
+    _errorCode: row?._errorCode || meta.error_code || null,
+    _blockedBy: row?._blockedBy || meta.blocked_by || meta.blockedBy || null,
+    _latency: row?._latency || meta.latency_ms || null,
+    _confirmedAt: row?._confirmedAt || meta.confirmed_at || meta.accepted_at || null,
+    _deliveryStatus: row?._deliveryStatus || meta.delivery_status || meta.status || null,
+  };
+};
+
+const getMessageErrorInfo = (message: any): NormalizedChatError | null => {
+  const meta = getMessageMetadata(message);
+  const detail = message?._error || meta.error_detail || meta.error || meta.last_error;
+  if (!detail && message?.status !== 'error' && meta.status !== 'error') return null;
+  const normalized = normalizeChatSendError(detail || 'Falha ao enviar mensagem.');
+  return {
+    ...normalized,
+    blockedBy: message?._blockedBy || meta.blocked_by || normalized.blockedBy,
+  };
+};
+
+const extractProviderMessageId = (data: any) => (
+  data?.data?.key?.id ||
+  data?.key?.id ||
+  data?.message?.key?.id ||
+  data?.id ||
+  data?.messageId ||
+  undefined
+);
 
 export default function ChatPage() {
   const [activeChannel, setActiveChannel] = useState<ChannelKey | null>(null);
@@ -279,6 +320,17 @@ export default function ChatPage() {
       message,
       data
     }, ...prev].slice(0, 50));
+  };
+
+  const showSendErrorToast = (err: unknown) => {
+    const normalized = normalizeChatSendError(err);
+    toast({
+      title: normalized.title,
+      description: normalized.message,
+      variant: 'destructive',
+    });
+    addDebugLog('error', `[WhatsApp] ${normalized.code}: ${normalized.detail}`, normalized);
+    return normalized;
   };
 
   useEffect(() => {
@@ -457,10 +509,10 @@ export default function ChatPage() {
           setMessages(prev => {
             const cid = row.client_msg_id;
             if (cid && prev.some(m => m.client_msg_id === cid || m.id === cid)) {
-              return prev.map(m => (m.client_msg_id === cid || m.id === cid) ? { ...m, ...row, status: m.status } : m);
+              return prev.map(m => (m.client_msg_id === cid || m.id === cid) ? hydrateChatMessage({ ...m, ...row, status: row.metadata?.status || row.status || m.status }) : m);
             }
             if (prev.some(m => m.id === row.id)) return prev;
-            return [...prev, row];
+            return [...prev, hydrateChatMessage(row)];
           });
         }
         if (activeChannel) loadConversations(activeChannel);
@@ -469,7 +521,7 @@ export default function ChatPage() {
         const row: any = payload.new;
         if (!row?.id) return;
         if (row.customer_id === selectedConvId) {
-          setMessages(prev => prev.map(m => m.id === row.id ? { ...m, ...row } : m));
+          setMessages(prev => prev.map(m => (m.id === row.id || (row.client_msg_id && m.client_msg_id === row.client_msg_id)) ? hydrateChatMessage({ ...m, ...row }) : m));
         }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_connections' }, () => {
@@ -574,7 +626,7 @@ export default function ChatPage() {
           .select('*')
           .eq('customer_id', selectedConvId)
           .order('created_at', { ascending: true });
-        if (data) setMessages(data);
+        if (data) setMessages((data || []).map(hydrateChatMessage));
       }
       loadMessages();
     }
@@ -771,12 +823,12 @@ export default function ChatPage() {
       }
 
     } catch (err: any) {
-      toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
+      const normalized = showSendErrorToast(err);
       setMessages(prev => prev.map(m => 
-        m.id === clientMsgId ? { ...m, status: 'error', _error: err.message } : m
+        m.id === clientMsgId ? { ...m, status: 'error', _error: normalized.message, _errorCode: normalized.code, _blockedBy: normalized.blockedBy } : m
       ));
       await supabase.from('chat_messages')
-        .update({ metadata: { status: 'error', error: err.message } })
+        .update({ metadata: { status: 'error', error: normalized.message, error_detail: normalized.detail, error_code: normalized.code, blocked_by: normalized.blockedBy, retryable: normalized.retryable } })
         .eq('client_msg_id', clientMsgId);
     }
 
@@ -788,6 +840,7 @@ export default function ChatPage() {
     setMessages(prev => [...prev, {
       id, client_msg_id: id, customer_id: selectedConvId, sender_type: 'agent',
       content, channel: activeChannel, created_at: new Date().toISOString(), status: 'sending',
+      _sentAt: Date.now(),
     }]);
     try {
       await supabase.from('chat_messages').insert({
@@ -804,7 +857,7 @@ export default function ChatPage() {
   };
 
   const markStatus = async (id: string, status: 'sent' | 'error', overrideId?: string, extra?: Record<string, any>) => {
-    setMessages(prev => prev.map(m => m.id === id ? { ...m, status, uaz_msg_id: overrideId || m.uaz_msg_id, ...(extra || {}) } : m));
+    setMessages(prev => prev.map(m => (m.id === id || m.client_msg_id === id) ? hydrateChatMessage({ ...m, status, uaz_msg_id: overrideId || m.uaz_msg_id, ...(extra || {}) }) : m));
     try {
       await supabase.from('chat_messages')
         .update({ uaz_msg_id: overrideId ?? null, metadata: { status, ...(extra || {}) } })
@@ -812,23 +865,71 @@ export default function ChatPage() {
     } catch {}
   };
 
+  const sendTextThroughActiveChannel = async (customerId: string, text: string) => {
+    if (activeChannel === 'whatsapp') {
+      if (!activeWhatsAppConn) throw new Error('Conexão ativa não encontrada');
+      const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+      addDebugLog('request', '[WhatsApp] Enviando texto pela conexão ativa', {
+        provider: activeWhatsAppConn.provider,
+        connection_id: activeWhatsAppConn.id,
+        customer_id: customerId,
+        text_length: text.length,
+        has_text: text.trim().length > 0,
+      });
+      return adapter.sendMessage(activeWhatsAppConn, customerId, text);
+    }
+    await new Promise(r => setTimeout(r, 400));
+    return { key: { id: crypto.randomUUID() } };
+  };
+
   const handleSendText = async (text: string) => {
     if (!selectedConvId || !text.trim()) return;
     const id = await sendOptimistic(text);
     try {
-      if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
-        const adapter = getProviderAdapter(activeWhatsAppConn.provider);
-        const t0 = Date.now();
-        const data = await adapter.sendMessage(activeWhatsAppConn, selectedConvId, text);
-        await markStatus(id, 'sent', data?.data?.key?.id || data?.key?.id, { latency_ms: Date.now() - t0 });
-      } else {
-        await new Promise(r => setTimeout(r, 400));
-        await markStatus(id, 'sent');
-      }
+      const t0 = Date.now();
+      const data = await sendTextThroughActiveChannel(selectedConvId, text);
+      await markStatus(id, 'sent', extractProviderMessageId(data), { latency_ms: Date.now() - t0, accepted_at: new Date().toISOString(), provider_response_ok: true });
     } catch (err: any) {
-      toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
-      await markStatus(id, 'error', undefined, { error: err.message });
+      const normalized = showSendErrorToast(err);
+      await markStatus(id, 'error', undefined, {
+        error: normalized.message,
+        error_detail: normalized.detail,
+        error_code: normalized.code,
+        blocked_by: normalized.blockedBy,
+        retryable: normalized.retryable,
+      });
       throw err;
+    }
+  };
+
+  const retryFailedMessage = async (message: any) => {
+    if (!message?.content || !selectedConvId) return;
+    const msgId = message.client_msg_id || message.id;
+    setMessages(prev => prev.map(m => (m.id === message.id || m.client_msg_id === msgId) ? { ...m, status: 'sending', _error: null, _blockedBy: null, _retrying: true } : m));
+    await supabase.from('chat_messages')
+      .update({ metadata: { ...getMessageMetadata(message), status: 'sending', retrying: true, retry_started_at: new Date().toISOString() } })
+      .eq('client_msg_id', msgId);
+
+    try {
+      const t0 = Date.now();
+      const data = await sendTextThroughActiveChannel(message.customer_id || selectedConvId, message.content);
+      await markStatus(msgId, 'sent', extractProviderMessageId(data), {
+        latency_ms: Date.now() - t0,
+        accepted_at: new Date().toISOString(),
+        retried_at: new Date().toISOString(),
+        provider_response_ok: true,
+      });
+      toast({ title: 'Mensagem reenviada', description: 'A fila retomou o envio desta mensagem.' });
+    } catch (err: any) {
+      const normalized = showSendErrorToast(err);
+      await markStatus(msgId, 'error', undefined, {
+        error: normalized.message,
+        error_detail: normalized.detail,
+        error_code: normalized.code,
+        blocked_by: normalized.blockedBy,
+        retryable: normalized.retryable,
+        retried_at: new Date().toISOString(),
+      });
     }
   };
 
@@ -840,14 +941,14 @@ export default function ChatPage() {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
         if (!adapter.sendMedia) throw new Error('Este canal não suporta envio de mídia ainda.');
         const data = await adapter.sendMedia(activeWhatsAppConn, selectedConvId, a.file, caption);
-        markStatus(id, 'sent', data?.data?.key?.id);
+        markStatus(id, 'sent', extractProviderMessageId(data), { accepted_at: new Date().toISOString(), provider_response_ok: true });
       } else {
         await new Promise(r => setTimeout(r, 400));
         markStatus(id, 'sent');
       }
     } catch (err: any) {
-      toast({ title: 'Erro ao enviar mídia', description: err.message, variant: 'destructive' });
-      markStatus(id, 'error');
+      const normalized = showSendErrorToast(err);
+      markStatus(id, 'error', undefined, { error: normalized.message, error_detail: normalized.detail, error_code: normalized.code, blocked_by: normalized.blockedBy, retryable: normalized.retryable });
       throw err;
     }
   };
@@ -860,14 +961,14 @@ export default function ChatPage() {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
         if (!adapter.sendAudio) throw new Error('Este canal não suporta áudio ainda.');
         const data = await adapter.sendAudio(activeWhatsAppConn, selectedConvId, blob);
-        markStatus(id, 'sent', data?.data?.key?.id);
+        markStatus(id, 'sent', extractProviderMessageId(data), { accepted_at: new Date().toISOString(), provider_response_ok: true });
       } else {
         await new Promise(r => setTimeout(r, 400));
         markStatus(id, 'sent');
       }
     } catch (err: any) {
-      toast({ title: 'Erro ao enviar áudio', description: err.message, variant: 'destructive' });
-      markStatus(id, 'error');
+      const normalized = showSendErrorToast(err);
+      markStatus(id, 'error', undefined, { error: normalized.message, error_detail: normalized.detail, error_code: normalized.code, blocked_by: normalized.blockedBy, retryable: normalized.retryable });
       throw err;
     }
   };
@@ -898,15 +999,15 @@ export default function ChatPage() {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
         if (!adapter.sendRich) throw new Error('Este canal ainda não suporta este tipo de mensagem.');
         const data = await adapter.sendRich(activeWhatsAppConn, selectedConvId, payload);
-        markStatus(id, 'sent', data?.data?.key?.id);
+        markStatus(id, 'sent', extractProviderMessageId(data), { accepted_at: new Date().toISOString(), provider_response_ok: true });
         toast({ title: 'Enviado', description: summary });
       } else {
         await new Promise(r => setTimeout(r, 300));
         markStatus(id, 'sent');
       }
     } catch (err: any) {
-      toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
-      markStatus(id, 'error');
+      const normalized = showSendErrorToast(err);
+      markStatus(id, 'error', undefined, { error: normalized.message, error_detail: normalized.detail, error_code: normalized.code, blocked_by: normalized.blockedBy, retryable: normalized.retryable });
       throw err;
     }
   };
@@ -1479,7 +1580,7 @@ export default function ChatPage() {
                             .select('*')
                             .eq('customer_id', selectedConvId)
                             .order('created_at', { ascending: true });
-                          if (data) setMessages(data);
+                          if (data) setMessages((data || []).map(hydrateChatMessage));
                           toast({ title: 'Histórico atualizado', description: `${data?.length || 0} mensagens carregadas.` });
                         }}
                         className="gap-2 text-xs"
@@ -1536,42 +1637,81 @@ export default function ChatPage() {
                   </div>
                 )}
                 
-                {messages.map((m) => (
-                  <motion.div
-                    key={m.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`flex ${m.sender_type !== 'client' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm relative group ${
-                      m.sender_type !== 'client' ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-secondary text-foreground rounded-bl-md'
-                    }`}>
-                      <p className="whitespace-pre-wrap break-words">{renderWhatsAppText(m.content)}</p>
-                      <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
-                        <p className="text-[10px]">
-                          {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                        {m.sender_type !== 'client' && (
-                          <div className="ml-1">
-                            {m.status === 'sending' ? (
-                              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                            ) : m.status === 'error' ? (
-                              <AlertCircle className="w-2.5 h-2.5 text-destructive-foreground" />
-                            ) : m.status === 'sent' ? (
-                              <Check className="w-2.5 h-2.5" />
-                            ) : m.status === 'delivered' ? (
-                              <div className="flex -space-x-1.5"><Check className="w-2.5 h-2.5" /><Check className="w-2.5 h-2.5" /></div>
-                            ) : m.status === 'read' ? (
-                              <div className="flex -space-x-1.5 text-sky-300"><Check className="w-2.5 h-2.5" /><Check className="w-2.5 h-2.5" /></div>
-                            ) : (
-                              <CheckCircle2 className="w-2.5 h-2.5" />
+                {messages.map((m) => {
+                  const errorInfo = getMessageErrorInfo(m);
+                  return (
+                    <motion.div
+                      key={m.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`flex ${m.sender_type !== 'client' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm relative group ${
+                        m.sender_type !== 'client' ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-secondary text-foreground rounded-bl-md'
+                      }`}>
+                        <p className="whitespace-pre-wrap break-words">{renderWhatsAppText(m.content)}</p>
+                        <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
+                          <p className="text-[10px]">
+                            {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                          {m.sender_type !== 'client' && (
+                            <div className="ml-1">
+                              {m.status === 'sending' ? (
+                                <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                              ) : m.status === 'error' ? (
+                                <AlertCircle className="w-2.5 h-2.5 text-destructive-foreground" />
+                              ) : m.status === 'sent' ? (
+                                <Check className="w-2.5 h-2.5" />
+                              ) : m.status === 'delivered' ? (
+                                <div className="flex -space-x-1.5"><Check className="w-2.5 h-2.5" /><Check className="w-2.5 h-2.5" /></div>
+                              ) : m.status === 'read' ? (
+                                <div className="flex -space-x-1.5 text-sky-300"><Check className="w-2.5 h-2.5" /><Check className="w-2.5 h-2.5" /></div>
+                              ) : (
+                                <CheckCircle2 className="w-2.5 h-2.5" />
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {m.sender_type !== 'client' && m.status === 'sending' && (
+                          <div className="mt-2 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-2 py-1 text-[10px] flex items-center gap-1.5">
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                            Aguardando confirmação da Evolution
+                          </div>
+                        )}
+
+                        {m.sender_type !== 'client' && m._latency && m.status !== 'error' && (
+                          <div className="mt-1 text-[9px] opacity-70 text-right">
+                            Evolution aceitou em {m._latency}ms{m._confirmedAt ? ` · confirmado ${new Date(m._confirmedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                          </div>
+                        )}
+
+                        {m.sender_type !== 'client' && errorInfo && (
+                          <div className="mt-2 rounded-lg border border-destructive/30 bg-destructive/15 px-2 py-1.5 text-[10px] text-primary-foreground space-y-1">
+                            <div className="flex items-start gap-1.5">
+                              <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="font-semibold">Bloqueio: {errorInfo.blockedBy || 'falha no envio'}</p>
+                                <p className="opacity-90 break-words">{errorInfo.detail}</p>
+                              </div>
+                            </div>
+                            {errorInfo.retryable && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                className="h-6 text-[10px] px-2 mt-1"
+                                onClick={() => retryFailedMessage(m)}
+                              >
+                                <RefreshCw className="w-3 h-3 mr-1" /> Retentar com correção
+                              </Button>
                             )}
                           </div>
                         )}
                       </div>
-                    </div>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  );
+                })}
               </div>
 
               <ChatComposer

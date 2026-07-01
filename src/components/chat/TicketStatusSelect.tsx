@@ -1,4 +1,4 @@
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Circle, CheckCircle2, Clock, Pause, XCircle } from 'lucide-react';
 
 export const STATUS_META: Record<string, { label: string; icon: any; color: string }> = {
@@ -16,7 +16,7 @@ export function TicketStatusSelect({ value, onChange }: { value: string; onChang
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger className="h-8 text-xs w-[140px] gap-1.5">
         <Icon className={`w-3 h-3 ${meta.color}`} />
-        <SelectValue />
+        <span>{meta.label}</span>
       </SelectTrigger>
       <SelectContent>
         {Object.entries(STATUS_META).map(([k, m]) => {

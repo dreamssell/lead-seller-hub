@@ -11,7 +11,10 @@ export interface WhatsAppProviderAdapter {
 }
 
 async function fileToBase64(blob: Blob): Promise<string> {
-  const buf = new Uint8Array(await blob.arrayBuffer());
+  const arrayBuffer = typeof blob.arrayBuffer === 'function'
+    ? await blob.arrayBuffer()
+    : await new Response(blob as any).arrayBuffer();
+  const buf = new Uint8Array(arrayBuffer);
   let bin = '';
   const chunk = 0x8000;
   for (let i = 0; i < buf.length; i += chunk) {
@@ -53,6 +56,12 @@ function extractEvolutionError(errData: any, fallback: string) {
   return typeof detail === 'string' ? detail : JSON.stringify(detail);
 }
 
+function ensureEvolutionText(value: unknown, fallback = 'Mensagem'): string {
+  const text = typeof value === 'string' ? value : value == null ? '' : String(value);
+  const normalized = text.replace(/\u0000/g, '').trim();
+  return normalized.length > 0 ? normalized : fallback;
+}
+
 function isConnectionClosedError(message: string) {
   return /connection\s*closed|connectionclosed|socket.*closed|not\s*connected|instance.*not.*(open|connected)/i.test(message);
 }
@@ -89,12 +98,13 @@ function setCachedTextPayloadMode(instance: string, mode: 'flat' | 'nested' | 'm
 }
 
 function buildEvolutionTextPayloads(number: string, text: string, preferred?: 'flat' | 'nested' | 'merged' | null) {
+  const safeText = ensureEvolutionText(text);
   const payloads = [
     {
       mode: 'flat' as const,
       body: {
         number,
-        text,
+        text: safeText,
         delay: 0,
         linkPreview: false,
       },
@@ -103,7 +113,7 @@ function buildEvolutionTextPayloads(number: string, text: string, preferred?: 'f
       mode: 'nested' as const,
       body: {
         number,
-        textMessage: { text },
+        textMessage: { text: safeText },
         delay: 0,
         linkPreview: false,
       },
@@ -112,8 +122,8 @@ function buildEvolutionTextPayloads(number: string, text: string, preferred?: 'f
       mode: 'merged' as const,
       body: {
         number,
-        text,
-        textMessage: { text },
+        text: safeText,
+        textMessage: { text: safeText },
         delay: 0,
         linkPreview: false,
         options: { delay: 0, presence: 'available', linkPreview: false },
@@ -125,6 +135,74 @@ function buildEvolutionTextPayloads(number: string, text: string, preferred?: 'f
   return [...payloads.filter((p) => p.mode === preferred), ...payloads.filter((p) => p.mode !== preferred)];
 }
 
+function stripInvalidMentioned(body: any): any {
+  if (!body || typeof body !== 'object') return body;
+  const copy = Array.isArray(body) ? [...body] : { ...body };
+  for (const key of Object.keys(copy)) {
+    const value = (copy as any)[key];
+    if (key === 'mentioned') {
+      if (Array.isArray(value) && value.length === 0) {
+        delete (copy as any)[key];
+        continue;
+      }
+      if (typeof value === 'string' && value.trim().length === 0) {
+        delete (copy as any)[key];
+        continue;
+      }
+    }
+    if (value && typeof value === 'object') (copy as any)[key] = stripInvalidMentioned(value);
+  }
+  return copy;
+}
+
+function collectMentionedDiagnostics(body: any, path = '$'): Array<{ path: string; type: string; length?: number }> {
+  if (!body || typeof body !== 'object') return [];
+  const out: Array<{ path: string; type: string; length?: number }> = [];
+  for (const [key, value] of Object.entries(body)) {
+    const nextPath = `${path}.${key}`;
+    if (key === 'mentioned') {
+      out.push({
+        path: nextPath,
+        type: Array.isArray(value) ? 'array' : typeof value,
+        length: Array.isArray(value) || typeof value === 'string' ? value.length : undefined,
+      });
+    }
+    if (value && typeof value === 'object') out.push(...collectMentionedDiagnostics(value, nextPath));
+  }
+  return out;
+}
+
+function payloadDiagnostics(body: any) {
+  const mentioned = body?.mentioned ?? body?.options?.mentioned;
+  const text = body?.text ?? body?.textMessage?.text ?? body?.caption ?? body?.mediaMessage?.caption ?? '';
+  const media = body?.media ?? body?.mediaMessage?.media;
+  const audio = body?.audio ?? body?.audioMessage?.audio;
+  return {
+    keys: body && typeof body === 'object' ? Object.keys(body) : [],
+    numberDigits: String(body?.number || '').replace(/\D/g, '').length,
+    numberMasked: body?.number ? `${String(body.number).replace(/\D/g, '').slice(0, 4)}…${String(body.number).replace(/\D/g, '').slice(-4)}` : undefined,
+    hasText: typeof text === 'string' && text.trim().length > 0,
+    textLength: typeof text === 'string' ? text.length : 0,
+    captionLength: typeof body?.caption === 'string' ? body.caption.length : undefined,
+    mentionedType: Array.isArray(mentioned) ? 'array' : typeof mentioned,
+    mentionedLength: Array.isArray(mentioned) || typeof mentioned === 'string' ? mentioned.length : mentioned == null ? 0 : undefined,
+    hasMentioned: mentioned != null,
+    mentionedPaths: collectMentionedDiagnostics(body),
+    mediaBytesApprox: typeof media === 'string' ? Math.round((media.length * 3) / 4) : undefined,
+    audioBytesApprox: typeof audio === 'string' ? Math.round((audio.length * 3) / 4) : undefined,
+    buttonsCount: body?.buttonsMessage?.buttons?.length,
+    listRowsCount: body?.listMessage?.sections?.reduce?.((acc: number, s: any) => acc + (s.rows?.length || 0), 0),
+  };
+}
+
+function logEvolutionPayload(endpoint: string, instance: string, body: any, phase: 'request' | 'error' = 'request', extra?: any) {
+  const diagnostics = payloadDiagnostics(body);
+  const safeInstance = instance ? `${String(instance).slice(0, 4)}…${String(instance).slice(-3)}` : '—';
+  const message = `[Evolution][${phase}] ${endpoint}/${safeInstance}`;
+  if (phase === 'error') console.error(message, { diagnostics, extra });
+  else console.info(message, { diagnostics });
+}
+
 async function postEvolutionJson(
   url: string,
   instance: string,
@@ -132,14 +210,17 @@ async function postEvolutionJson(
   endpoint: string,
   body: any,
 ) {
+  const safeBody = stripInvalidMentioned(body);
+  logEvolutionPayload(endpoint, instance, safeBody, 'request');
   const res = await fetch(`${url}/message/${endpoint}/${encodeURIComponent(instance)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: token, Authorization: `Bearer ${token}` },
-    body: JSON.stringify(body),
+    body: JSON.stringify(safeBody),
   });
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
+    logEvolutionPayload(endpoint, instance, safeBody, 'error', { status: res.status, error: errData });
     throw new Error(extractEvolutionError(errData, `Erro Evolution: ${res.status}`));
   }
 
@@ -147,7 +228,7 @@ async function postEvolutionJson(
 }
 
 async function postEvolutionText(ctx: { url: string; token: string; instance: string; number: string }, text: string) {
-  const payloads = buildEvolutionTextPayloads(ctx.number, text, getCachedTextPayloadMode(ctx.instance));
+  const payloads = buildEvolutionTextPayloads(ctx.number, ensureEvolutionText(text), getCachedTextPayloadMode(ctx.instance));
   let lastError: any;
 
   for (const payload of payloads) {
@@ -302,11 +383,12 @@ async function evolutionPost(ctx: { url: string; token: string; instance: string
 }
 
 function richToText(payload: any): string {
+  const text = (() => {
   switch (payload.type) {
     case 'location':
       return `📍 ${payload.name || 'Localização'}${payload.address ? `\n${payload.address}` : ''}\nhttps://maps.google.com/?q=${payload.latitude},${payload.longitude}`;
     case 'contact':
-      return `👤 ${payload.fullName}\n${payload.phone}`;
+      return `👤 ${payload.fullName || 'Contato'}\n${payload.phone || ''}`;
     case 'poll':
       return `📊 *${payload.name}*\n${(payload.values || []).map((v: string, i: number) => `${i + 1}. ${v}`).join('\n')}`;
     case 'list':
@@ -322,6 +404,8 @@ function richToText(payload: any): string {
     default:
       return JSON.stringify(payload);
   }
+  })();
+  return ensureEvolutionText(text, 'Mensagem interativa');
 }
 
 async function sendEvolutionRich(conn: WhatsAppConnection, customerId: string, payload: any) {
@@ -382,13 +466,7 @@ async function sendEvolutionRich(conn: WhatsAppConnection, customerId: string, p
 
 
 async function sendEvolutionMedia(conn: WhatsAppConnection, customerId: string, file: File, caption: string, kind: 'media' | 'audio') {
-  const rawUrl = (conn.metadata?.url || '').trim();
-  const url = rawUrl && !/^https?:\/\//i.test(rawUrl) ? `https://${rawUrl}` : rawUrl;
-  const token = conn.metadata?.token;
-  const instance = conn.metadata?.instance || conn.metadata?.phone_number_id;
-  if (!url || !token || !instance) throw new Error('Configurações da Evolution API incompletas.');
-  const { data: customer } = await supabase.from('customers').select('phone').eq('id', customerId).single();
-  if (!customer?.phone) throw new Error('Cliente não possui telefone cadastrado.');
+  const ctx = await evolutionContext(conn, customerId);
   const base64 = await fileToBase64(file);
   const isImage = file.type.startsWith('image/');
   const isVideo = file.type.startsWith('video/');
@@ -397,14 +475,14 @@ async function sendEvolutionMedia(conn: WhatsAppConnection, customerId: string, 
   // Merged v2 + v1 payload (see sendMessage rationale).
   const body = kind === 'audio'
     ? {
-        number: customer.phone,
+        number: ctx.number,
         audio: base64,
         audioMessage: { audio: base64 },
         options: { delay: 0, presence: 'available' },
         delay: 0,
       }
     : {
-        number: customer.phone,
+        number: ctx.number,
         mediatype: mediaType,
         mimetype: file.type,
         fileName: file.name,
@@ -414,16 +492,7 @@ async function sendEvolutionMedia(conn: WhatsAppConnection, customerId: string, 
         options: { delay: 0, presence: 'available' },
         delay: 0,
       };
-  const endpoint = `${url.replace(/\/$/, '')}/message/${path}/${encodeURIComponent(instance)}`;
-  const headers = { 'Content-Type': 'application/json', apikey: token, Authorization: `Bearer ${token}` };
-  const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
-
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(extractEvolutionError(errData, `Erro Evolution: ${res.status}`));
-
-  }
-  return await res.json();
+  return evolutionPost(ctx, path, body);
 }
 
 export const getProviderAdapter = (provider: string): WhatsAppProviderAdapter => {
