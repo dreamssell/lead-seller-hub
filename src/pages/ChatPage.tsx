@@ -48,6 +48,8 @@ import { WhisperComposer } from '@/components/chat/WhisperComposer';
 import { TransferConversationDialog } from '@/components/chat/TransferConversationDialog';
 import { useIsSupervisor } from '@/hooks/useIsSupervisor';
 import { normalizeChatSendError, NormalizedChatError } from '@/lib/chatErrorMapper';
+import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
+import { Plus } from 'lucide-react';
 
 
 
@@ -210,6 +212,7 @@ export default function ChatPage() {
   const [transferTarget, setTransferTarget] = useState('');
   const [collabTransferOpen, setCollabTransferOpen] = useState(false);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [newConversationOpen, setNewConversationOpen] = useState(false);
   const { isSupervisor, userId: currentUserId } = useIsSupervisor();
 
   // Ctrl/Cmd+K → busca global
@@ -1331,7 +1334,18 @@ export default function ChatPage() {
 
         {/* Lista */}
         <div className="w-80 border-r border-border flex flex-col">
-          <div className="p-3 border-b border-border">
+          <div className="p-3 border-b border-border space-y-2">
+            {activeChannel === 'whatsapp' && (
+              <Button
+                onClick={() => setNewConversationOpen(true)}
+                className="w-full h-9 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={!activeWhatsAppConn}
+                title={!activeWhatsAppConn ? 'Selecione uma conexão WhatsApp ativa' : 'Iniciar conversa a partir de um número'}
+              >
+                <Plus className="w-4 h-4" />
+                Nova conversa
+              </Button>
+            )}
             <div className="flex flex-col gap-2 bg-secondary rounded-xl p-3">
               <div className="flex items-center gap-2">
                 <Search className="w-4 h-4 text-muted-foreground" />
@@ -1691,7 +1705,7 @@ export default function ChatPage() {
                         {m.sender_type !== 'client' && m.status === 'sending' && (
                           <div className="mt-2 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-2 py-1 text-[10px] flex items-center gap-1.5">
                             <RefreshCw className="w-3 h-3 animate-spin" />
-                            Aguardando confirmação da Evolution
+                            Enviando pelo provedor…
                           </div>
                         )}
 
@@ -1826,6 +1840,15 @@ export default function ChatPage() {
       <MediaDropzone active={!!selectedConvId} onDrop={(files) => setExternalAttachment(files[0] || null)} />
       <KeyboardShortcutsHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       <GlobalSearchDialog open={globalSearchOpen} onOpenChange={setGlobalSearchOpen} />
+      <NewConversationDialog
+        open={newConversationOpen}
+        onOpenChange={setNewConversationOpen}
+        connection={activeWhatsAppConn}
+        onCreated={(customerId) => {
+          setSelectedConvId(customerId);
+          setActiveChannel('whatsapp');
+        }}
+      />
     </AppLayout>
   );
 }

@@ -17,6 +17,8 @@ export interface WhatsAppConnection {
   next_cleanup_at?: string;
   created_at?: string;
   updated_at?: string;
+  owner_id?: string | null;
+  sub_company_id?: string | null;
 }
 
 export interface ProviderConfig {
