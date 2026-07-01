@@ -183,7 +183,8 @@ export function NewConversationDialog({ open, onOpenChange, connection, onCreate
             {showError ? (
               <div id="new-conv-phone-help" className="text-[11px] text-destructive space-y-0.5">
                 <p className="font-medium">{validation.errorMessage}</p>
-                {validation.hint && <p className="text-destructive/80">{validation.hint}</p>}
+                <p className="text-destructive/80">{dynamicExample}</p>
+                {validation.hint && <p className="text-destructive/70">{validation.hint}</p>}
               </div>
             ) : showSuccess ? (
               <p id="new-conv-phone-help" className="text-[11px] text-emerald-600 dark:text-emerald-400">
@@ -194,8 +195,8 @@ export function NewConversationDialog({ open, onOpenChange, connection, onCreate
               </p>
             ) : (
               <p id="new-conv-phone-help" className="text-[10px] text-muted-foreground leading-relaxed">
-                <strong>DDI</strong> (código do país, ex: 55) + <strong>DDD</strong> (ex: 27) + número.<br />
-                Aceita: <code className="text-[10px]">5527997784501</code> · <code className="text-[10px]">(27) 99778-4501</code> · <code className="text-[10px]">+55 27 99778-4501</code>
+                Formato aceito: <code className="text-[10px]">+55 DDD 9XXXX-XXXX</code><br />
+                Inclua <strong>DDI</strong> (país) + <strong>DDD</strong> + número. Celulares BR começam com 9.
               </p>
             )}
           </div>
