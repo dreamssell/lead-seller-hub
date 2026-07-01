@@ -267,8 +267,14 @@ Deno.serve(async (req) => {
         payload.data?.statuses?.[0]?.status
       );
       if (statusMsgId && deliveryStatus) {
+        const { data: existing } = await supabaseAdmin
+          .from("chat_messages")
+          .select("metadata")
+          .eq("uaz_msg_id", statusMsgId)
+          .maybeSingle();
         const updates: any = {
           metadata: {
+            ...(existing?.metadata || {}),
             delivery_status: deliveryStatus,
             status: deliveryStatus,
             confirmed_at: new Date().toISOString(),
