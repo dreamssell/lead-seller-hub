@@ -5,6 +5,34 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-webhook-signature, x-webhook-id",
 };
 
+const normalizePhone = (value: unknown) => String(value || "").replace(/@s\.whatsapp\.net|@c\.us|@g\.us/gi, "").replace(/\D/g, "");
+
+const extractMessageText = (data: any) => {
+  const msg = data?.message || {};
+  return (
+    msg.conversation ||
+    msg.extendedTextMessage?.text ||
+    msg.imageMessage?.caption ||
+    msg.videoMessage?.caption ||
+    msg.documentMessage?.caption ||
+    data?.text ||
+    data?.body ||
+    data?.messageText ||
+    ""
+  );
+};
+
+const getConnectionPhone = (conn: any) => normalizePhone(
+  conn?.phone_number ||
+  conn?.metadata?.phone ||
+  conn?.metadata?.phone_number ||
+  conn?.metadata?.number ||
+  conn?.metadata?.owner ||
+  conn?.metadata?.wuid ||
+  conn?.metadata?.me?.id ||
+  conn?.metadata?.me?.jid
+);
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -29,26 +57,29 @@ Deno.serve(async (req) => {
     payload = JSON.parse(bodyText);
 
     const eventType = payload.event || "unknown";
-    const remoteJid = payload.data?.key?.remoteJid || payload.data?.from;
-    const messageText = payload.data?.message?.conversation || payload.data?.text || payload.data?.body;
+    const remoteJid = payload.data?.key?.remoteJid || payload.data?.remoteJid || payload.data?.from;
+    const messageText = extractMessageText(payload.data);
     const msgId = payload.data?.key?.id || payload.data?.id;
     const senderName = payload.data?.pushName || payload.data?.notifyName;
+    const fromMe = Boolean(payload.data?.key?.fromMe ?? payload.data?.fromMe ?? false);
 
     // ---------- Resolve scope (owner + sub_company + channel + connection) ----------
     let ownerId: string | null = null;
     let subCompanyId: string | null = qSubCompanyId;
     let connectionId: string | null = qConnectionId;
     let channel = qChannel;
+    let connectionPhone = "";
 
     if (connectionId) {
       const { data: conn } = await supabaseAdmin
         .from("whatsapp_connections")
-        .select("id, owner_id, sub_company_id, provider, role")
+        .select("id, owner_id, sub_company_id, provider, role, phone_number, metadata")
         .eq("id", connectionId)
         .maybeSingle();
       if (conn) {
         ownerId = ownerId || conn.owner_id;
         subCompanyId = subCompanyId || conn.sub_company_id;
+        connectionPhone = getConnectionPhone(conn);
         if (conn.provider) channel = channel || (conn.provider === "uaz" || conn.provider === "evolution" ? "whatsapp" : conn.provider);
       }
     }
@@ -96,6 +127,10 @@ Deno.serve(async (req) => {
 
       if (jidRoot && parsedPresence) {
         const phone = String(jidRoot).replace("@s.whatsapp.net", "").replace("@g.us", "");
+        if (connectionPhone && normalizePhone(phone) === connectionPhone) {
+          responseBody = JSON.stringify({ success: true, skipped: "own_presence" });
+          return new Response(responseBody, { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
         const now = new Date().toISOString();
         const updates: any = { presence: parsedPresence, presence_updated_at: now };
         if (parsedPresence === 'available' || parsedPresence === 'composing' || parsedPresence === 'recording') {
@@ -120,7 +155,17 @@ Deno.serve(async (req) => {
       }
 
       if (remoteJid && messageText) {
-        const phone = String(remoteJid).replace("@s.whatsapp.net", "").replace("@g.us", "");
+        // In Evolution/Baileys, key.remoteJid is the other participant for both
+        // inbound and fromMe=true outbound events. Always use remoteJid as the
+        // customer phone and fromMe only to decide sender_type. This prevents
+        // native WhatsApp outbound messages from appearing as if the lead sent
+        // them to themselves.
+        const phone = normalizePhone(remoteJid);
+        if (!phone || (connectionPhone && phone === connectionPhone)) {
+          responseBody = JSON.stringify({ success: true, skipped: "own_number_or_empty_phone", phone });
+          return new Response(responseBody, { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        const senderType = fromMe ? "agent" : "client";
 
         // Find or create customer scoped by sub_company
         let { data: customer } = await supabaseAdmin
@@ -134,7 +179,7 @@ Deno.serve(async (req) => {
           const { data: newCustomer, error: custError } = await supabaseAdmin
             .from("customers")
             .insert({
-              name: senderName || `${channel} ${phone}`,
+              name: fromMe ? `${channel} ${phone}` : (senderName || `${channel} ${phone}`),
               phone,
               channel,
               owner_id: ownerId,
@@ -179,13 +224,13 @@ Deno.serve(async (req) => {
         if (customer) {
           await supabaseAdmin.from("chat_messages").insert({
             customer_id: customer.id,
-            sender_type: "client",
+            sender_type: senderType,
             content: messageText,
             uaz_msg_id: msgId,
             channel,
             sub_company_id: subCompanyId,
             connection_id: connectionId,
-            metadata: { raw: payload.data, routing_applied: !!routing },
+            metadata: { raw: payload.data, routing_applied: !!routing, from_me: fromMe, direction: fromMe ? "outbound_native" : "inbound", status: fromMe ? "sent" : "read" },
           });
         }
       }
