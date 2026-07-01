@@ -821,12 +821,12 @@ export default function ChatPage() {
       }
 
     } catch (err: any) {
-      toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
+      const normalized = showSendErrorToast(err);
       setMessages(prev => prev.map(m => 
-        m.id === clientMsgId ? { ...m, status: 'error', _error: err.message } : m
+        m.id === clientMsgId ? { ...m, status: 'error', _error: normalized.message, _errorCode: normalized.code, _blockedBy: normalized.blockedBy } : m
       ));
       await supabase.from('chat_messages')
-        .update({ metadata: { status: 'error', error: err.message } })
+        .update({ metadata: { status: 'error', error: normalized.message, error_detail: normalized.detail, error_code: normalized.code, blocked_by: normalized.blockedBy, retryable: normalized.retryable } })
         .eq('client_msg_id', clientMsgId);
     }
 
