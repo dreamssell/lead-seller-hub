@@ -11,7 +11,10 @@ export interface WhatsAppProviderAdapter {
 }
 
 async function fileToBase64(blob: Blob): Promise<string> {
-  const buf = new Uint8Array(await blob.arrayBuffer());
+  const arrayBuffer = typeof blob.arrayBuffer === 'function'
+    ? await blob.arrayBuffer()
+    : await new Response(blob as any).arrayBuffer();
+  const buf = new Uint8Array(arrayBuffer);
   let bin = '';
   const chunk = 0x8000;
   for (let i = 0; i < buf.length; i += chunk) {
