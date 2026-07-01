@@ -165,7 +165,7 @@ export function NewConversationDialog({ open, onOpenChange, connection, onCreate
               <PhoneCall className={cn('w-4 h-4 shrink-0', showError ? 'text-destructive' : showSuccess ? 'text-emerald-500' : 'text-muted-foreground')} />
               <Input
                 id="new-conv-phone"
-                placeholder="+55 27 99778-4501"
+                placeholder="+DDI DDD 9XXXX-XXXX"
                 inputMode="tel"
                 autoComplete="tel"
                 value={phone}
