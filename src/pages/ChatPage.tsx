@@ -176,6 +176,8 @@ const hydrateChatMessage = (row: any) => {
     _errorCode: row?._errorCode || meta.error_code || null,
     _blockedBy: row?._blockedBy || meta.blocked_by || meta.blockedBy || null,
     _latency: row?._latency || meta.latency_ms || null,
+    _confirmedAt: row?._confirmedAt || meta.confirmed_at || meta.accepted_at || null,
+    _deliveryStatus: row?._deliveryStatus || meta.delivery_status || meta.status || null,
   };
 };
 
@@ -886,7 +888,7 @@ export default function ChatPage() {
     try {
       const t0 = Date.now();
       const data = await sendTextThroughActiveChannel(selectedConvId, text);
-      await markStatus(id, 'sent', extractProviderMessageId(data), { latency_ms: Date.now() - t0, provider_response_ok: true });
+      await markStatus(id, 'sent', extractProviderMessageId(data), { latency_ms: Date.now() - t0, accepted_at: new Date().toISOString(), provider_response_ok: true });
     } catch (err: any) {
       const normalized = showSendErrorToast(err);
       await markStatus(id, 'error', undefined, {
@@ -913,6 +915,7 @@ export default function ChatPage() {
       const data = await sendTextThroughActiveChannel(message.customer_id || selectedConvId, message.content);
       await markStatus(msgId, 'sent', extractProviderMessageId(data), {
         latency_ms: Date.now() - t0,
+        accepted_at: new Date().toISOString(),
         retried_at: new Date().toISOString(),
         provider_response_ok: true,
       });
