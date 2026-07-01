@@ -56,6 +56,11 @@ function extractEvolutionError(errData: any, fallback: string) {
   return typeof detail === 'string' ? detail : JSON.stringify(detail);
 }
 
+function extractInvokeError(data: any, fallback: string) {
+  const detail = data?.response?.message ?? data?.message ?? data?.error ?? data?.hint ?? fallback;
+  return typeof detail === 'string' ? detail : JSON.stringify(detail);
+}
+
 function ensureEvolutionText(value: unknown, fallback = 'Mensagem'): string {
   const text = typeof value === 'string' ? value : value == null ? '' : String(value);
   const normalized = text.replace(/\u0000/g, '').trim();
@@ -326,14 +331,21 @@ class EvolutionAdapter implements WhatsAppProviderAdapter {
   }
 
   async sendMessage(conn: WhatsAppConnection, customerId: string, content: string) {
-    const ctx = await evolutionContext(conn, customerId);
-
     return enqueue(`evo:${conn.id}`, () => sendWithRetry(async () => {
       const start = Date.now();
       try {
-        const json = await postEvolutionText(ctx, content);
-        (json as any)._latency_ms = Date.now() - start;
-        return json;
+        const { data, error } = await supabase.functions.invoke('evolution-instance', {
+          body: {
+            action: 'send_text',
+            connection_id: conn.id,
+            customer_id: customerId,
+            text: ensureEvolutionText(content),
+          },
+        });
+        if (error) throw new Error(error.message || 'Falha ao chamar envio Evolution.');
+        if (!data?.ok) throw new Error(extractInvokeError(data, 'Falha ao enviar mensagem pela Evolution.'));
+        (data as any)._latency_ms = data.latency_ms ?? Date.now() - start;
+        return data;
       } catch (err: any) {
         const msg = String(err?.message || '');
         if (isConnectionClosedError(msg)) {

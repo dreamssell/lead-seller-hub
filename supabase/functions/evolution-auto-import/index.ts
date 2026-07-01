@@ -17,6 +17,10 @@ const corsHeaders = {
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
+const applyNullableScope = (query: any, column: string, value: string | null | undefined) => (
+  value ? query.eq(column, value) : query.is(column, null)
+);
+
 async function evoFetch(baseUrl: string, token: string, path: string, init: RequestInit = {}) {
   const url = `${baseUrl.replace(/\/$/, "")}${path}`;
   const res = await fetch(url, {
@@ -83,10 +87,15 @@ Deno.serve(async (req) => {
         const displayName: string = chat.name || chat.pushName || chat.notifyName || `WhatsApp ${phone}`;
 
         let customerId: string | null = null;
-        const existing = await admin.from("customers").select("id")
-          .eq("phone", phone).eq("sub_company_id", conn.sub_company_id as any).maybeSingle();
-        if (existing.data?.id) {
-          customerId = existing.data.id;
+        let existingCustomerQuery = admin.from("customers").select("id")
+          .eq("phone", phone)
+          .order("updated_at", { ascending: false })
+          .limit(1);
+        if (conn.owner_id) existingCustomerQuery = existingCustomerQuery.eq("owner_id", conn.owner_id);
+        existingCustomerQuery = applyNullableScope(existingCustomerQuery, "sub_company_id", conn.sub_company_id);
+        const existing = await existingCustomerQuery;
+        if (existing.data?.[0]?.id) {
+          customerId = existing.data[0].id;
         } else {
           const ins = await admin.from("customers").insert({
             name: displayName, phone, channel: "whatsapp",

@@ -16,7 +16,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-type Action = "create" | "qr" | "state" | "logout" | "delete" | "test" | "set_webhook" | "import_chats" | "set_auto_import" | "subscribe_presence";
+type Action = "create" | "qr" | "state" | "logout" | "delete" | "test" | "set_webhook" | "send_text" | "import_chats" | "set_auto_import" | "subscribe_presence";
 
 interface Body {
   action: Action;
@@ -26,6 +26,9 @@ interface Body {
   instance?: string;
   // subscribe_presence:
   number?: string;
+  // send_text:
+  customer_id?: string;
+  text?: string;
   // import_chats options:
   max_chats?: number;
   messages_per_chat?: number;
@@ -41,6 +44,60 @@ interface Body {
 }
 
 const MEDIA_BUCKET = "whatsapp-media";
+
+const normalizePhone = (value: unknown) => String(value || "").replace(/@s\.whatsapp\.net|@c\.us|@g\.us/gi, "").replace(/\D/g, "");
+
+const applyNullableScope = (query: any, column: string, value: string | null | undefined) => (
+  value ? query.eq(column, value) : query.is(column, null)
+);
+
+const ensureText = (value: unknown, fallback = "Mensagem") => {
+  const text = typeof value === "string" ? value : value == null ? "" : String(value);
+  const normalized = text.replace(/\u0000/g, "").trim();
+  return normalized.length ? normalized : fallback;
+};
+
+const extractEvolutionMessageId = (data: any): string | null => (
+  data?.key?.id ||
+  data?.data?.key?.id ||
+  data?.message?.key?.id ||
+  data?.messageId ||
+  data?.id ||
+  data?.response?.key?.id ||
+  null
+);
+
+const extractEvolutionError = (data: any, fallback: string) => {
+  const detail = data?.response?.message ?? data?.message ?? data?.error ?? data?.errors ?? data?.raw ?? fallback;
+  return typeof detail === "string" ? detail : JSON.stringify(detail);
+};
+
+const isEvolutionTextSchemaError = (message: string) => /requires property\s+\\?"?(text|textMessage)\\?"?|textMessage|property\s+text|mentioned/i.test(message);
+
+function buildEvolutionTextPayloads(number: string, text: string) {
+  const safeText = ensureText(text);
+  return [
+    { mode: "flat", body: { number, text: safeText, delay: 0, linkPreview: false } },
+    { mode: "nested", body: { number, textMessage: { text: safeText }, delay: 0, linkPreview: false } },
+    { mode: "merged", body: { number, text: safeText, textMessage: { text: safeText }, delay: 0, linkPreview: false } },
+  ];
+}
+
+async function sendEvolutionText(baseUrl: string, token: string, instance: string, number: string, text: string) {
+  let last: { ok: boolean; status: number; data: any; mode?: string } | null = null;
+  for (const payload of buildEvolutionTextPayloads(number, text)) {
+    const r = await evoFetchRetry(baseUrl, token, `/message/sendText/${encodeURIComponent(instance)}`, {
+      method: "POST",
+      body: JSON.stringify(payload.body),
+    });
+    last = { ...r, mode: payload.mode };
+    if (r.ok) return last;
+
+    const errorMessage = extractEvolutionError(r.data, `Erro Evolution: ${r.status}`);
+    if (!isEvolutionTextSchemaError(errorMessage)) break;
+  }
+  return last ?? { ok: false, status: 0, data: { error: "Evolution não respondeu." } };
+}
 
 
 async function evoFetch(
@@ -506,6 +563,75 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (action === "send_text") {
+      const customerId = body.customer_id;
+      const text = ensureText(body.text);
+      if (!customerId) return json({ ok: false, error: "missing_customer_id" }, 400);
+
+      const { data: customer, error: customerErr } = await admin
+        .from("customers")
+        .select("id, phone, owner_id, sub_company_id, created_by")
+        .eq("id", customerId)
+        .maybeSingle();
+
+      if (customerErr || !customer) {
+        return json({ ok: false, error: "customer_not_found" }, 404);
+      }
+
+      const customerOwner = customer.owner_id || customer.created_by || null;
+      const sameOwner = isPlatformAdmin === true || !conn.owner_id || customerOwner === conn.owner_id;
+      const sameSubCompany = !conn.sub_company_id || (customer.sub_company_id ?? null) === (conn.sub_company_id ?? null);
+      if (!sameOwner || !sameSubCompany) {
+        return json({ ok: false, error: "customer_forbidden", hint: "Este contato não pertence ao escopo da conexão WhatsApp ativa." }, 403);
+      }
+
+      const number = normalizePhone(customer.phone);
+      const ownNumber = normalizePhone(conn.phone_number || meta.phone || meta.phone_number || meta.owner || meta.wuid);
+      if (!number) return json({ ok: false, error: "customer_without_phone", hint: "Cliente não possui telefone WhatsApp válido." }, 400);
+      if (ownNumber && number === ownNumber) {
+        return json({ ok: false, error: "own_number_blocked", hint: "O destinatário resolvido é o próprio número conectado; selecione o contato correto." }, 400);
+      }
+
+      const start = Date.now();
+      const r = await sendEvolutionText(baseUrl, token, instance, number, text);
+      const latencyMs = Date.now() - start;
+      if (!r.ok) {
+        const detail = extractEvolutionError(r.data, `Erro Evolution: ${r.status}`);
+        await logEvent("evolution.send_text", "error", detail, {
+          http_status: r.status,
+          mode: r.mode,
+          customer_id: customerId,
+          number_last4: number.slice(-4),
+        });
+        return json({ ok: false, error: detail, status: r.status, mode: r.mode, raw: r.data, latency_ms: latencyMs });
+      }
+
+      const providerMessageId = extractEvolutionMessageId(r.data);
+      await admin
+        .from("whatsapp_connections")
+        .update({ last_error: null, last_checked_at: new Date().toISOString() })
+        .eq("id", connection_id);
+      await logEvent("evolution.send_text", "success", "Mensagem aceita pela Evolution", {
+        http_status: r.status,
+        mode: r.mode,
+        customer_id: customerId,
+        number_last4: number.slice(-4),
+        provider_message_id: providerMessageId,
+        latency_ms: latencyMs,
+      });
+
+      return json({
+        ok: true,
+        status: r.status,
+        mode: r.mode,
+        key: providerMessageId ? { id: providerMessageId } : null,
+        data: providerMessageId ? { key: { id: providerMessageId } } : r.data,
+        message_id: providerMessageId,
+        raw: r.data,
+        latency_ms: latencyMs,
+      });
+    }
+
     if (action === "subscribe_presence") {
       const number = (body.number || "").replace(/\D/g, "");
       if (!number) return json({ ok: false, error: "missing_number" }, 400);
@@ -779,9 +905,12 @@ Deno.serve(async (req) => {
             });
           }
           if (phones.length) {
-            const { data: existing } = await admin
+            let existingQuery = admin
               .from("customers").select("phone")
-              .eq("sub_company_id", conn.sub_company_id as any).in("phone", phones);
+              .in("phone", phones);
+            if (conn.owner_id) existingQuery = existingQuery.eq("owner_id", conn.owner_id);
+            existingQuery = applyNullableScope(existingQuery, "sub_company_id", conn.sub_company_id);
+            const { data: existing } = await existingQuery;
             const existingSet = new Set((existing ?? []).map((r: any) => r.phone));
             const toInsert = [...byPhone.entries()]
               .filter(([p]) => !existingSet.has(p))
@@ -855,10 +984,15 @@ Deno.serve(async (req) => {
           (isGroup ? `Grupo ${phone.slice(-6)}` : `WhatsApp ${phone}`);
 
         let customerId: string | null = null;
-        const existing = await admin.from("customers").select("id")
-          .eq("phone", phone).eq("sub_company_id", conn.sub_company_id as any).maybeSingle();
-        if (existing.data?.id) {
-          customerId = existing.data.id;
+        let existingCustomerQuery = admin.from("customers").select("id")
+          .eq("phone", phone)
+          .order("updated_at", { ascending: false })
+          .limit(1);
+        if (conn.owner_id) existingCustomerQuery = existingCustomerQuery.eq("owner_id", conn.owner_id);
+        existingCustomerQuery = applyNullableScope(existingCustomerQuery, "sub_company_id", conn.sub_company_id);
+        const existing = await existingCustomerQuery;
+        if (existing.data?.[0]?.id) {
+          customerId = existing.data[0].id;
         } else if (!dryRun) {
           const ins = await admin.from("customers").insert({
             name: displayName, phone, channel: "whatsapp",
