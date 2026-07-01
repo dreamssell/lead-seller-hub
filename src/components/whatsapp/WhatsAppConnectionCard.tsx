@@ -62,6 +62,7 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
   );
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [fixingWebhook, setFixingWebhook] = useState(false);
   const [showEvolutionWizard, setShowEvolutionWizard] = useState(false);
   const [wizardAutoStart, setWizardAutoStart] = useState(false);
 
@@ -272,15 +273,53 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
                   Testar Conexão
                 </Button>
                 {conn.provider === 'evolution' && (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => setShowEvolutionWizard(true)}
-                    className="gap-2"
-                  >
-                    <QrCode className="w-4 h-4" />
-                    {conn.status === 'connected' ? 'Gerenciar QR' : 'Conectar via QR Code'}
-                  </Button>
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setShowEvolutionWizard(true)}
+                      className="gap-2"
+                    >
+                      <QrCode className="w-4 h-4" />
+                      {conn.status === 'connected' ? 'Gerenciar QR' : 'Conectar via QR Code'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={fixingWebhook}
+                      onClick={async () => {
+                        if (!url || !token || !extra) {
+                          toast.error('Preencha URL, Token e Instância antes.');
+                          return;
+                        }
+                        setFixingWebhook(true);
+                        try {
+                          const { data, error } = await supabase.functions.invoke('evolution-instance', {
+                            body: {
+                              action: 'set_webhook',
+                              connection_id: conn.id,
+                              url,
+                              token,
+                              instance: extra,
+                            },
+                          });
+                          if (error) throw error;
+                          if (data?.error) throw new Error(data.error);
+                          toast.success('Webhook reconfigurado na Evolution', {
+                            description: 'URL apontada para o endpoint correto da plataforma. Envie uma mensagem para testar o ACK.',
+                          });
+                        } catch (e: any) {
+                          toast.error('Falha ao reconfigurar webhook', { description: e?.message ?? String(e) });
+                        } finally {
+                          setFixingWebhook(false);
+                        }
+                      }}
+                      className="gap-2"
+                    >
+                      {fixingWebhook ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                      Reconfigurar Webhook
+                    </Button>
+                  </>
                 )}
               </>
             )}
