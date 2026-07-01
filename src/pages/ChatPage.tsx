@@ -941,7 +941,7 @@ export default function ChatPage() {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
         if (!adapter.sendMedia) throw new Error('Este canal não suporta envio de mídia ainda.');
         const data = await adapter.sendMedia(activeWhatsAppConn, selectedConvId, a.file, caption);
-        markStatus(id, 'sent', extractProviderMessageId(data));
+        markStatus(id, 'sent', extractProviderMessageId(data), { accepted_at: new Date().toISOString(), provider_response_ok: true });
       } else {
         await new Promise(r => setTimeout(r, 400));
         markStatus(id, 'sent');
@@ -961,7 +961,7 @@ export default function ChatPage() {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
         if (!adapter.sendAudio) throw new Error('Este canal não suporta áudio ainda.');
         const data = await adapter.sendAudio(activeWhatsAppConn, selectedConvId, blob);
-        markStatus(id, 'sent', extractProviderMessageId(data));
+        markStatus(id, 'sent', extractProviderMessageId(data), { accepted_at: new Date().toISOString(), provider_response_ok: true });
       } else {
         await new Promise(r => setTimeout(r, 400));
         markStatus(id, 'sent');
@@ -999,7 +999,7 @@ export default function ChatPage() {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
         if (!adapter.sendRich) throw new Error('Este canal ainda não suporta este tipo de mensagem.');
         const data = await adapter.sendRich(activeWhatsAppConn, selectedConvId, payload);
-        markStatus(id, 'sent', extractProviderMessageId(data));
+        markStatus(id, 'sent', extractProviderMessageId(data), { accepted_at: new Date().toISOString(), provider_response_ok: true });
         toast({ title: 'Enviado', description: summary });
       } else {
         await new Promise(r => setTimeout(r, 300));
