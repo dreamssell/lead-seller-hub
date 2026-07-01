@@ -72,7 +72,7 @@ const extractEvolutionError = (data: any, fallback: string) => {
   return typeof detail === "string" ? detail : JSON.stringify(detail);
 };
 
-const isEvolutionTextSchemaError = (message: string) => /requires property\s+\\?"?(text|textMessage)\\?"?|textMessage|property\s+text|mentioned/i.test(message);
+const isEvolutionTextSchemaError = (message: string) => /requires property\s+\\?"?(text|textMessage)\\?"?|textMessage|property\s+text|mentioned|cannot read propert|typeerror|undefined \(reading|bad ?request|validation|invalid.*(payload|body|schema)/i.test(message);
 
 function buildEvolutionTextPayloads(number: string, text: string) {
   const safeText = ensureText(text);
@@ -85,6 +85,7 @@ function buildEvolutionTextPayloads(number: string, text: string) {
 
 async function sendEvolutionText(baseUrl: string, token: string, instance: string, number: string, text: string) {
   let last: { ok: boolean; status: number; data: any; mode?: string } | null = null;
+  const attempts: Array<{ mode: string; status: number; error: string }> = [];
   for (const payload of buildEvolutionTextPayloads(number, text)) {
     const r = await evoFetchRetry(baseUrl, token, `/message/sendText/${encodeURIComponent(instance)}`, {
       method: "POST",
@@ -94,9 +95,14 @@ async function sendEvolutionText(baseUrl: string, token: string, instance: strin
     if (r.ok) return last;
 
     const errorMessage = extractEvolutionError(r.data, `Erro Evolution: ${r.status}`);
-    if (!isEvolutionTextSchemaError(errorMessage)) break;
+    attempts.push({ mode: payload.mode, status: r.status, error: errorMessage.slice(0, 200) });
+    // Continue trying other payload shapes on any 4xx from Evolution — v1/v2 parsers
+    // can throw generic TypeErrors instead of schema errors when the shape is wrong.
+    const retriable = r.status >= 400 && r.status < 500 && (isEvolutionTextSchemaError(errorMessage) || /400|typeerror|cannot read/i.test(errorMessage));
+    if (!retriable) break;
   }
-  return last ?? { ok: false, status: 0, data: { error: "Evolution não respondeu." } };
+  if (last) (last as any).attempts = attempts;
+  return last ?? { ok: false, status: 0, data: { error: "Evolution não respondeu.", attempts } };
 }
 
 
