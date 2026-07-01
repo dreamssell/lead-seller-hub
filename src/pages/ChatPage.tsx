@@ -1680,6 +1680,12 @@ export default function ChatPage() {
                           </div>
                         )}
 
+                        {m.sender_type !== 'client' && m._latency && m.status !== 'error' && (
+                          <div className="mt-1 text-[9px] opacity-70 text-right">
+                            Evolution aceitou em {m._latency}ms{m._confirmedAt ? ` · confirmado ${new Date(m._confirmedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                          </div>
+                        )}
+
                         {m.sender_type !== 'client' && errorInfo && (
                           <div className="mt-2 rounded-lg border border-destructive/30 bg-destructive/15 px-2 py-1.5 text-[10px] text-primary-foreground space-y-1">
                             <div className="flex items-start gap-1.5">
