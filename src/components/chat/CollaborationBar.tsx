@@ -103,8 +103,14 @@ export function CollaborationBar({ customerId, onOpenTransfer, isSupervisor, cur
 
   return (
     <div className="border-b border-border bg-secondary/30 px-4 py-2 flex items-center gap-2 flex-wrap text-xs">
-      <PrioritySelect value={row.priority} onChange={(v) => update({ priority: v })} />
-      <TicketStatusSelect value={row.ticket_status} onChange={(v) => update({ ticket_status: v })} />
+      <div className="inline-flex items-center gap-1.5 rounded-md border bg-background/70 px-2 py-1">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Prioridade</span>
+        <PrioritySelect value={row.priority} onChange={(v) => update({ priority: v })} />
+      </div>
+      <div className="inline-flex items-center gap-1.5 rounded-md border bg-background/70 px-2 py-1">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Status</span>
+        <TicketStatusSelect value={row.ticket_status} onChange={(v) => update({ ticket_status: v })} />
+      </div>
       <TagPicker ownerId={row.owner_id} selected={row.tags || []} onChange={(ids) => update({ tags: ids })} />
 
       {row.assigned_to && (
