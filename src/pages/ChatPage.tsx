@@ -133,8 +133,8 @@ const getUniqueProviderLabels = (connections: WhatsAppConnection[]) => (
 );
 
 const getConnectionPhoneFromDb = (conn?: WhatsAppConnection | null) => {
-  if (!conn?.metadata) return undefined;
-  return conn.metadata.phone || conn.metadata.phone_number || conn.metadata.number || conn.metadata.owner;
+  if (!conn) return undefined;
+  return conn.phone_number || conn.metadata?.phone || conn.metadata?.phone_number || conn.metadata?.number || conn.metadata?.owner || conn.metadata?.wuid || conn.metadata?.me?.id || conn.metadata?.me?.jid;
 };
 
 const getWhatsAppDbSummary = (connections: WhatsAppConnection[]) => {
