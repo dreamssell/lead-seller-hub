@@ -1334,7 +1334,18 @@ export default function ChatPage() {
 
         {/* Lista */}
         <div className="w-80 border-r border-border flex flex-col">
-          <div className="p-3 border-b border-border">
+          <div className="p-3 border-b border-border space-y-2">
+            {activeChannel === 'whatsapp' && (
+              <Button
+                onClick={() => setNewConversationOpen(true)}
+                className="w-full h-9 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={!activeWhatsAppConn}
+                title={!activeWhatsAppConn ? 'Selecione uma conexão WhatsApp ativa' : 'Iniciar conversa a partir de um número'}
+              >
+                <Plus className="w-4 h-4" />
+                Nova conversa
+              </Button>
+            )}
             <div className="flex flex-col gap-2 bg-secondary rounded-xl p-3">
               <div className="flex items-center gap-2">
                 <Search className="w-4 h-4 text-muted-foreground" />
