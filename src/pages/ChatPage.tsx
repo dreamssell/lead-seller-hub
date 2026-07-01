@@ -212,6 +212,7 @@ export default function ChatPage() {
   const [transferTarget, setTransferTarget] = useState('');
   const [collabTransferOpen, setCollabTransferOpen] = useState(false);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [newConversationOpen, setNewConversationOpen] = useState(false);
   const { isSupervisor, userId: currentUserId } = useIsSupervisor();
 
   // Ctrl/Cmd+K → busca global
