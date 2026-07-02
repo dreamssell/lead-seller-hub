@@ -307,11 +307,58 @@ export default function CompaniesTab() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="md:col-span-2 border-t border-border/40 pt-4 mt-2">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center">
+                  <Building2 className="w-3.5 h-3.5 text-primary" />
+                </div>
+                <h4 className="text-sm font-semibold">Credenciais de acesso à plataforma</h4>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                Preencha para que esta empresa possa entrar na plataforma. O e-mail vira o login e a senha é enviada
+                para o sistema de autenticação. Deixe em branco para cadastrar apenas o registro comercial sem login ativo.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>E-mail de login</Label>
+                  <Input
+                    type="email"
+                    placeholder="usuario@empresa.com"
+                    value={editing?.login_email || ''}
+                    onChange={(e) => setEditing((p) => ({ ...p!, login_email: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>{editing?.id && editing?.auth_user_id ? 'Nova senha (opcional)' : 'Senha inicial'}</Label>
+                  <Input
+                    type="password"
+                    placeholder={editing?.id && editing?.auth_user_id ? 'Deixe em branco para manter' : 'mín. 6 caracteres'}
+                    value={editing?.password || ''}
+                    onChange={(e) => setEditing((p) => ({ ...p!, password: e.target.value }))}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Nome de exibição</Label>
+                  <Input
+                    placeholder="Como o usuário aparecerá na plataforma"
+                    value={editing?.display_name || ''}
+                    onChange={(e) => setEditing((p) => ({ ...p!, display_name: e.target.value }))}
+                  />
+                </div>
+              </div>
+              {editing?.auth_user_id && (
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-2">
+                  ✓ Login já ativo · ID auth: <span className="font-mono">{editing.auth_user_id.slice(0, 8)}…</span>
+                </p>
+              )}
+            </div>
+
             <div className="md:col-span-2">
               <Label>Notas internas</Label>
               <Textarea rows={3} value={editing?.notes || ''} onChange={(e) => setEditing((p) => ({ ...p!, notes: e.target.value }))} />
             </div>
           </div>
+
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button>
