@@ -300,6 +300,7 @@ Deno.serve(async (req) => {
           await supabaseAdmin.rpc("release_provision_lock", { p_email: normalizedEmail });
         }
       }
+      } // end else (sub_companies branch)
     }
 
     // Verifica perfil bloqueado
