@@ -1,0 +1,14 @@
+# Lead Seller
+
+> Plataforma omnichannel de atendimento e vendas: unifica WhatsApp, voz, vídeo, CRM, automações e assinaturas eletrônicas em uma única central para times comerciais e de suporte.
+
+Lead Seller é uma aplicação web para empresas gerenciarem conversas com clientes em múltiplos canais, qualificarem leads com agentes de IA (SDR), realizarem chamadas VoIP e videochamadas, coletarem assinaturas eletrônicas e acompanharem funis de vendas em quadros Kanban.
+
+## Pages
+
+- [Home](/): Painel de entrada da plataforma Lead Seller.
+- [Status público](/status-view): Página pública de status operacional dos serviços.
+
+## Optional
+
+- [Landing pages públicas](/p/): Landing pages publicadas pelos clientes via módulo de captura de leads (rotas dinâmicas /p/:slug).
