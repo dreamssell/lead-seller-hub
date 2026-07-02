@@ -21,6 +21,7 @@ import {
 
 export type SidebarPageKey =
   | 'dashboard'
+  | 'tools'
   | 'chat'
   | 'calls'
   | 'tickets'
@@ -56,7 +57,8 @@ export const navSections: { label: string; items: SidebarNavItem[] }[] = [
   {
     label: 'Principal',
     items: [
-      { key: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', path: '/', desc: 'Visão geral da operação' },
+      { key: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', path: '/', desc: 'Visão geral personalizada por perfil' },
+      { key: 'tools', icon: Sparkles, label: 'Ferramentas', path: '/ferramentas', desc: 'Todos os módulos e serviços' },
       { key: 'chat', icon: MessageSquare, label: 'Chat Omnichannel', path: '/chat', desc: 'Conversas e atendimento por canais' },
       { key: 'calls', icon: Phone, label: 'VoIP & Chamadas', path: '/calls', desc: 'Ligações, filas e telefonia' },
       { key: 'tickets', icon: Headphones, label: 'Atendimentos', path: '/tickets', desc: 'Tickets e suporte ao cliente' },

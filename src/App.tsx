@@ -11,6 +11,7 @@ import { VoipProvider } from "@/contexts/VoipContext";
 import { WavoipWebphoneProvider } from "@/contexts/WavoipWebphoneContext";
 import { VideoCallProvider } from "@/contexts/VideoCallContext";
 import Dashboard from "./pages/Dashboard";
+import ToolsPage from "./pages/ToolsPage";
 import ChatPage from "./pages/ChatPage";
 import CallsPage from "./pages/CallsPage";
 import TicketsPage from "./pages/TicketsPage";
@@ -83,6 +84,7 @@ const App = () => (
 
               {/* Rotas protegidas */}
               <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/ferramentas" element={<ProtectedRoute><ToolsPage /></ProtectedRoute>} />
               <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
               <Route path="/calls" element={<ProtectedRoute><CallsPage /></ProtectedRoute>} />
               <Route path="/tickets" element={<ProtectedRoute><TicketsPage /></ProtectedRoute>} />
