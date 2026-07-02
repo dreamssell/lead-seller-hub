@@ -602,14 +602,18 @@ Deno.serve(async (req) => {
     // ─── DELETE ────────────────────────────────────────────────────────────
     if (action === "delete") {
       const { user_id } = body;
-      if (!user_id) return json({ error: "user_id obrigatório" }, 400);
+      if (!user_id) return userError("user_id é obrigatório.", 400, "missing_user_id");
       if (user_id === caller.user.id) {
-        return json({ error: "Você não pode excluir o próprio usuário" }, 400);
+        return userError(
+          "Você não pode remover a si mesmo. Peça a outro administrador.",
+          400,
+          "cannot_delete_self",
+        );
       }
 
       const target = await getScopedAccess(adminClient, user_id, scope);
       if (!target) {
-        return json({ error: "Usuário não está no seu escopo" }, 403);
+        return userError("Este usuário não pertence ao seu escopo.", 403, "not_in_scope");
       }
 
       const { data: beforeProfile } = await adminClient.from("profiles").select(
