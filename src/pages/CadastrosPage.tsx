@@ -19,6 +19,7 @@ import { toast } from '@/hooks/use-toast';
 import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin, LayoutGrid, List, MessageSquare, Bot as BotIcon, Clock, ChevronRight, User, RefreshCw, AlertCircle, Code, Share2, Download, CheckCircle2, Settings, Pause, Play } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import WhiteLabelTab from '@/components/cadastros/WhiteLabelTab';
+import CompaniesTab from '@/components/cadastros/CompaniesTab';
 import { logAudit } from '@/lib/audit';
 import { BLOCKABLE_PAGES } from '@/lib/navigation';
 
