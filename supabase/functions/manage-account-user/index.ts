@@ -53,6 +53,21 @@ async function findUserByEmail(
   email: string,
 ) {
   const normalized = String(email).trim().toLowerCase();
+  // Fast path: SQL lookup via SECURITY DEFINER helper (reliable regardless of user count).
+  try {
+    const { data: uid, error: rpcErr } = await adminClient.rpc(
+      "admin_find_auth_user_by_email",
+      { p_email: normalized },
+    );
+    if (!rpcErr && uid) {
+      const { data: byId } = await adminClient.auth.admin.getUserById(
+        uid as string,
+      );
+      if (byId?.user) return byId.user;
+    }
+  } catch (_) {
+    // Fall back to listUsers pagination.
+  }
   for (let page = 1; page <= 20; page += 1) {
     const { data, error } = await adminClient.auth.admin.listUsers({
       page,
