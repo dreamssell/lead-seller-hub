@@ -293,7 +293,7 @@ Deno.serve(async (req) => {
         q = q.eq("sub_company_id", scope.sub_company_id);
       } else q = q.is("sub_company_id", null);
       const { data: rows, error } = await q;
-      if (error) return json({ error: error.message }, 400);
+      if (error) return userError(error.message, 400, "list_query_error");
       const ids = (rows || []).map((r) => r.user_id);
       const { data: profiles } = await adminClient.from("profiles").select("*")
         .in("user_id", ids);
