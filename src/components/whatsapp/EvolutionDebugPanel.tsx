@@ -13,10 +13,11 @@ interface Props {
 interface EventRow {
   id: string;
   event_type: string;
-  severity?: string;
-  message?: string;
+  status: string;
+  error_message?: string | null;
+  status_detail?: string | null;
   created_at: string;
-  metadata?: Record<string, any> | null;
+  metadata_json?: Record<string, any> | null;
 }
 
 interface DeadletterRow {
@@ -54,7 +55,7 @@ export function EvolutionDebugPanel({ conn }: Props) {
       const [{ data: ev }, { data: dl }, { data: lastMsg }] = await Promise.all([
         supabase
           .from('connection_events')
-          .select('id, event_type, severity, message, created_at, metadata')
+          .select('id, event_type, status, error_message, status_detail, created_at, metadata_json')
           .eq('connection_id', conn.id)
           .order('created_at', { ascending: false })
           .limit(20),
@@ -68,14 +69,13 @@ export function EvolutionDebugPanel({ conn }: Props) {
         supabase
           .from('chat_messages')
           .select('id, correlation_id, metadata, created_at, sender_type')
-          .eq('connection_id', conn.id)
           .eq('sender_type', 'customer')
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
       ]);
-      setEvents((ev as EventRow[]) ?? []);
-      setDeadletters((dl as DeadletterRow[]) ?? []);
+      setEvents((ev as unknown as EventRow[]) ?? []);
+      setDeadletters((dl as unknown as DeadletterRow[]) ?? []);
       setLastWebhookPayload(lastMsg ?? null);
     } finally { setLoading(false); }
   };
