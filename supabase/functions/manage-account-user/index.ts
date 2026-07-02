@@ -1,9 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.49.4";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const ALL_PAGES = [
   "dashboard", "chat", "calls", "tickets", "team", "cadastros", "ai-agents",
@@ -17,6 +13,20 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function userError(message: string, status = 400, code?: string) {
+  return json({ error: message, code }, status);
+}
+
+function errorMessage(error: unknown, fallback = "Falha ao processar a solicitação") {
+  if (!error) return fallback;
+  const err = error as any;
+  return String(err?.message || err?.error_description || err?.error || fallback);
+}
+
+function sameScope(row: any, scope: Scope) {
+  return row?.owner_id === scope.owner_id && (row?.sub_company_id ?? null) === scope.sub_company_id;
 }
 
 async function findUserByEmail(adminClient: ReturnType<typeof createClient>, email: string) {
@@ -88,15 +98,17 @@ async function applyAccessLevel(
   let del = adminClient.from("user_signature_roles").delete().eq("user_id", userId).eq("owner_id", scope.owner_id);
   if (scope.sub_company_id) del = del.eq("sub_company_id", scope.sub_company_id);
   else del = del.is("sub_company_id", null);
-  await del;
+  const { error: deleteError } = await del;
+  if (deleteError) throw deleteError;
 
   if (level === "supervisao") {
-    await adminClient.from("user_signature_roles").insert({
+    const { error: insertError } = await adminClient.from("user_signature_roles").insert({
       user_id: userId,
       owner_id: scope.owner_id,
       sub_company_id: scope.sub_company_id,
       role: "supervisor",
     });
+    if (insertError) throw insertError;
   }
 }
 
@@ -111,7 +123,7 @@ async function logAudit(
     scope: Scope;
   },
 ) {
-  await adminClient.from("audit_logs").insert({
+  const { error } = await adminClient.from("audit_logs").insert({
     table_name: "user_account_access",
     record_id: params.userId,
     action: params.action,
@@ -122,6 +134,46 @@ async function logAudit(
     },
     changed_by: params.changedBy,
   });
+  if (error) console.error("[manage-account-user] audit_log_failed", errorMessage(error));
+}
+
+async function getScopedAccess(
+  adminClient: ReturnType<typeof createClient>,
+  userId: string,
+  scope: Scope,
+) {
+  let q = adminClient
+    .from("user_account_access")
+    .select("id, owner_id, sub_company_id, allowed_pages, is_account_admin")
+    .eq("user_id", userId)
+    .eq("owner_id", scope.owner_id);
+  if (scope.sub_company_id) q = q.eq("sub_company_id", scope.sub_company_id);
+  else q = q.is("sub_company_id", null);
+  const { data, error } = await q.maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function upsertScopedAccess(
+  adminClient: ReturnType<typeof createClient>,
+  payload: any,
+  existingId?: string,
+) {
+  if (existingId) {
+    const { error } = await adminClient
+      .from("user_account_access")
+      .update({
+        allowed_pages: payload.allowed_pages,
+        is_account_admin: payload.is_account_admin,
+        updated_at: payload.updated_at,
+      })
+      .eq("id", existingId);
+    if (error) throw error;
+    return;
+  }
+
+  const { error } = await adminClient.from("user_account_access").insert(payload);
+  if (error) throw error;
 }
 
 Deno.serve(async (req) => {
@@ -190,21 +242,31 @@ Deno.serve(async (req) => {
       const isAdmin = level === "administracao";
 
       const existing = await findUserByEmail(adminClient, normalizedEmail);
+      const existingAccess = existing ? await getScopedAccess(adminClient, existing.id, scope) : null;
+      if (existing && existingAccess) {
+        return userError(
+          "Este e-mail já está cadastrado neste escopo. Use Editar no membro existente ou informe outro e-mail.",
+          409,
+          "member_already_exists",
+        );
+      }
+
       const userResult = existing
-        ? await adminClient.auth.admin.updateUserById(existing.id, { password, email_confirm: true, user_metadata: { display_name: name } })
+        ? await adminClient.auth.admin.updateUserById(existing.id, { password, user_metadata: { display_name: name } })
         : await adminClient.auth.admin.createUser({ email: normalizedEmail, password, email_confirm: true, user_metadata: { display_name: name } });
       if (userResult.error || !userResult.data.user) {
-        return json({ error: userResult.error?.message || "Falha ao criar usuário" }, 400);
+        return userError(errorMessage(userResult.error, "Falha ao criar usuário"), 400, "auth_user_error");
       }
       const newUser = userResult.data.user;
 
-      await adminClient.from("profiles").upsert({
+      const { error: profileError } = await adminClient.from("profiles").upsert({
         user_id: newUser.id,
         email: normalizedEmail,
         display_name: name,
         role_label: role_label || null,
         is_active: true,
       }, { onConflict: "user_id" });
+      if (profileError) return userError(errorMessage(profileError, "Falha ao salvar o perfil"), 400, "profile_save_error");
 
       const accessPayload: any = {
         user_id: newUser.id,
@@ -215,11 +277,11 @@ Deno.serve(async (req) => {
         created_by: caller.user.id,
         updated_at: new Date().toISOString(),
       };
-      const conflict = scope.sub_company_id ? "user_id,owner_id,sub_company_id" : undefined;
-      const { error: accessError } = conflict
-        ? await adminClient.from("user_account_access").upsert(accessPayload, { onConflict: conflict })
-        : await adminClient.from("user_account_access").upsert(accessPayload);
-      if (accessError) return json({ error: accessError.message }, 400);
+      try {
+        await upsertScopedAccess(adminClient, accessPayload, existingAccess?.id);
+      } catch (accessError) {
+        return userError(errorMessage(accessError, "Falha ao salvar permissões do membro"), 400, "access_save_error");
+      }
 
       await applyAccessLevel(adminClient, newUser.id, scope, level);
 
@@ -240,9 +302,7 @@ Deno.serve(async (req) => {
       const { user_id, name, password, allowed_pages, is_account_admin, is_active, phone, role_label, access_level } = body;
       if (!user_id) return json({ error: "user_id obrigatório" }, 400);
 
-      let q = adminClient.from("user_account_access").select("id, sub_company_id, allowed_pages, is_account_admin").eq("user_id", user_id).eq("owner_id", scope.owner_id);
-      if (scope.sub_company_id) q = q.eq("sub_company_id", scope.sub_company_id);
-      const { data: target } = await q.maybeSingle();
+      const target = await getScopedAccess(adminClient, user_id, scope);
       if (!target) return json({ error: "Usuário não está no seu escopo" }, 403);
 
       const { data: beforeProfile } = await adminClient.from("profiles").select("display_name, role_label, phone, is_active, email").eq("user_id", user_id).maybeSingle();
@@ -269,7 +329,8 @@ Deno.serve(async (req) => {
       const nextLevel: AccessLevel = level ?? prevLevel;
 
       if (password && password.length >= 6) {
-        await adminClient.auth.admin.updateUserById(user_id, { password });
+        const { error: passwordError } = await adminClient.auth.admin.updateUserById(user_id, { password });
+        if (passwordError) return userError(errorMessage(passwordError, "Falha ao atualizar senha"), 400, "password_update_error");
       }
       const profileUpdate: any = {};
       if (typeof name === "string") profileUpdate.display_name = name;
@@ -277,13 +338,15 @@ Deno.serve(async (req) => {
       if (typeof role_label === "string") profileUpdate.role_label = role_label;
       if (typeof is_active === "boolean") profileUpdate.is_active = is_active;
       if (Object.keys(profileUpdate).length > 0) {
-        await adminClient.from("profiles").update(profileUpdate).eq("user_id", user_id);
+        const { error: profileError } = await adminClient.from("profiles").update(profileUpdate).eq("user_id", user_id);
+        if (profileError) return userError(errorMessage(profileError, "Falha ao atualizar perfil"), 400, "profile_update_error");
       }
 
       const accessUpdate: any = { updated_at: new Date().toISOString() };
       if (Array.isArray(allowed_pages)) accessUpdate.allowed_pages = allowed_pages;
       accessUpdate.is_account_admin = nextIsAdmin;
-      await adminClient.from("user_account_access").update(accessUpdate).eq("id", target.id);
+      const { error: accessUpdateError } = await adminClient.from("user_account_access").update(accessUpdate).eq("id", target.id);
+      if (accessUpdateError) return userError(errorMessage(accessUpdateError, "Falha ao atualizar permissões"), 400, "access_update_error");
 
       if (level) await applyAccessLevel(adminClient, user_id, scope, level);
 
@@ -334,19 +397,19 @@ Deno.serve(async (req) => {
       if (!user_id) return json({ error: "user_id obrigatório" }, 400);
       if (user_id === caller.user.id) return json({ error: "Você não pode excluir o próprio usuário" }, 400);
 
-      let q = adminClient.from("user_account_access").select("id, sub_company_id").eq("user_id", user_id).eq("owner_id", scope.owner_id);
-      if (scope.sub_company_id) q = q.eq("sub_company_id", scope.sub_company_id);
-      const { data: target } = await q.maybeSingle();
+      const target = await getScopedAccess(adminClient, user_id, scope);
       if (!target) return json({ error: "Usuário não está no seu escopo" }, 403);
 
       const { data: beforeProfile } = await adminClient.from("profiles").select("display_name, email").eq("user_id", user_id).maybeSingle();
 
-      await adminClient.from("user_account_access").delete().eq("id", target.id);
+      const { error: deleteAccessError } = await adminClient.from("user_account_access").delete().eq("id", target.id);
+      if (deleteAccessError) return userError(errorMessage(deleteAccessError, "Falha ao remover acesso"), 400, "access_delete_error");
 
       let sigDel = adminClient.from("user_signature_roles").delete().eq("user_id", user_id).eq("owner_id", scope.owner_id);
       if (scope.sub_company_id) sigDel = sigDel.eq("sub_company_id", scope.sub_company_id);
       else sigDel = sigDel.is("sub_company_id", null);
-      await sigDel;
+      const { error: sigDeleteError } = await sigDel;
+      if (sigDeleteError) return userError(errorMessage(sigDeleteError, "Falha ao remover nível de acesso"), 400, "signature_role_delete_error");
 
       const { data: stillHas } = await adminClient.from("user_account_access").select("id").eq("user_id", user_id).limit(1);
       if (!stillHas || stillHas.length === 0) {

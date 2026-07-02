@@ -185,9 +185,13 @@ export default function TeamPage() {
     setSaving(false);
     let errMsg = (data as any)?.error as string | undefined;
     if (error && !errMsg) {
-      // supabase-js wraps non-2xx as FunctionsHttpError — try to read the actual body
+      // supabase-js stores the failed HTTP Response directly in error.context.
+      // Older mocks/wrappers may expose it as context.response, so support both.
       try {
-        const resp = (error as any)?.context?.response as Response | undefined;
+        const context = (error as any)?.context;
+        const resp = (typeof Response !== 'undefined' && context instanceof Response)
+          ? context
+          : context?.response as Response | undefined;
         if (resp) {
           const body = await resp.clone().json().catch(() => null);
           errMsg = body?.error || body?.message;

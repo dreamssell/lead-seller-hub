@@ -230,11 +230,24 @@ describe('TeamPage — error toast surfaces real backend messages', () => {
       status: 400, headers: { 'Content-Type': 'application/json' },
     });
     const error = Object.assign(new Error('Edge Function returned a non-2xx status code'), {
-      context: { response },
+      context: response,
     });
     await simulateSubmit({ data: null, error });
     expect(toastMock).toHaveBeenCalledWith(
       expect.objectContaining({ description: 'Limite do plano atingido', variant: 'destructive' }),
+    );
+  });
+
+  it('also parses legacy context.response error bodies', async () => {
+    const response = new Response(JSON.stringify({ error: 'Este e-mail já está cadastrado neste escopo' }), {
+      status: 409, headers: { 'Content-Type': 'application/json' },
+    });
+    const error = Object.assign(new Error('Edge Function returned a non-2xx status code'), {
+      context: { response },
+    });
+    await simulateSubmit({ data: null, error });
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({ description: 'Este e-mail já está cadastrado neste escopo', variant: 'destructive' }),
     );
   });
 
