@@ -388,12 +388,12 @@ export default function TeamPage() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {ACCESS_LEVELS.map(l => (
-                    <SelectItem key={l.value} value={l.value}>
+                    <SelectItem key={l.value} value={l.value} className="group">
                       <div className="flex items-start gap-2">
                         <l.icon className="w-4 h-4 mt-0.5 shrink-0" />
                         <div>
                           <p className="text-sm font-medium">{l.label}</p>
-                          <p className="text-xs text-muted-foreground">{l.description}</p>
+                          <p className="text-xs text-muted-foreground group-data-[highlighted]:text-accent-foreground/85 group-data-[state=checked]:text-accent-foreground/85">{l.description}</p>
                         </div>
                       </div>
                     </SelectItem>
