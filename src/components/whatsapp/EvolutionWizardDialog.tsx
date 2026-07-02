@@ -52,6 +52,7 @@ interface Props {
 
 type Step = 'credentials' | 'qr' | 'connected' | 'failed';
 type FailureReason = 'timeout' | 'auth' | 'forbidden' | 'unknown';
+type FailureCode = 'not_found' | 'invalid_token' | 'network' | 'generic';
 
 const MIN_POLL_MS = 3000;
 const MAX_POLL_MS = 15000;
@@ -102,7 +103,8 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
   const [busy, setBusy] = useState(false);
   const [stateText, setStateText] = useState<string>('');
   const [remaining, setRemaining] = useState<number>(0);
-  const [failure, setFailure] = useState<{ reason: FailureReason; message: string } | null>(null);
+  const [failure, setFailure] = useState<{ reason: FailureReason; message: string; code?: FailureCode } | null>(null);
+  const [recreating, setRecreating] = useState(false);
   const [autoReconnect, setAutoReconnect] = useState<boolean>(initialMeta.auto_reconnect ?? true);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
@@ -203,9 +205,9 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
       body: { action, connection_id: conn.id, url, token, instance, ...extra },
     });
 
-  const failWith = (reason: FailureReason, message: string) => {
+  const failWith = (reason: FailureReason, message: string, code?: FailureCode) => {
     stopAll();
-    setFailure({ reason, message });
+    setFailure({ reason, message, code });
     setStep('failed');
   };
 
@@ -340,7 +342,7 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
         // Network/edge error — back off and retry.
         pollDelayRef.current = Math.min(MAX_POLL_MS, pollDelayRef.current * POLL_BACKOFF);
       } else if (data?.not_found) {
-        failWith('auth', data.hint || `A instância "${instance}" não existe no servidor Evolution. Clique em "Criar Instância" para gerar uma nova ou verifique o nome.`);
+        failWith('auth', data.hint || `A instância "${instance}" não existe no servidor Evolution. Use o botão "Recriar instância" para provisioná-la automaticamente.`, 'not_found');
         return;
       } else if (data?.auth_error) {
         failWith('auth', data.hint || 'A API Key da Evolution foi recusada. Atualize o token e tente novamente.');
@@ -966,8 +968,38 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
 
 
 
+  const recreateInstance = async () => {
+    setRecreating(true);
+    setFailure(null);
+    try {
+      const { data, error } = await invoke('create');
+      if (error) {
+        setRecreating(false);
+        failWith('unknown', error.message ?? 'Falha ao recriar instância.', 'network');
+        return;
+      }
+      if (data?.error) {
+        setRecreating(false);
+        failWith('unknown', data.hint || data.error, 'generic');
+        return;
+      }
+      toast.success('Instância recriada na Evolution', {
+        description: 'Iniciando pareamento com novo QR Code.',
+      });
+      setQr(data?.qr ?? null);
+      setPairingCode(data?.pairing_code ?? null);
+      setStep('qr');
+      persistTimeout(timeoutSec);
+      beginPolling();
+      if (!data?.qr) refreshQr();
+    } finally {
+      setRecreating(false);
+    }
+  };
+
   const renderFailed = () => {
     const isAuth = failure?.reason === 'auth' || failure?.reason === 'forbidden';
+    const isNotFound = failure?.code === 'not_found';
     return (
       <div className="text-center py-6 space-y-3">
         <div
@@ -983,13 +1015,25 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
         </div>
         <div>
           <p className="font-semibold">
-            {failure?.reason === 'timeout' && 'Tempo esgotado'}
-            {failure?.reason === 'auth' && 'Autenticação expirou'}
+            {isNotFound && 'Instância não encontrada na Evolution'}
+            {!isNotFound && failure?.reason === 'timeout' && 'Tempo esgotado'}
+            {!isNotFound && failure?.reason === 'auth' && 'Autenticação expirou'}
             {failure?.reason === 'forbidden' && 'Acesso negado'}
-            {failure?.reason === 'unknown' && 'Não foi possível conectar'}
+            {!isNotFound && failure?.reason === 'unknown' && 'Não foi possível conectar'}
           </p>
           <p className="text-sm text-muted-foreground px-4">{failure?.message}</p>
         </div>
+        {isNotFound && (
+          <div className="flex flex-col items-center gap-2 pt-2">
+            <Button onClick={recreateInstance} disabled={recreating} className="gap-2">
+              {recreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlugZap className="w-4 h-4" />}
+              Recriar instância automaticamente
+            </Button>
+            <p className="text-[11px] text-muted-foreground max-w-sm">
+              A plataforma vai provisionar novamente <span className="font-mono">{instance}</span> no seu servidor Evolution e retomar o pareamento por QR Code.
+            </p>
+          </div>
+        )}
       </div>
     );
   };
