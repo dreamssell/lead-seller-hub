@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { Plus, Bot, UserCheck, MoreVertical, Infinity as InfinityIcon, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Bot, UserCheck, MoreVertical, Infinity as InfinityIcon, Loader2, Pencil, Trash2, ShieldCheck, History, Shield, Headset } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,15 +12,19 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
+type AccessLevel = 'atendimento' | 'supervisao' | 'administracao';
+
 type Member = {
   user_id: string;
   is_account_admin: boolean;
   allowed_pages: string[];
+  access_level?: AccessLevel;
   profile: {
     display_name?: string | null;
     email?: string | null;
@@ -29,10 +33,21 @@ type Member = {
   } | null;
 };
 
+const ACCESS_LEVELS: Array<{ value: AccessLevel; label: string; description: string; icon: any }> = [
+  { value: 'atendimento', label: 'Atendimento', description: 'Usuários operacionais (SDR, Closer, Atendente).', icon: Headset },
+  { value: 'supervisao', label: 'Supervisão', description: 'Coordenadores, Supervisores e Gestores de equipe.', icon: ShieldCheck },
+  { value: 'administracao', label: 'Administração', description: 'Administradores da conta, Diretores ou Donos.', icon: Shield },
+];
+
+const levelMeta = (v?: AccessLevel) => ACCESS_LEVELS.find(l => l.value === v) || ACCESS_LEVELS[0];
+
 export default function TeamPage() {
   const { access, user } = useAuth();
   const { isOwner } = usePlatformOwner();
   const scopeSubId = access?.sub_company_id ?? null;
+
+  // Management gate: platform owner OR account admin of current scope
+  const isManagement = isOwner || !!access?.is_account_admin;
 
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,14 +56,22 @@ export default function TeamPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Member | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    email: string; password: string; display_name: string;
+    role_label: string; access_level: AccessLevel;
+  }>({
     email: '', password: '', display_name: '',
-    role_label: 'Atendente', is_account_admin: false,
+    role_label: 'Atendente', access_level: 'atendimento',
   });
+
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditRows, setAuditRows] = useState<any[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
 
   const unlimited = isOwner || maxUsers == null;
   const total = members.length;
   const limitReached = !unlimited && total >= (maxUsers ?? 0);
+  const canManage = isManagement;
 
   const loadMembers = async () => {
     setLoading(true);
@@ -70,7 +93,6 @@ export default function TeamPage() {
       const { data } = await supabase.from('sub_companies').select('plan_slug').eq('id', scopeSubId).maybeSingle();
       planSlug = data?.plan_slug ?? null;
     } else if (user?.id) {
-      // Painel-owner (no sub_company): try own client_companies plan; fallback unlimited
       const { data } = await supabase.from('client_companies').select('plan_slug').eq('owner_id', user.id).limit(1).maybeSingle();
       planSlug = data?.plan_slug ?? null;
     }
@@ -81,9 +103,36 @@ export default function TeamPage() {
     setPlanName(plan?.name ?? planSlug);
   };
 
+  const loadAudit = async () => {
+    if (!isManagement) return;
+    setAuditLoading(true);
+    const ids = members.map(m => m.user_id);
+    const q = supabase
+      .from('audit_logs')
+      .select('id, created_at, action, record_label, changes, changed_by, record_id')
+      .eq('table_name', 'user_account_access')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    const { data } = ids.length > 0 ? await q.in('record_id', ids) : await q;
+    // Resolve author names
+    const authorIds = Array.from(new Set((data || []).map((r: any) => r.changed_by).filter(Boolean)));
+    let authorMap = new Map<string, string>();
+    if (authorIds.length > 0) {
+      const { data: profs } = await supabase.from('profiles').select('user_id, display_name, email').in('user_id', authorIds);
+      (profs || []).forEach((p: any) => authorMap.set(p.user_id, p.display_name || p.email || p.user_id));
+    }
+    setAuditRows((data || []).map((r: any) => ({ ...r, changed_by_name: authorMap.get(r.changed_by) || 'Sistema' })));
+    setAuditLoading(false);
+  };
+
   useEffect(() => { loadMembers(); loadPlanLimit(); /* eslint-disable-next-line */ }, [scopeSubId, isOwner, user?.id]);
+  useEffect(() => { if (auditOpen) loadAudit(); /* eslint-disable-next-line */ }, [auditOpen, members.length]);
 
   const openNew = () => {
+    if (!canManage) {
+      toast({ title: 'Permissão negada', description: 'Apenas administradores podem adicionar membros.', variant: 'destructive' });
+      return;
+    }
     if (limitReached) {
       toast({
         title: 'Limite do plano atingido',
@@ -93,18 +142,19 @@ export default function TeamPage() {
       return;
     }
     setEditing(null);
-    setForm({ email: '', password: '', display_name: '', role_label: 'Atendente', is_account_admin: false });
+    setForm({ email: '', password: '', display_name: '', role_label: 'Atendente', access_level: 'atendimento' });
     setDialogOpen(true);
   };
 
   const openEdit = (m: Member) => {
+    if (!canManage) return;
     setEditing(m);
     setForm({
       email: m.profile?.email || '',
       password: '',
       display_name: m.profile?.display_name || '',
       role_label: m.profile?.role_label || 'Atendente',
-      is_account_admin: !!m.is_account_admin,
+      access_level: m.access_level || (m.is_account_admin ? 'administracao' : 'atendimento'),
     });
     setDialogOpen(true);
   };
@@ -122,13 +172,14 @@ export default function TeamPage() {
       ? {
           action: 'update', sub_company_id: scopeSubId, user_id: editing.user_id,
           name: form.display_name, role_label: form.role_label,
-          is_account_admin: form.is_account_admin,
+          access_level: form.access_level,
           ...(form.password ? { password: form.password } : {}),
         }
       : {
           action: 'create', sub_company_id: scopeSubId,
           email: form.email.trim().toLowerCase(), name: form.display_name, password: form.password,
-          is_account_admin: form.is_account_admin,
+          role_label: form.role_label,
+          access_level: form.access_level,
         };
     const { data, error } = await supabase.functions.invoke('manage-account-user', { body: payload });
     setSaving(false);
@@ -142,6 +193,7 @@ export default function TeamPage() {
   };
 
   const remove = async (m: Member) => {
+    if (!canManage) return;
     if (m.user_id === user?.id) return;
     if (!confirm(`Remover ${m.profile?.display_name || m.profile?.email}?`)) return;
     const { data, error } = await supabase.functions.invoke('manage-account-user', {
@@ -179,15 +231,26 @@ export default function TeamPage() {
             />
           </div>
         </div>
-        <Button onClick={openNew} disabled={limitReached && !unlimited}>
-          <Plus className="w-4 h-4 mr-2" />
-          Adicionar Membro
-        </Button>
+        <div className="flex items-center gap-2">
+          {isManagement && (
+            <Button variant="outline" onClick={() => setAuditOpen(true)}>
+              <History className="w-4 h-4 mr-2" /> Auditoria
+            </Button>
+          )}
+          <Button
+            onClick={openNew}
+            disabled={!canManage || (limitReached && !unlimited)}
+            title={!canManage ? 'Apenas administradores podem adicionar membros' : undefined}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Adicionar Membro
+          </Button>
+        </div>
       </div>
 
       {limitReached && (
         <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          Você atingiu o limite de {maxUsers} usuários do plano {planName}. Faça upgrade para adicionar novos membros.
+          Você atingiu o limite de <b>{maxUsers}</b> usuários do plano <b>{planName}</b>. Remova um membro ou faça upgrade do plano para adicionar novos.
         </div>
       )}
 
@@ -204,6 +267,8 @@ export default function TeamPage() {
           {members.map((m, i) => {
             const isAI = /bot|i\.?a\.?|agente/i.test(m.profile?.role_label || '');
             const active = m.profile?.is_active !== false;
+            const lvl = levelMeta(m.access_level || (m.is_account_admin ? 'administracao' : 'atendimento'));
+            const LvlIcon = lvl.icon;
             return (
               <motion.div
                 key={m.user_id}
@@ -224,29 +289,31 @@ export default function TeamPage() {
                         {m.profile?.display_name || m.profile?.email || '—'}
                       </p>
                       <p className="text-xs text-muted-foreground truncate">
-                        {m.profile?.role_label || 'Membro'}{m.is_account_admin ? ' · Admin' : ''}
+                        {m.profile?.role_label || 'Membro'}
                       </p>
                     </div>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
-                        <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => openEdit(m)}>
-                        <Pencil className="w-4 h-4 mr-2" /> Editar
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={m.user_id === user?.id}
-                        onClick={() => remove(m)}
-                        className="text-destructive focus:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" /> Remover
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  {canManage && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
+                          <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEdit(m)}>
+                          <Pencil className="w-4 h-4 mr-2" /> Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={m.user_id === user?.id}
+                          onClick={() => remove(m)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" /> Remover
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -254,7 +321,9 @@ export default function TeamPage() {
                     <span className={`w-2 h-2 rounded-full ${active ? 'bg-success' : 'bg-muted-foreground'}`} />
                     <span className="text-xs text-muted-foreground">{active ? 'Ativo' : 'Inativo'}</span>
                   </div>
-                  <span className="text-xs text-muted-foreground truncate max-w-[60%]">{m.profile?.email}</span>
+                  <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
+                    <LvlIcon className="w-3 h-3" /> {lvl.label}
+                  </span>
                 </div>
               </motion.div>
             );
@@ -262,6 +331,7 @@ export default function TeamPage() {
         </div>
       )}
 
+      {/* Add/Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -289,15 +359,29 @@ export default function TeamPage() {
             <div>
               <Label>Cargo</Label>
               <Input value={form.role_label} onChange={e => setForm(f => ({ ...f, role_label: e.target.value }))}
-                placeholder="Atendente, Closer, SDR..." />
+                placeholder="Atendente, Closer, SDR, Coordenador..." />
             </div>
-            <div className="flex items-center justify-between rounded-lg border border-border p-3">
-              <div>
-                <p className="text-sm font-medium">Administrador da conta</p>
-                <p className="text-xs text-muted-foreground">Concede permissões totais dentro deste escopo.</p>
-              </div>
-              <Switch checked={form.is_account_admin}
-                onCheckedChange={v => setForm(f => ({ ...f, is_account_admin: v }))} />
+            <div>
+              <Label>Nível de acesso</Label>
+              <Select value={form.access_level} onValueChange={(v: AccessLevel) => setForm(f => ({ ...f, access_level: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ACCESS_LEVELS.map(l => (
+                    <SelectItem key={l.value} value={l.value}>
+                      <div className="flex items-start gap-2">
+                        <l.icon className="w-4 h-4 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium">{l.label}</p>
+                          <p className="text-xs text-muted-foreground">{l.description}</p>
+                        </div>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Administração concede permissões totais dentro deste escopo. Supervisão libera dashboards de gestão e assinaturas de nível supervisor.
+              </p>
             </div>
           </div>
 
@@ -308,6 +392,44 @@ export default function TeamPage() {
               {editing ? 'Salvar' : 'Adicionar'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Audit dialog (management only) */}
+      <Dialog open={auditOpen} onOpenChange={setAuditOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Auditoria da Equipe</DialogTitle>
+            <DialogDescription>
+              Ações recentes de criação, edição e remoção de membros neste escopo
+              {scopeSubId ? ' (sub-empresa atual)' : ' (conta principal)'}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto space-y-2">
+            {auditLoading ? (
+              <div className="py-8 text-center text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Carregando...</div>
+            ) : auditRows.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">Nenhuma ação registrada ainda.</div>
+            ) : auditRows.map((r) => (
+              <div key={r.id} className="rounded-lg border border-border p-3 text-sm">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                    r.action === 'create' ? 'bg-success/10 text-success' :
+                    r.action === 'delete' ? 'bg-destructive/10 text-destructive' :
+                    'bg-primary/10 text-primary'
+                  }`}>{r.action}</span>
+                  <span className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString('pt-BR')}</span>
+                </div>
+                <p className="text-sm font-medium text-foreground">{r.record_label || r.record_id}</p>
+                <p className="text-xs text-muted-foreground">Por: {r.changed_by_name}</p>
+                {r.changes && (
+                  <pre className="mt-2 text-[11px] bg-secondary/50 rounded p-2 overflow-x-auto whitespace-pre-wrap break-words">
+                    {JSON.stringify(r.changes, null, 2)}
+                  </pre>
+                )}
+              </div>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
     </AppLayout>
