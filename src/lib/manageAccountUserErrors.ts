@@ -70,9 +70,12 @@ export async function extractManageUserError(
 
   if (!raw && !code) return null;
 
-  const friendly = (code && MANAGE_USER_ERROR_MESSAGES[code])
+  const friendlyBase = (code && MANAGE_USER_ERROR_MESSAGES[code])
     || raw
     || 'Erro desconhecido ao processar membro.';
+  const friendly = (code && MANAGE_USER_ERROR_MESSAGES[code] && raw && raw !== MANAGE_USER_ERROR_MESSAGES[code])
+    ? `${friendlyBase} Detalhe: ${raw}`
+    : friendlyBase;
 
   return { code, message: friendly, raw };
 }

@@ -53,6 +53,21 @@ async function findUserByEmail(
   email: string,
 ) {
   const normalized = String(email).trim().toLowerCase();
+  // Fast path: SQL lookup via SECURITY DEFINER helper (reliable regardless of user count).
+  try {
+    const { data: uid, error: rpcErr } = await adminClient.rpc(
+      "admin_find_auth_user_by_email",
+      { p_email: normalized },
+    );
+    if (!rpcErr && uid) {
+      const { data: byId } = await adminClient.auth.admin.getUserById(
+        uid as string,
+      );
+      if (byId?.user) return byId.user;
+    }
+  } catch (_) {
+    // Fall back to listUsers pagination.
+  }
   for (let page = 1; page <= 20; page += 1) {
     const { data, error } = await adminClient.auth.admin.listUsers({
       page,
@@ -363,7 +378,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      const userResult = existing
+      let userResult = existing
         ? await adminClient.auth.admin.updateUserById(existing.id, {
           password,
           user_metadata: { display_name: name },
@@ -374,12 +389,29 @@ Deno.serve(async (req) => {
           email_confirm: true,
           user_metadata: { display_name: name },
         });
-      if (userResult.error || !userResult.data.user) {
-        return userError(
-          errorMessage(userResult.error, "Falha ao criar usuário"),
-          400,
-          "auth_user_error",
+
+      // Recovery: se createUser falhar porque o e-mail já existe (mesmo não localizado antes),
+      // tenta encontrar o usuário e atualiza a senha no lugar.
+      if (!existing && (userResult.error || !userResult.data.user)) {
+        const rawMsg = errorMessage(userResult.error, "");
+        const looksDuplicate = /already|registered|exists|duplicate/i.test(
+          rawMsg,
         );
+        if (looksDuplicate) {
+          const retryFound = await findUserByEmail(adminClient, normalizedEmail);
+          if (retryFound) {
+            userResult = await adminClient.auth.admin.updateUserById(
+              retryFound.id,
+              { password, user_metadata: { display_name: name } },
+            );
+          }
+        }
+      }
+
+      if (userResult.error || !userResult.data.user) {
+        const raw = errorMessage(userResult.error, "Falha ao criar usuário");
+        console.error("[manage-account-user] auth_user_error", raw);
+        return userError(raw, 400, "auth_user_error");
       }
       const newUser = userResult.data.user;
 
