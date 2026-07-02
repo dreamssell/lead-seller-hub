@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import UazAuditTab from '@/components/settings/UazAuditTab';
 import { WhatsAppConnectionCard } from '@/components/whatsapp/WhatsAppConnectionCard';
+import { EvolutionAuditAggregatePanel } from '@/components/whatsapp/EvolutionAuditAggregatePanel';
 import { WhatsAppConnection, WhatsAppProvider } from '@/components/whatsapp/types';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
@@ -108,6 +109,10 @@ export default function WhatsAppPage() {
                   Auditoria & Logs
                 </TabsTrigger>
               )}
+              <TabsTrigger value="aggregate" className="gap-2">
+                <Activity className="w-4 h-4" />
+                Auditoria Consolidada
+              </TabsTrigger>
               <TabsTrigger value="health" className="gap-2">
 
                 <Activity className="w-4 h-4" />
@@ -193,6 +198,10 @@ export default function WhatsAppPage() {
             </TabsContent>
           )}
 
+
+          <TabsContent value="aggregate" className="mt-0">
+            <EvolutionAuditAggregatePanel connections={connections} />
+          </TabsContent>
 
           <TabsContent value="health" className="mt-0">
             <Card className="glass-card">

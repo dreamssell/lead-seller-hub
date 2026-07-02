@@ -25,6 +25,7 @@ import { WidgetSettings } from './WidgetSettings';
 import { EvolutionWizardDialog } from './EvolutionWizardDialog';
 import { EvolutionStatusBanner } from './EvolutionStatusBanner';
 import { EvolutionDebugPanel } from './EvolutionDebugPanel';
+import { EvolutionWebhookAlert } from './EvolutionWebhookAlert';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
 
@@ -225,7 +226,10 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
       
       <CardContent className="space-y-4">
         {conn.provider === 'evolution' && (
-          <EvolutionStatusBanner conn={conn} onOpenWizard={() => setShowEvolutionWizard(true)} />
+          <>
+            <EvolutionStatusBanner conn={conn} onOpenWizard={() => setShowEvolutionWizard(true)} />
+            <EvolutionWebhookAlert conn={conn} onFixed={onSaved} />
+          </>
         )}
 
         {/* Provider Specific Stats/Metrics */}
