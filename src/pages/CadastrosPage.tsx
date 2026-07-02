@@ -19,6 +19,7 @@ import { toast } from '@/hooks/use-toast';
 import { Pencil, Trash2, Plus, Search, Users, Package, CheckSquare, UserCog, Briefcase, History, Eye, Sparkles, UserPlus, Phone, Mail, Building, MapPin, LayoutGrid, List, MessageSquare, Bot as BotIcon, Clock, ChevronRight, User, RefreshCw, AlertCircle, Code, Share2, Download, CheckCircle2, Settings, Pause, Play } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import WhiteLabelTab from '@/components/cadastros/WhiteLabelTab';
+import CompaniesTab from '@/components/cadastros/CompaniesTab';
 import { logAudit } from '@/lib/audit';
 import { BLOCKABLE_PAGES } from '@/lib/navigation';
 
@@ -2730,7 +2731,7 @@ export default function CadastrosPage() {
   return (
     <AppLayout title="Cadastros & CRM" subtitle="Gestão centralizada de contatos, leads, clientes e auditoria">
       <Tabs defaultValue="contacts" className="w-full">
-        <TabsList className={`grid grid-cols-3 ${showWhiteLabel ? 'md:grid-cols-9' : 'md:grid-cols-8'} mb-6`}>
+        <TabsList className={`grid grid-cols-3 ${showWhiteLabel ? 'md:grid-cols-10' : 'md:grid-cols-9'} mb-6`}>
           <TabsTrigger value="contacts"><UserPlus className="w-4 h-4 mr-2" />CRM</TabsTrigger>
           <TabsTrigger value="leads"><Users className="w-4 h-4 mr-2" />Leads</TabsTrigger>
           <TabsTrigger value="customers"><Briefcase className="w-4 h-4 mr-2" />Clientes</TabsTrigger>
@@ -2738,6 +2739,7 @@ export default function CadastrosPage() {
           <TabsTrigger value="tasks"><CheckSquare className="w-4 h-4 mr-2" />Tarefas</TabsTrigger>
           <TabsTrigger value="users"><UserCog className="w-4 h-4 mr-2" />Usuários</TabsTrigger>
           <TabsTrigger value="templates"><Mail className="w-4 h-4 mr-2" />Templates</TabsTrigger>
+          <TabsTrigger value="companies"><Building className="w-4 h-4 mr-2" />Empresas</TabsTrigger>
           {showWhiteLabel && <TabsTrigger value="whitelabel"><Sparkles className="w-4 h-4 mr-2" />White Label</TabsTrigger>}
           <TabsTrigger value="audit" className="relative">
             <History className="w-4 h-4 mr-2" /> Auditoria
@@ -2754,6 +2756,7 @@ export default function CadastrosPage() {
         <TabsContent value="tasks"><CrudTab entity="tasks" /></TabsContent>
         <TabsContent value="users"><UsersTab /></TabsContent>
         <TabsContent value="templates"><EmailTemplatesTab /></TabsContent>
+        <TabsContent value="companies"><CompaniesTab /></TabsContent>
         {showWhiteLabel && <TabsContent value="whitelabel"><WhiteLabelTab /></TabsContent>}
         <TabsContent value="audit"><AuditTab /></TabsContent>
       </Tabs>
