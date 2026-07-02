@@ -206,7 +206,10 @@ describe('TeamPage — error toast surfaces real backend messages', () => {
     let errMsg = (data as any)?.error as string | undefined;
     if (error && !errMsg) {
       try {
-        const resp = (error as any)?.context?.response as Response | undefined;
+        const context = (error as any)?.context;
+        const resp = (typeof Response !== 'undefined' && context instanceof Response)
+          ? context
+          : context?.response as Response | undefined;
         if (resp) {
           const body = await resp.clone().json().catch(() => null);
           errMsg = body?.error || body?.message;

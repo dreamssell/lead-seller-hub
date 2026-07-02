@@ -25,10 +25,6 @@ function errorMessage(error: unknown, fallback = "Falha ao processar a solicita√
   return String(err?.message || err?.error_description || err?.error || fallback);
 }
 
-function sameScope(row: any, scope: Scope) {
-  return row?.owner_id === scope.owner_id && (row?.sub_company_id ?? null) === scope.sub_company_id;
-}
-
 async function findUserByEmail(adminClient: ReturnType<typeof createClient>, email: string) {
   const normalized = String(email).trim().toLowerCase();
   for (let page = 1; page <= 20; page += 1) {
