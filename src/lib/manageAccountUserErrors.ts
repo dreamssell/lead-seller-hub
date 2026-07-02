@@ -41,7 +41,7 @@ async function parseErrorResponse(error: any): Promise<{ code?: string; message?
       message: json?.error || json?.message,
     };
   } catch {
-    return { message: bodyText };
+    return null;
   }
 }
 
@@ -63,6 +63,9 @@ export async function extractManageUserError(
 
     const genericEdgeMessage = /Edge Function returned a non-2xx status code/i.test(String(error?.message || ''));
     if (!raw && !genericEdgeMessage) raw = error.message;
+    if (!raw && genericEdgeMessage) {
+      raw = 'O backend recusou a criação do membro. Recarregue a página e tente novamente; se persistir, verifique suas permissões e o limite do plano.';
+    }
   }
 
   if (!raw && !code) return null;
