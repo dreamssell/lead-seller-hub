@@ -167,8 +167,15 @@ export default function CompaniesTab() {
 
   const remove = async () => {
     if (!confirmDel) return;
+    const snapshot = { ...confirmDel };
     const { error } = await supabase.from('client_companies').delete().eq('id', confirmDel.id);
     if (error) return toast({ title: 'Erro ao excluir', description: error.message, variant: 'destructive' });
+    try {
+      await logAudit({
+        table: 'client_companies', recordId: snapshot.id, action: 'delete',
+        label: snapshot.name, before: snapshot,
+      });
+    } catch (e) { console.error('audit failed', e); }
     toast({ title: 'Empresa excluída' });
     setConfirmDel(null);
     load();
