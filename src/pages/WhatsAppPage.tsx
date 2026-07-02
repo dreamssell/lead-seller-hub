@@ -53,19 +53,35 @@ export default function WhatsAppPage() {
   const [isAddingConnection, setIsAddingConnection] = useState(false);
 
   const addConnection = async (provider: WhatsAppProvider) => {
-    const { data, error } = await supabase
+    const { data: userRes } = await supabase.auth.getUser();
+    const uid = userRes?.user?.id;
+    if (!uid) {
+      toast.error('Sessão expirada — faça login novamente.');
+      return;
+    }
+    // Resolve the user's default account scope (own account or sub-empresa
+    // where they have access), so the new connection is properly tenant-scoped
+    // instead of becoming an orphan row.
+    const { data: access } = await supabase.rpc('get_my_account_access');
+    const scope = Array.isArray(access) && access[0] ? access[0] : null;
+    const ownerId = scope?.owner_id ?? uid;
+    const subCompanyId = scope?.sub_company_id ?? null;
+
+    const { error } = await supabase
       .from('whatsapp_connections')
       .insert({
         provider,
         display_name: `Conexão ${provider.toUpperCase()} ${connections.length + 1}`,
         status: 'disconnected',
-        metadata: {}
+        metadata: {},
+        owner_id: ownerId,
+        sub_company_id: subCompanyId,
       })
       .select()
       .single();
 
     if (error) {
-      toast.error('Erro ao criar conexão');
+      toast.error('Erro ao criar conexão', { description: error.message });
     } else {
       toast.success(`Conexão ${provider.toUpperCase()} criada!`);
       loadConnections();
