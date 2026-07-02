@@ -167,13 +167,13 @@ export function EvolutionDebugPanel({ conn }: Props) {
             {sendAttempts.slice(0, 5).map(e => (
               <li key={e.id} className="p-2 text-[11px] space-y-0.5">
                 <div className="flex items-center justify-between">
-                  <span className="font-mono">{e.metadata?.correlation_id ?? '—'}</span>
-                  <Badge variant={e.severity === 'error' ? 'destructive' : 'secondary'} className="text-[9px]">
-                    {e.severity}
+                  <span className="font-mono">{e.metadata_json?.correlation_id ?? '—'}</span>
+                  <Badge variant={e.status === 'error' ? 'destructive' : 'secondary'} className="text-[9px]">
+                    {e.status}
                   </Badge>
                 </div>
-                <div className="text-muted-foreground">{fmt(e.created_at)} · modo <span className="font-mono">{e.metadata?.mode ?? '—'}</span> · {e.metadata?.latency_ms ?? '?'}ms</div>
-                {e.message && <div className="break-all">{e.message}</div>}
+                <div className="text-muted-foreground">{fmt(e.created_at)} · modo <span className="font-mono">{e.metadata_json?.mode ?? '—'}</span> · {e.metadata_json?.latency_ms ?? '?'}ms</div>
+                {(e.error_message || e.status_detail) && <div className="break-all">{e.error_message || e.status_detail}</div>}
               </li>
             ))}
           </ul>
