@@ -183,8 +183,20 @@ export default function TeamPage() {
         };
     const { data, error } = await supabase.functions.invoke('manage-account-user', { body: payload });
     setSaving(false);
-    if (error || (data as any)?.error) {
-      toast({ title: 'Erro', description: error?.message || (data as any)?.error, variant: 'destructive' });
+    let errMsg = (data as any)?.error as string | undefined;
+    if (error && !errMsg) {
+      // supabase-js wraps non-2xx as FunctionsHttpError — try to read the actual body
+      try {
+        const resp = (error as any)?.context?.response as Response | undefined;
+        if (resp) {
+          const body = await resp.clone().json().catch(() => null);
+          errMsg = body?.error || body?.message;
+        }
+      } catch { /* ignore */ }
+      if (!errMsg) errMsg = error.message;
+    }
+    if (errMsg) {
+      toast({ title: 'Erro', description: errMsg, variant: 'destructive' });
       return;
     }
     toast({ title: editing ? 'Membro atualizado' : 'Membro adicionado' });
