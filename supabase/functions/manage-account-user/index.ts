@@ -378,7 +378,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      const userResult = existing
+      let userResult = existing
         ? await adminClient.auth.admin.updateUserById(existing.id, {
           password,
           user_metadata: { display_name: name },
@@ -389,12 +389,29 @@ Deno.serve(async (req) => {
           email_confirm: true,
           user_metadata: { display_name: name },
         });
-      if (userResult.error || !userResult.data.user) {
-        return userError(
-          errorMessage(userResult.error, "Falha ao criar usuário"),
-          400,
-          "auth_user_error",
+
+      // Recovery: se createUser falhar porque o e-mail já existe (mesmo não localizado antes),
+      // tenta encontrar o usuário e atualiza a senha no lugar.
+      if (!existing && (userResult.error || !userResult.data.user)) {
+        const rawMsg = errorMessage(userResult.error, "");
+        const looksDuplicate = /already|registered|exists|duplicate/i.test(
+          rawMsg,
         );
+        if (looksDuplicate) {
+          const retryFound = await findUserByEmail(adminClient, normalizedEmail);
+          if (retryFound) {
+            userResult = await adminClient.auth.admin.updateUserById(
+              retryFound.id,
+              { password, user_metadata: { display_name: name } },
+            );
+          }
+        }
+      }
+
+      if (userResult.error || !userResult.data.user) {
+        const raw = errorMessage(userResult.error, "Falha ao criar usuário");
+        console.error("[manage-account-user] auth_user_error", raw);
+        return userError(raw, 400, "auth_user_error");
       }
       const newUser = userResult.data.user;
 
