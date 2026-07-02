@@ -235,24 +235,9 @@ export default function TeamPage() {
         };
     const { data, error } = await supabase.functions.invoke('manage-account-user', { body: payload });
     setSaving(false);
-    let errMsg = (data as any)?.error as string | undefined;
-    if (error && !errMsg) {
-      // supabase-js stores the failed HTTP Response directly in error.context.
-      // Older mocks/wrappers may expose it as context.response, so support both.
-      try {
-        const context = (error as any)?.context;
-        const resp = (typeof Response !== 'undefined' && context instanceof Response)
-          ? context
-          : context?.response as Response | undefined;
-        if (resp) {
-          const body = await resp.clone().json().catch(() => null);
-          errMsg = body?.error || body?.message;
-        }
-      } catch { /* ignore */ }
-      if (!errMsg) errMsg = error.message;
-    }
-    if (errMsg) {
-      toast({ title: 'Erro', description: errMsg, variant: 'destructive' });
+    const surfaced = await extractManageUserError(data, error);
+    if (surfaced) {
+      toast({ title: 'Erro', description: surfaced.message, variant: 'destructive' });
       return;
     }
     toast({ title: editing ? 'Membro atualizado' : 'Membro adicionado' });
@@ -267,8 +252,9 @@ export default function TeamPage() {
     const { data, error } = await supabase.functions.invoke('manage-account-user', {
       body: { action: 'delete', sub_company_id: scopeSubId, user_id: m.user_id },
     });
-    if (error || (data as any)?.error) {
-      toast({ title: 'Erro ao remover', description: error?.message || (data as any)?.error, variant: 'destructive' });
+    const surfaced = await extractManageUserError(data, error);
+    if (surfaced) {
+      toast({ title: 'Erro ao remover', description: surfaced.message, variant: 'destructive' });
       return;
     }
     toast({ title: 'Membro removido' });
