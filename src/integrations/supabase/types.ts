@@ -671,6 +671,80 @@ export type Database = {
         }
         Relationships: []
       }
+      client_companies: {
+        Row: {
+          address: string | null
+          city: string | null
+          created_at: string
+          created_by: string | null
+          document: string | null
+          email: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          notes: string | null
+          owner_id: string
+          phone: string | null
+          plan_slug: string | null
+          segment: string | null
+          state: string | null
+          status: string
+          sub_company_id: string | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          created_by?: string | null
+          document?: string | null
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          name: string
+          notes?: string | null
+          owner_id: string
+          phone?: string | null
+          plan_slug?: string | null
+          segment?: string | null
+          state?: string | null
+          status?: string
+          sub_company_id?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          created_by?: string | null
+          document?: string | null
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          name?: string
+          notes?: string | null
+          owner_id?: string
+          phone?: string | null
+          plan_slug?: string | null
+          segment?: string | null
+          state?: string | null
+          status?: string
+          sub_company_id?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_companies_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       company_settings: {
         Row: {
           address: string | null
