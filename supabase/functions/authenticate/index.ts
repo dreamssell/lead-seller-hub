@@ -120,16 +120,84 @@ Deno.serve(async (req) => {
         .ilike("admin_email", normalizedEmail)
         .maybeSingle();
 
+      // Fallback: client_companies (end-consumer login registered under Cadastros → Empresas).
       if (!sub) {
-        await logEvent(supabaseAdmin, req, {
-          email: normalizedEmail, event: "login_failure", success: false,
-          error_message: "Usuário não encontrado",
+        const { data: cc } = await supabaseAdmin
+          .from("client_companies")
+          .select("id, owner_id, sub_company_id, name, display_name, status")
+          .ilike("login_email", normalizedEmail)
+          .maybeSingle();
+
+        if (!cc) {
+          await logEvent(supabaseAdmin, req, {
+            email: normalizedEmail, event: "login_failure", success: false,
+            error_message: "Usuário não encontrado",
+          });
+          return new Response(
+            JSON.stringify({ success: false, error: "Usuário não encontrado" }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        if (cc.status === "blocked") {
+          await logEvent(supabaseAdmin, req, {
+            email: normalizedEmail, event: "login_blocked", success: false,
+            error_message: "Empresa bloqueada",
+          });
+          return new Response(
+            JSON.stringify({ success: false, error: "Acesso bloqueado. Contate o administrador." }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        if (String(password).length < 6) {
+          return new Response(
+            JSON.stringify({ success: false, error: "Senha deve ter pelo menos 6 caracteres" }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        // Provision the auth user for this client company (idempotent).
+        const created = await supabaseAdmin.auth.admin.createUser({
+          email: normalizedEmail,
+          password,
+          email_confirm: true,
+          user_metadata: {
+            display_name: cc.display_name || cc.name,
+            client_company_id: cc.id,
+            owner_id: cc.owner_id,
+            sub_company_id: cc.sub_company_id,
+          },
         });
-        return new Response(
-          JSON.stringify({ success: false, error: "Usuário não encontrado" }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
+        if (created.error || !created.data.user) {
+          await logEvent(supabaseAdmin, req, {
+            email: normalizedEmail, event: "provision_failed", success: false,
+            error_message: created.error?.message || "createUser falhou",
+          });
+          return new Response(
+            JSON.stringify({ success: false, error: created.error?.message || "Falha ao provisionar usuário" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        existing = created.data.user;
+
+        await supabaseAdmin.from("profiles").upsert({
+          user_id: existing.id,
+          email: normalizedEmail,
+          display_name: cc.display_name || cc.name,
+          role_label: "Cliente",
+          is_active: true,
+        }, { onConflict: "user_id" });
+
+        await supabaseAdmin.from("client_companies")
+          .update({ auth_user_id: existing.id })
+          .eq("id", cc.id);
+
+        await logEvent(supabaseAdmin, req, {
+          email: normalizedEmail, event: "user_provisioned", success: true,
+          user_id: existing.id, metadata: { client_company_id: cc.id },
+        });
+      } else {
 
       if (sub.status === "blocked") {
         await logEvent(supabaseAdmin, req, {
@@ -232,6 +300,7 @@ Deno.serve(async (req) => {
           await supabaseAdmin.rpc("release_provision_lock", { p_email: normalizedEmail });
         }
       }
+      } // end else (sub_companies branch)
     }
 
     // Verifica perfil bloqueado
