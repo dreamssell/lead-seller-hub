@@ -4702,6 +4702,10 @@ export type Database = {
       }
     }
     Functions: {
+      admin_find_auth_user_by_email: {
+        Args: { p_email: string }
+        Returns: string
+      }
       calculate_next_retry: { Args: { retry_count: number }; Returns: string }
       can_user_manage_pipelines: {
         Args: { p_owner_id: string; p_sub_company_id: string }
