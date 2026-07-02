@@ -29,7 +29,7 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
         <div className="flex items-center gap-2.5">
           <img src={logo} alt="Lead Seller" className="w-9 h-9 object-contain shrink-0" />
           <div>
-            <h1 className="text-base font-bold text-foreground leading-tight">Lead Seller</h1>
+            <div className="text-base font-bold text-foreground leading-tight">Lead Seller</div>
             <p className="text-[10px] text-muted-foreground font-medium tracking-wide uppercase">Omnichannel Platform</p>
           </div>
         </div>

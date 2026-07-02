@@ -72,14 +72,17 @@ export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
           <Menu className="w-5 h-5 text-foreground" />
         </button>
         <div className="min-w-0">
-          <h2 className="text-base md:text-lg font-semibold text-foreground truncate">{title}</h2>
+          <h1 className="text-base md:text-lg font-semibold text-foreground truncate">{title}</h1>
           {subtitle && <p className="text-xs text-muted-foreground truncate hidden sm:block">{subtitle}</p>}
         </div>
       </div>
 
       <div className="flex items-center gap-1 md:gap-2">
         {/* Desktop actions */}
-        <button className="hidden md:inline-flex p-2.5 rounded-xl hover:bg-secondary transition-colors">
+        <button
+          className="hidden md:inline-flex p-2.5 rounded-xl hover:bg-secondary transition-colors"
+          aria-label="Buscar"
+        >
           <Search className="w-4 h-4 text-muted-foreground" />
         </button>
         <NotificationsBell />
@@ -88,6 +91,7 @@ export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
           className="hidden md:inline-flex p-2.5 rounded-xl hover:bg-secondary transition-colors"
           whileTap={{ scale: 0.9, rotate: 180 }}
           transition={{ duration: 0.3 }}
+          aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
         >
           {theme === 'dark' ? (
             <Sun className="w-4 h-4 text-muted-foreground" />
@@ -98,7 +102,10 @@ export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
 
         {/* Mobile combined menu */}
         <DropdownMenu>
-          <DropdownMenuTrigger className="md:hidden p-2 rounded-xl hover:bg-secondary transition-colors">
+          <DropdownMenuTrigger
+            className="md:hidden p-2 rounded-xl hover:bg-secondary transition-colors"
+            aria-label="Idioma, tema e ações"
+          >
             <Globe className="w-5 h-5 text-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
