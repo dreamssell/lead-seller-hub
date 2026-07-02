@@ -142,6 +142,26 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Fallback: client_companies (end-consumer companies registered under Cadastros → Empresas)
+    const { data: cc } = await supabaseAdmin
+      .from("client_companies")
+      .select("id, name, display_name, status, auth_user_id")
+      .ilike("login_email", normalizedEmail).maybeSingle();
+
+    if (cc && cc.status !== "blocked") {
+      await logEvent(supabaseAdmin, req, {
+        email: normalizedEmail, event: "verify_email", success: true,
+        user_id: cc.auth_user_id, metadata: { pending_provision: !cc.auth_user_id, client_company_id: cc.id },
+      });
+      return new Response(
+        JSON.stringify({
+          exists: true, pending_provision: !cc.auth_user_id,
+          user: { email: normalizedEmail, display_name: cc.display_name || cc.name },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     if (sub && sub.status === "blocked") {
       await logEvent(supabaseAdmin, req, {
         email: normalizedEmail, event: "verify_email_blocked", success: false,
