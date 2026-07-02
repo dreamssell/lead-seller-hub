@@ -31,13 +31,16 @@ type Company = {
   status: string;
   logo_url: string | null;
   notes: string | null;
+  login_email: string | null;
+  auth_user_id: string | null;
+  display_name: string | null;
   created_at: string;
 };
 
-const EMPTY: Partial<Company> = {
+const EMPTY: Partial<Company> & { password?: string } = {
   name: '', document: '', email: '', phone: '', website: '',
   address: '', city: '', state: '', segment: '', plan_slug: 'basic',
-  status: 'active', notes: '',
+  status: 'active', notes: '', login_email: '', password: '', display_name: '',
 };
 
 export default function CompaniesTab() {
