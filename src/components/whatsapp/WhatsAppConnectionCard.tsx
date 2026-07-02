@@ -381,6 +381,12 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
             </div>
           </motion.div>
         )}
+
+        {showDebug && conn.provider === 'evolution' && (
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+            <EvolutionDebugPanel conn={conn} />
+          </motion.div>
+        )}
       </CardContent>
       {conn.provider === 'evolution' && (
         <EvolutionWizardDialog
