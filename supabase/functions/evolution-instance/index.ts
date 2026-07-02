@@ -16,7 +16,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-type Action = "create" | "qr" | "state" | "logout" | "delete" | "test" | "set_webhook" | "send_text" | "import_chats" | "set_auto_import" | "subscribe_presence";
+type Action = "create" | "qr" | "state" | "logout" | "delete" | "test" | "set_webhook" | "check_webhook" | "send_text" | "import_chats" | "set_auto_import" | "subscribe_presence";
 
 interface Body {
   action: Action;
@@ -29,6 +29,7 @@ interface Body {
   // send_text:
   customer_id?: string;
   text?: string;
+  correlation_id?: string;
   // import_chats options:
   max_chats?: number;
   messages_per_chat?: number;
@@ -569,10 +570,31 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (action === "check_webhook") {
+      try {
+        const r = await evoFetch(baseUrl, token, `/webhook/find/${encodeURIComponent(instance)}`);
+        const expected = inboundWebhookUrl(connection_id);
+        const remoteUrl: string | undefined = r.data?.url ?? r.data?.webhook?.url;
+        const webhookByEvents: boolean = !!(r.data?.webhookByEvents ?? r.data?.webhook_by_events ?? r.data?.webhook?.webhookByEvents);
+        const matches = !!remoteUrl && remoteUrl.replace(/\/$/, "") === expected.replace(/\/$/, "");
+        return json({
+          ok: matches && !webhookByEvents,
+          matches,
+          webhookByEvents,
+          remote_url: remoteUrl ?? null,
+          expected_url: expected,
+          raw: r.data,
+        });
+      } catch (e) {
+        return json({ ok: false, error: (e as Error).message }, 502);
+      }
+    }
+
     if (action === "send_text") {
       const customerId = body.customer_id;
       const text = ensureText(body.text);
-      if (!customerId) return json({ ok: false, error: "missing_customer_id" }, 400);
+      const correlationId = body.correlation_id ?? crypto.randomUUID();
+      if (!customerId) return json({ ok: false, error: "missing_customer_id", correlation_id: correlationId }, 400);
 
       const { data: customer, error: customerErr } = await admin
         .from("customers")
@@ -581,22 +603,24 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (customerErr || !customer) {
-        return json({ ok: false, error: "customer_not_found" }, 404);
+        return json({ ok: false, error: "customer_not_found", correlation_id: correlationId }, 404);
       }
 
       const customerOwner = customer.owner_id || customer.created_by || null;
       const sameOwner = isPlatformAdmin === true || !conn.owner_id || customerOwner === conn.owner_id;
       const sameSubCompany = !conn.sub_company_id || (customer.sub_company_id ?? null) === (conn.sub_company_id ?? null);
       if (!sameOwner || !sameSubCompany) {
-        return json({ ok: false, error: "customer_forbidden", hint: "Este contato não pertence ao escopo da conexão WhatsApp ativa." }, 403);
+        return json({ ok: false, error: "customer_forbidden", hint: "Este contato não pertence ao escopo da conexão WhatsApp ativa.", correlation_id: correlationId }, 403);
       }
 
       const number = normalizePhone(customer.phone);
       const ownNumber = normalizePhone(conn.phone_number || meta.phone || meta.phone_number || meta.owner || meta.wuid);
-      if (!number) return json({ ok: false, error: "customer_without_phone", hint: "Cliente não possui telefone WhatsApp válido." }, 400);
+      if (!number) return json({ ok: false, error: "customer_without_phone", hint: "Cliente não possui telefone WhatsApp válido.", correlation_id: correlationId }, 400);
       if (ownNumber && number === ownNumber) {
-        return json({ ok: false, error: "own_number_blocked", hint: "O destinatário resolvido é o próprio número conectado; selecione o contato correto." }, 400);
+        return json({ ok: false, error: "own_number_blocked", hint: "O destinatário resolvido é o próprio número conectado; selecione o contato correto.", correlation_id: correlationId }, 400);
       }
+
+      console.log(`[evolution-instance][cid=${correlationId}] send_text begin`, { customer_id: customerId, number_last4: number.slice(-4) });
 
       const start = Date.now();
       const r = await sendEvolutionText(baseUrl, token, instance, number, text);
@@ -608,8 +632,11 @@ Deno.serve(async (req) => {
           mode: r.mode,
           customer_id: customerId,
           number_last4: number.slice(-4),
+          correlation_id: correlationId,
+          latency_ms: latencyMs,
         });
-        return json({ ok: false, error: detail, status: r.status, mode: r.mode, raw: r.data, latency_ms: latencyMs });
+        console.error(`[evolution-instance][cid=${correlationId}] send_text fail`, { status: r.status, detail });
+        return json({ ok: false, error: detail, status: r.status, mode: r.mode, raw: r.data, latency_ms: latencyMs, correlation_id: correlationId });
       }
 
       const providerMessageId = extractEvolutionMessageId(r.data);
@@ -624,7 +651,9 @@ Deno.serve(async (req) => {
         number_last4: number.slice(-4),
         provider_message_id: providerMessageId,
         latency_ms: latencyMs,
+        correlation_id: correlationId,
       });
+      console.log(`[evolution-instance][cid=${correlationId}] send_text ok`, { latency_ms: latencyMs, message_id: providerMessageId });
 
       return json({
         ok: true,
@@ -635,6 +664,7 @@ Deno.serve(async (req) => {
         message_id: providerMessageId,
         raw: r.data,
         latency_ms: latencyMs,
+        correlation_id: correlationId,
       });
     }
 
