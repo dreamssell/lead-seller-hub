@@ -44,9 +44,10 @@ vi.mock('@/components/layout/AppLayout', () => ({
   AppLayout: ({ children }: any) => <div>{children}</div>,
 }));
 
+const toastMock = vi.fn();
 vi.mock('@/components/ui/use-toast', () => ({
-  toast: vi.fn(),
-  useToast: () => ({ toast: vi.fn() }),
+  toast: (...args: any[]) => toastMock(...args),
+  useToast: () => ({ toast: toastMock }),
 }));
 
 import TeamPage from './TeamPage';
