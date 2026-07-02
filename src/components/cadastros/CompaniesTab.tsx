@@ -76,6 +76,15 @@ export default function CompaniesTab() {
   const save = async () => {
     if (!editing?.name?.trim()) return toast({ title: 'Informe o nome da empresa', variant: 'destructive' });
     if (!ownerId) return toast({ title: 'Sessão inválida', variant: 'destructive' });
+    const loginEmail = (editing.login_email || '').trim().toLowerCase();
+    const password = editing.password || '';
+    if (loginEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginEmail)) {
+      return toast({ title: 'E-mail de login inválido', variant: 'destructive' });
+    }
+    // For NEW companies, require a password whenever a login email is provided.
+    if (!editing.id && loginEmail && password.length < 6) {
+      return toast({ title: 'Defina uma senha de pelo menos 6 caracteres', variant: 'destructive' });
+    }
     setSaving(true);
     const payload: any = {
       name: editing.name?.trim(),
@@ -90,7 +99,9 @@ export default function CompaniesTab() {
       plan_slug: editing.plan_slug || 'basic',
       status: editing.status || 'active',
       notes: editing.notes || null,
+      display_name: editing.display_name || editing.name?.trim() || null,
     };
+    let companyId = editing.id as string | undefined;
     let error;
     if (editing.id) {
       ({ error } = await supabase.from('client_companies').update(payload).eq('id', editing.id));
@@ -98,11 +109,39 @@ export default function CompaniesTab() {
       payload.owner_id = ownerId;
       payload.sub_company_id = subCompanyId;
       payload.created_by = user?.id ?? null;
-      ({ error } = await supabase.from('client_companies').insert(payload));
+      const ins = await supabase.from('client_companies').insert(payload).select('id').single();
+      error = ins.error;
+      companyId = ins.data?.id;
+    }
+    if (error) { setSaving(false); return toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' }); }
+
+    // Provision / update the login user (idempotent). Only when a login email
+    // is provided — the company can also live without an active login.
+    if (companyId && loginEmail) {
+      const { data: provRes, error: provErr } = await supabase.functions.invoke('provision-client-company-user', {
+        body: {
+          company_id: companyId,
+          login_email: loginEmail,
+          password: password || undefined,
+          display_name: editing.display_name || editing.name?.trim(),
+        },
+      });
+      if (provErr || (provRes as any)?.error) {
+        setSaving(false);
+        return toast({
+          title: 'Empresa salva, mas houve erro ao criar/atualizar o login',
+          description: provErr?.message || (provRes as any)?.error,
+          variant: 'destructive',
+        });
+      }
+      toast({
+        title: editing.id ? 'Empresa atualizada' : 'Empresa cadastrada com login ativo',
+        description: `Login: ${loginEmail}`,
+      });
+    } else {
+      toast({ title: editing.id ? 'Empresa atualizada' : 'Empresa cadastrada' });
     }
     setSaving(false);
-    if (error) return toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
-    toast({ title: editing.id ? 'Empresa atualizada' : 'Empresa cadastrada' });
     setEditing(null);
     load();
   };
