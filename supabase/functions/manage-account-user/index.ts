@@ -247,9 +247,26 @@ Deno.serve(async (req) => {
 
       const { data: beforeProfile } = await adminClient.from("profiles").select("display_name, role_label, phone, is_active, email").eq("user_id", user_id).maybeSingle();
 
+      // Compute previous access_level from current signature roles + is_account_admin
+      let beforeSigQ = adminClient
+        .from("user_signature_roles")
+        .select("role")
+        .eq("user_id", user_id)
+        .eq("owner_id", scope.owner_id);
+      if (scope.sub_company_id) beforeSigQ = beforeSigQ.eq("sub_company_id", scope.sub_company_id);
+      else beforeSigQ = beforeSigQ.is("sub_company_id", null);
+      const { data: beforeSigs } = await beforeSigQ;
+      const hadSupervisor = (beforeSigs || []).some((s: any) =>
+        ["supervisor", "coordenador", "diretor"].includes(s.role)
+      );
+      const prevLevel: AccessLevel = target.is_account_admin
+        ? "administracao"
+        : hadSupervisor ? "supervisao" : "atendimento";
+
       const level: AccessLevel | null = (["atendimento", "supervisao", "administracao"].includes(access_level))
         ? access_level as AccessLevel : null;
       const nextIsAdmin = level ? (level === "administracao") : (typeof is_account_admin === "boolean" ? is_account_admin : target.is_account_admin);
+      const nextLevel: AccessLevel = level ?? prevLevel;
 
       if (password && password.length >= 6) {
         await adminClient.auth.admin.updateUserById(user_id, { password });
@@ -270,17 +287,33 @@ Deno.serve(async (req) => {
 
       if (level) await applyAccessLevel(adminClient, user_id, scope, level);
 
-      // Diff for audit
+      // Diff for audit — only record fields that actually changed. Skip irrelevant fields.
       const diff: Record<string, { from: any; to: any }> = {};
       const trackProfile: Array<keyof typeof profileUpdate> = ["display_name", "role_label", "phone", "is_active"];
       trackProfile.forEach((k) => {
-        if (profileUpdate[k] !== undefined && (beforeProfile as any)?.[k] !== profileUpdate[k]) {
-          diff[k] = { from: (beforeProfile as any)?.[k] ?? null, to: profileUpdate[k] };
+        if (profileUpdate[k] === undefined) return;
+        const prev = (beforeProfile as any)?.[k] ?? null;
+        const next = profileUpdate[k] ?? null;
+        if (JSON.stringify(prev) !== JSON.stringify(next)) {
+          diff[k as string] = { from: prev, to: next };
         }
       });
-      if (nextIsAdmin !== target.is_account_admin) diff.is_account_admin = { from: target.is_account_admin, to: nextIsAdmin };
-      if (level) diff.access_level = { from: null, to: level };
-      if (password) diff.password = { from: "••••", to: "••••" };
+      if (Array.isArray(allowed_pages)) {
+        const prevPages = [...(target.allowed_pages || [])].sort();
+        const nextPages = [...allowed_pages].sort();
+        if (JSON.stringify(prevPages) !== JSON.stringify(nextPages)) {
+          diff.allowed_pages = { from: target.allowed_pages || [], to: allowed_pages };
+        }
+      }
+      if (nextIsAdmin !== target.is_account_admin) {
+        diff.is_account_admin = { from: target.is_account_admin, to: nextIsAdmin };
+      }
+      if (nextLevel !== prevLevel) {
+        diff.access_level = { from: prevLevel, to: nextLevel };
+      }
+      if (password && password.length >= 6) {
+        diff.password = { from: "••••", to: "•••• (alterada)" };
+      }
 
       if (Object.keys(diff).length > 0) {
         await logAudit(adminClient, {
