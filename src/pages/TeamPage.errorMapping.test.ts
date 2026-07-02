@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractManageUserError, MANAGE_USER_ERROR_MESSAGES } from './TeamPage';
+import { extractManageUserError, MANAGE_USER_ERROR_MESSAGES } from '@/lib/manageAccountUserErrors';
 
 /**
  * Contract tests for the code→message dictionary returned by
