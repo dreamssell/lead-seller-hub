@@ -41,6 +41,58 @@ const ACCESS_LEVELS: Array<{ value: AccessLevel; label: string; description: str
 
 const levelMeta = (v?: AccessLevel) => ACCESS_LEVELS.find(l => l.value === v) || ACCESS_LEVELS[0];
 
+// Machine codes returned by manage-account-user → user-facing PT-BR text.
+// Keep in sync with supabase/functions/manage-account-user/index.ts
+export const MANAGE_USER_ERROR_MESSAGES: Record<string, string> = {
+  unauthenticated: 'Sua sessão expirou. Faça login novamente para continuar.',
+  invalid_json: 'Não foi possível interpretar a requisição. Recarregue a página e tente novamente.',
+  missing_action: 'Ação não informada. Contate o suporte se o erro persistir.',
+  unknown_action: 'Ação desconhecida. Atualize a página para carregar a versão mais recente.',
+  not_allowed_for_sub: 'Você não tem permissão para gerenciar esta sub-empresa.',
+  not_account_admin: 'Apenas administradores da conta podem executar esta ação.',
+  scope_error: 'Não foi possível validar seu nível de acesso. Tente novamente.',
+  list_query_error: 'Falha ao carregar a lista de membros da equipe.',
+  invalid_create_payload: 'Informe nome, e-mail e uma senha com pelo menos 6 caracteres.',
+  member_already_exists: 'Este e-mail já é membro deste escopo. Use "Editar" no card existente.',
+  auth_user_error: 'Não foi possível criar/atualizar o usuário na base de autenticação.',
+  profile_save_error: 'Usuário criado, mas o perfil não pôde ser salvo. Tente editar o membro.',
+  access_save_error: 'Não foi possível salvar as permissões deste membro.',
+  password_update_error: 'A nova senha não pôde ser aplicada. Verifique se ela tem 6+ caracteres.',
+  profile_update_error: 'Não foi possível atualizar o perfil deste membro.',
+  access_update_error: 'Não foi possível atualizar as permissões deste membro.',
+  missing_user_id: 'Nenhum usuário selecionado para esta operação.',
+  not_in_scope: 'Este usuário não pertence ao escopo atual.',
+  cannot_delete_self: 'Você não pode remover a si mesmo. Peça a outro administrador.',
+  access_delete_error: 'Não foi possível remover o acesso do membro.',
+  signature_role_delete_error: 'Não foi possível remover o nível de acesso do membro.',
+  internal_error: 'Erro interno inesperado. Tente novamente em instantes.',
+};
+
+export async function extractManageUserError(
+  data: any,
+  error: any,
+): Promise<{ code?: string; message: string } | null> {
+  let code: string | undefined = data?.code;
+  let raw: string | undefined = data?.error;
+  if (!raw && error) {
+    try {
+      const context = (error as any)?.context;
+      const resp = (typeof Response !== 'undefined' && context instanceof Response)
+        ? context
+        : (context?.response as Response | undefined);
+      if (resp) {
+        const body = await resp.clone().json().catch(() => null);
+        raw = body?.error || body?.message;
+        code = code || body?.code;
+      }
+    } catch { /* ignore */ }
+    if (!raw) raw = (error as Error).message;
+  }
+  if (!raw && !code) return null;
+  const friendly = (code && MANAGE_USER_ERROR_MESSAGES[code]) || raw || 'Erro desconhecido';
+  return { code, message: friendly };
+}
+
 export default function TeamPage() {
   const { access, user } = useAuth();
   const { isOwner } = usePlatformOwner();
@@ -183,24 +235,9 @@ export default function TeamPage() {
         };
     const { data, error } = await supabase.functions.invoke('manage-account-user', { body: payload });
     setSaving(false);
-    let errMsg = (data as any)?.error as string | undefined;
-    if (error && !errMsg) {
-      // supabase-js stores the failed HTTP Response directly in error.context.
-      // Older mocks/wrappers may expose it as context.response, so support both.
-      try {
-        const context = (error as any)?.context;
-        const resp = (typeof Response !== 'undefined' && context instanceof Response)
-          ? context
-          : context?.response as Response | undefined;
-        if (resp) {
-          const body = await resp.clone().json().catch(() => null);
-          errMsg = body?.error || body?.message;
-        }
-      } catch { /* ignore */ }
-      if (!errMsg) errMsg = error.message;
-    }
-    if (errMsg) {
-      toast({ title: 'Erro', description: errMsg, variant: 'destructive' });
+    const surfaced = await extractManageUserError(data, error);
+    if (surfaced) {
+      toast({ title: 'Erro', description: surfaced.message, variant: 'destructive' });
       return;
     }
     toast({ title: editing ? 'Membro atualizado' : 'Membro adicionado' });
@@ -215,8 +252,9 @@ export default function TeamPage() {
     const { data, error } = await supabase.functions.invoke('manage-account-user', {
       body: { action: 'delete', sub_company_id: scopeSubId, user_id: m.user_id },
     });
-    if (error || (data as any)?.error) {
-      toast({ title: 'Erro ao remover', description: error?.message || (data as any)?.error, variant: 'destructive' });
+    const surfaced = await extractManageUserError(data, error);
+    if (surfaced) {
+      toast({ title: 'Erro ao remover', description: surfaced.message, variant: 'destructive' });
       return;
     }
     toast({ title: 'Membro removido' });

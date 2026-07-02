@@ -242,17 +242,44 @@ Deno.serve(async (req) => {
     const adminClient = createClient(url, serviceKey);
 
     const { data: caller } = await userClient.auth.getUser();
-    if (!caller.user) return json({ error: "Não autenticado" }, 401);
+    if (!caller.user) {
+      return userError("Sessão expirada. Faça login novamente.", 401, "unauthenticated");
+    }
 
-    const body = await req.json();
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return userError("Corpo da requisição inválido (JSON esperado).", 400, "invalid_json");
+    }
     const action: "create" | "update" | "delete" | "list" = body.action;
-    if (!action) return json({ error: "action obrigatória" }, 400);
+    if (!action) return userError("Ação obrigatória.", 400, "missing_action");
 
-    const scope = await resolveScope(
-      adminClient,
-      caller.user.id,
-      body.sub_company_id ?? null,
-    );
+    let scope: Scope;
+    try {
+      scope = await resolveScope(
+        adminClient,
+        caller.user.id,
+        body.sub_company_id ?? null,
+      );
+    } catch (scopeError: any) {
+      const msg = String(scopeError?.message || scopeError || "");
+      if (msg === "not_allowed_for_sub") {
+        return userError(
+          "Você não tem permissão para gerenciar esta sub-empresa.",
+          403,
+          "not_allowed_for_sub",
+        );
+      }
+      if (msg === "not_account_admin") {
+        return userError(
+          "Apenas administradores da conta podem executar esta ação.",
+          403,
+          "not_account_admin",
+        );
+      }
+      return userError(errorMessage(scopeError, "Falha ao resolver escopo"), 400, "scope_error");
+    }
 
     // ─── LIST ──────────────────────────────────────────────────────────────
     if (action === "list") {
@@ -266,7 +293,7 @@ Deno.serve(async (req) => {
         q = q.eq("sub_company_id", scope.sub_company_id);
       } else q = q.is("sub_company_id", null);
       const { data: rows, error } = await q;
-      if (error) return json({ error: error.message }, 400);
+      if (error) return userError(error.message, 400, "list_query_error");
       const ids = (rows || []).map((r) => r.user_id);
       const { data: profiles } = await adminClient.from("profiles").select("*")
         .in("user_id", ids);
@@ -313,9 +340,10 @@ Deno.serve(async (req) => {
           : (is_account_admin ? "administracao" : "atendimento");
       const normalizedEmail = String(email || "").trim().toLowerCase();
       if (!normalizedEmail || !name || !password || password.length < 6) {
-        return json(
-          { error: "Email, nome e senha (mín. 6) obrigatórios" },
+        return userError(
+          "Informe e-mail, nome e senha (mínimo 6 caracteres).",
           400,
+          "invalid_create_payload",
         );
       }
       const pages = Array.isArray(allowed_pages) && allowed_pages.length > 0
@@ -429,11 +457,11 @@ Deno.serve(async (req) => {
         role_label,
         access_level,
       } = body;
-      if (!user_id) return json({ error: "user_id obrigatório" }, 400);
+      if (!user_id) return userError("user_id é obrigatório.", 400, "missing_user_id");
 
       const target = await getScopedAccess(adminClient, user_id, scope);
       if (!target) {
-        return json({ error: "Usuário não está no seu escopo" }, 403);
+        return userError("Este usuário não pertence ao seu escopo.", 403, "not_in_scope");
       }
 
       const { data: beforeProfile } = await adminClient.from("profiles").select(
@@ -574,14 +602,18 @@ Deno.serve(async (req) => {
     // ─── DELETE ────────────────────────────────────────────────────────────
     if (action === "delete") {
       const { user_id } = body;
-      if (!user_id) return json({ error: "user_id obrigatório" }, 400);
+      if (!user_id) return userError("user_id é obrigatório.", 400, "missing_user_id");
       if (user_id === caller.user.id) {
-        return json({ error: "Você não pode excluir o próprio usuário" }, 400);
+        return userError(
+          "Você não pode remover a si mesmo. Peça a outro administrador.",
+          400,
+          "cannot_delete_self",
+        );
       }
 
       const target = await getScopedAccess(adminClient, user_id, scope);
       if (!target) {
-        return json({ error: "Usuário não está no seu escopo" }, 403);
+        return userError("Este usuário não pertence ao seu escopo.", 403, "not_in_scope");
       }
 
       const { data: beforeProfile } = await adminClient.from("profiles").select(
@@ -637,12 +669,16 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
-    return json({ error: "Ação desconhecida" }, 400);
+    return userError("Ação desconhecida.", 400, "unknown_action");
   } catch (error: any) {
     console.error(
       "[manage-account-user] fatal",
       error?.stack || error?.message || error,
     );
-    return json({ error: String(error?.message || error) }, 500);
+    return userError(
+      String(error?.message || error) || "Erro interno do servidor",
+      500,
+      "internal_error",
+    );
   }
 });

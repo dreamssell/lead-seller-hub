@@ -1,0 +1,60 @@
+name: CI - Unit & Edge Function Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  vitest:
+    name: Vitest (TeamPage & unit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm install
+      - name: Run Vitest with coverage
+        run: npx vitest run --coverage --reporter=default --reporter=junit --outputFile.junit=vitest-results.xml
+      - name: Upload Vitest artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-coverage
+          path: |
+            vitest-results.xml
+            coverage/
+          retention-days: 14
+
+  deno:
+    name: Deno (Edge Functions)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+      - name: Run Deno tests with coverage
+        working-directory: supabase/functions
+        run: |
+          mkdir -p ../../deno-coverage
+          deno test -A --coverage=../../deno-coverage manage-account-user/
+      - name: Generate coverage report
+        if: always()
+        run: |
+          deno coverage deno-coverage --lcov > deno-coverage.lcov || true
+      - name: Upload Deno artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deno-coverage
+          path: |
+            deno-coverage.lcov
+            deno-coverage/
+          retention-days: 14
