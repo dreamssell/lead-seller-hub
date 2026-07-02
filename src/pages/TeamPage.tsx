@@ -17,7 +17,7 @@ import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
-import { extractManageUserError, MANAGE_USER_ERROR_MESSAGES } from '@/lib/manageAccountUserErrors';
+import { extractManageUserError } from '@/lib/manageAccountUserErrors';
 
 type AccessLevel = 'atendimento' | 'supervisao' | 'administracao';
 
