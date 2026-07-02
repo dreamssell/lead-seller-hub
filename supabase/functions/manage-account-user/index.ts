@@ -457,11 +457,11 @@ Deno.serve(async (req) => {
         role_label,
         access_level,
       } = body;
-      if (!user_id) return json({ error: "user_id obrigatório" }, 400);
+      if (!user_id) return userError("user_id é obrigatório.", 400, "missing_user_id");
 
       const target = await getScopedAccess(adminClient, user_id, scope);
       if (!target) {
-        return json({ error: "Usuário não está no seu escopo" }, 403);
+        return userError("Este usuário não pertence ao seu escopo.", 403, "not_in_scope");
       }
 
       const { data: beforeProfile } = await adminClient.from("profiles").select(
