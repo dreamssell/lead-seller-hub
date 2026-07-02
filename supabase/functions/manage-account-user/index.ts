@@ -10,6 +10,8 @@ const ALL_PAGES = [
   "reports", "pipeline", "ceo", "settings", "api-keys", "status", "profile", "white-label",
 ];
 
+type AccessLevel = "atendimento" | "supervisao" | "administracao";
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -32,21 +34,14 @@ async function findUserByEmail(adminClient: ReturnType<typeof createClient>, ema
 type Scope = {
   owner_id: string;
   sub_company_id: string | null;
-  is_owner: boolean; // direct owner of the account (no sub_company_id row required)
+  is_owner: boolean;
 };
 
-/**
- * Resolves the caller's management scope:
- *  - If caller has no user_account_access row → treat as owner, owner_id = caller.id
- *    (matches the platform's "dono do painel" pattern)
- *  - Else, caller must be is_account_admin in the requested sub_company_id (or owner_id matches).
- */
 async function resolveScope(
   adminClient: ReturnType<typeof createClient>,
   callerId: string,
   requestedSubId: string | null,
 ): Promise<Scope> {
-  // Owners of sub_companies → owner_id = callerId
   const { data: ownedSub } = await adminClient
     .from("sub_companies")
     .select("id")
@@ -54,16 +49,13 @@ async function resolveScope(
     .limit(1);
   const isOwnerOfSubs = (ownedSub?.length || 0) > 0;
 
-  // Caller's own access rows
   const { data: access } = await adminClient
     .from("user_account_access")
     .select("owner_id, sub_company_id, is_account_admin")
     .eq("user_id", callerId);
 
-  // If caller has no access row but owns sub_companies (or is a platform admin) → owner
   if (!access || access.length === 0 || isOwnerOfSubs) {
     if (requestedSubId) {
-      // Must own the sub_company
       const { data: sub } = await adminClient
         .from("sub_companies")
         .select("owner_id")
@@ -75,7 +67,6 @@ async function resolveScope(
     return { owner_id: callerId, sub_company_id: null, is_owner: true };
   }
 
-  // Sub-admin path
   const adminRow = access.find((a) =>
     a.is_account_admin && (!requestedSubId || a.sub_company_id === requestedSubId)
   );
@@ -85,6 +76,52 @@ async function resolveScope(
     sub_company_id: adminRow.sub_company_id ?? requestedSubId ?? null,
     is_owner: false,
   };
+}
+
+async function applyAccessLevel(
+  adminClient: ReturnType<typeof createClient>,
+  userId: string,
+  scope: Scope,
+  level: AccessLevel,
+) {
+  // Remove existing signature roles for this scope
+  let del = adminClient.from("user_signature_roles").delete().eq("user_id", userId).eq("owner_id", scope.owner_id);
+  if (scope.sub_company_id) del = del.eq("sub_company_id", scope.sub_company_id);
+  else del = del.is("sub_company_id", null);
+  await del;
+
+  if (level === "supervisao") {
+    await adminClient.from("user_signature_roles").insert({
+      user_id: userId,
+      owner_id: scope.owner_id,
+      sub_company_id: scope.sub_company_id,
+      role: "supervisor",
+    });
+  }
+}
+
+async function logAudit(
+  adminClient: ReturnType<typeof createClient>,
+  params: {
+    action: "create" | "update" | "delete";
+    userId: string;
+    label: string;
+    changes: any;
+    changedBy: string;
+    scope: Scope;
+  },
+) {
+  await adminClient.from("audit_logs").insert({
+    table_name: "user_account_access",
+    record_id: params.userId,
+    action: params.action,
+    record_label: params.label,
+    changes: {
+      ...params.changes,
+      _scope: { owner_id: params.scope.owner_id, sub_company_id: params.scope.sub_company_id },
+    },
+    changed_by: params.changedBy,
+  });
 }
 
 Deno.serve(async (req) => {
@@ -120,21 +157,37 @@ Deno.serve(async (req) => {
       const ids = (rows || []).map((r) => r.user_id);
       const { data: profiles } = await adminClient.from("profiles").select("*").in("user_id", ids);
       const profMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
-      const users = (rows || []).map((r) => ({
-        ...r,
-        profile: profMap.get(r.user_id) || null,
-      }));
+
+      // Signature roles → derive access level
+      let sigQ = adminClient.from("user_signature_roles").select("user_id, role").eq("owner_id", scope.owner_id).in("user_id", ids);
+      if (scope.sub_company_id) sigQ = sigQ.eq("sub_company_id", scope.sub_company_id);
+      const { data: sigs } = await sigQ;
+      const sigMap = new Map<string, string>();
+      (sigs || []).forEach((s: any) => sigMap.set(s.user_id, s.role));
+
+      const users = (rows || []).map((r) => {
+        const sigRole = sigMap.get(r.user_id);
+        const access_level: AccessLevel = r.is_account_admin
+          ? "administracao"
+          : (sigRole && ["supervisor", "coordenador", "diretor"].includes(sigRole))
+            ? "supervisao"
+            : "atendimento";
+        return { ...r, profile: profMap.get(r.user_id) || null, access_level };
+      });
       return json({ users, scope });
     }
 
     // ─── CREATE ────────────────────────────────────────────────────────────
     if (action === "create") {
-      const { email, name, password, allowed_pages, is_account_admin } = body;
+      const { email, name, password, allowed_pages, is_account_admin, role_label, access_level } = body;
+      const level: AccessLevel = (["atendimento", "supervisao", "administracao"].includes(access_level))
+        ? access_level : (is_account_admin ? "administracao" : "atendimento");
       const normalizedEmail = String(email || "").trim().toLowerCase();
       if (!normalizedEmail || !name || !password || password.length < 6) {
         return json({ error: "Email, nome e senha (mín. 6) obrigatórios" }, 400);
       }
       const pages = Array.isArray(allowed_pages) && allowed_pages.length > 0 ? allowed_pages : ALL_PAGES;
+      const isAdmin = level === "administracao";
 
       const existing = await findUserByEmail(adminClient, normalizedEmail);
       const userResult = existing
@@ -149,6 +202,7 @@ Deno.serve(async (req) => {
         user_id: newUser.id,
         email: normalizedEmail,
         display_name: name,
+        role_label: role_label || null,
         is_active: true,
       }, { onConflict: "user_id" });
 
@@ -157,7 +211,7 @@ Deno.serve(async (req) => {
         owner_id: scope.owner_id,
         sub_company_id: scope.sub_company_id,
         allowed_pages: pages,
-        is_account_admin: !!is_account_admin,
+        is_account_admin: isAdmin,
         created_by: caller.user.id,
         updated_at: new Date().toISOString(),
       };
@@ -167,19 +221,35 @@ Deno.serve(async (req) => {
         : await adminClient.from("user_account_access").upsert(accessPayload);
       if (accessError) return json({ error: accessError.message }, 400);
 
+      await applyAccessLevel(adminClient, newUser.id, scope, level);
+
+      await logAudit(adminClient, {
+        action: "create",
+        userId: newUser.id,
+        label: `${name} <${normalizedEmail}>`,
+        changes: { email: normalizedEmail, display_name: name, role_label, access_level: level, is_account_admin: isAdmin },
+        changedBy: caller.user.id,
+        scope,
+      });
+
       return json({ ok: true, user_id: newUser.id });
     }
 
     // ─── UPDATE ────────────────────────────────────────────────────────────
     if (action === "update") {
-      const { user_id, name, password, allowed_pages, is_account_admin, is_active, phone, role_label } = body;
+      const { user_id, name, password, allowed_pages, is_account_admin, is_active, phone, role_label, access_level } = body;
       if (!user_id) return json({ error: "user_id obrigatório" }, 400);
 
-      // Verify target belongs to scope
-      let q = adminClient.from("user_account_access").select("id, sub_company_id").eq("user_id", user_id).eq("owner_id", scope.owner_id);
+      let q = adminClient.from("user_account_access").select("id, sub_company_id, allowed_pages, is_account_admin").eq("user_id", user_id).eq("owner_id", scope.owner_id);
       if (scope.sub_company_id) q = q.eq("sub_company_id", scope.sub_company_id);
       const { data: target } = await q.maybeSingle();
       if (!target) return json({ error: "Usuário não está no seu escopo" }, 403);
+
+      const { data: beforeProfile } = await adminClient.from("profiles").select("display_name, role_label, phone, is_active, email").eq("user_id", user_id).maybeSingle();
+
+      const level: AccessLevel | null = (["atendimento", "supervisao", "administracao"].includes(access_level))
+        ? access_level as AccessLevel : null;
+      const nextIsAdmin = level ? (level === "administracao") : (typeof is_account_admin === "boolean" ? is_account_admin : target.is_account_admin);
 
       if (password && password.length >= 6) {
         await adminClient.auth.admin.updateUserById(user_id, { password });
@@ -195,9 +265,32 @@ Deno.serve(async (req) => {
 
       const accessUpdate: any = { updated_at: new Date().toISOString() };
       if (Array.isArray(allowed_pages)) accessUpdate.allowed_pages = allowed_pages;
-      if (typeof is_account_admin === "boolean") accessUpdate.is_account_admin = is_account_admin;
-      if (Object.keys(accessUpdate).length > 1) {
-        await adminClient.from("user_account_access").update(accessUpdate).eq("id", target.id);
+      accessUpdate.is_account_admin = nextIsAdmin;
+      await adminClient.from("user_account_access").update(accessUpdate).eq("id", target.id);
+
+      if (level) await applyAccessLevel(adminClient, user_id, scope, level);
+
+      // Diff for audit
+      const diff: Record<string, { from: any; to: any }> = {};
+      const trackProfile: Array<keyof typeof profileUpdate> = ["display_name", "role_label", "phone", "is_active"];
+      trackProfile.forEach((k) => {
+        if (profileUpdate[k] !== undefined && (beforeProfile as any)?.[k] !== profileUpdate[k]) {
+          diff[k] = { from: (beforeProfile as any)?.[k] ?? null, to: profileUpdate[k] };
+        }
+      });
+      if (nextIsAdmin !== target.is_account_admin) diff.is_account_admin = { from: target.is_account_admin, to: nextIsAdmin };
+      if (level) diff.access_level = { from: null, to: level };
+      if (password) diff.password = { from: "••••", to: "••••" };
+
+      if (Object.keys(diff).length > 0) {
+        await logAudit(adminClient, {
+          action: "update",
+          userId: user_id,
+          label: `${profileUpdate.display_name || beforeProfile?.display_name || beforeProfile?.email || user_id}`,
+          changes: diff,
+          changedBy: caller.user.id,
+          scope,
+        });
       }
       return json({ ok: true });
     }
@@ -213,15 +306,31 @@ Deno.serve(async (req) => {
       const { data: target } = await q.maybeSingle();
       if (!target) return json({ error: "Usuário não está no seu escopo" }, 403);
 
+      const { data: beforeProfile } = await adminClient.from("profiles").select("display_name, email").eq("user_id", user_id).maybeSingle();
+
       await adminClient.from("user_account_access").delete().eq("id", target.id);
 
-      // Only delete from auth if no other access rows remain
+      let sigDel = adminClient.from("user_signature_roles").delete().eq("user_id", user_id).eq("owner_id", scope.owner_id);
+      if (scope.sub_company_id) sigDel = sigDel.eq("sub_company_id", scope.sub_company_id);
+      else sigDel = sigDel.is("sub_company_id", null);
+      await sigDel;
+
       const { data: stillHas } = await adminClient.from("user_account_access").select("id").eq("user_id", user_id).limit(1);
       if (!stillHas || stillHas.length === 0) {
         await adminClient.from("user_roles").delete().eq("user_id", user_id);
         await adminClient.from("profiles").delete().eq("user_id", user_id);
         await adminClient.auth.admin.deleteUser(user_id);
       }
+
+      await logAudit(adminClient, {
+        action: "delete",
+        userId: user_id,
+        label: `${beforeProfile?.display_name || beforeProfile?.email || user_id}`,
+        changes: { removed: true, email: beforeProfile?.email },
+        changedBy: caller.user.id,
+        scope,
+      });
+
       return json({ ok: true });
     }
 
