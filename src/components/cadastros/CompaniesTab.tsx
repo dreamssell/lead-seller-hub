@@ -31,13 +31,16 @@ type Company = {
   status: string;
   logo_url: string | null;
   notes: string | null;
+  login_email: string | null;
+  auth_user_id: string | null;
+  display_name: string | null;
   created_at: string;
 };
 
-const EMPTY: Partial<Company> = {
+const EMPTY: Partial<Company> & { password?: string } = {
   name: '', document: '', email: '', phone: '', website: '',
   address: '', city: '', state: '', segment: '', plan_slug: 'basic',
-  status: 'active', notes: '',
+  status: 'active', notes: '', login_email: '', password: '', display_name: '',
 };
 
 export default function CompaniesTab() {
@@ -45,7 +48,7 @@ export default function CompaniesTab() {
   const [rows, setRows] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
-  const [editing, setEditing] = useState<Partial<Company> | null>(null);
+  const [editing, setEditing] = useState<(Partial<Company> & { password?: string }) | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDel, setConfirmDel] = useState<Company | null>(null);
 
@@ -73,6 +76,15 @@ export default function CompaniesTab() {
   const save = async () => {
     if (!editing?.name?.trim()) return toast({ title: 'Informe o nome da empresa', variant: 'destructive' });
     if (!ownerId) return toast({ title: 'Sessão inválida', variant: 'destructive' });
+    const loginEmail = (editing.login_email || '').trim().toLowerCase();
+    const password = editing.password || '';
+    if (loginEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginEmail)) {
+      return toast({ title: 'E-mail de login inválido', variant: 'destructive' });
+    }
+    // For NEW companies, require a password whenever a login email is provided.
+    if (!editing.id && loginEmail && password.length < 6) {
+      return toast({ title: 'Defina uma senha de pelo menos 6 caracteres', variant: 'destructive' });
+    }
     setSaving(true);
     const payload: any = {
       name: editing.name?.trim(),
@@ -87,7 +99,9 @@ export default function CompaniesTab() {
       plan_slug: editing.plan_slug || 'basic',
       status: editing.status || 'active',
       notes: editing.notes || null,
+      display_name: editing.display_name || editing.name?.trim() || null,
     };
+    let companyId = editing.id as string | undefined;
     let error;
     if (editing.id) {
       ({ error } = await supabase.from('client_companies').update(payload).eq('id', editing.id));
@@ -95,11 +109,39 @@ export default function CompaniesTab() {
       payload.owner_id = ownerId;
       payload.sub_company_id = subCompanyId;
       payload.created_by = user?.id ?? null;
-      ({ error } = await supabase.from('client_companies').insert(payload));
+      const ins = await supabase.from('client_companies').insert(payload).select('id').single();
+      error = ins.error;
+      companyId = ins.data?.id;
+    }
+    if (error) { setSaving(false); return toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' }); }
+
+    // Provision / update the login user (idempotent). Only when a login email
+    // is provided — the company can also live without an active login.
+    if (companyId && loginEmail) {
+      const { data: provRes, error: provErr } = await supabase.functions.invoke('provision-client-company-user', {
+        body: {
+          company_id: companyId,
+          login_email: loginEmail,
+          password: password || undefined,
+          display_name: editing.display_name || editing.name?.trim(),
+        },
+      });
+      if (provErr || (provRes as any)?.error) {
+        setSaving(false);
+        return toast({
+          title: 'Empresa salva, mas houve erro ao criar/atualizar o login',
+          description: provErr?.message || (provRes as any)?.error,
+          variant: 'destructive',
+        });
+      }
+      toast({
+        title: editing.id ? 'Empresa atualizada' : 'Empresa cadastrada com login ativo',
+        description: `Login: ${loginEmail}`,
+      });
+    } else {
+      toast({ title: editing.id ? 'Empresa atualizada' : 'Empresa cadastrada' });
     }
     setSaving(false);
-    if (error) return toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
-    toast({ title: editing.id ? 'Empresa atualizada' : 'Empresa cadastrada' });
     setEditing(null);
     load();
   };
@@ -265,11 +307,58 @@ export default function CompaniesTab() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="md:col-span-2 border-t border-border/40 pt-4 mt-2">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center">
+                  <Building2 className="w-3.5 h-3.5 text-primary" />
+                </div>
+                <h4 className="text-sm font-semibold">Credenciais de acesso à plataforma</h4>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                Preencha para que esta empresa possa entrar na plataforma. O e-mail vira o login e a senha é enviada
+                para o sistema de autenticação. Deixe em branco para cadastrar apenas o registro comercial sem login ativo.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>E-mail de login</Label>
+                  <Input
+                    type="email"
+                    placeholder="usuario@empresa.com"
+                    value={editing?.login_email || ''}
+                    onChange={(e) => setEditing((p) => ({ ...p!, login_email: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>{editing?.id && editing?.auth_user_id ? 'Nova senha (opcional)' : 'Senha inicial'}</Label>
+                  <Input
+                    type="password"
+                    placeholder={editing?.id && editing?.auth_user_id ? 'Deixe em branco para manter' : 'mín. 6 caracteres'}
+                    value={editing?.password || ''}
+                    onChange={(e) => setEditing((p) => ({ ...p!, password: e.target.value }))}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Nome de exibição</Label>
+                  <Input
+                    placeholder="Como o usuário aparecerá na plataforma"
+                    value={editing?.display_name || ''}
+                    onChange={(e) => setEditing((p) => ({ ...p!, display_name: e.target.value }))}
+                  />
+                </div>
+              </div>
+              {editing?.auth_user_id && (
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-2">
+                  ✓ Login já ativo · ID auth: <span className="font-mono">{editing.auth_user_id.slice(0, 8)}…</span>
+                </p>
+              )}
+            </div>
+
             <div className="md:col-span-2">
               <Label>Notas internas</Label>
               <Textarea rows={3} value={editing?.notes || ''} onChange={(e) => setEditing((p) => ({ ...p!, notes: e.target.value }))} />
             </div>
           </div>
+
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button>

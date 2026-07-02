@@ -674,12 +674,15 @@ export type Database = {
       client_companies: {
         Row: {
           address: string | null
+          auth_user_id: string | null
           city: string | null
           created_at: string
           created_by: string | null
+          display_name: string | null
           document: string | null
           email: string | null
           id: string
+          login_email: string | null
           logo_url: string | null
           name: string
           notes: string | null
@@ -695,12 +698,15 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          auth_user_id?: string | null
           city?: string | null
           created_at?: string
           created_by?: string | null
+          display_name?: string | null
           document?: string | null
           email?: string | null
           id?: string
+          login_email?: string | null
           logo_url?: string | null
           name: string
           notes?: string | null
@@ -716,12 +722,15 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          auth_user_id?: string | null
           city?: string | null
           created_at?: string
           created_by?: string | null
+          display_name?: string | null
           document?: string | null
           email?: string | null
           id?: string
+          login_email?: string | null
           logo_url?: string | null
           name?: string
           notes?: string | null
