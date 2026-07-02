@@ -249,8 +249,29 @@ export default function TeamPage() {
       </div>
 
       {limitReached && (
-        <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          Você atingiu o limite de <b>{maxUsers}</b> usuários do plano <b>{planName}</b>. Remova um membro ou faça upgrade do plano para adicionar novos.
+        <div
+          role="alert"
+          aria-label="limite-plano-atingido"
+          className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive flex flex-col md:flex-row md:items-center md:justify-between gap-3"
+        >
+          <div>
+            <p className="font-semibold">Limite do plano {planName} atingido</p>
+            <p className="text-destructive/80">
+              Você já utiliza <b>{total}</b> de <b>{maxUsers}</b> usuários disponíveis no plano <b>{planName}</b>.
+              Para adicionar novos membros, remova um usuário existente ou solicite um aumento de licenças.
+            </p>
+          </div>
+          <a
+            href={`mailto:suporte@leadseller.com?subject=${encodeURIComponent(
+              `Solicitação de aumento de usuários – Plano ${planName}`
+            )}&body=${encodeURIComponent(
+              `Olá, gostaria de aumentar o limite de usuários do meu plano ${planName} (atual: ${maxUsers}).\n\nEscopo: ${scopeSubId ? 'sub-empresa' : 'conta principal'}\nUsuário: ${user?.email || ''}`
+            )}`}
+            data-testid="request-plan-upgrade"
+            className="inline-flex items-center justify-center rounded-lg bg-destructive text-destructive-foreground px-3 py-2 text-xs font-medium hover:opacity-90 whitespace-nowrap"
+          >
+            Solicitar aumento de usuários
+          </a>
         </div>
       )}
 
