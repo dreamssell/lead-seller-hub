@@ -669,12 +669,16 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
-    return json({ error: "Ação desconhecida" }, 400);
+    return userError("Ação desconhecida.", 400, "unknown_action");
   } catch (error: any) {
     console.error(
       "[manage-account-user] fatal",
       error?.stack || error?.message || error,
     );
-    return json({ error: String(error?.message || error) }, 500);
+    return userError(
+      String(error?.message || error) || "Erro interno do servidor",
+      500,
+      "internal_error",
+    );
   }
 });
