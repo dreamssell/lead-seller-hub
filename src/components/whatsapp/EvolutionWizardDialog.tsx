@@ -339,6 +339,9 @@ export function EvolutionWizardDialog({ open, onOpenChange, conn, onConnected, a
       if (error) {
         // Network/edge error — back off and retry.
         pollDelayRef.current = Math.min(MAX_POLL_MS, pollDelayRef.current * POLL_BACKOFF);
+      } else if (data?.not_found) {
+        failWith('auth', data.hint || `A instância "${instance}" não existe no servidor Evolution. Clique em "Criar Instância" para gerar uma nova ou verifique o nome.`);
+        return;
       } else if (data?.auth_error) {
         failWith('auth', data.hint || 'A API Key da Evolution foi recusada. Atualize o token e tente novamente.');
         return;

@@ -414,6 +414,9 @@ Deno.serve(async (req) => {
       const state = r.data?.instance?.state || r.data?.state || "unknown";
       const connected = state === "open";
 
+      const notFound = r.status === 404;
+      const authError = r.status === 401 || r.status === 403;
+
       // Sync the connection row.
       const newStatus: "connected" | "connecting" | "disconnected" | "error" = connected
         ? "connected"
@@ -423,24 +426,36 @@ Deno.serve(async (req) => {
             ? "disconnected"
             : "error";
 
+      const errorMessage = notFound
+        ? `Instância "${instance}" não existe no servidor Evolution — recrie a instância.`
+        : authError
+          ? `API Key recusada (${r.status}) — atualize o token.`
+          : !r.ok
+            ? `Evolution ${r.status}`
+            : null;
+
       const update: Record<string, any> = {
         status: newStatus,
         last_checked_at: new Date().toISOString(),
-        last_error: r.ok ? null : `Evolution ${r.status}`,
+        last_error: errorMessage,
       };
       if (connected && r.data?.instance?.owner) {
         update.phone_number = String(r.data.instance.owner).split("@")[0];
       }
       await admin.from("whatsapp_connections").update(update).eq("id", connection_id);
 
-      const authError = r.status === 401 || r.status === 403;
-      if (authError) {
+      // Only log meaningful transitions to avoid log-spam on repeated 404s.
+      const prevError = (conn as any).last_error ?? null;
+      const changed = errorMessage !== prevError || conn.status !== newStatus;
+      if (notFound && changed) {
+        await logEvent("evolution.instance_missing", "error", errorMessage!, { state, status: r.status });
+      } else if (authError && changed) {
         await logEvent("evolution.auth_error", "error", `HTTP ${r.status}`, { state });
       } else if (connected && conn.status !== "connected") {
         await logEvent("evolution.connected", "success", "Instância conectada", {
           phone: update.phone_number ?? null,
         });
-      } else if (!r.ok) {
+      } else if (!r.ok && !notFound && changed) {
         await logEvent("evolution.state_error", "error", `HTTP ${r.status}`, { state });
       }
       return json({
@@ -449,11 +464,14 @@ Deno.serve(async (req) => {
         state,
         status: r.status,
         auth_error: authError,
-        hint: authError
-          ? "A API Key da Evolution foi recusada (token expirado ou inválido)."
-          : !r.ok
-            ? `Evolution respondeu ${r.status}. Verifique URL/instância.`
-            : null,
+        not_found: notFound,
+        hint: notFound
+          ? `A instância "${instance}" não existe mais no servidor. Clique em "Criar Instância" ou verifique se o nome está correto.`
+          : authError
+            ? "A API Key da Evolution foi recusada (token expirado ou inválido)."
+            : !r.ok
+              ? `Evolution respondeu ${r.status}. Verifique URL/instância.`
+              : null,
         raw: r.data,
       });
     }
