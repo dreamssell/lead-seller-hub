@@ -104,7 +104,10 @@ export default function CompaniesTab() {
     };
     let companyId = editing.id as string | undefined;
     let error;
+    let beforeRow: any = null;
     if (editing.id) {
+      const prev = await supabase.from('client_companies').select('*').eq('id', editing.id).maybeSingle();
+      beforeRow = prev.data;
       ({ error } = await supabase.from('client_companies').update(payload).eq('id', editing.id));
     } else {
       payload.owner_id = ownerId;
@@ -115,6 +118,21 @@ export default function CompaniesTab() {
       companyId = ins.data?.id;
     }
     if (error) { setSaving(false); return toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' }); }
+
+    // Audit trail — captured regardless of the provisioning outcome below.
+    try {
+      if (editing.id) {
+        await logAudit({
+          table: 'client_companies', recordId: editing.id, action: 'update',
+          label: payload.name, before: beforeRow, after: { ...beforeRow, ...payload },
+        });
+      } else if (companyId) {
+        await logAudit({
+          table: 'client_companies', recordId: companyId, action: 'create',
+          label: payload.name, after: payload,
+        });
+      }
+    } catch (e) { console.error('audit failed', e); }
 
     // Provision / update the login user (idempotent). Only when a login email
     // is provided — the company can also live without an active login.
