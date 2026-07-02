@@ -485,12 +485,64 @@ export type Database = {
           },
         ]
       }
+      chat_message_deadletter: {
+        Row: {
+          attempts: number
+          channel: string | null
+          connection_id: string | null
+          content: string | null
+          correlation_id: string | null
+          created_at: string
+          customer_id: string | null
+          id: string
+          last_error: string | null
+          last_error_code: string | null
+          metadata: Json
+          owner_id: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+        }
+        Insert: {
+          attempts?: number
+          channel?: string | null
+          connection_id?: string | null
+          content?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          last_error?: string | null
+          last_error_code?: string | null
+          metadata?: Json
+          owner_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Update: {
+          attempts?: number
+          channel?: string | null
+          connection_id?: string | null
+          content?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          last_error?: string | null
+          last_error_code?: string | null
+          metadata?: Json
+          owner_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           channel: string | null
           client_msg_id: string | null
           connection_id: string | null
           content: string
+          correlation_id: string | null
           created_at: string
           customer_id: string | null
           id: string
@@ -505,6 +557,7 @@ export type Database = {
           client_msg_id?: string | null
           connection_id?: string | null
           content: string
+          correlation_id?: string | null
           created_at?: string
           customer_id?: string | null
           id?: string
@@ -519,6 +572,7 @@ export type Database = {
           client_msg_id?: string | null
           connection_id?: string | null
           content?: string
+          correlation_id?: string | null
           created_at?: string
           customer_id?: string | null
           id?: string
