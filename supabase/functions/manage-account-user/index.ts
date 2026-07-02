@@ -340,9 +340,10 @@ Deno.serve(async (req) => {
           : (is_account_admin ? "administracao" : "atendimento");
       const normalizedEmail = String(email || "").trim().toLowerCase();
       if (!normalizedEmail || !name || !password || password.length < 6) {
-        return json(
-          { error: "Email, nome e senha (mín. 6) obrigatórios" },
+        return userError(
+          "Informe e-mail, nome e senha (mínimo 6 caracteres).",
           400,
+          "invalid_create_payload",
         );
       }
       const pages = Array.isArray(allowed_pages) && allowed_pages.length > 0
