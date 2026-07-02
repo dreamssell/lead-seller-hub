@@ -48,7 +48,7 @@ export default function CompaniesTab() {
   const [rows, setRows] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
-  const [editing, setEditing] = useState<Partial<Company> | null>(null);
+  const [editing, setEditing] = useState<(Partial<Company> & { password?: string }) | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDel, setConfirmDel] = useState<Company | null>(null);
 
