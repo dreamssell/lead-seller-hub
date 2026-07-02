@@ -923,10 +923,43 @@ export default function ChatPage() {
   const retryFailedMessage = async (message: any) => {
     if (!message?.content || !selectedConvId) return;
     const msgId = message.client_msg_id || message.id;
+    const meta = getMessageMetadata(message) || {};
+    const currentAttempts = Number(meta.retry_count ?? 0);
+
+    // Poison queue: after 3 attempts stop retrying and move to deadletter.
+    if (currentAttempts >= 3) {
+      try {
+        await supabase.from('chat_message_deadletter').insert({
+          correlation_id: (message as any).correlation_id || msgId,
+          customer_id: message.customer_id || selectedConvId,
+          owner_id: activeWhatsAppConn?.owner_id ?? null,
+          connection_id: activeWhatsAppConn?.id ?? null,
+          channel: message.channel || activeChannel,
+          content: message.content,
+          attempts: currentAttempts,
+          last_error: (message as any)._error || meta.error || 'exceeded_max_retries',
+          last_error_code: (message as any)._errorCode || meta.error_code || null,
+          metadata: { ...(meta || {}), poisoned_at: new Date().toISOString() },
+        });
+      } catch { /* best-effort */ }
+      await markStatus(msgId, 'error', undefined, {
+        ...meta,
+        poisoned: true,
+        error: 'Falha persistente — mensagem movida para a fila de erros (deadletter). Verifique o painel de Debug.',
+      });
+      toast({ title: 'Fila de erros', description: 'Após 3 tentativas a mensagem foi movida para a poison queue.', variant: 'destructive' });
+      return;
+    }
+
+    const nextAttempt = currentAttempts + 1;
+    const backoffMs = Math.min(4000, 400 * Math.pow(2, currentAttempts));
+
     setMessages(prev => prev.map(m => (m.id === message.id || m.client_msg_id === msgId) ? { ...m, status: 'sending', _error: null, _blockedBy: null, _retrying: true } : m));
     await supabase.from('chat_messages')
-      .update({ metadata: { ...getMessageMetadata(message), status: 'sending', retrying: true, retry_started_at: new Date().toISOString() } })
+      .update({ metadata: { ...meta, status: 'sending', retrying: true, retry_count: nextAttempt, retry_started_at: new Date().toISOString() } })
       .eq('client_msg_id', msgId);
+
+    await new Promise(r => setTimeout(r, backoffMs));
 
     try {
       const t0 = Date.now();
@@ -935,17 +968,20 @@ export default function ChatPage() {
         latency_ms: Date.now() - t0,
         accepted_at: new Date().toISOString(),
         retried_at: new Date().toISOString(),
+        retry_count: nextAttempt,
         provider_response_ok: true,
       });
-      toast({ title: 'Mensagem reenviada', description: 'A fila retomou o envio desta mensagem.' });
+      toast({ title: 'Mensagem reenviada', description: `A fila retomou o envio (tentativa ${nextAttempt}/3).` });
     } catch (err: any) {
       const normalized = showSendErrorToast(err);
       await markStatus(msgId, 'error', undefined, {
+        ...meta,
         error: normalized.message,
         error_detail: normalized.detail,
         error_code: normalized.code,
         blocked_by: normalized.blockedBy,
         retryable: normalized.retryable,
+        retry_count: nextAttempt,
         retried_at: new Date().toISOString(),
       });
     }
