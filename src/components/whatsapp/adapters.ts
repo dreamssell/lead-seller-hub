@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface WhatsAppProviderAdapter {
   getStatus(conn: WhatsAppConnection): Promise<{ connected: boolean; status: string; phone?: string; error?: string; raw?: any }>;
-  sendMessage(conn: WhatsAppConnection, customerId: string, content: string): Promise<any>;
+  sendMessage(conn: WhatsAppConnection, customerId: string, content: string, correlationId?: string): Promise<any>;
   sendMedia?(conn: WhatsAppConnection, customerId: string, file: File, caption?: string): Promise<any>;
   sendAudio?(conn: WhatsAppConnection, customerId: string, blob: Blob): Promise<any>;
   sendRich?(conn: WhatsAppConnection, customerId: string, payload: any): Promise<any>;
@@ -330,29 +330,34 @@ class EvolutionAdapter implements WhatsAppProviderAdapter {
     return data;
   }
 
-  async sendMessage(conn: WhatsAppConnection, customerId: string, content: string) {
+  async sendMessage(conn: WhatsAppConnection, customerId: string, content: string, correlationId?: string) {
+    const cid = correlationId ?? (globalThis.crypto?.randomUUID?.() ?? String(Date.now()));
     return enqueue(`evo:${conn.id}`, () => sendWithRetry(async () => {
       const start = Date.now();
       try {
+        console.info(`[Evolution][cid=${cid}] send_text start`, { connection_id: conn.id, customer_id: customerId });
         const { data, error } = await supabase.functions.invoke('evolution-instance', {
           body: {
             action: 'send_text',
             connection_id: conn.id,
             customer_id: customerId,
             text: ensureEvolutionText(content),
+            correlation_id: cid,
           },
         });
         if (error) throw new Error(error.message || 'Falha ao chamar envio Evolution.');
         if (!data?.ok) throw new Error(extractInvokeError(data, 'Falha ao enviar mensagem pela Evolution.'));
         (data as any)._latency_ms = data.latency_ms ?? Date.now() - start;
+        (data as any)._correlation_id = cid;
+        console.info(`[Evolution][cid=${cid}] send_text ok`, { latency_ms: (data as any)._latency_ms, mode: (data as any).mode, message_id: (data as any).message_id });
         return data;
       } catch (err: any) {
         const msg = String(err?.message || '');
+        console.error(`[Evolution][cid=${cid}] send_text fail`, { err: msg });
         if (isConnectionClosedError(msg)) {
           await markConnectionDisconnected(conn.id, msg);
           throw new Error('Sua instância do WhatsApp foi desconectada. Reescaneie o QR Code em Conexões & Canais para continuar enviando mensagens.');
         }
-        console.error('[Evolution] Error sending message:', err);
         throw err;
       }
     }));
