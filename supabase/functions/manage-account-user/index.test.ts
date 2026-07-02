@@ -2,10 +2,15 @@
 // These call the deployed function via HTTP and validate that failure paths
 // return machine-readable JSON errors (used by the TeamPage toast layer).
 import "https://deno.land/std@0.224.0/dotenv/load.ts";
-import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import {
+  assert,
+  assertEquals,
+} from "https://deno.land/std@0.224.0/assert/mod.ts";
 
-const SUPABASE_URL = Deno.env.get("VITE_SUPABASE_URL") ?? Deno.env.get("SUPABASE_URL")!;
-const ANON = Deno.env.get("VITE_SUPABASE_PUBLISHABLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY")!;
+const SUPABASE_URL = Deno.env.get("VITE_SUPABASE_URL") ??
+  Deno.env.get("SUPABASE_URL")!;
+const ANON = Deno.env.get("VITE_SUPABASE_PUBLISHABLE_KEY") ??
+  Deno.env.get("SUPABASE_ANON_KEY")!;
 const FN_URL = `${SUPABASE_URL}/functions/v1/manage-account-user`;
 
 async function call(body: unknown, auth?: string) {
@@ -20,7 +25,9 @@ async function call(body: unknown, auth?: string) {
   });
   const text = await res.text();
   let json: any = null;
-  try { json = JSON.parse(text); } catch { /* keep raw */ }
+  try {
+    json = JSON.parse(text);
+  } catch { /* keep raw */ }
   return { status: res.status, json, text };
 }
 
@@ -37,7 +44,12 @@ Deno.test("returns JSON error when action is missing", async () => {
 });
 
 Deno.test("returns JSON error when create payload is invalid", async () => {
-  const { json } = await call({ action: "create", email: "", name: "", password: "123" });
+  const { json } = await call({
+    action: "create",
+    email: "",
+    name: "",
+    password: "123",
+  });
   assert(typeof json?.error === "string");
 });
 
