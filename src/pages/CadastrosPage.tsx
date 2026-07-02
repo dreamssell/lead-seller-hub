@@ -22,6 +22,7 @@ import WhiteLabelTab from '@/components/cadastros/WhiteLabelTab';
 import CompaniesTab from '@/components/cadastros/CompaniesTab';
 import { logAudit } from '@/lib/audit';
 import { BLOCKABLE_PAGES } from '@/lib/navigation';
+import { extractManageUserError } from '@/lib/manageAccountUserErrors';
 
 type Entity = 'leads' | 'customers' | 'products' | 'tasks' | 'users' | 'contacts';
 
@@ -733,7 +734,8 @@ function UsersTab() {
     const { data, error } = await supabase.functions.invoke('manage-account-user', {
       body: { action: 'list', sub_company_id: scopeSubId },
     });
-    if (error) toast({ title: 'Erro ao carregar', description: error.message, variant: 'destructive' });
+    const surfaced = await extractManageUserError(data, error);
+    if (surfaced) toast({ title: 'Erro ao carregar', description: surfaced.message, variant: 'destructive' });
     setRows((data as any)?.users || []);
     setLoading(false);
   };
@@ -790,8 +792,9 @@ function UsersTab() {
       if (form.password) payload.password = form.password;
       const { data, error } = await supabase.functions.invoke('manage-account-user', { body: payload });
       setSaving(false);
-      if (error || (data as any)?.error) {
-        toast({ title: 'Erro ao salvar', description: error?.message || (data as any)?.error, variant: 'destructive' });
+      const surfaced = await extractManageUserError(data, error);
+      if (surfaced) {
+        toast({ title: 'Erro ao salvar', description: surfaced.message, variant: 'destructive' });
         return;
       }
       await logAudit({ table: 'profiles', recordId: editing.user_id, action: 'update', label: form.display_name, after: payload });
@@ -813,8 +816,9 @@ function UsersTab() {
       };
       const { data, error } = await supabase.functions.invoke('manage-account-user', { body: payload });
       setSaving(false);
-      if (error || (data as any)?.error) {
-        toast({ title: 'Erro ao criar', description: error?.message || (data as any)?.error, variant: 'destructive' });
+      const surfaced = await extractManageUserError(data, error);
+      if (surfaced) {
+        toast({ title: 'Erro ao criar', description: surfaced.message, variant: 'destructive' });
         return;
       }
       await logAudit({ table: 'profiles', recordId: (data as any)?.user_id, action: 'create', label: form.display_name, after: payload });
@@ -829,8 +833,9 @@ function UsersTab() {
     const { data, error } = await supabase.functions.invoke('manage-account-user', {
       body: { action: 'delete', sub_company_id: scopeSubId, user_id: deleting.user_id },
     });
-    if (error || (data as any)?.error) {
-      toast({ title: 'Erro ao excluir', description: error?.message || (data as any)?.error, variant: 'destructive' });
+    const surfaced = await extractManageUserError(data, error);
+    if (surfaced) {
+      toast({ title: 'Erro ao excluir', description: surfaced.message, variant: 'destructive' });
     } else {
       await logAudit({ table: 'profiles', recordId: deleting.user_id, action: 'delete', label: deleting.profile?.display_name });
       toast({ title: 'Usuário excluído' });
