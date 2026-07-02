@@ -242,17 +242,44 @@ Deno.serve(async (req) => {
     const adminClient = createClient(url, serviceKey);
 
     const { data: caller } = await userClient.auth.getUser();
-    if (!caller.user) return json({ error: "Não autenticado" }, 401);
+    if (!caller.user) {
+      return userError("Sessão expirada. Faça login novamente.", 401, "unauthenticated");
+    }
 
-    const body = await req.json();
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return userError("Corpo da requisição inválido (JSON esperado).", 400, "invalid_json");
+    }
     const action: "create" | "update" | "delete" | "list" = body.action;
-    if (!action) return json({ error: "action obrigatória" }, 400);
+    if (!action) return userError("Ação obrigatória.", 400, "missing_action");
 
-    const scope = await resolveScope(
-      adminClient,
-      caller.user.id,
-      body.sub_company_id ?? null,
-    );
+    let scope: Scope;
+    try {
+      scope = await resolveScope(
+        adminClient,
+        caller.user.id,
+        body.sub_company_id ?? null,
+      );
+    } catch (scopeError: any) {
+      const msg = String(scopeError?.message || scopeError || "");
+      if (msg === "not_allowed_for_sub") {
+        return userError(
+          "Você não tem permissão para gerenciar esta sub-empresa.",
+          403,
+          "not_allowed_for_sub",
+        );
+      }
+      if (msg === "not_account_admin") {
+        return userError(
+          "Apenas administradores da conta podem executar esta ação.",
+          403,
+          "not_account_admin",
+        );
+      }
+      return userError(errorMessage(scopeError, "Falha ao resolver escopo"), 400, "scope_error");
+    }
 
     // ─── LIST ──────────────────────────────────────────────────────────────
     if (action === "list") {
