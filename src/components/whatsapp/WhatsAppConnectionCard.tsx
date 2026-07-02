@@ -24,6 +24,7 @@ import { FacebookDiagnostics } from './FacebookDiagnostics';
 import { WidgetSettings } from './WidgetSettings';
 import { EvolutionWizardDialog } from './EvolutionWizardDialog';
 import { EvolutionStatusBanner } from './EvolutionStatusBanner';
+import { EvolutionDebugPanel } from './EvolutionDebugPanel';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
 
@@ -71,25 +72,48 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
 
   const handleSave = async () => {
     setSaving(true);
-    const metadata = { 
-      ...(conn.metadata ?? {}), 
-      url, 
-      token, 
+    const metadata = {
+      ...(conn.metadata ?? {}),
+      url,
+      token,
       ...(conn.provider === 'meta' && { phone_number_id: extra }),
-      ...(conn.provider === 'evolution' && { instance: extra }) 
+      ...(conn.provider === 'evolution' && { instance: extra })
     };
     const { error } = await supabase
       .from('whatsapp_connections')
       .update({ metadata })
       .eq('id', conn.id);
-    
+
     setSaving(false);
     if (error) {
       toast.error('Erro ao salvar', { description: error.message });
-    } else {
-      toast.success('Configuração salva');
-      onSaved();
+      return;
     }
+    toast.success('Configuração salva');
+
+    // For Evolution, validate that the webhook URL registered on the provider
+    // still points at Lead Seller (and that "Webhook by Events" is off).
+    if (conn.provider === 'evolution' && url && token && extra) {
+      try {
+        const { data } = await supabase.functions.invoke('evolution-instance', {
+          body: { action: 'check_webhook', connection_id: conn.id, url, token, instance: extra },
+        });
+        if (data && data.matches === false) {
+          toast.warning('Webhook desalinhado na Evolution', {
+            description: `Configurado: ${data.remote_url ?? '(vazio)'} · Esperado: ${data.expected_url}. Use "Reconfigurar Webhook".`,
+            duration: 10000,
+          });
+        } else if (data?.webhookByEvents) {
+          toast.warning('"Webhook by Events" está ligado', {
+            description: 'Desative na Evolution ou clique em "Reconfigurar Webhook" para normalizar.',
+            duration: 10000,
+          });
+        }
+      } catch {
+        // best-effort validation, do not block save.
+      }
+    }
+    onSaved();
   };
 
   const handleTest = async (isRetry = false) => {
