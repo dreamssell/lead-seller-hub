@@ -643,6 +643,33 @@ Deno.serve(async (req) => {
           : target.is_account_admin);
       const nextLevel: AccessLevel = level ?? prevLevel;
 
+      // Enforce: Atendimento requires at least 1 pipeline (after applying changes)
+      if (nextLevel === "atendimento") {
+        let effectiveCount: number;
+        if (Array.isArray(body.pipeline_ids)) {
+          effectiveCount = body.pipeline_ids.filter(
+            (v: any) => typeof v === "string" && v,
+          ).length;
+        } else {
+          let existingQ = adminClient.from("user_pipeline_assignments")
+            .select("pipeline_id", { count: "exact", head: true })
+            .eq("user_id", user_id).eq("owner_id", scope.owner_id);
+          if (scope.sub_company_id) {
+            existingQ = existingQ.eq("sub_company_id", scope.sub_company_id);
+          } else existingQ = existingQ.is("sub_company_id", null);
+          const { count } = await existingQ;
+          effectiveCount = count ?? 0;
+        }
+        if (effectiveCount === 0) {
+          return userError(
+            "Selecione ao menos 1 funil para membros de Atendimento.",
+            400,
+            "pipeline_required",
+          );
+        }
+      }
+
+
       if (password && password.length >= 6) {
         const { error: passwordError } = await adminClient.auth.admin
           .updateUserById(user_id, { password });
