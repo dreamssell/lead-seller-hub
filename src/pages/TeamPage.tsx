@@ -369,6 +369,33 @@ export default function TeamPage() {
                   )}
                 </div>
 
+                <div className="mb-3">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">Funis atribuídos</p>
+                  {memberPipelines.length === 0 ? (
+                    <span className="text-[11px] text-muted-foreground italic">Nenhum funil</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {memberPipelines.slice(0, 4).map((name, idx) => (
+                        <span
+                          key={idx}
+                          className="text-[10px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 max-w-[140px] truncate"
+                          title={name}
+                        >
+                          {name}
+                        </span>
+                      ))}
+                      {memberPipelines.length > 4 && (
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded-md bg-secondary text-secondary-foreground"
+                          title={memberPipelines.slice(4).join(', ')}
+                        >
+                          +{memberPipelines.length - 4}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <span className={`w-2 h-2 rounded-full ${active ? 'bg-success' : 'bg-muted-foreground'}`} />
