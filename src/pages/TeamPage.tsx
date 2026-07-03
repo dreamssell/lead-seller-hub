@@ -72,6 +72,7 @@ export default function TeamPage() {
 
   const [pipelines, setPipelines] = useState<PipelineOption[]>([]);
   const [pipelinesLoading, setPipelinesLoading] = useState(false);
+  const [pipelinesError, setPipelinesError] = useState<string | null>(null);
 
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditRows, setAuditRows] = useState<any[]>([]);
