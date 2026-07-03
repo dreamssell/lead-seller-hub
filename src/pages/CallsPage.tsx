@@ -453,19 +453,8 @@ export default function CallsPage() {
       </motion.div>
 
       <Tabs defaultValue="history" className="space-y-4">
-        <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="history">Histórico</TabsTrigger>
-          <TabsTrigger value="recordings">Gravações</TabsTrigger>
-          <TabsTrigger value="reports">Relatórios</TabsTrigger>
-          <TabsTrigger value="insights" className="gap-1.5">
-            <Sparkles className="w-3.5 h-3.5" />
-            Análises
-          </TabsTrigger>
-          <TabsTrigger value="stats">Estatísticas</TabsTrigger>
-          <TabsTrigger value="queues">Filas & IVR</TabsTrigger>
-          <TabsTrigger value="blocked">Bloqueados</TabsTrigger>
-          {isOwner && <TabsTrigger value="settings">Configurações SIP</TabsTrigger>}
-        </TabsList>
+        <CallsPageTabsList isOwner={isOwner} />
+
 
         {/* Histórico */}
         <TabsContent value="history">
