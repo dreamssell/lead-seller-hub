@@ -146,6 +146,7 @@ const dialPad = [
 ];
 
 export default function CallsPage() {
+  const { isOwner } = usePlatformOwner();
   const [dialerOpen, setDialerOpen] = useState(false);
   const [number, setNumber] = useState('');
   const [inCall, setInCall] = useState(false);
