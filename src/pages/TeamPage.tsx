@@ -26,6 +26,7 @@ type Member = {
   is_account_admin: boolean;
   allowed_pages: string[];
   access_level?: AccessLevel;
+  pipeline_ids?: string[];
   profile: {
     display_name?: string | null;
     email?: string | null;
@@ -33,6 +34,8 @@ type Member = {
     is_active?: boolean | null;
   } | null;
 };
+
+type PipelineOption = { id: string; name: string };
 
 const ACCESS_LEVELS: Array<{ value: AccessLevel; label: string; description: string; icon: any }> = [
   { value: 'atendimento', label: 'Atendimento', description: 'Usuários operacionais (SDR, Closer, Atendente).', icon: Headset },
