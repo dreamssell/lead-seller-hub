@@ -48,6 +48,71 @@ function errorMessage(
   );
 }
 
+async function syncPipelineAssignments(
+  admin: any,
+  userId: string,
+  scope: { owner_id: string; sub_company_id: string | null },
+  pipelineIds: string[] | undefined,
+  createdBy: string,
+): Promise<{ from: string[]; to: string[] } | null> {
+  if (!Array.isArray(pipelineIds)) return null;
+  const desired = Array.from(new Set(pipelineIds.filter((v) => typeof v === "string" && v)));
+
+  // Validate all pipelines belong to the same scope
+  if (desired.length > 0) {
+    let pq = admin.from("pipelines").select("id, sub_company_id")
+      .eq("owner_id", scope.owner_id).in("id", desired);
+    const { data: valid } = await pq;
+    const validIds = new Set((valid || []).filter((p: any) =>
+      scope.sub_company_id ? p.sub_company_id === scope.sub_company_id : p.sub_company_id === null
+    ).map((p: any) => p.id));
+    for (const id of desired) {
+      if (!validIds.has(id)) {
+        throw new Error(`pipeline_out_of_scope:${id}`);
+      }
+    }
+  }
+
+  let curQ = admin.from("user_pipeline_assignments").select("pipeline_id")
+    .eq("user_id", userId).eq("owner_id", scope.owner_id);
+  if (scope.sub_company_id) curQ = curQ.eq("sub_company_id", scope.sub_company_id);
+  else curQ = curQ.is("sub_company_id", null);
+  const { data: current } = await curQ;
+  const currentSet = new Set((current || []).map((r: any) => r.pipeline_id));
+  const desiredSet = new Set(desired);
+
+  const toAdd = desired.filter((id) => !currentSet.has(id));
+  const toRemove = Array.from(currentSet).filter((id) => !desiredSet.has(id as string)) as string[];
+
+  if (toAdd.length > 0) {
+    const rows = toAdd.map((pipeline_id) => ({
+      user_id: userId,
+      owner_id: scope.owner_id,
+      sub_company_id: scope.sub_company_id,
+      pipeline_id,
+      created_by: createdBy,
+    }));
+    const { error } = await admin.from("user_pipeline_assignments").insert(rows);
+    if (error) throw new Error(errorMessage(error, "Falha ao atribuir funis"));
+  }
+  if (toRemove.length > 0) {
+    let delQ = admin.from("user_pipeline_assignments").delete()
+      .eq("user_id", userId).eq("owner_id", scope.owner_id)
+      .in("pipeline_id", toRemove);
+    if (scope.sub_company_id) delQ = delQ.eq("sub_company_id", scope.sub_company_id);
+    else delQ = delQ.is("sub_company_id", null);
+    const { error } = await delQ;
+    if (error) throw new Error(errorMessage(error, "Falha ao remover funis"));
+  }
+
+  const from = Array.from(currentSet).sort() as string[];
+  const to = [...desired].sort();
+  if (JSON.stringify(from) === JSON.stringify(to)) return null;
+  return { from, to };
+}
+
+
+
 async function findUserByEmail(
   adminClient: ReturnType<typeof createClient>,
   email: string,
