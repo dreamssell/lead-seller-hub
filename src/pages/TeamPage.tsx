@@ -74,7 +74,7 @@ export default function TeamPage() {
   const [pipelinesLoading, setPipelinesLoading] = useState(false);
   const [pipelinesError, setPipelinesError] = useState<string | null>(null);
   const [pipelineFieldHighlight, setPipelineFieldHighlight] = useState(false);
-  const pipelineFieldRef = React.useRef<HTMLDivElement | null>(null);
+  const pipelineFieldRef = useRef<HTMLDivElement | null>(null);
 
   const flashPipelineField = () => {
     setPipelineFieldHighlight(true);
