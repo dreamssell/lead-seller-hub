@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion, AnimatePresence } from 'framer-motion';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import {
   Phone,
   PhoneIncoming,
@@ -145,6 +146,7 @@ const dialPad = [
 ];
 
 export default function CallsPage() {
+  const { isOwner } = usePlatformOwner();
   const [dialerOpen, setDialerOpen] = useState(false);
   const [number, setNumber] = useState('');
   const [inCall, setInCall] = useState(false);
@@ -385,7 +387,7 @@ export default function CallsPage() {
           <TabsTrigger value="stats">Estatísticas</TabsTrigger>
           <TabsTrigger value="queues">Filas & IVR</TabsTrigger>
           <TabsTrigger value="blocked">Bloqueados</TabsTrigger>
-          <TabsTrigger value="settings">Configurações SIP</TabsTrigger>
+          {isOwner && <TabsTrigger value="settings">Configurações SIP</TabsTrigger>}
         </TabsList>
 
         {/* Histórico */}
@@ -1253,7 +1255,8 @@ export default function CallsPage() {
           </motion.div>
         </TabsContent>
 
-        {/* Configurações SIP */}
+        {/* Configurações SIP — visível apenas para o dono da plataforma */}
+        {isOwner && (
         <TabsContent value="settings">
           <motion.div className="glass-card p-6" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
             <div className="flex items-center gap-2 mb-5">
@@ -1343,6 +1346,7 @@ export default function CallsPage() {
             </div>
           </motion.div>
         </TabsContent>
+        )}
       </Tabs>
 
       {/* Discador Flutuante */}
