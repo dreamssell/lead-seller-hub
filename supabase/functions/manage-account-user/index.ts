@@ -541,6 +541,48 @@ Deno.serve(async (req) => {
           );
         }
       }
+
+      // Email change — restricted to the platform owner (app_role='admin').
+      let emailChanged: { from: string | null; to: string } | null = null;
+      const rawEmail = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+      if (rawEmail && rawEmail !== (beforeProfile?.email || "").toLowerCase()) {
+        const { data: isPlatformAdmin } = await adminClient.rpc("has_role", {
+          _user_id: caller.user.id,
+          _role: "admin",
+        });
+        if (!isPlatformAdmin) {
+          return userError(
+            "Apenas o dono da plataforma pode alterar o e-mail de um usuário.",
+            403,
+            "email_change_forbidden",
+          );
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
+          return userError("E-mail inválido.", 400, "invalid_email");
+        }
+        const conflict = await findUserByEmail(adminClient, rawEmail);
+        if (conflict && conflict.id !== user_id) {
+          return userError(
+            "Este e-mail já pertence a outro usuário.",
+            409,
+            "email_already_used",
+          );
+        }
+        const { error: emailError } = await adminClient.auth.admin
+          .updateUserById(user_id, { email: rawEmail, email_confirm: true });
+        if (emailError) {
+          return userError(
+            errorMessage(emailError, "Falha ao atualizar e-mail"),
+            400,
+            "email_update_error",
+          );
+        }
+        await adminClient.from("profiles").update({ email: rawEmail }).eq(
+          "user_id",
+          user_id,
+        );
+        emailChanged = { from: beforeProfile?.email ?? null, to: rawEmail };
+      }
       const profileUpdate: any = {};
       if (typeof name === "string") profileUpdate.display_name = name;
       if (typeof phone === "string") profileUpdate.phone = phone;
