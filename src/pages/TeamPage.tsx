@@ -438,6 +438,50 @@ export default function TeamPage() {
                 placeholder="Atendente, Closer, SDR, Coordenador..." />
             </div>
             <div>
+              <div className="flex items-center justify-between">
+                <Label>Funis atribuídos</Label>
+                <span className="text-[11px] text-muted-foreground">
+                  {form.pipeline_ids.length} selecionado(s)
+                </span>
+              </div>
+              <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+                {pipelinesLoading ? (
+                  <div className="p-3 text-xs text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Carregando funis...
+                  </div>
+                ) : pipelines.length === 0 ? (
+                  <div className="p-3 text-xs text-muted-foreground">
+                    Nenhum funil ativo neste escopo. Crie funis na página Pipeline antes de atribuir.
+                  </div>
+                ) : (
+                  pipelines.map(p => {
+                    const checked = form.pipeline_ids.includes(p.id);
+                    return (
+                      <label key={p.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-secondary/50">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            setForm(f => ({
+                              ...f,
+                              pipeline_ids: e.target.checked
+                                ? Array.from(new Set([...f.pipeline_ids, p.id]))
+                                : f.pipeline_ids.filter(id => id !== p.id),
+                            }));
+                          }}
+                          className="h-4 w-4 rounded border-border accent-primary"
+                        />
+                        <span className="truncate">{p.name}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Selecione um ou vários funis ativos deste escopo aos quais este membro terá acesso.
+              </p>
+            </div>
+            <div>
               <Label>Nível de acesso</Label>
               <Select value={form.access_level} onValueChange={(v: AccessLevel) => setForm(f => ({ ...f, access_level: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
