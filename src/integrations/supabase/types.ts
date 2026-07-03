@@ -3012,6 +3012,126 @@ export type Database = {
           },
         ]
       }
+      sip_config_audit: {
+        Row: {
+          action: string
+          changed_by: string | null
+          changed_by_email: string | null
+          changes: Json | null
+          client_company_id: string | null
+          config_id: string | null
+          created_at: string
+          id: string
+          ip_address: string | null
+          owner_id: string | null
+          sub_company_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          changed_by?: string | null
+          changed_by_email?: string | null
+          changes?: Json | null
+          client_company_id?: string | null
+          config_id?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          owner_id?: string | null
+          sub_company_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          changed_by?: string | null
+          changed_by_email?: string | null
+          changes?: Json | null
+          client_company_id?: string | null
+          config_id?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          owner_id?: string | null
+          sub_company_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
+      sip_configurations: {
+        Row: {
+          auto_record: boolean | null
+          client_company_id: string | null
+          created_at: string
+          created_by: string | null
+          display_name: string | null
+          id: string
+          owner_id: string
+          password_ciphertext: string
+          password_iv: string
+          port: string | null
+          server: string
+          sub_company_id: string | null
+          transport: string | null
+          updated_at: string
+          updated_by: string | null
+          username: string
+          ws_uri: string | null
+        }
+        Insert: {
+          auto_record?: boolean | null
+          client_company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          display_name?: string | null
+          id?: string
+          owner_id: string
+          password_ciphertext: string
+          password_iv: string
+          port?: string | null
+          server: string
+          sub_company_id?: string | null
+          transport?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          username: string
+          ws_uri?: string | null
+        }
+        Update: {
+          auto_record?: boolean | null
+          client_company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          display_name?: string | null
+          id?: string
+          owner_id?: string
+          password_ciphertext?: string
+          password_iv?: string
+          port?: string | null
+          server?: string
+          sub_company_id?: string | null
+          transport?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          username?: string
+          ws_uri?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sip_configurations_client_company_id_fkey"
+            columns: ["client_company_id"]
+            isOneToOne: false
+            referencedRelation: "client_companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sip_configurations_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sla_policies: {
         Row: {
           business_hours_only: boolean
