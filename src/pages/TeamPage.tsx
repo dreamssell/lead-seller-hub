@@ -487,8 +487,13 @@ export default function TeamPage() {
             <div>
               <div className="flex items-center justify-between">
                 <Label>Funis atribuídos</Label>
-                <span className="text-[11px] text-muted-foreground">
-                  {form.pipeline_ids.length} selecionado(s)
+                <span className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                  {pipelinesLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {pipelinesLoading
+                    ? 'Carregando...'
+                    : pipelinesError
+                    ? <span className="text-destructive">Falha ao carregar</span>
+                    : `${form.pipeline_ids.length} de ${pipelines.length} selecionado(s)`}
                 </span>
               </div>
               <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-border divide-y divide-border">
