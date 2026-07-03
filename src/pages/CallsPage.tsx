@@ -1346,6 +1346,7 @@ export default function CallsPage() {
             </div>
           </motion.div>
         </TabsContent>
+        )}
       </Tabs>
 
       {/* Discador Flutuante */}
