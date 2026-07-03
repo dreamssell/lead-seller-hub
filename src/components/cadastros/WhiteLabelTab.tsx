@@ -257,7 +257,7 @@ function SubCompanyDialog({
   const save = async () => {
     const name = (form.name || '').trim();
     const adminName = (form.admin_name || '').trim();
-    const adminEmail = (form.admin_email || '').trim().toLowerCase();
+    const adminEmail = normalizeAdminEmail(form.admin_email);
     const adminPassword = String((form as any).admin_password || '');
 
     if (!name || !adminName || !adminEmail) {
