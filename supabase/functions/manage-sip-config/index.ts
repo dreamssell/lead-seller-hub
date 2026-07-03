@@ -86,16 +86,16 @@ async function decryptPassword(ciphertext: string, iv: string): Promise<string> 
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' });
+  if (req.method !== 'POST') return fail(405, 'method_not_allowed');
 
   const authHeader = req.headers.get('Authorization') || '';
-  if (!authHeader.startsWith('Bearer ')) return json(401, { error: 'missing_auth' });
+  if (!authHeader.startsWith('Bearer ')) return fail(401, 'missing_auth');
 
   const userClient = createClient(SUPABASE_URL, ANON, {
     global: { headers: { Authorization: authHeader } },
   });
   const { data: userData, error: userErr } = await userClient.auth.getUser();
-  if (userErr || !userData?.user) return json(401, { error: 'unauthenticated' });
+  if (userErr || !userData?.user) return fail(401, 'unauthenticated');
   const user = userData.user;
 
   // Admin gate — every operation on SIP configs requires platform admin role.
@@ -103,13 +103,13 @@ Deno.serve(async (req) => {
     _user_id: user.id,
     _role: 'admin',
   });
-  if (roleErr || isAdmin !== true) {
-    return json(403, { error: 'forbidden', message: 'Apenas o dono da plataforma pode acessar configurações SIP.' });
-  }
+  if (roleErr || isAdmin !== true) return fail(403, 'forbidden');
 
   let body: any;
-  try { body = await req.json(); } catch { return json(400, { error: 'invalid_json' }); }
+  try { body = await req.json(); } catch { return fail(400, 'invalid_json'); }
   const action = String(body?.action || '');
+  if (!action) return fail(400, 'missing_action');
+
   const scope = body?.scope || {};
   const ownerId: string | null = scope.owner_id || user.id;
   const subCompanyId: string | null = scope.sub_company_id ?? null;
