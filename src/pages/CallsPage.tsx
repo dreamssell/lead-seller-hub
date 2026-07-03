@@ -387,7 +387,7 @@ export default function CallsPage() {
           <TabsTrigger value="stats">Estatísticas</TabsTrigger>
           <TabsTrigger value="queues">Filas & IVR</TabsTrigger>
           <TabsTrigger value="blocked">Bloqueados</TabsTrigger>
-          <TabsTrigger value="settings">Configurações SIP</TabsTrigger>
+          {isOwner && <TabsTrigger value="settings">Configurações SIP</TabsTrigger>}
         </TabsList>
 
         {/* Histórico */}
