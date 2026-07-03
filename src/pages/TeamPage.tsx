@@ -204,6 +204,14 @@ export default function TeamPage() {
         return;
       }
     }
+    if (form.access_level === 'atendimento' && form.pipeline_ids.length === 0) {
+      toast({
+        title: 'Selecione ao menos 1 funil',
+        description: 'Membros de Atendimento precisam de pelo menos um funil atribuído para operar leads.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setSaving(true);
     const payload: any = editing
       ? {
