@@ -271,3 +271,111 @@ describe('TeamPage — error toast surfaces real backend messages', () => {
     );
   });
 });
+
+// ─── Email edit gating: only platform owner may change a member's email ─────
+describe('TeamPage — email edit is gated by platform ownership', () => {
+  const member = {
+    user_id: 'm1',
+    is_account_admin: false,
+    allowed_pages: [],
+    access_level: 'atendimento',
+    profile: { display_name: 'Fulano', email: 'fulano@test.com', is_active: true, role_label: 'Atendente' },
+  };
+
+  beforeEach(() => {
+    invokeMock.mockReset();
+    fromMock.mockReset();
+    toastMock.mockReset();
+    authState.access = { sub_company_id: null, is_account_admin: true };
+  });
+
+  async function openEditDialog() {
+    const user = userEvent.setup();
+    setup([member], 10);
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Fulano')).toBeInTheDocument());
+    // Radix dropdown trigger is the MoreVertical button; open it, then click Editar.
+    const triggers = screen.getAllByRole('button');
+    const more = triggers.find((b) => b.querySelector('svg.lucide-more-vertical'))!;
+    await user.click(more);
+    const editItem = await screen.findByRole('menuitem', { name: /Editar/i });
+    await user.click(editItem);
+    return user;
+  }
+
+  it('disables the email input and shows a permission warning for non-owners', async () => {
+    platformOwnerState.isOwner = false;
+    await openEditDialog();
+    const email = await screen.findByTestId('team-email-input');
+    expect(email).toBeDisabled();
+    expect(email).toHaveAttribute('readonly');
+    expect(email).toHaveValue('fulano@test.com');
+    const warning = screen.getByTestId('team-email-lock-warning');
+    expect(warning).toHaveTextContent(/Apenas o dono da plataforma/i);
+  });
+
+  it('does NOT include email in the update payload when a non-owner submits', async () => {
+    platformOwnerState.isOwner = false;
+    const user = await openEditDialog();
+    await user.click(screen.getByRole('button', { name: /^Salvar$/i }));
+    await waitFor(() => {
+      const call = invokeMock.mock.calls.find(
+        (c) => c[0] === 'manage-account-user' && c[1]?.body?.action === 'update',
+      );
+      expect(call).toBeTruthy();
+      expect(call![1].body).not.toHaveProperty('email');
+    });
+  });
+
+  it('enables editing and sends the new email when the platform owner submits', async () => {
+    platformOwnerState.isOwner = true;
+    const user = await openEditDialog();
+    const email = screen.getByTestId('team-email-input');
+    expect(email).toBeEnabled();
+    expect(screen.queryByTestId('team-email-lock-warning')).not.toBeInTheDocument();
+    await user.clear(email);
+    await user.type(email, 'novo@test.com');
+    await user.click(screen.getByRole('button', { name: /^Salvar$/i }));
+    await waitFor(() => {
+      const call = invokeMock.mock.calls.find(
+        (c) => c[0] === 'manage-account-user' && c[1]?.body?.action === 'update',
+      );
+      expect(call).toBeTruthy();
+      expect(call![1].body.email).toBe('novo@test.com');
+    });
+  });
+
+  it('surfaces PT-BR toast when backend responds 403 email_change_forbidden', async () => {
+    platformOwnerState.isOwner = true;
+    // First open the dialog (uses default list mock)…
+    const user = await openEditDialog();
+    // …then swap invoke to reject with a real 403 body for the update call.
+    invokeMock.mockImplementationOnce(async (_fn: string, _opts: any) => {
+      const response = new Response(
+        JSON.stringify({
+          error: 'Apenas o dono da plataforma pode alterar o e-mail de um usuário.',
+          code: 'email_change_forbidden',
+        }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } },
+      );
+      const err = Object.assign(new Error('Edge Function returned a non-2xx status code'), {
+        context: response,
+      });
+      return { data: null, error: err };
+    });
+    const email = screen.getByTestId('team-email-input');
+    await user.clear(email);
+    await user.type(email, 'outro@test.com');
+    await user.click(screen.getByRole('button', { name: /^Salvar$/i }));
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Erro',
+          variant: 'destructive',
+          description: expect.stringMatching(/dono da plataforma/i),
+        }),
+      );
+    });
+  });
+});
+
