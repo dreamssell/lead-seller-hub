@@ -11,7 +11,7 @@ const TEST_EMAIL = Deno.env.get("TEST_LOGIN_EMAIL");
 const TEST_PASSWORD = Deno.env.get("TEST_LOGIN_PASSWORD");
 const TEST_API_KEY = Deno.env.get("TEST_PLATFORM_API_KEY");
 
-const PLATFORM_URL_DEFAULT = "https://connecto-center.lovable.app";
+const PLATFORM_URL_DEFAULT = "https://hub.leadseller.com.br";
 
 async function callFn(body: unknown, extraHeaders: Record<string, string> = {}) {
   const res = await fetch(FN_URL, {

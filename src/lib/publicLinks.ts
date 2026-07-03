@@ -1,4 +1,4 @@
-const FALLBACK_PUBLIC_APP_ORIGIN = 'https://connecto-center.lovable.app';
+const FALLBACK_PUBLIC_APP_ORIGIN = 'https://hub.leadseller.com.br';
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
 
@@ -10,9 +10,9 @@ export function getPublicAppOrigin() {
 
   const { hostname, origin } = window.location;
   const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
-  const isPublishedLovable = hostname.endsWith('.lovable.app') && !hostname.startsWith('id-preview--');
-
-  return isLocal || isPublishedLovable ? origin : FALLBACK_PUBLIC_APP_ORIGIN;
+  // Sempre priorizar o domínio canônico (hub.leadseller.com.br) para links públicos,
+  // exceto em ambiente local de desenvolvimento.
+  return isLocal ? origin : FALLBACK_PUBLIC_APP_ORIGIN;
 }
 
 export function getPublicLandingUrl(slug: string) {
