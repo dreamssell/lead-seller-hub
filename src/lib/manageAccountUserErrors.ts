@@ -20,6 +20,10 @@ export const MANAGE_USER_ERROR_MESSAGES: Record<string, string> = {
   cannot_delete_self: 'Você não pode remover a si mesmo. Peça a outro administrador.',
   access_delete_error: 'Não foi possível remover o acesso do membro.',
   signature_role_delete_error: 'Não foi possível remover o nível de acesso do membro.',
+  email_change_forbidden: 'Apenas o dono da plataforma pode alterar o e-mail de um usuário.',
+  email_already_used: 'Este e-mail já pertence a outro usuário.',
+  email_update_error: 'Não foi possível atualizar o e-mail deste usuário na base de autenticação.',
+  invalid_email: 'E-mail inválido. Verifique o formato e tente novamente.',
   internal_error: 'Erro interno inesperado. Tente novamente em instantes.',
 };
 

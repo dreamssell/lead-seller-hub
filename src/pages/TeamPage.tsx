@@ -374,9 +374,31 @@ export default function TeamPage() {
               <Input value={form.display_name} onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))} />
             </div>
             <div>
-              <Label>E-mail {editing && !isOwner && <span className="text-xs text-muted-foreground">(somente o dono da plataforma pode alterar)</span>}</Label>
-              <Input type="email" disabled={!!editing && !isOwner} value={form.email}
-                onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+              <Label>E-mail</Label>
+              <Input
+                type="email"
+                data-testid="team-email-input"
+                aria-label="E-mail do membro"
+                readOnly={!!editing && !isOwner}
+                disabled={!!editing && !isOwner}
+                title={editing && !isOwner ? 'Somente o dono da plataforma pode alterar o e-mail.' : undefined}
+                value={form.email}
+                onChange={e => {
+                  if (editing && !isOwner) return;
+                  setForm(f => ({ ...f, email: e.target.value }));
+                }}
+                className={editing && !isOwner ? 'cursor-not-allowed opacity-70' : undefined}
+              />
+              {editing && !isOwner && (
+                <p
+                  role="alert"
+                  data-testid="team-email-lock-warning"
+                  className="mt-1 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Apenas o dono da plataforma pode alterar o e-mail deste usuário.
+                </p>
+              )}
             </div>
             <div>
               <Label>{editing ? 'Nova senha (opcional)' : 'Senha (mín. 6)'}</Label>
