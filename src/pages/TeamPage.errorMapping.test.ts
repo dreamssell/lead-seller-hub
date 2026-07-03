@@ -29,6 +29,10 @@ const BACKEND_CODES = [
   'cannot_delete_self',
   'access_delete_error',
   'signature_role_delete_error',
+  'email_change_forbidden',
+  'email_already_used',
+  'email_update_error',
+  'invalid_email',
   'internal_error',
 ];
 
