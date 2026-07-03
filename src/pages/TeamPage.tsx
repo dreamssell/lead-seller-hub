@@ -317,6 +317,10 @@ export default function TeamPage() {
             const isAI = /bot|i\.?a\.?|agente/i.test(m.profile?.role_label || '');
             const active = m.profile?.is_active !== false;
             const lvl = levelMeta(m.access_level || (m.is_account_admin ? 'administracao' : 'atendimento'));
+            const pipelineMap = new Map(pipelines.map(p => [p.id, p.name]));
+            const memberPipelines = (m.pipeline_ids || [])
+              .map(id => pipelineMap.get(id))
+              .filter(Boolean) as string[];
             const LvlIcon = lvl.icon;
             return (
               <motion.div
