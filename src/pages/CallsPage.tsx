@@ -217,16 +217,27 @@ export default function CallsPage() {
   const [sipLoading, setSipLoading] = useState(false);
   const [sipAudit, setSipAudit] = useState<Array<{ id: string; action: string; changed_by_email: string | null; created_at: string }>>([]);
 
-  // Load SIP config from secure backend (admin only). Legacy localStorage entry
-  // is proactively purged to prevent credential leakage on shared devices.
+  // Load SIP config from secure backend (admin only). Any legacy credential
+  // entry left in browser storage is proactively purged on every mount so it
+  // cannot survive a page reload on shared devices.
   useEffect(() => {
-    try { localStorage.removeItem('sipConfig'); } catch {}
-    if (!isOwner) return;
+    const purge = () => {
+      try {
+        ['sipConfig', 'sip_config', 'sip-credentials', 'voipConfig'].forEach(k => {
+          localStorage.removeItem(k);
+          sessionStorage.removeItem(k);
+        });
+      } catch {}
+    };
+    purge();
+    window.addEventListener('storage', purge);
+
+    if (!isOwner) return () => window.removeEventListener('storage', purge);
     let cancelled = false;
     (async () => {
       setSipLoading(true);
       try {
-        const { fetchSipConfig, listSipAudit } = await import('@/lib/sipConfig');
+        const { fetchSipConfig, listSipAudit, SipError } = await import('@/lib/sipConfig');
         const cfg = await fetchSipConfig();
         if (cancelled) return;
         if (cfg) {
@@ -246,11 +257,18 @@ export default function CallsPage() {
         if (!cancelled) setSipAudit(audit);
       } catch (e: any) {
         console.warn('SIP fetch failed', e?.message);
+        if (e?.name === 'SipError') {
+          toast({
+            title: e.status === 403 ? 'Acesso negado' : e.status === 401 ? 'Sessão expirada' : 'Falha ao carregar SIP',
+            description: e.message,
+            variant: 'destructive',
+          });
+        }
       } finally {
         if (!cancelled) setSipLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; window.removeEventListener('storage', purge); };
   }, [isOwner]);
 
 
