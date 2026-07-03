@@ -99,4 +99,18 @@ describe('extractManageUserError', () => {
     const r = await extractManageUserError({ ok: true }, null);
     expect(r).toBeNull();
   });
+
+  it('maps 403 email_change_forbidden from edge response into PT-BR toast text', async () => {
+    const response = new Response(
+      JSON.stringify({
+        error: 'Apenas o dono da plataforma pode alterar o e-mail de um usuário.',
+        code: 'email_change_forbidden',
+      }),
+      { status: 403, headers: { 'Content-Type': 'application/json' } },
+    );
+    const err = Object.assign(new Error('non-2xx'), { context: response });
+    const r = await extractManageUserError(null, err);
+    expect(r?.code).toBe('email_change_forbidden');
+    expect(r?.message).toBe(MANAGE_USER_ERROR_MESSAGES.email_change_forbidden);
+  });
 });
