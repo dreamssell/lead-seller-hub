@@ -225,10 +225,24 @@ function SubCompaniesSection() {
   );
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const SUB_ERROR_MESSAGES: Record<string, string> = {
+  missing_fields: 'Preencha todos os campos obrigatórios.',
+  invalid_email: 'E-mail em formato inválido.',
+  weak_password: 'A senha precisa ter pelo menos 6 caracteres.',
+  email_already_used: 'Este e-mail já pertence a outro usuário.',
+  provision_in_progress: 'Já existe uma criação em andamento para este e-mail. Aguarde alguns segundos.',
+  forbidden: 'Você não tem permissão para provisionar esta sub-empresa.',
+  sub_not_found: 'Sub-empresa não encontrada.',
+  unauthenticated: 'Sessão expirada. Faça login novamente.',
+};
+
 function SubCompanyDialog({
   open, onOpenChange, step, setStep, plans, selectedPlan, setSelectedPlan, editing, ownerId, onSaved,
 }: any) {
   const [form, setForm] = useState<Partial<SubCompany>>({});
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
     if (editing) setForm(editing);
     else setForm({ name: '', admin_name: '', admin_email: '', admin_password: '', whatsapp_limit: 10, inherit_branding: true, byok_inherit: true, blocked_pages: [], allow_custom_logic: false } as any);
@@ -240,19 +254,27 @@ function SubCompanyDialog({
   };
 
   const save = async () => {
-    if (!form.name || !form.admin_name || !form.admin_email) {
+    const name = (form.name || '').trim();
+    const adminName = (form.admin_name || '').trim();
+    const adminEmail = (form.admin_email || '').trim().toLowerCase();
+    const adminPassword = String((form as any).admin_password || '');
+
+    if (!name || !adminName || !adminEmail) {
       toast({ title: 'Preencha os campos obrigatórios', variant: 'destructive' }); return;
     }
-    if (!editing && !(form as any).admin_password) {
-      toast({ title: 'Defina uma senha inicial para o administrador', variant: 'destructive' }); return;
+    if (!EMAIL_RE.test(adminEmail)) {
+      toast({ title: 'E-mail inválido', description: 'Informe um e-mail válido para o administrador.', variant: 'destructive' }); return;
+    }
+    if (!editing && adminPassword.length < 6) {
+      toast({ title: 'Senha muito curta', description: 'Use ao menos 6 caracteres para a senha inicial.', variant: 'destructive' }); return;
     }
     if (!selectedPlan) { toast({ title: 'Selecione um plano', variant: 'destructive' }); return; }
 
     const payload = {
       owner_id: ownerId,
-      name: form.name,
-      admin_name: form.admin_name,
-      admin_email: form.admin_email,
+      name,
+      admin_name: adminName,
+      admin_email: adminEmail,
       whatsapp_limit: Number(form.whatsapp_limit) || 10,
       plan_slug: selectedPlan.slug,
       monthly_fee: selectedPlan.monthly_price,
@@ -265,28 +287,39 @@ function SubCompanyDialog({
       allow_custom_logic: !!form.allow_custom_logic,
     };
 
-    const q = editing
-      ? supabase.from('sub_companies').update(payload).eq('id', editing.id).select().single()
-      : supabase.from('sub_companies').insert(payload as any).select().single();
-    const { data: savedSub, error } = await q;
-    if (error) { toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' }); return; }
+    setSaving(true);
+    try {
+      const q = editing
+        ? supabase.from('sub_companies').update(payload).eq('id', editing.id).select().single()
+        : supabase.from('sub_companies').insert(payload as any).select().single();
+      const { data: savedSub, error } = await q;
+      if (error) { toast({ title: 'Erro ao salvar sub-empresa', description: error.message, variant: 'destructive' }); return; }
 
-    if (savedSub && (!editing || (form as any).admin_password)) {
-      const allowedPages = ALL_PERMISSION_KEYS.filter(k => !(payload.blocked_pages || []).includes(k));
-      const { error: userError } = await supabase.functions.invoke('create-sub-company-user', {
-        body: {
-          sub_company_id: savedSub.id,
-          email: form.admin_email,
-          name: form.admin_name,
-          password: (form as any).admin_password,
-          allowed_pages: allowedPages,
-          is_account_admin: true,
-        },
-      });
-      if (userError) { toast({ title: 'Sub-empresa criada, mas o usuário não foi criado', description: userError.message, variant: 'destructive' }); return; }
+      if (savedSub && (!editing || adminPassword)) {
+        const allowedPages = ALL_PERMISSION_KEYS.filter(k => !(payload.blocked_pages || []).includes(k));
+        const { data: userData, error: userError } = await supabase.functions.invoke('create-sub-company-user', {
+          body: {
+            sub_company_id: savedSub.id,
+            email: adminEmail,
+            name: adminName,
+            password: adminPassword,
+            allowed_pages: allowedPages,
+            is_account_admin: true,
+          },
+        });
+        const code = (userData as any)?.code || (userError as any)?.context?.code;
+        if (userError || (userData as any)?.error) {
+          const rawMsg = (userData as any)?.message || (userData as any)?.error || userError?.message || 'Falha desconhecida';
+          const friendly = SUB_ERROR_MESSAGES[code] || rawMsg;
+          toast({ title: editing ? 'Erro ao atualizar acesso' : 'Sub-empresa criada, mas o usuário não foi criado', description: friendly, variant: 'destructive' });
+          return;
+        }
+      }
+      toast({ title: editing ? 'Sub-empresa atualizada' : 'Convite enviado!', description: editing ? '' : `Plano ${selectedPlan.name} aplicado.` });
+      onSaved();
+    } finally {
+      setSaving(false);
     }
-    toast({ title: editing ? 'Sub-empresa atualizada' : 'Convite enviado!', description: editing ? '' : `Plano ${selectedPlan.name} aplicado.` });
-    onSaved();
   };
 
   return (
@@ -459,7 +492,7 @@ function SubCompanyDialog({
           {step === 'plan' && !editing ? (
             <Button onClick={() => setStep('details')} disabled={!selectedPlan}>Continuar</Button>
           ) : (
-            <Button onClick={save}>{editing ? 'Salvar' : 'Enviar Convite'}</Button>
+            <Button onClick={save} disabled={saving}>{saving ? 'Salvando...' : (editing ? 'Salvar' : 'Enviar Convite')}</Button>
           )}
         </DialogFooter>
       </DialogContent>
