@@ -543,6 +543,19 @@ Deno.serve(async (req) => {
 
       await applyAccessLevel(adminClient, newUser.id, scope, level);
 
+      let pipelineChange: { from: string[]; to: string[] } | null = null;
+      try {
+        pipelineChange = await syncPipelineAssignments(
+          adminClient, newUser.id, scope, body.pipeline_ids, caller.user.id,
+        );
+      } catch (pipeErr: any) {
+        return userError(
+          errorMessage(pipeErr, "Falha ao atribuir funis"),
+          400,
+          "pipeline_assign_error",
+        );
+      }
+
       await logAudit(adminClient, {
         action: "create",
         userId: newUser.id,
@@ -553,6 +566,7 @@ Deno.serve(async (req) => {
           role_label,
           access_level: level,
           is_account_admin: isAdmin,
+          ...(pipelineChange ? { pipeline_ids: pipelineChange } : {}),
         },
         changedBy: caller.user.id,
         scope,
