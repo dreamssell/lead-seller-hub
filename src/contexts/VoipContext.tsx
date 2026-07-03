@@ -192,22 +192,40 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Carrega configurações SIP salvas ao iniciar o app
+  // Carrega configurações SIP salvas ao iniciar o app (apenas admin autenticado).
+  // Legado: purga localStorage antigo para não deixar credenciais em disco.
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('sipConfig');
-      if (stored) {
-        const config = JSON.parse(stored);
-        if (config.server && config.username) {
-          connect(config);
+    try { localStorage.removeItem('sipConfig'); } catch {}
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData?.user) return;
+        const { data: isAdmin } = await supabase.rpc('has_role', {
+          _user_id: userData.user.id,
+          _role: 'admin' as any,
+        });
+        if (isAdmin !== true) return;
+        const { fetchSipConfig } = await import('@/lib/sipConfig');
+        const cfg = await fetchSipConfig();
+        if (cancelled || !cfg) return;
+        if (cfg.server && cfg.username) {
+          connect({
+            server: cfg.server,
+            port: cfg.port,
+            wsUri: cfg.ws_uri,
+            username: cfg.username,
+            password: cfg.password,
+            displayName: cfg.display_name,
+          });
         }
+      } catch (e) {
+        console.error('SIP autoload failed', e);
       }
-    } catch (e) {
-      console.error(e);
-    }
-    
-    return () => disconnect();
+    })();
+    return () => { cancelled = true; disconnect(); };
   },[]);
+
 
   return (
     <VoipContext.Provider

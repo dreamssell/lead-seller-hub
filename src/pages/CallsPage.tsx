@@ -204,22 +204,55 @@ export default function CallsPage() {
   };
 
 
-  const [sipConfig, setSipConfig] = useState(() => {
-    try {
-      const stored = localStorage.getItem('sipConfig');
-      if (stored) return JSON.parse(stored);
-    } catch {}
-    return {
-      server: 'sipv2.wavoip.com',
-      port: '5060',
-      wsUri: 'wss://sipv2.wavoip.com:7443',
-      username: '',
-      password: '',
-      displayName: 'Lead Seller',
-      transport: 'WSS',
-      autoRecord: true,
-    };
+  const [sipConfig, setSipConfig] = useState({
+    server: 'sipv2.wavoip.com',
+    port: '5060',
+    wsUri: 'wss://sipv2.wavoip.com:7443',
+    username: '',
+    password: '',
+    displayName: 'Lead Seller',
+    transport: 'WSS',
+    autoRecord: true,
   });
+  const [sipLoading, setSipLoading] = useState(false);
+  const [sipAudit, setSipAudit] = useState<Array<{ id: string; action: string; changed_by_email: string | null; created_at: string }>>([]);
+
+  // Load SIP config from secure backend (admin only). Legacy localStorage entry
+  // is proactively purged to prevent credential leakage on shared devices.
+  useEffect(() => {
+    try { localStorage.removeItem('sipConfig'); } catch {}
+    if (!isOwner) return;
+    let cancelled = false;
+    (async () => {
+      setSipLoading(true);
+      try {
+        const { fetchSipConfig, listSipAudit } = await import('@/lib/sipConfig');
+        const cfg = await fetchSipConfig();
+        if (cancelled) return;
+        if (cfg) {
+          setSipConfig(prev => ({
+            ...prev,
+            server: cfg.server,
+            port: cfg.port || prev.port,
+            wsUri: cfg.ws_uri || prev.wsUri,
+            username: cfg.username,
+            password: cfg.password,
+            displayName: cfg.display_name || prev.displayName,
+            transport: cfg.transport || prev.transport,
+            autoRecord: cfg.auto_record ?? prev.autoRecord,
+          }));
+        }
+        const audit = await listSipAudit();
+        if (!cancelled) setSipAudit(audit);
+      } catch (e: any) {
+        console.warn('SIP fetch failed', e?.message);
+      } finally {
+        if (!cancelled) setSipLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isOwner]);
+
 
   const filteredRecordings = useMemo(() => {
     return recordings.filter((r) => {
@@ -250,10 +283,30 @@ export default function CallsPage() {
     toast({ title: 'Chamada encerrada' });
   };
 
-  const handleSaveSip = () => {
-    try { localStorage.setItem('sipConfig', JSON.stringify(sipConfig)); } catch {}
-    toast({ title: 'Configuração SIP salva', description: 'As credenciais foram atualizadas.' });
+  const handleSaveSip = async () => {
+    if (!isOwner) {
+      toast({ title: 'Acesso negado', description: 'Apenas o dono da plataforma pode alterar configurações SIP.', variant: 'destructive' });
+      return;
+    }
+    try {
+      const { saveSipConfig, listSipAudit } = await import('@/lib/sipConfig');
+      await saveSipConfig({
+        server: sipConfig.server,
+        port: sipConfig.port,
+        ws_uri: sipConfig.wsUri,
+        username: sipConfig.username,
+        password: sipConfig.password,
+        display_name: sipConfig.displayName,
+        transport: sipConfig.transport,
+        auto_record: sipConfig.autoRecord,
+      });
+      toast({ title: 'Configuração SIP salva', description: 'Credenciais criptografadas armazenadas no backend.' });
+      setSipAudit(await listSipAudit());
+    } catch (e: any) {
+      toast({ title: 'Falha ao salvar SIP', description: e?.message || 'Erro desconhecido', variant: 'destructive' });
+    }
   };
+
 
   const handleTestSip = async () => {
     if (!sipConfig.server || !sipConfig.username || !sipConfig.password) {
@@ -1339,12 +1392,28 @@ export default function CallsPage() {
                 {sipStatus === 'connecting' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
                 Testar conexão
               </Button>
-              <Button onClick={handleSaveSip} className="gap-2">
+              <Button onClick={handleSaveSip} className="gap-2" disabled={sipLoading}>
                 <Save className="w-4 h-4" />
                 Salvar configuração
               </Button>
             </div>
+
+            {sipAudit.length > 0 && (
+              <div className="mt-6 border-t border-border pt-4">
+                <p className="text-xs font-semibold text-foreground mb-2">Trilha de auditoria (últimas alterações)</p>
+                <div className="space-y-1 max-h-40 overflow-y-auto text-[11px] text-muted-foreground">
+                  {sipAudit.slice(0, 20).map(entry => (
+                    <div key={entry.id} className="flex items-center justify-between gap-2 py-1 border-b border-border/50 last:border-0">
+                      <span className="font-mono uppercase text-[10px] px-1.5 py-0.5 rounded bg-secondary">{entry.action}</span>
+                      <span className="flex-1 truncate">{entry.changed_by_email || '—'}</span>
+                      <span>{new Date(entry.created_at).toLocaleString('pt-BR')}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </motion.div>
+
         </TabsContent>
         )}
       </Tabs>
