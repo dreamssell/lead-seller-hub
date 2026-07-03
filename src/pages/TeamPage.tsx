@@ -374,8 +374,8 @@ export default function TeamPage() {
               <Input value={form.display_name} onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))} />
             </div>
             <div>
-              <Label>E-mail</Label>
-              <Input type="email" disabled={!!editing} value={form.email}
+              <Label>E-mail {editing && !isOwner && <span className="text-xs text-muted-foreground">(somente o dono da plataforma pode alterar)</span>}</Label>
+              <Input type="email" disabled={!!editing && !isOwner} value={form.email}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
             </div>
             <div>
