@@ -73,6 +73,16 @@ export default function TeamPage() {
   const [pipelines, setPipelines] = useState<PipelineOption[]>([]);
   const [pipelinesLoading, setPipelinesLoading] = useState(false);
   const [pipelinesError, setPipelinesError] = useState<string | null>(null);
+  const [pipelineFieldHighlight, setPipelineFieldHighlight] = useState(false);
+  const pipelineFieldRef = React.useRef<HTMLDivElement | null>(null);
+
+  const flashPipelineField = () => {
+    setPipelineFieldHighlight(true);
+    requestAnimationFrame(() => {
+      pipelineFieldRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    window.setTimeout(() => setPipelineFieldHighlight(false), 2600);
+  };
 
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditRows, setAuditRows] = useState<any[]>([]);
