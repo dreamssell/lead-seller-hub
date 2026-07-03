@@ -1,7 +1,10 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { CallsPageTabsList } from '@/components/calls/CallsPageTabsList';
+import { useSipStoragePurge } from '@/hooks/useSipStoragePurge';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
+
 import {
   Phone,
   PhoneIncoming,
