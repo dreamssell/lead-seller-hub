@@ -226,9 +226,10 @@ Deno.serve(async (req) => {
       return json(200, { entries: data });
     }
 
-    return json(400, { error: 'unknown_action' });
+    return fail(400, 'unknown_action');
   } catch (e: any) {
     console.error('manage-sip-config error', e);
-    return json(500, { error: 'internal', message: e?.message ?? String(e) });
+    return fail(500, 'internal', e?.message ?? String(e));
   }
+
 });
