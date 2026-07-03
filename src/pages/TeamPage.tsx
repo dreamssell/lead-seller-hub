@@ -164,6 +164,7 @@ export default function TeamPage() {
       display_name: m.profile?.display_name || '',
       role_label: m.profile?.role_label || 'Atendente',
       access_level: m.access_level || (m.is_account_admin ? 'administracao' : 'atendimento'),
+      pipeline_ids: m.pipeline_ids || [],
     });
     setDialogOpen(true);
   };
