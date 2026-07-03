@@ -48,6 +48,71 @@ function errorMessage(
   );
 }
 
+async function syncPipelineAssignments(
+  admin: any,
+  userId: string,
+  scope: { owner_id: string; sub_company_id: string | null },
+  pipelineIds: string[] | undefined,
+  createdBy: string,
+): Promise<{ from: string[]; to: string[] } | null> {
+  if (!Array.isArray(pipelineIds)) return null;
+  const desired = Array.from(new Set(pipelineIds.filter((v) => typeof v === "string" && v)));
+
+  // Validate all pipelines belong to the same scope
+  if (desired.length > 0) {
+    let pq = admin.from("pipelines").select("id, sub_company_id")
+      .eq("owner_id", scope.owner_id).in("id", desired);
+    const { data: valid } = await pq;
+    const validIds = new Set((valid || []).filter((p: any) =>
+      scope.sub_company_id ? p.sub_company_id === scope.sub_company_id : p.sub_company_id === null
+    ).map((p: any) => p.id));
+    for (const id of desired) {
+      if (!validIds.has(id)) {
+        throw new Error(`pipeline_out_of_scope:${id}`);
+      }
+    }
+  }
+
+  let curQ = admin.from("user_pipeline_assignments").select("pipeline_id")
+    .eq("user_id", userId).eq("owner_id", scope.owner_id);
+  if (scope.sub_company_id) curQ = curQ.eq("sub_company_id", scope.sub_company_id);
+  else curQ = curQ.is("sub_company_id", null);
+  const { data: current } = await curQ;
+  const currentSet = new Set((current || []).map((r: any) => r.pipeline_id));
+  const desiredSet = new Set(desired);
+
+  const toAdd = desired.filter((id) => !currentSet.has(id));
+  const toRemove = Array.from(currentSet).filter((id) => !desiredSet.has(id as string)) as string[];
+
+  if (toAdd.length > 0) {
+    const rows = toAdd.map((pipeline_id) => ({
+      user_id: userId,
+      owner_id: scope.owner_id,
+      sub_company_id: scope.sub_company_id,
+      pipeline_id,
+      created_by: createdBy,
+    }));
+    const { error } = await admin.from("user_pipeline_assignments").insert(rows);
+    if (error) throw new Error(errorMessage(error, "Falha ao atribuir funis"));
+  }
+  if (toRemove.length > 0) {
+    let delQ = admin.from("user_pipeline_assignments").delete()
+      .eq("user_id", userId).eq("owner_id", scope.owner_id)
+      .in("pipeline_id", toRemove);
+    if (scope.sub_company_id) delQ = delQ.eq("sub_company_id", scope.sub_company_id);
+    else delQ = delQ.is("sub_company_id", null);
+    const { error } = await delQ;
+    if (error) throw new Error(errorMessage(error, "Falha ao remover funis"));
+  }
+
+  const from = Array.from(currentSet).sort() as string[];
+  const to = [...desired].sort();
+  if (JSON.stringify(from) === JSON.stringify(to)) return null;
+  return { from, to };
+}
+
+
+
 async function findUserByEmail(
   adminClient: ReturnType<typeof createClient>,
   email: string,
@@ -325,6 +390,21 @@ Deno.serve(async (req) => {
       const sigMap = new Map<string, string>();
       (sigs || []).forEach((s: any) => sigMap.set(s.user_id, s.role));
 
+      // Pipeline assignments per user within scope
+      let pipeQ = adminClient.from("user_pipeline_assignments")
+        .select("user_id, pipeline_id")
+        .eq("owner_id", scope.owner_id)
+        .in("user_id", ids.length > 0 ? ids : ["00000000-0000-0000-0000-000000000000"]);
+      if (scope.sub_company_id) pipeQ = pipeQ.eq("sub_company_id", scope.sub_company_id);
+      else pipeQ = pipeQ.is("sub_company_id", null);
+      const { data: pipeRows } = await pipeQ;
+      const pipeMap = new Map<string, string[]>();
+      (pipeRows || []).forEach((p: any) => {
+        const arr = pipeMap.get(p.user_id) || [];
+        arr.push(p.pipeline_id);
+        pipeMap.set(p.user_id, arr);
+      });
+
       const users = (rows || []).map((r) => {
         const sigRole = sigMap.get(r.user_id);
         const access_level: AccessLevel = r.is_account_admin
@@ -333,7 +413,12 @@ Deno.serve(async (req) => {
               ["supervisor", "coordenador", "diretor"].includes(sigRole))
           ? "supervisao"
           : "atendimento";
-        return { ...r, profile: profMap.get(r.user_id) || null, access_level };
+        return {
+          ...r,
+          profile: profMap.get(r.user_id) || null,
+          access_level,
+          pipeline_ids: pipeMap.get(r.user_id) || [],
+        };
       });
       return json({ users, scope });
     }
@@ -458,6 +543,19 @@ Deno.serve(async (req) => {
 
       await applyAccessLevel(adminClient, newUser.id, scope, level);
 
+      let pipelineChange: { from: string[]; to: string[] } | null = null;
+      try {
+        pipelineChange = await syncPipelineAssignments(
+          adminClient, newUser.id, scope, body.pipeline_ids, caller.user.id,
+        );
+      } catch (pipeErr: any) {
+        return userError(
+          errorMessage(pipeErr, "Falha ao atribuir funis"),
+          400,
+          "pipeline_assign_error",
+        );
+      }
+
       await logAudit(adminClient, {
         action: "create",
         userId: newUser.id,
@@ -468,6 +566,7 @@ Deno.serve(async (req) => {
           role_label,
           access_level: level,
           is_account_admin: isAdmin,
+          ...(pipelineChange ? { pipeline_ids: pipelineChange } : {}),
         },
         changedBy: caller.user.id,
         scope,
@@ -618,6 +717,19 @@ Deno.serve(async (req) => {
 
       if (level) await applyAccessLevel(adminClient, user_id, scope, level);
 
+      let pipelineChange: { from: string[]; to: string[] } | null = null;
+      try {
+        pipelineChange = await syncPipelineAssignments(
+          adminClient, user_id, scope, body.pipeline_ids, caller.user.id,
+        );
+      } catch (pipeErr: any) {
+        return userError(
+          errorMessage(pipeErr, "Falha ao atribuir funis"),
+          400,
+          "pipeline_assign_error",
+        );
+      }
+
       // Diff for audit — only record fields that actually changed. Skip irrelevant fields.
       const diff: Record<string, { from: any; to: any }> = {};
       const trackProfile: Array<keyof typeof profileUpdate> = [
@@ -658,6 +770,9 @@ Deno.serve(async (req) => {
       }
       if (emailChanged) {
         diff.email = emailChanged;
+      }
+      if (pipelineChange) {
+        diff.pipeline_ids = pipelineChange;
       }
 
       if (Object.keys(diff).length > 0) {
@@ -707,6 +822,13 @@ Deno.serve(async (req) => {
           "access_delete_error",
         );
       }
+
+      // Clean up pipeline assignments in this scope
+      let pipeDel = adminClient.from("user_pipeline_assignments").delete()
+        .eq("user_id", user_id).eq("owner_id", scope.owner_id);
+      if (scope.sub_company_id) pipeDel = pipeDel.eq("sub_company_id", scope.sub_company_id);
+      else pipeDel = pipeDel.is("sub_company_id", null);
+      await pipeDel;
 
       let sigDel = adminClient.from("user_signature_roles").delete().eq(
         "user_id",

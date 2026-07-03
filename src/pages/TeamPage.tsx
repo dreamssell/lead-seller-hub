@@ -26,6 +26,7 @@ type Member = {
   is_account_admin: boolean;
   allowed_pages: string[];
   access_level?: AccessLevel;
+  pipeline_ids?: string[];
   profile: {
     display_name?: string | null;
     email?: string | null;
@@ -33,6 +34,8 @@ type Member = {
     is_active?: boolean | null;
   } | null;
 };
+
+type PipelineOption = { id: string; name: string };
 
 const ACCESS_LEVELS: Array<{ value: AccessLevel; label: string; description: string; icon: any }> = [
   { value: 'atendimento', label: 'Atendimento', description: 'Usuários operacionais (SDR, Closer, Atendente).', icon: Headset },
@@ -60,10 +63,15 @@ export default function TeamPage() {
   const [form, setForm] = useState<{
     email: string; password: string; display_name: string;
     role_label: string; access_level: AccessLevel;
+    pipeline_ids: string[];
   }>({
     email: '', password: '', display_name: '',
     role_label: 'Atendente', access_level: 'atendimento',
+    pipeline_ids: [],
   });
+
+  const [pipelines, setPipelines] = useState<PipelineOption[]>([]);
+  const [pipelinesLoading, setPipelinesLoading] = useState(false);
 
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditRows, setAuditRows] = useState<any[]>([]);
@@ -126,7 +134,18 @@ export default function TeamPage() {
     setAuditLoading(false);
   };
 
-  useEffect(() => { loadMembers(); loadPlanLimit(); /* eslint-disable-next-line */ }, [scopeSubId, isOwner, user?.id]);
+  const loadPipelines = async () => {
+    setPipelinesLoading(true);
+    const ownerId = access?.owner_id ?? user?.id;
+    if (!ownerId) { setPipelines([]); setPipelinesLoading(false); return; }
+    let q = supabase.from('pipelines').select('id, name').eq('owner_id', ownerId).order('name');
+    q = scopeSubId ? q.eq('sub_company_id', scopeSubId) : q.is('sub_company_id', null);
+    const { data } = await q;
+    setPipelines((data || []) as PipelineOption[]);
+    setPipelinesLoading(false);
+  };
+
+  useEffect(() => { loadMembers(); loadPlanLimit(); loadPipelines(); /* eslint-disable-next-line */ }, [scopeSubId, isOwner, user?.id]);
   useEffect(() => { if (auditOpen) loadAudit(); /* eslint-disable-next-line */ }, [auditOpen, members.length]);
 
   const openNew = () => {
@@ -143,7 +162,7 @@ export default function TeamPage() {
       return;
     }
     setEditing(null);
-    setForm({ email: '', password: '', display_name: '', role_label: 'Atendente', access_level: 'atendimento' });
+    setForm({ email: '', password: '', display_name: '', role_label: 'Atendente', access_level: 'atendimento', pipeline_ids: [] });
     setDialogOpen(true);
   };
 
@@ -156,6 +175,7 @@ export default function TeamPage() {
       display_name: m.profile?.display_name || '',
       role_label: m.profile?.role_label || 'Atendente',
       access_level: m.access_level || (m.is_account_admin ? 'administracao' : 'atendimento'),
+      pipeline_ids: m.pipeline_ids || [],
     });
     setDialogOpen(true);
   };
@@ -174,6 +194,7 @@ export default function TeamPage() {
           action: 'update', sub_company_id: scopeSubId, user_id: editing.user_id,
           name: form.display_name, role_label: form.role_label,
           access_level: form.access_level,
+          pipeline_ids: form.pipeline_ids,
           ...(form.password ? { password: form.password } : {}),
           ...(isOwner && form.email.trim() && form.email.trim().toLowerCase() !== (editing.profile?.email || '').toLowerCase()
             ? { email: form.email.trim().toLowerCase() }
@@ -184,6 +205,7 @@ export default function TeamPage() {
           email: form.email.trim().toLowerCase(), name: form.display_name, password: form.password,
           role_label: form.role_label,
           access_level: form.access_level,
+          pipeline_ids: form.pipeline_ids,
         };
     const { data, error } = await supabase.functions.invoke('manage-account-user', { body: payload });
     setSaving(false);
@@ -414,6 +436,50 @@ export default function TeamPage() {
               <Label>Cargo</Label>
               <Input value={form.role_label} onChange={e => setForm(f => ({ ...f, role_label: e.target.value }))}
                 placeholder="Atendente, Closer, SDR, Coordenador..." />
+            </div>
+            <div>
+              <div className="flex items-center justify-between">
+                <Label>Funis atribuídos</Label>
+                <span className="text-[11px] text-muted-foreground">
+                  {form.pipeline_ids.length} selecionado(s)
+                </span>
+              </div>
+              <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+                {pipelinesLoading ? (
+                  <div className="p-3 text-xs text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Carregando funis...
+                  </div>
+                ) : pipelines.length === 0 ? (
+                  <div className="p-3 text-xs text-muted-foreground">
+                    Nenhum funil ativo neste escopo. Crie funis na página Pipeline antes de atribuir.
+                  </div>
+                ) : (
+                  pipelines.map(p => {
+                    const checked = form.pipeline_ids.includes(p.id);
+                    return (
+                      <label key={p.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-secondary/50">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            setForm(f => ({
+                              ...f,
+                              pipeline_ids: e.target.checked
+                                ? Array.from(new Set([...f.pipeline_ids, p.id]))
+                                : f.pipeline_ids.filter(id => id !== p.id),
+                            }));
+                          }}
+                          className="h-4 w-4 rounded border-border accent-primary"
+                        />
+                        <span className="truncate">{p.name}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Selecione um ou vários funis ativos deste escopo aos quais este membro terá acesso.
+              </p>
             </div>
             <div>
               <Label>Nível de acesso</Label>
