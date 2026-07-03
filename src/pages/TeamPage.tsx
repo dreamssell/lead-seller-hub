@@ -175,6 +175,9 @@ export default function TeamPage() {
           name: form.display_name, role_label: form.role_label,
           access_level: form.access_level,
           ...(form.password ? { password: form.password } : {}),
+          ...(isOwner && form.email.trim() && form.email.trim().toLowerCase() !== (editing.profile?.email || '').toLowerCase()
+            ? { email: form.email.trim().toLowerCase() }
+            : {}),
         }
       : {
           action: 'create', sub_company_id: scopeSubId,
@@ -371,8 +374,8 @@ export default function TeamPage() {
               <Input value={form.display_name} onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))} />
             </div>
             <div>
-              <Label>E-mail</Label>
-              <Input type="email" disabled={!!editing} value={form.email}
+              <Label>E-mail {editing && !isOwner && <span className="text-xs text-muted-foreground">(somente o dono da plataforma pode alterar)</span>}</Label>
+              <Input type="email" disabled={!!editing && !isOwner} value={form.email}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
             </div>
             <div>
