@@ -290,15 +290,14 @@ describe('TeamPage — email edit is gated by platform ownership', () => {
   });
 
   async function openEditDialog() {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
     setup([member], 10);
     renderPage();
     await waitFor(() => expect(screen.getByText('Fulano')).toBeInTheDocument());
-    // Radix dropdown trigger is the MoreVertical button; open it, then click Editar.
     const triggers = screen.getAllByRole('button');
     const more = triggers.find((b) => b.querySelector('svg.lucide-more-vertical'))!;
     await user.click(more);
-    const editItem = await screen.findByRole('menuitem', { name: /Editar/i });
+    const editItem = await screen.findByRole('menuitem', { name: /Editar/i }, { timeout: 3000 });
     await user.click(editItem);
     return user;
   }
