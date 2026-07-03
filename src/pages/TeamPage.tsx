@@ -137,13 +137,28 @@ export default function TeamPage() {
 
   const loadPipelines = async () => {
     setPipelinesLoading(true);
+    setPipelinesError(null);
     const ownerId = access?.owner_id ?? user?.id;
-    if (!ownerId) { setPipelines([]); setPipelinesLoading(false); return; }
-    let q = supabase.from('pipelines').select('id, name').eq('owner_id', ownerId).order('name');
-    q = scopeSubId ? q.eq('sub_company_id', scopeSubId) : q.is('sub_company_id', null);
-    const { data } = await q;
-    setPipelines((data || []) as PipelineOption[]);
-    setPipelinesLoading(false);
+    if (!ownerId) {
+      setPipelines([]);
+      setPipelinesError('Escopo indisponível: faça login novamente para carregar seus funis.');
+      setPipelinesLoading(false);
+      return;
+    }
+    try {
+      let q = supabase.from('pipelines').select('id, name').eq('owner_id', ownerId).order('name');
+      q = scopeSubId ? q.eq('sub_company_id', scopeSubId) : q.is('sub_company_id', null);
+      const { data, error } = await q;
+      if (error) throw error;
+      setPipelines((data || []) as PipelineOption[]);
+    } catch (e: any) {
+      const msg = e?.message || 'Falha ao carregar funis ativos.';
+      setPipelines([]);
+      setPipelinesError(msg);
+      toast({ title: 'Erro ao carregar funis', description: msg, variant: 'destructive' });
+    } finally {
+      setPipelinesLoading(false);
+    }
   };
 
   useEffect(() => { loadMembers(); loadPlanLimit(); loadPipelines(); /* eslint-disable-next-line */ }, [scopeSubId, isOwner, user?.id]);
