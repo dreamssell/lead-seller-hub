@@ -246,7 +246,19 @@ export default function TeamPage() {
     setSaving(false);
     const surfaced = await extractManageUserError(data, error);
     if (surfaced) {
-      toast({ title: 'Erro', description: surfaced.message, variant: 'destructive' });
+      const isPipelineErr =
+        surfaced.code === 'pipeline_required' ||
+        /funil|pipeline/i.test(surfaced.message);
+      if (isPipelineErr) {
+        flashPipelineField();
+        toast({
+          title: '⚠ Selecione pelo menos 1 funil',
+          description: `${surfaced.message} O campo "Funis atribuídos" foi destacado abaixo.`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({ title: 'Erro', description: surfaced.message, variant: 'destructive' });
+      }
       return;
     }
     toast({ title: editing ? 'Membro atualizado' : 'Membro adicionado' });
