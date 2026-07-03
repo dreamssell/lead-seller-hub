@@ -344,7 +344,7 @@ Deno.serve(async (req) => {
       user_id: existing.id,
     });
 
-    const platformUrl = Deno.env.get("PLATFORM_URL") || "https://connecto-center.lovable.app";
+    const platformUrl = Deno.env.get("PLATFORM_URL") || "https://hub.leadseller.com.br";
     const redirectUrl = `${platformUrl}/auth/callback?access_token=${authData.session.access_token}&refresh_token=${authData.session.refresh_token}`;
 
     return new Response(

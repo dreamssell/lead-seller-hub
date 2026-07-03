@@ -1,4 +1,4 @@
-const FALLBACK_PUBLIC_APP_ORIGIN = 'https://connecto-center.lovable.app';
+const FALLBACK_PUBLIC_APP_ORIGIN = 'https://hub.leadseller.com.br';
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
 
