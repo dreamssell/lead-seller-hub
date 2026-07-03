@@ -89,7 +89,7 @@ function SubCompaniesSection() {
       supabase.from('sub_companies').select('*').order('created_at', { ascending: false }),
       supabase.from('plan_packages').select('*').eq('active', true).order('sort_order'),
     ]);
-    setSubs((s as any) || []);
+    setSubs(dedupeSubCompaniesByEmail(((s as any) || []) as SubCompany[]));
     setPlans(((p as any) || []).map((x: any) => ({ ...x, features: Array.isArray(x.features) ? x.features : [] })));
     setLoading(false);
   };
