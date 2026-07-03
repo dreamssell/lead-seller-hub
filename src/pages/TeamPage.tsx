@@ -134,7 +134,18 @@ export default function TeamPage() {
     setAuditLoading(false);
   };
 
-  useEffect(() => { loadMembers(); loadPlanLimit(); /* eslint-disable-next-line */ }, [scopeSubId, isOwner, user?.id]);
+  const loadPipelines = async () => {
+    setPipelinesLoading(true);
+    const ownerId = access?.owner_id ?? user?.id;
+    if (!ownerId) { setPipelines([]); setPipelinesLoading(false); return; }
+    let q = supabase.from('pipelines').select('id, name').eq('owner_id', ownerId).order('name');
+    q = scopeSubId ? q.eq('sub_company_id', scopeSubId) : q.is('sub_company_id', null);
+    const { data } = await q;
+    setPipelines((data || []) as PipelineOption[]);
+    setPipelinesLoading(false);
+  };
+
+  useEffect(() => { loadMembers(); loadPlanLimit(); loadPipelines(); /* eslint-disable-next-line */ }, [scopeSubId, isOwner, user?.id]);
   useEffect(() => { if (auditOpen) loadAudit(); /* eslint-disable-next-line */ }, [auditOpen, members.length]);
 
   const openNew = () => {
