@@ -63,10 +63,15 @@ export default function TeamPage() {
   const [form, setForm] = useState<{
     email: string; password: string; display_name: string;
     role_label: string; access_level: AccessLevel;
+    pipeline_ids: string[];
   }>({
     email: '', password: '', display_name: '',
     role_label: 'Atendente', access_level: 'atendimento',
+    pipeline_ids: [],
   });
+
+  const [pipelines, setPipelines] = useState<PipelineOption[]>([]);
+  const [pipelinesLoading, setPipelinesLoading] = useState(false);
 
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditRows, setAuditRows] = useState<any[]>([]);
