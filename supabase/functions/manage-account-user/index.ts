@@ -656,6 +656,9 @@ Deno.serve(async (req) => {
       if (password && password.length >= 6) {
         diff.password = { from: "••••", to: "•••• (alterada)" };
       }
+      if (emailChanged) {
+        diff.email = emailChanged;
+      }
 
       if (Object.keys(diff).length > 0) {
         await logAudit(adminClient, {
