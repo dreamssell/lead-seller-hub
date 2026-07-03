@@ -381,6 +381,8 @@ export default function TeamPage() {
                 aria-label="E-mail do membro"
                 readOnly={!!editing && !isOwner}
                 disabled={!!editing && !isOwner}
+                aria-disabled={!!editing && !isOwner || undefined}
+                aria-describedby={editing && !isOwner ? 'team-email-lock-warning' : undefined}
                 title={editing && !isOwner ? 'Somente o dono da plataforma pode alterar o e-mail.' : undefined}
                 value={form.email}
                 onChange={e => {
@@ -391,11 +393,14 @@ export default function TeamPage() {
               />
               {editing && !isOwner && (
                 <p
+                  id="team-email-lock-warning"
                   role="alert"
+                  aria-live="polite"
+                  aria-atomic="true"
                   data-testid="team-email-lock-warning"
                   className="mt-1 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400"
                 >
-                  <ShieldCheck className="h-3.5 w-3.5" />
+                  <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
                   Apenas o dono da plataforma pode alterar o e-mail deste usuário.
                 </p>
               )}

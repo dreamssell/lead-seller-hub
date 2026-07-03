@@ -332,6 +332,45 @@ describe('TeamPage — email edit is gated by platform ownership', () => {
     expect(warning).toHaveTextContent(/Apenas o dono da plataforma/i);
   });
 
+  // ─── Accessibility of the lock warning ────────────────────────────────────
+  it('exposes the email lock warning to assistive tech via role=alert (announced to screen readers)', async () => {
+    platformOwnerState.isOwner = false;
+    await openEditDialog();
+    // Discoverable by role — this is what NVDA/JAWS/VoiceOver rely on.
+    const alert = await screen.findByRole('alert');
+    expect(alert).toBeInTheDocument();
+    expect(alert).toHaveTextContent(/Apenas o dono da plataforma pode alterar o e-mail deste usuário/i);
+    // Explicit live-region hints so the announcement is polite + atomic
+    // (role=alert already implies assertive live, but we make intent explicit).
+    expect(alert).toHaveAttribute('aria-live', 'polite');
+    expect(alert).toHaveAttribute('aria-atomic', 'true');
+  });
+
+  it('associates the warning with the email input via aria-describedby, and marks it aria-disabled', async () => {
+    platformOwnerState.isOwner = false;
+    await openEditDialog();
+    const email = await screen.findByTestId('team-email-input');
+    const alert = await screen.findByRole('alert');
+    // The input must point to the alert's id so screen readers announce the
+    // reason when focus lands on the field.
+    expect(alert.id).toBe('team-email-lock-warning');
+    expect(email).toHaveAttribute('aria-describedby', 'team-email-lock-warning');
+    expect(email).toHaveAttribute('aria-disabled', 'true');
+    // Decorative shield icon should NOT be announced twice by AT.
+    const icon = alert.querySelector('svg');
+    expect(icon).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('does not render an alert or aria-describedby for the platform owner (no false announcements)', async () => {
+    platformOwnerState.isOwner = true;
+    await openEditDialog();
+    const email = await screen.findByTestId('team-email-input');
+    expect(email).not.toHaveAttribute('aria-describedby');
+    expect(email).not.toHaveAttribute('aria-disabled');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('team-email-lock-warning')).not.toBeInTheDocument();
+  });
+
   it('does NOT include email in the update payload when a non-owner submits', async () => {
     platformOwnerState.isOwner = false;
     const user = await openEditDialog();
