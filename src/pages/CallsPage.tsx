@@ -321,7 +321,13 @@ export default function CallsPage() {
       toast({ title: 'Configuração SIP salva', description: 'Credenciais criptografadas armazenadas no backend.' });
       setSipAudit(await listSipAudit());
     } catch (e: any) {
-      toast({ title: 'Falha ao salvar SIP', description: e?.message || 'Erro desconhecido', variant: 'destructive' });
+      const status: number = e?.status ?? 0;
+      const title =
+        status === 401 ? 'Sessão expirada' :
+        status === 403 ? 'Acesso negado' :
+        status >= 500 ? 'Erro interno do servidor' :
+        'Falha ao salvar SIP';
+      toast({ title, description: e?.message || 'Erro desconhecido', variant: 'destructive' });
     }
   };
 
