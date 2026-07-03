@@ -27,6 +27,30 @@ function json(status: number, body: unknown) {
   });
 }
 
+// Formal error contract. Every failure response returned by this function
+// MUST go through `fail()` so clients (see src/lib/sipConfig.ts) can rely on
+// a stable, machine-readable shape:
+//   { error: string, code: string, message: string, status: number }
+// `error` mirrors `code` for backward compatibility with older callers that
+// still read `json.error` as the code discriminator.
+const ERROR_MESSAGES: Record<string, string> = {
+  method_not_allowed: 'Método HTTP não suportado. Use POST.',
+  missing_auth: 'Cabeçalho Authorization ausente ou mal formatado.',
+  unauthenticated: 'Sessão inválida ou expirada.',
+  forbidden: 'Apenas o dono da plataforma pode acessar configurações SIP.',
+  invalid_json: 'Corpo da requisição não é um JSON válido.',
+  missing_action: 'Campo "action" é obrigatório.',
+  unknown_action: 'Ação SIP não reconhecida.',
+  missing_fields: 'Preencha "server" e "username" antes de salvar.',
+  internal: 'Falha interna ao processar credenciais SIP.',
+};
+
+function fail(status: number, code: string, message?: string) {
+  const msg = message ?? ERROR_MESSAGES[code] ?? 'Erro desconhecido.';
+  return json(status, { error: code, code, message: msg, status });
+}
+
+
 async function getAesKey(): Promise<CryptoKey> {
   const enc = new TextEncoder().encode(ENC_KEY_RAW);
   // Derive a stable 32-byte key from the secret via SHA-256
@@ -62,16 +86,16 @@ async function decryptPassword(ciphertext: string, iv: string): Promise<string> 
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' });
+  if (req.method !== 'POST') return fail(405, 'method_not_allowed');
 
   const authHeader = req.headers.get('Authorization') || '';
-  if (!authHeader.startsWith('Bearer ')) return json(401, { error: 'missing_auth' });
+  if (!authHeader.startsWith('Bearer ')) return fail(401, 'missing_auth');
 
   const userClient = createClient(SUPABASE_URL, ANON, {
     global: { headers: { Authorization: authHeader } },
   });
   const { data: userData, error: userErr } = await userClient.auth.getUser();
-  if (userErr || !userData?.user) return json(401, { error: 'unauthenticated' });
+  if (userErr || !userData?.user) return fail(401, 'unauthenticated');
   const user = userData.user;
 
   // Admin gate — every operation on SIP configs requires platform admin role.
@@ -79,13 +103,13 @@ Deno.serve(async (req) => {
     _user_id: user.id,
     _role: 'admin',
   });
-  if (roleErr || isAdmin !== true) {
-    return json(403, { error: 'forbidden', message: 'Apenas o dono da plataforma pode acessar configurações SIP.' });
-  }
+  if (roleErr || isAdmin !== true) return fail(403, 'forbidden');
 
   let body: any;
-  try { body = await req.json(); } catch { return json(400, { error: 'invalid_json' }); }
+  try { body = await req.json(); } catch { return fail(400, 'invalid_json'); }
   const action = String(body?.action || '');
+  if (!action) return fail(400, 'missing_action');
+
   const scope = body?.scope || {};
   const ownerId: string | null = scope.owner_id || user.id;
   const subCompanyId: string | null = scope.sub_company_id ?? null;
@@ -139,7 +163,7 @@ Deno.serve(async (req) => {
 
     if (action === 'upsert') {
       const cfg = body.config || {};
-      if (!cfg.server || !cfg.username) return json(400, { error: 'missing_fields' });
+      if (!cfg.server || !cfg.username) return fail(400, 'missing_fields');
       const { ciphertext, iv } = await encryptPassword(String(cfg.password || ''));
       const payload = {
         owner_id: ownerId,
@@ -202,9 +226,10 @@ Deno.serve(async (req) => {
       return json(200, { entries: data });
     }
 
-    return json(400, { error: 'unknown_action' });
+    return fail(400, 'unknown_action');
   } catch (e: any) {
     console.error('manage-sip-config error', e);
-    return json(500, { error: 'internal', message: e?.message ?? String(e) });
+    return fail(500, 'internal', e?.message ?? String(e));
   }
+
 });
