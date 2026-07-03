@@ -175,6 +175,9 @@ export default function TeamPage() {
           name: form.display_name, role_label: form.role_label,
           access_level: form.access_level,
           ...(form.password ? { password: form.password } : {}),
+          ...(isOwner && form.email.trim() && form.email.trim().toLowerCase() !== (editing.profile?.email || '').toLowerCase()
+            ? { email: form.email.trim().toLowerCase() }
+            : {}),
         }
       : {
           action: 'create', sub_company_id: scopeSubId,
