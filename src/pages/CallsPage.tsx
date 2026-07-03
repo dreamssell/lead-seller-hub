@@ -222,27 +222,15 @@ export default function CallsPage() {
   const [sipLoading, setSipLoading] = useState(false);
   const [sipAudit, setSipAudit] = useState<Array<{ id: string; action: string; changed_by_email: string | null; created_at: string }>>([]);
 
-  // Load SIP config from secure backend (admin only). Any legacy credential
-  // entry left in browser storage is proactively purged on every mount so it
-  // cannot survive a page reload on shared devices.
+  // Load SIP config from secure backend (admin only). Storage purge is handled
+  // by the useSipStoragePurge() hook above so credentials never survive a reload.
   useEffect(() => {
-    const purge = () => {
-      try {
-        ['sipConfig', 'sip_config', 'sip-credentials', 'voipConfig'].forEach(k => {
-          localStorage.removeItem(k);
-          sessionStorage.removeItem(k);
-        });
-      } catch {}
-    };
-    purge();
-    window.addEventListener('storage', purge);
-
-    if (!isOwner) return () => window.removeEventListener('storage', purge);
+    if (!isOwner) return;
     let cancelled = false;
     (async () => {
       setSipLoading(true);
       try {
-        const { fetchSipConfig, listSipAudit, SipError } = await import('@/lib/sipConfig');
+        const { fetchSipConfig, listSipAudit } = await import('@/lib/sipConfig');
         const cfg = await fetchSipConfig();
         if (cancelled) return;
         if (cfg) {
@@ -273,8 +261,9 @@ export default function CallsPage() {
         if (!cancelled) setSipLoading(false);
       }
     })();
-    return () => { cancelled = true; window.removeEventListener('storage', purge); };
+    return () => { cancelled = true; };
   }, [isOwner]);
+
 
 
   const filteredRecordings = useMemo(() => {
