@@ -515,7 +515,15 @@ export default function TeamPage() {
               <Input value={form.role_label} onChange={e => setForm(f => ({ ...f, role_label: e.target.value }))}
                 placeholder="Atendente, Closer, SDR, Coordenador..." />
             </div>
-            <div>
+            <div
+              ref={pipelineFieldRef}
+              className={
+                'scroll-mt-4 rounded-lg transition-all ' +
+                (pipelineFieldHighlight
+                  ? 'ring-2 ring-destructive ring-offset-2 ring-offset-background animate-pulse -m-2 p-2'
+                  : '')
+              }
+            >
               <div className="flex items-center justify-between">
                 <Label>Funis atribuídos</Label>
                 <span className="text-[11px] text-muted-foreground flex items-center gap-1.5">
