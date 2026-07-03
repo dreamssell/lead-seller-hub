@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Building2, Globe, LayoutDashboard, Plus, Pencil, Trash2, Ban, LogIn, Copy, Check, Sparkles, Crown, Star, Wand2, Upload, ShieldCheck, RefreshCw, AlertCircle } from 'lucide-react';
 import { SubCompanyManageDialog } from './SubCompanyManageDialog';
 import { BLOCKABLE_PAGES, ALL_PERMISSION_KEYS } from '@/lib/navigation';
+import { normalizeAdminEmail, dedupeSubCompaniesByEmail } from '@/lib/subCompanyUtils';
 
 type Plan = {
   id: string; slug: string; name: string; tagline: string | null;
