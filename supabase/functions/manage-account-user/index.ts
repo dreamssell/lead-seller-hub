@@ -451,6 +451,20 @@ Deno.serve(async (req) => {
         : ALL_PAGES;
       const isAdmin = level === "administracao";
 
+      // Enforce: Atendimento requires at least 1 pipeline
+      if (level === "atendimento") {
+        const desired = Array.isArray(body.pipeline_ids)
+          ? body.pipeline_ids.filter((v: any) => typeof v === "string" && v)
+          : [];
+        if (desired.length === 0) {
+          return userError(
+            "Selecione ao menos 1 funil para membros de Atendimento.",
+            400,
+            "pipeline_required",
+          );
+        }
+      }
+
       const existing = await findUserByEmail(adminClient, normalizedEmail);
       const existingAccess = existing
         ? await getScopedAccess(adminClient, existing.id, scope)
@@ -628,6 +642,33 @@ Deno.serve(async (req) => {
           ? is_account_admin
           : target.is_account_admin);
       const nextLevel: AccessLevel = level ?? prevLevel;
+
+      // Enforce: Atendimento requires at least 1 pipeline (after applying changes)
+      if (nextLevel === "atendimento") {
+        let effectiveCount: number;
+        if (Array.isArray(body.pipeline_ids)) {
+          effectiveCount = body.pipeline_ids.filter(
+            (v: any) => typeof v === "string" && v,
+          ).length;
+        } else {
+          let existingQ = adminClient.from("user_pipeline_assignments")
+            .select("pipeline_id", { count: "exact", head: true })
+            .eq("user_id", user_id).eq("owner_id", scope.owner_id);
+          if (scope.sub_company_id) {
+            existingQ = existingQ.eq("sub_company_id", scope.sub_company_id);
+          } else existingQ = existingQ.is("sub_company_id", null);
+          const { count } = await existingQ;
+          effectiveCount = count ?? 0;
+        }
+        if (effectiveCount === 0) {
+          return userError(
+            "Selecione ao menos 1 funil para membros de Atendimento.",
+            400,
+            "pipeline_required",
+          );
+        }
+      }
+
 
       if (password && password.length >= 6) {
         const { error: passwordError } = await adminClient.auth.admin
