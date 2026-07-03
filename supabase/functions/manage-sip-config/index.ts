@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
 
     if (action === 'upsert') {
       const cfg = body.config || {};
-      if (!cfg.server || !cfg.username) return json(400, { error: 'missing_fields' });
+      if (!cfg.server || !cfg.username) return fail(400, 'missing_fields');
       const { ciphertext, iv } = await encryptPassword(String(cfg.password || ''));
       const payload = {
         owner_id: ownerId,
