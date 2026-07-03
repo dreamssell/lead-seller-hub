@@ -493,8 +493,21 @@ export default function TeamPage() {
               </div>
               <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-border divide-y divide-border">
                 {pipelinesLoading ? (
-                  <div className="p-3 text-xs text-muted-foreground flex items-center gap-2">
-                    <Loader2 className="w-3 h-3 animate-spin" /> Carregando funis...
+                  <div className="p-3 text-xs text-muted-foreground flex items-center gap-2" aria-live="polite">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Carregando funis ativos...
+                  </div>
+                ) : pipelinesError ? (
+                  <div className="p-3 text-xs text-destructive flex items-center justify-between gap-2" role="alert">
+                    <span className="truncate" title={pipelinesError}>⚠ {pipelinesError}</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[11px] shrink-0"
+                      onClick={loadPipelines}
+                    >
+                      Tentar novamente
+                    </Button>
                   </div>
                 ) : pipelines.length === 0 ? (
                   <div className="p-3 text-xs text-muted-foreground">
