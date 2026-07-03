@@ -24,6 +24,8 @@ export const MANAGE_USER_ERROR_MESSAGES: Record<string, string> = {
   email_already_used: 'Este e-mail já pertence a outro usuário.',
   email_update_error: 'Não foi possível atualizar o e-mail deste usuário na base de autenticação.',
   invalid_email: 'E-mail inválido. Verifique o formato e tente novamente.',
+  pipeline_required: 'Selecione ao menos 1 funil para membros de Atendimento.',
+  pipeline_assign_error: 'Não foi possível atribuir os funis selecionados. Verifique se pertencem ao escopo atual.',
   internal_error: 'Erro interno inesperado. Tente novamente em instantes.',
 };
 
