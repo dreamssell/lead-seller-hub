@@ -27,6 +27,30 @@ function json(status: number, body: unknown) {
   });
 }
 
+// Formal error contract. Every failure response returned by this function
+// MUST go through `fail()` so clients (see src/lib/sipConfig.ts) can rely on
+// a stable, machine-readable shape:
+//   { error: string, code: string, message: string, status: number }
+// `error` mirrors `code` for backward compatibility with older callers that
+// still read `json.error` as the code discriminator.
+const ERROR_MESSAGES: Record<string, string> = {
+  method_not_allowed: 'Método HTTP não suportado. Use POST.',
+  missing_auth: 'Cabeçalho Authorization ausente ou mal formatado.',
+  unauthenticated: 'Sessão inválida ou expirada.',
+  forbidden: 'Apenas o dono da plataforma pode acessar configurações SIP.',
+  invalid_json: 'Corpo da requisição não é um JSON válido.',
+  missing_action: 'Campo "action" é obrigatório.',
+  unknown_action: 'Ação SIP não reconhecida.',
+  missing_fields: 'Preencha "server" e "username" antes de salvar.',
+  internal: 'Falha interna ao processar credenciais SIP.',
+};
+
+function fail(status: number, code: string, message?: string) {
+  const msg = message ?? ERROR_MESSAGES[code] ?? 'Erro desconhecido.';
+  return json(status, { error: code, code, message: msg, status });
+}
+
+
 async function getAesKey(): Promise<CryptoKey> {
   const enc = new TextEncoder().encode(ENC_KEY_RAW);
   // Derive a stable 32-byte key from the secret via SHA-256
