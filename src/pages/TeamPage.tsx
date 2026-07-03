@@ -204,6 +204,14 @@ export default function TeamPage() {
         return;
       }
     }
+    if (form.access_level === 'atendimento' && form.pipeline_ids.length === 0) {
+      toast({
+        title: 'Selecione ao menos 1 funil',
+        description: 'Membros de Atendimento precisam de pelo menos um funil atribuído para operar leads.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setSaving(true);
     const payload: any = editing
       ? {
@@ -545,6 +553,11 @@ export default function TeamPage() {
               <p className="text-xs text-muted-foreground mt-1.5">
                 Selecione um ou vários funis ativos deste escopo aos quais este membro terá acesso.
               </p>
+              {form.access_level === 'atendimento' && form.pipeline_ids.length === 0 && !pipelinesLoading && !pipelinesError && (
+                <p className="text-xs text-destructive mt-1.5 flex items-center gap-1" role="alert">
+                  ⚠ Obrigatório para o nível <strong>Atendimento</strong>: escolha pelo menos 1 funil.
+                </p>
+              )}
             </div>
             <div>
               <Label>Nível de acesso</Label>
@@ -572,7 +585,10 @@ export default function TeamPage() {
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogOpen(false)} disabled={saving}>Cancelar</Button>
-            <Button onClick={save} disabled={saving}>
+            <Button
+              onClick={save}
+              disabled={saving || (form.access_level === 'atendimento' && form.pipeline_ids.length === 0)}
+            >
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {editing ? 'Salvar' : 'Adicionar'}
             </Button>
