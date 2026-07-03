@@ -317,6 +317,10 @@ export default function TeamPage() {
             const isAI = /bot|i\.?a\.?|agente/i.test(m.profile?.role_label || '');
             const active = m.profile?.is_active !== false;
             const lvl = levelMeta(m.access_level || (m.is_account_admin ? 'administracao' : 'atendimento'));
+            const pipelineMap = new Map(pipelines.map(p => [p.id, p.name]));
+            const memberPipelines = (m.pipeline_ids || [])
+              .map(id => pipelineMap.get(id))
+              .filter(Boolean) as string[];
             const LvlIcon = lvl.icon;
             return (
               <motion.div
@@ -362,6 +366,33 @@ export default function TeamPage() {
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                  )}
+                </div>
+
+                <div className="mb-3">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">Funis atribuídos</p>
+                  {memberPipelines.length === 0 ? (
+                    <span className="text-[11px] text-muted-foreground italic">Nenhum funil</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {memberPipelines.slice(0, 4).map((name, idx) => (
+                        <span
+                          key={idx}
+                          className="text-[10px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 max-w-[140px] truncate"
+                          title={name}
+                        >
+                          {name}
+                        </span>
+                      ))}
+                      {memberPipelines.length > 4 && (
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded-md bg-secondary text-secondary-foreground"
+                          title={memberPipelines.slice(4).join(', ')}
+                        >
+                          +{memberPipelines.length - 4}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
 
