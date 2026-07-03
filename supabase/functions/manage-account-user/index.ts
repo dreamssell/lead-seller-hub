@@ -717,6 +717,19 @@ Deno.serve(async (req) => {
 
       if (level) await applyAccessLevel(adminClient, user_id, scope, level);
 
+      let pipelineChange: { from: string[]; to: string[] } | null = null;
+      try {
+        pipelineChange = await syncPipelineAssignments(
+          adminClient, user_id, scope, body.pipeline_ids, caller.user.id,
+        );
+      } catch (pipeErr: any) {
+        return userError(
+          errorMessage(pipeErr, "Falha ao atribuir funis"),
+          400,
+          "pipeline_assign_error",
+        );
+      }
+
       // Diff for audit — only record fields that actually changed. Skip irrelevant fields.
       const diff: Record<string, { from: any; to: any }> = {};
       const trackProfile: Array<keyof typeof profileUpdate> = [
