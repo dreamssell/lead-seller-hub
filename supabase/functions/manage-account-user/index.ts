@@ -325,6 +325,21 @@ Deno.serve(async (req) => {
       const sigMap = new Map<string, string>();
       (sigs || []).forEach((s: any) => sigMap.set(s.user_id, s.role));
 
+      // Pipeline assignments per user within scope
+      let pipeQ = adminClient.from("user_pipeline_assignments")
+        .select("user_id, pipeline_id")
+        .eq("owner_id", scope.owner_id)
+        .in("user_id", ids.length > 0 ? ids : ["00000000-0000-0000-0000-000000000000"]);
+      if (scope.sub_company_id) pipeQ = pipeQ.eq("sub_company_id", scope.sub_company_id);
+      else pipeQ = pipeQ.is("sub_company_id", null);
+      const { data: pipeRows } = await pipeQ;
+      const pipeMap = new Map<string, string[]>();
+      (pipeRows || []).forEach((p: any) => {
+        const arr = pipeMap.get(p.user_id) || [];
+        arr.push(p.pipeline_id);
+        pipeMap.set(p.user_id, arr);
+      });
+
       const users = (rows || []).map((r) => {
         const sigRole = sigMap.get(r.user_id);
         const access_level: AccessLevel = r.is_account_admin
@@ -333,7 +348,12 @@ Deno.serve(async (req) => {
               ["supervisor", "coordenador", "diretor"].includes(sigRole))
           ? "supervisao"
           : "atendimento";
-        return { ...r, profile: profMap.get(r.user_id) || null, access_level };
+        return {
+          ...r,
+          profile: profMap.get(r.user_id) || null,
+          access_level,
+          pipeline_ids: pipeMap.get(r.user_id) || [],
+        };
       });
       return json({ users, scope });
     }
