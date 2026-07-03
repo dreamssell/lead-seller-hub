@@ -194,6 +194,7 @@ export default function TeamPage() {
           action: 'update', sub_company_id: scopeSubId, user_id: editing.user_id,
           name: form.display_name, role_label: form.role_label,
           access_level: form.access_level,
+          pipeline_ids: form.pipeline_ids,
           ...(form.password ? { password: form.password } : {}),
           ...(isOwner && form.email.trim() && form.email.trim().toLowerCase() !== (editing.profile?.email || '').toLowerCase()
             ? { email: form.email.trim().toLowerCase() }
@@ -204,6 +205,7 @@ export default function TeamPage() {
           email: form.email.trim().toLowerCase(), name: form.display_name, password: form.password,
           role_label: form.role_label,
           access_level: form.access_level,
+          pipeline_ids: form.pipeline_ids,
         };
     const { data, error } = await supabase.functions.invoke('manage-account-user', { body: payload });
     setSaving(false);
