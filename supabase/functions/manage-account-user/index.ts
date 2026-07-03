@@ -451,6 +451,20 @@ Deno.serve(async (req) => {
         : ALL_PAGES;
       const isAdmin = level === "administracao";
 
+      // Enforce: Atendimento requires at least 1 pipeline
+      if (level === "atendimento") {
+        const desired = Array.isArray(body.pipeline_ids)
+          ? body.pipeline_ids.filter((v: any) => typeof v === "string" && v)
+          : [];
+        if (desired.length === 0) {
+          return userError(
+            "Selecione ao menos 1 funil para membros de Atendimento.",
+            400,
+            "pipeline_required",
+          );
+        }
+      }
+
       const existing = await findUserByEmail(adminClient, normalizedEmail);
       const existingAccess = existing
         ? await getScopedAccess(adminClient, existing.id, scope)
