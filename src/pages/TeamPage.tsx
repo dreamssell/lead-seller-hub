@@ -215,9 +215,10 @@ export default function TeamPage() {
       }
     }
     if (form.access_level === 'atendimento' && form.pipeline_ids.length === 0) {
+      flashPipelineField();
       toast({
-        title: 'Selecione ao menos 1 funil',
-        description: 'Membros de Atendimento precisam de pelo menos um funil atribuído para operar leads.',
+        title: '⚠ Selecione pelo menos 1 funil',
+        description: 'O campo "Funis atribuídos" foi destacado abaixo. Marque um ou mais funis ativos para concluir o cadastro de um membro de Atendimento.',
         variant: 'destructive',
       });
       return;
