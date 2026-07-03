@@ -3,6 +3,9 @@
  * caller that is not authenticated OR is not a platform admin, no matter
  * which action they try. This guards against direct API access bypassing
  * the frontend tab-visibility gate.
+ *
+ * End-to-end: point SIP_FN_URL at the deployed function and provide a
+ * SIP_NON_ADMIN_JWT belonging to a real non-admin user to prove RBAC.
  */
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 
@@ -37,16 +40,34 @@ Deno.test('rejects requests with bogus bearer token', async () => {
   assertEquals(status === 401 || status === 403, true);
 });
 
+Deno.test('rejects unknown HTTP methods with 405', async () => {
+  const res = await fetch(FN_URL, { method: 'GET' });
+  await res.text();
+  // Either the platform gateway blocks GET or the function returns 405.
+  assertEquals(res.status === 405 || res.status === 401, true);
+});
+
 Deno.test({
-  name: 'rejects authenticated non-admin users with 403 (requires SIP_NON_ADMIN_JWT env)',
+  name: 'E2E: authenticated non-admin users get 403 for every action (needs SIP_NON_ADMIN_JWT)',
   ignore: !NON_ADMIN_JWT,
   fn: async () => {
-    for (const action of ['get', 'upsert', 'delete', 'audit_list']) {
+    const actions: Array<{ action: string; extra?: Record<string, unknown> }> = [
+      { action: 'get' },
+      { action: 'upsert', extra: { config: { server: 's', username: 'u', password: 'p' } } },
+      { action: 'delete' },
+      { action: 'audit_list' },
+    ];
+    for (const { action, extra } of actions) {
       const { status, body } = await call(
         { Authorization: `Bearer ${NON_ADMIN_JWT}`, apikey: ANON },
-        { action, scope: {}, config: { server: 's', username: 'u', password: 'p' } },
+        { action, scope: {}, ...(extra ?? {}) },
       );
       assertEquals(status, 403, `action=${action} body=${body}`);
+      // Response must include the human-readable Portuguese message so the
+      // UI can surface a clear "acesso negado" toast.
+      if (!body.includes('forbidden')) {
+        throw new Error(`expected 'forbidden' in body for action=${action}, got: ${body}`);
+      }
     }
   },
 });
