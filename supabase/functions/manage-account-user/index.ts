@@ -771,6 +771,9 @@ Deno.serve(async (req) => {
       if (emailChanged) {
         diff.email = emailChanged;
       }
+      if (pipelineChange) {
+        diff.pipeline_ids = pipelineChange;
+      }
 
       if (Object.keys(diff).length > 0) {
         await logAudit(adminClient, {
