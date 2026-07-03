@@ -59,3 +59,49 @@ Deno.test("CORS preflight succeeds", async () => {
   assertEquals(res.status, 200);
   assert(res.headers.get("access-control-allow-origin"));
 });
+
+// ─── Email change is restricted to the platform owner (app_role='admin') ────
+// The unauth path is the strongest guarantee we can assert without seeded
+// credentials: any request that carries an email in `update` MUST be rejected
+// before it ever reaches the auth admin API when the caller has no session.
+Deno.test(
+  "update with email field is rejected 401 when caller is not authenticated",
+  async () => {
+    const { status, json } = await call({
+      action: "update",
+      user_id: "00000000-0000-0000-0000-000000000000",
+      email: "novo@test.com",
+      name: "Alguém",
+    });
+    assertEquals(status, 401);
+    assertEquals(json?.code, "unauthenticated");
+  },
+);
+
+// Opt-in E2E: set TEAM_NON_OWNER_JWT to a valid signed-in JWT for a
+// non-platform-owner account admin and TEAM_TARGET_USER_ID to a user in
+// their scope. The function must respond 403 with code=email_change_forbidden.
+const NON_OWNER_JWT = Deno.env.get("TEAM_NON_OWNER_JWT");
+const TARGET_USER_ID = Deno.env.get("TEAM_TARGET_USER_ID");
+Deno.test({
+  name:
+    "update with email field is rejected 403 email_change_forbidden for non-owner admin",
+  ignore: !NON_OWNER_JWT || !TARGET_USER_ID,
+  fn: async () => {
+    const { status, json } = await call(
+      {
+        action: "update",
+        user_id: TARGET_USER_ID,
+        email: `changed+${Date.now()}@test.com`,
+        name: "Nome Existente",
+      },
+      NON_OWNER_JWT,
+    );
+    assertEquals(status, 403);
+    assertEquals(json?.code, "email_change_forbidden");
+    assert(
+      /dono da plataforma/i.test(String(json?.error || "")),
+      "should return PT-BR platform-owner message",
+    );
+  },
+});

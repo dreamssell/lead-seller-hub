@@ -395,5 +395,101 @@ describe('TeamPage — email edit is gated by platform ownership', () => {
       );
     });
   });
+
+  it('save() strips email from the update payload even after the user attempts to type a new one (non-owner)', async () => {
+    // Regression guard: the field is readOnly for non-owners, so React state
+    // never mutates. We assert both the DOM guard and the outbound payload.
+    platformOwnerState.isOwner = false;
+    const user = await openEditDialog();
+    const email = screen.getByTestId('team-email-input') as HTMLInputElement;
+    // Sanity: field is locked.
+    expect(email).toBeDisabled();
+    expect(email).toHaveAttribute('readonly');
+    // Simulate a keyboard attempt — value must NOT change.
+    await user.type(email, 'attacker@evil.com').catch(() => { /* disabled input rejects input in some jsdom versions */ });
+    expect(email.value).toBe('fulano@test.com');
+    await user.click(screen.getByRole('button', { name: /^Salvar$/i }));
+    await waitFor(() => {
+      const call = invokeMock.mock.calls.find(
+        (c) => c[0] === 'manage-account-user' && c[1]?.body?.action === 'update',
+      );
+      expect(call).toBeTruthy();
+      // Never a shape like { email: 'attacker@evil.com' } — never any `email` at all.
+      expect(Object.keys(call![1].body)).not.toContain('email');
+    });
+  });
+
+  // Helper — swap the invoke mock to reject the next call with a real HTTP
+  // error whose body carries the given { code, error } shape.
+  function nextInvokeRejects(code: string, message: string, status: number) {
+    invokeMock.mockImplementationOnce(async () => {
+      const response = new Response(
+        JSON.stringify({ code, error: message }),
+        { status, headers: { 'Content-Type': 'application/json' } },
+      );
+      const err = Object.assign(
+        new Error('Edge Function returned a non-2xx status code'),
+        { context: response },
+      );
+      return { data: null, error: err };
+    });
+  }
+
+  it('shows PT-BR toast when backend replies 409 email_already_used', async () => {
+    platformOwnerState.isOwner = true;
+    const user = await openEditDialog();
+    nextInvokeRejects('email_already_used', 'Este e-mail já pertence a outro usuário.', 409);
+    const email = screen.getByTestId('team-email-input');
+    await user.clear(email);
+    await user.type(email, 'existente@test.com');
+    await user.click(screen.getByRole('button', { name: /^Salvar$/i }));
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Erro',
+          variant: 'destructive',
+          description: expect.stringMatching(/já pertence a outro usuário/i),
+        }),
+      );
+    });
+  });
+
+  it('shows PT-BR toast when backend replies 400 email_update_error', async () => {
+    platformOwnerState.isOwner = true;
+    const user = await openEditDialog();
+    nextInvokeRejects('email_update_error', 'auth admin failure', 400);
+    const email = screen.getByTestId('team-email-input');
+    await user.clear(email);
+    await user.type(email, 'novo@test.com');
+    await user.click(screen.getByRole('button', { name: /^Salvar$/i }));
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Erro',
+          variant: 'destructive',
+          description: expect.stringMatching(/base de autenticação/i),
+        }),
+      );
+    });
+  });
+
+  it('shows PT-BR toast when backend replies 400 invalid_email', async () => {
+    platformOwnerState.isOwner = true;
+    const user = await openEditDialog();
+    nextInvokeRejects('invalid_email', 'E-mail inválido.', 400);
+    const email = screen.getByTestId('team-email-input');
+    await user.clear(email);
+    await user.type(email, 'quebrado@');
+    await user.click(screen.getByRole('button', { name: /^Salvar$/i }));
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Erro',
+          variant: 'destructive',
+          description: expect.stringMatching(/e-mail inválido/i),
+        }),
+      );
+    });
+  });
 });
 
