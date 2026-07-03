@@ -150,7 +150,9 @@ const dialPad = [
 
 export default function CallsPage() {
   const { isOwner } = usePlatformOwner();
+  useSipStoragePurge();
   const [dialerOpen, setDialerOpen] = useState(false);
+
   const [number, setNumber] = useState('');
   const [inCall, setInCall] = useState(false);
   const [muted, setMuted] = useState(false);
