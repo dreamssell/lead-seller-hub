@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion, AnimatePresence } from 'framer-motion';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import {
   Phone,
   PhoneIncoming,
