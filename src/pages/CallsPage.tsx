@@ -1255,7 +1255,8 @@ export default function CallsPage() {
           </motion.div>
         </TabsContent>
 
-        {/* Configurações SIP */}
+        {/* Configurações SIP — visível apenas para o dono da plataforma */}
+        {isOwner && (
         <TabsContent value="settings">
           <motion.div className="glass-card p-6" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
             <div className="flex items-center gap-2 mb-5">
