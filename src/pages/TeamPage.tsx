@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
 import { Plus, Bot, UserCheck, MoreVertical, Infinity as InfinityIcon, Loader2, Pencil, Trash2, ShieldCheck, History, Shield, Headset } from 'lucide-react';
@@ -73,6 +73,16 @@ export default function TeamPage() {
   const [pipelines, setPipelines] = useState<PipelineOption[]>([]);
   const [pipelinesLoading, setPipelinesLoading] = useState(false);
   const [pipelinesError, setPipelinesError] = useState<string | null>(null);
+  const [pipelineFieldHighlight, setPipelineFieldHighlight] = useState(false);
+  const pipelineFieldRef = useRef<HTMLDivElement | null>(null);
+
+  const flashPipelineField = () => {
+    setPipelineFieldHighlight(true);
+    requestAnimationFrame(() => {
+      pipelineFieldRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    window.setTimeout(() => setPipelineFieldHighlight(false), 2600);
+  };
 
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditRows, setAuditRows] = useState<any[]>([]);
@@ -205,9 +215,10 @@ export default function TeamPage() {
       }
     }
     if (form.access_level === 'atendimento' && form.pipeline_ids.length === 0) {
+      flashPipelineField();
       toast({
-        title: 'Selecione ao menos 1 funil',
-        description: 'Membros de Atendimento precisam de pelo menos um funil atribuído para operar leads.',
+        title: '⚠ Selecione pelo menos 1 funil',
+        description: 'O campo "Funis atribuídos" foi destacado abaixo. Marque um ou mais funis ativos para concluir o cadastro de um membro de Atendimento.',
         variant: 'destructive',
       });
       return;
@@ -235,7 +246,19 @@ export default function TeamPage() {
     setSaving(false);
     const surfaced = await extractManageUserError(data, error);
     if (surfaced) {
-      toast({ title: 'Erro', description: surfaced.message, variant: 'destructive' });
+      const isPipelineErr =
+        surfaced.code === 'pipeline_required' ||
+        /funil|pipeline/i.test(surfaced.message);
+      if (isPipelineErr) {
+        flashPipelineField();
+        toast({
+          title: '⚠ Selecione pelo menos 1 funil',
+          description: `${surfaced.message} O campo "Funis atribuídos" foi destacado abaixo.`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({ title: 'Erro', description: surfaced.message, variant: 'destructive' });
+      }
       return;
     }
     toast({ title: editing ? 'Membro atualizado' : 'Membro adicionado' });
@@ -492,7 +515,15 @@ export default function TeamPage() {
               <Input value={form.role_label} onChange={e => setForm(f => ({ ...f, role_label: e.target.value }))}
                 placeholder="Atendente, Closer, SDR, Coordenador..." />
             </div>
-            <div>
+            <div
+              ref={pipelineFieldRef}
+              className={
+                'scroll-mt-4 rounded-lg transition-all ' +
+                (pipelineFieldHighlight
+                  ? 'ring-2 ring-destructive ring-offset-2 ring-offset-background animate-pulse -m-2 p-2'
+                  : '')
+              }
+            >
               <div className="flex items-center justify-between">
                 <Label>Funis atribuídos</Label>
                 <span className="text-[11px] text-muted-foreground flex items-center gap-1.5">
