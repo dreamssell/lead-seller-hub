@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Building2, Globe, LayoutDashboard, Plus, Pencil, Trash2, Ban, LogIn, Copy, Check, Sparkles, Crown, Star, Wand2, Upload, ShieldCheck, RefreshCw, AlertCircle } from 'lucide-react';
 import { SubCompanyManageDialog } from './SubCompanyManageDialog';
 import { BLOCKABLE_PAGES, ALL_PERMISSION_KEYS } from '@/lib/navigation';
+import { normalizeAdminEmail, dedupeSubCompaniesByEmail } from '@/lib/subCompanyUtils';
 
 type Plan = {
   id: string; slug: string; name: string; tagline: string | null;
@@ -88,7 +89,7 @@ function SubCompaniesSection() {
       supabase.from('sub_companies').select('*').order('created_at', { ascending: false }),
       supabase.from('plan_packages').select('*').eq('active', true).order('sort_order'),
     ]);
-    setSubs((s as any) || []);
+    setSubs(dedupeSubCompaniesByEmail(((s as any) || []) as SubCompany[]));
     setPlans(((p as any) || []).map((x: any) => ({ ...x, features: Array.isArray(x.features) ? x.features : [] })));
     setLoading(false);
   };
@@ -196,7 +197,7 @@ function SubCompaniesSection() {
                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center"><Building2 className="w-5 h-5 text-primary" /></div>
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{s.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{s.admin_name} · {s.admin_email}</p>
+                  <p className="text-xs text-muted-foreground truncate" data-testid={`sub-admin-email-${s.id}`}>{s.admin_name} · {normalizeAdminEmail(s.admin_email)}</p>
                 </div>
                 <Badge variant="secondary" className="ml-2 hidden sm:inline-flex">{plans.find(p => p.slug === s.plan_slug)?.name || s.plan_slug}</Badge>
                 {s.status !== 'active' && <Badge variant="destructive">Bloqueada</Badge>}
@@ -256,7 +257,7 @@ function SubCompanyDialog({
   const save = async () => {
     const name = (form.name || '').trim();
     const adminName = (form.admin_name || '').trim();
-    const adminEmail = (form.admin_email || '').trim().toLowerCase();
+    const adminEmail = normalizeAdminEmail(form.admin_email);
     const adminPassword = String((form as any).admin_password || '');
 
     if (!name || !adminName || !adminEmail) {
