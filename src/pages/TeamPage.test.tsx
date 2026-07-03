@@ -315,11 +315,9 @@ describe('TeamPage — email edit is gated by platform ownership', () => {
     setup([member], 10);
     renderPage();
     await waitFor(() => expect(screen.getByText('Fulano')).toBeInTheDocument());
-    const triggers = screen.getAllByRole('button');
-    const more = triggers.find((b) => b.querySelector('svg.lucide-more-vertical'))!;
-    await user.click(more);
-    const editItem = await screen.findByRole('menuitem', { name: /Editar/i }, { timeout: 3000 });
+    const editItem = await screen.findByRole('menuitem', { name: /Editar/i });
     await user.click(editItem);
+    await screen.findByTestId('team-email-input');
     return user;
   }
 
