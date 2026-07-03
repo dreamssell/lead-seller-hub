@@ -197,7 +197,7 @@ function SubCompaniesSection() {
                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center"><Building2 className="w-5 h-5 text-primary" /></div>
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{s.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{s.admin_name} · {s.admin_email}</p>
+                  <p className="text-xs text-muted-foreground truncate" data-testid={`sub-admin-email-${s.id}`}>{s.admin_name} · {normalizeAdminEmail(s.admin_email)}</p>
                 </div>
                 <Badge variant="secondary" className="ml-2 hidden sm:inline-flex">{plans.find(p => p.slug === s.plan_slug)?.name || s.plan_slug}</Badge>
                 {s.status !== 'active' && <Badge variant="destructive">Bloqueada</Badge>}
