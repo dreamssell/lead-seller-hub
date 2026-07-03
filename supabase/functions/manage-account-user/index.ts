@@ -823,6 +823,13 @@ Deno.serve(async (req) => {
         );
       }
 
+      // Clean up pipeline assignments in this scope
+      let pipeDel = adminClient.from("user_pipeline_assignments").delete()
+        .eq("user_id", user_id).eq("owner_id", scope.owner_id);
+      if (scope.sub_company_id) pipeDel = pipeDel.eq("sub_company_id", scope.sub_company_id);
+      else pipeDel = pipeDel.is("sub_company_id", null);
+      await pipeDel;
+
       let sigDel = adminClient.from("user_signature_roles").delete().eq(
         "user_id",
         user_id,
