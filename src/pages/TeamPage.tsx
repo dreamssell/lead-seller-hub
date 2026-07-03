@@ -72,6 +72,7 @@ export default function TeamPage() {
 
   const [pipelines, setPipelines] = useState<PipelineOption[]>([]);
   const [pipelinesLoading, setPipelinesLoading] = useState(false);
+  const [pipelinesError, setPipelinesError] = useState<string | null>(null);
 
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditRows, setAuditRows] = useState<any[]>([]);
@@ -136,13 +137,28 @@ export default function TeamPage() {
 
   const loadPipelines = async () => {
     setPipelinesLoading(true);
+    setPipelinesError(null);
     const ownerId = access?.owner_id ?? user?.id;
-    if (!ownerId) { setPipelines([]); setPipelinesLoading(false); return; }
-    let q = supabase.from('pipelines').select('id, name').eq('owner_id', ownerId).order('name');
-    q = scopeSubId ? q.eq('sub_company_id', scopeSubId) : q.is('sub_company_id', null);
-    const { data } = await q;
-    setPipelines((data || []) as PipelineOption[]);
-    setPipelinesLoading(false);
+    if (!ownerId) {
+      setPipelines([]);
+      setPipelinesError('Escopo indisponível: faça login novamente para carregar seus funis.');
+      setPipelinesLoading(false);
+      return;
+    }
+    try {
+      let q = supabase.from('pipelines').select('id, name').eq('owner_id', ownerId).order('name');
+      q = scopeSubId ? q.eq('sub_company_id', scopeSubId) : q.is('sub_company_id', null);
+      const { data, error } = await q;
+      if (error) throw error;
+      setPipelines((data || []) as PipelineOption[]);
+    } catch (e: any) {
+      const msg = e?.message || 'Falha ao carregar funis ativos.';
+      setPipelines([]);
+      setPipelinesError(msg);
+      toast({ title: 'Erro ao carregar funis', description: msg, variant: 'destructive' });
+    } finally {
+      setPipelinesLoading(false);
+    }
   };
 
   useEffect(() => { loadMembers(); loadPlanLimit(); loadPipelines(); /* eslint-disable-next-line */ }, [scopeSubId, isOwner, user?.id]);
@@ -471,14 +487,32 @@ export default function TeamPage() {
             <div>
               <div className="flex items-center justify-between">
                 <Label>Funis atribuídos</Label>
-                <span className="text-[11px] text-muted-foreground">
-                  {form.pipeline_ids.length} selecionado(s)
+                <span className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                  {pipelinesLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {pipelinesLoading
+                    ? 'Carregando...'
+                    : pipelinesError
+                    ? <span className="text-destructive">Falha ao carregar</span>
+                    : `${form.pipeline_ids.length} de ${pipelines.length} selecionado(s)`}
                 </span>
               </div>
               <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-border divide-y divide-border">
                 {pipelinesLoading ? (
-                  <div className="p-3 text-xs text-muted-foreground flex items-center gap-2">
-                    <Loader2 className="w-3 h-3 animate-spin" /> Carregando funis...
+                  <div className="p-3 text-xs text-muted-foreground flex items-center gap-2" aria-live="polite">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Carregando funis ativos...
+                  </div>
+                ) : pipelinesError ? (
+                  <div className="p-3 text-xs text-destructive flex items-center justify-between gap-2" role="alert">
+                    <span className="truncate" title={pipelinesError}>⚠ {pipelinesError}</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[11px] shrink-0"
+                      onClick={loadPipelines}
+                    >
+                      Tentar novamente
+                    </Button>
                   </div>
                 ) : pipelines.length === 0 ? (
                   <div className="p-3 text-xs text-muted-foreground">
