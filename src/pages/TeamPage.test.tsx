@@ -45,6 +45,27 @@ vi.mock('@/components/layout/AppLayout', () => ({
   AppLayout: ({ children }: any) => <div>{children}</div>,
 }));
 
+vi.mock('@/components/ui/dropdown-menu', () => {
+  const React = require('react');
+  const Passthrough = ({ children, asChild, onClick, disabled, ...rest }: any) =>
+    React.createElement(
+      'div',
+      { role: rest.role, onClick: disabled ? undefined : onClick, ...rest },
+      children,
+    );
+  return {
+    DropdownMenu: Passthrough,
+    DropdownMenuTrigger: Passthrough,
+    DropdownMenuContent: Passthrough,
+    DropdownMenuItem: ({ children, onClick, disabled }: any) =>
+      React.createElement(
+        'button',
+        { role: 'menuitem', type: 'button', disabled, onClick },
+        children,
+      ),
+  };
+});
+
 const toastMock = vi.fn();
 vi.mock('@/components/ui/use-toast', () => ({
   toast: (...args: any[]) => toastMock(...args),
