@@ -3838,6 +3838,44 @@ export type Database = {
           },
         ]
       }
+      user_pipeline_assignments: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          owner_id: string
+          pipeline_id: string
+          sub_company_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          owner_id: string
+          pipeline_id: string
+          sub_company_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          owner_id?: string
+          pipeline_id?: string
+          sub_company_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_pipeline_assignments_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
