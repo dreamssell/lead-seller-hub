@@ -151,7 +151,7 @@ export default function TeamPage() {
       return;
     }
     setEditing(null);
-    setForm({ email: '', password: '', display_name: '', role_label: 'Atendente', access_level: 'atendimento' });
+    setForm({ email: '', password: '', display_name: '', role_label: 'Atendente', access_level: 'atendimento', pipeline_ids: [] });
     setDialogOpen(true);
   };
 
