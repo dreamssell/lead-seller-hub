@@ -492,7 +492,7 @@ function SubCompanyDialog({
           {step === 'plan' && !editing ? (
             <Button onClick={() => setStep('details')} disabled={!selectedPlan}>Continuar</Button>
           ) : (
-            <Button onClick={save}>{editing ? 'Salvar' : 'Enviar Convite'}</Button>
+            <Button onClick={save} disabled={saving}>{saving ? 'Salvando...' : (editing ? 'Salvar' : 'Enviar Convite')}</Button>
           )}
         </DialogFooter>
       </DialogContent>
