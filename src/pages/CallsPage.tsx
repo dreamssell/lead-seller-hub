@@ -1,7 +1,10 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { CallsPageTabsList } from '@/components/calls/CallsPageTabsList';
+import { useSipStoragePurge } from '@/hooks/useSipStoragePurge';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
+
 import {
   Phone,
   PhoneIncoming,
@@ -147,7 +150,9 @@ const dialPad = [
 
 export default function CallsPage() {
   const { isOwner } = usePlatformOwner();
+  useSipStoragePurge();
   const [dialerOpen, setDialerOpen] = useState(false);
+
   const [number, setNumber] = useState('');
   const [inCall, setInCall] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -217,10 +222,9 @@ export default function CallsPage() {
   const [sipLoading, setSipLoading] = useState(false);
   const [sipAudit, setSipAudit] = useState<Array<{ id: string; action: string; changed_by_email: string | null; created_at: string }>>([]);
 
-  // Load SIP config from secure backend (admin only). Legacy localStorage entry
-  // is proactively purged to prevent credential leakage on shared devices.
+  // Load SIP config from secure backend (admin only). Storage purge is handled
+  // by the useSipStoragePurge() hook above so credentials never survive a reload.
   useEffect(() => {
-    try { localStorage.removeItem('sipConfig'); } catch {}
     if (!isOwner) return;
     let cancelled = false;
     (async () => {
@@ -246,12 +250,20 @@ export default function CallsPage() {
         if (!cancelled) setSipAudit(audit);
       } catch (e: any) {
         console.warn('SIP fetch failed', e?.message);
+        if (e?.name === 'SipError') {
+          toast({
+            title: e.status === 403 ? 'Acesso negado' : e.status === 401 ? 'Sessão expirada' : 'Falha ao carregar SIP',
+            description: e.message,
+            variant: 'destructive',
+          });
+        }
       } finally {
         if (!cancelled) setSipLoading(false);
       }
     })();
     return () => { cancelled = true; };
   }, [isOwner]);
+
 
 
   const filteredRecordings = useMemo(() => {
@@ -303,7 +315,13 @@ export default function CallsPage() {
       toast({ title: 'Configuração SIP salva', description: 'Credenciais criptografadas armazenadas no backend.' });
       setSipAudit(await listSipAudit());
     } catch (e: any) {
-      toast({ title: 'Falha ao salvar SIP', description: e?.message || 'Erro desconhecido', variant: 'destructive' });
+      const status: number = e?.status ?? 0;
+      const title =
+        status === 401 ? 'Sessão expirada' :
+        status === 403 ? 'Acesso negado' :
+        status >= 500 ? 'Erro interno do servidor' :
+        'Falha ao salvar SIP';
+      toast({ title, description: e?.message || 'Erro desconhecido', variant: 'destructive' });
     }
   };
 
@@ -429,19 +447,8 @@ export default function CallsPage() {
       </motion.div>
 
       <Tabs defaultValue="history" className="space-y-4">
-        <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="history">Histórico</TabsTrigger>
-          <TabsTrigger value="recordings">Gravações</TabsTrigger>
-          <TabsTrigger value="reports">Relatórios</TabsTrigger>
-          <TabsTrigger value="insights" className="gap-1.5">
-            <Sparkles className="w-3.5 h-3.5" />
-            Análises
-          </TabsTrigger>
-          <TabsTrigger value="stats">Estatísticas</TabsTrigger>
-          <TabsTrigger value="queues">Filas & IVR</TabsTrigger>
-          <TabsTrigger value="blocked">Bloqueados</TabsTrigger>
-          {isOwner && <TabsTrigger value="settings">Configurações SIP</TabsTrigger>}
-        </TabsList>
+        <CallsPageTabsList isOwner={isOwner} />
+
 
         {/* Histórico */}
         <TabsContent value="history">
