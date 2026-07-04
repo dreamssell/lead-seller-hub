@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, ShieldCheck, ShieldAlert, ArrowRight } from "lucide-react";
-import { EXTERNAL_LOGIN_URL } from "@/contexts/AuthContext";
+import { EXTERNAL_LOGIN_URL, buildExternalLoginUrl } from "@/contexts/AuthContext";
 
 type Info = {
   sub_company_id: string;
