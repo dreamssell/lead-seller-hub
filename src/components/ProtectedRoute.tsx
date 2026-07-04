@@ -48,7 +48,7 @@ export default function ProtectedRoute({ children, pageKey, ownerOnly }: Protect
       metadata: { path: location.pathname, redirect_to: EXTERNAL_LOGIN_URL || '/auth/callback' },
     });
     if (EXTERNAL_LOGIN_URL) {
-      window.location.href = EXTERNAL_LOGIN_URL;
+      window.location.href = buildExternalLoginUrl();
       return null;
     }
     return <Navigate to="/auth/callback" replace />;
