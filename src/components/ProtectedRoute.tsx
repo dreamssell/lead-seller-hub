@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth, EXTERNAL_LOGIN_URL } from '@/contexts/AuthContext';
+import { useAuth, EXTERNAL_LOGIN_URL, buildExternalLoginUrl } from '@/contexts/AuthContext';
 import { getPageKeyByPath, type SidebarPageKey } from '@/lib/navigation';
 import { logRouteTelemetry } from '@/lib/routeTelemetry';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
