@@ -9,7 +9,7 @@ const ALL_PAGES = [
   "reports", "pipeline", "ceo", "settings", "api-keys", "status", "profile",
 ];
 
-const DEFAULT_PLATFORM_URL = "https://hub.leadseller.com.br";
+const DEFAULT_PLATFORM_URL = "https://connecto-center.lovable.app";
 const FALLBACK_PLATFORM_URL = "https://connecto-center.lovable.app";
 const ALLOWED_CALLBACK_HOSTS = new Set([
   "hub.leadseller.com.br",
