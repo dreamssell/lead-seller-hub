@@ -124,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setAccess(null);
     if (EXTERNAL_LOGIN_URL) {
-      window.location.href = EXTERNAL_LOGIN_URL;
+      window.location.href = buildExternalLoginUrl();
     }
   };
 
