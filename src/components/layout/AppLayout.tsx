@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
@@ -9,27 +9,101 @@ interface AppLayoutProps {
   subtitle?: string;
 }
 
+const PIN_STORAGE_KEY = 'ls:sidebar:pinned';
+
+function readPinned(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(PIN_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export function AppLayout({ children, title, subtitle }: AppLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [pinned, setPinned] = useState<boolean>(readPinned);
   const [hoverExpanded, setHoverExpanded] = useState(false);
+  const [focusExpanded, setFocusExpanded] = useState(false);
+  const sidebarWrapRef = useRef<HTMLDivElement | null>(null);
+
+  const expanded = pinned || hoverExpanded || focusExpanded;
+
+  // Persist pin preference
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PIN_STORAGE_KEY, pinned ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [pinned]);
+
+  // Close (collapse) when clicking outside — only when unpinned + currently expanded
+  useEffect(() => {
+    if (pinned || !expanded) return;
+    const onPointerDown = (e: MouseEvent) => {
+      const el = sidebarWrapRef.current;
+      if (el && !el.contains(e.target as Node)) {
+        setHoverExpanded(false);
+        setFocusExpanded(false);
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [pinned, expanded]);
+
+  // Escape collapses when not pinned
+  useEffect(() => {
+    if (pinned) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && expanded) {
+        setHoverExpanded(false);
+        setFocusExpanded(false);
+        (document.activeElement as HTMLElement | null)?.blur?.();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [pinned, expanded]);
+
+  const handleNavigate = () => {
+    if (!pinned) {
+      setHoverExpanded(false);
+      setFocusExpanded(false);
+    }
+  };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Desktop sidebar — icon rail, expands overlay on hover */}
+    <div className="flex h-dvh overflow-hidden bg-background">
+      {/* Desktop / tablet sidebar */}
       <div
+        ref={sidebarWrapRef}
         className="hidden md:block relative shrink-0"
-        onMouseEnter={() => setHoverExpanded(true)}
-        onMouseLeave={() => setHoverExpanded(false)}
+        onMouseEnter={() => !pinned && setHoverExpanded(true)}
+        onMouseLeave={() => !pinned && setHoverExpanded(false)}
+        onFocusCapture={() => !pinned && setFocusExpanded(true)}
+        onBlurCapture={(e) => {
+          if (pinned) return;
+          const next = e.relatedTarget as Node | null;
+          if (!next || !sidebarWrapRef.current?.contains(next)) {
+            setFocusExpanded(false);
+          }
+        }}
       >
-        {/* Reserved rail width so main content doesn't shift */}
-        <div className="w-16 h-full" aria-hidden />
-        {/* Actual sidebar overlays on top; expands on hover */}
+        {/* Rail placeholder keeps main content stable when unpinned */}
+        <div className={pinned ? 'w-64 h-full' : 'w-16 h-full'} aria-hidden />
         <div
           className={`absolute inset-y-0 left-0 z-40 transition-shadow duration-300 ${
-            hoverExpanded ? 'shadow-2xl' : ''
+            expanded && !pinned ? 'shadow-2xl' : ''
           }`}
         >
-          <Sidebar collapsible expanded={hoverExpanded} />
+          <Sidebar
+            collapsible={!pinned}
+            expanded={expanded}
+            pinned={pinned}
+            onTogglePin={() => setPinned((p) => !p)}
+            onNavigate={handleNavigate}
+          />
         </div>
       </div>
 
