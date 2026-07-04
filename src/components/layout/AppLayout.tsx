@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -146,7 +146,14 @@ export function AppLayout({ children, title, subtitle }: AppLayoutProps) {
       {/* Mobile / tablet sidebar (sheet). Persists open/closed preference. */}
       {!isDesktop && (
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetContent side="left" className="p-0 w-72 max-w-[85vw] z-50 overflow-y-auto">
+          <SheetContent
+            side="left"
+            className="p-0 w-72 max-w-[85vw] z-50 overflow-y-auto focus:outline-none"
+          >
+            <SheetTitle className="sr-only">Menu de navegação</SheetTitle>
+            <SheetDescription className="sr-only">
+              Use Tab e Shift+Tab para navegar entre os itens, Enter para abrir e Esc para fechar.
+            </SheetDescription>
             <Sidebar onNavigate={() => setMobileOpen(false)} />
           </SheetContent>
         </Sheet>

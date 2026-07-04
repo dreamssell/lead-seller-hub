@@ -66,8 +66,9 @@ export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
       <div className="flex items-center gap-2 min-w-0">
         <button
           onClick={onOpenMenu}
-          className="lg:hidden p-2 rounded-xl hover:bg-secondary transition-colors"
-          aria-label="Abrir menu"
+          className="lg:hidden p-2 rounded-xl hover:bg-secondary transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          aria-label="Abrir menu de navegação"
+          aria-haspopup="dialog"
         >
           <Menu className="w-5 h-5 text-foreground" />
         </button>
