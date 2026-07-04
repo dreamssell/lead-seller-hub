@@ -11,12 +11,26 @@ interface AppLayoutProps {
 
 export function AppLayout({ children, title, subtitle }: AppLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [hoverExpanded, setHoverExpanded] = useState(false);
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      {/* Desktop sidebar */}
-      <div className="hidden md:flex">
-        <Sidebar />
+      {/* Desktop sidebar — icon rail, expands overlay on hover */}
+      <div
+        className="hidden md:block relative shrink-0"
+        onMouseEnter={() => setHoverExpanded(true)}
+        onMouseLeave={() => setHoverExpanded(false)}
+      >
+        {/* Reserved rail width so main content doesn't shift */}
+        <div className="w-16 h-full" aria-hidden />
+        {/* Actual sidebar overlays on top; expands on hover */}
+        <div
+          className={`absolute inset-y-0 left-0 z-40 transition-shadow duration-300 ${
+            hoverExpanded ? 'shadow-2xl' : ''
+          }`}
+        >
+          <Sidebar collapsible expanded={hoverExpanded} />
+        </div>
       </div>
 
       {/* Mobile sidebar (sheet) */}
