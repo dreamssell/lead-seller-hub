@@ -94,7 +94,7 @@ export default function SubLoginPage() {
               </p>
             </div>
             <Button asChild className="w-full">
-              <a href={`${EXTERNAL_LOGIN_URL}?email=${encodeURIComponent(info.admin_email)}`}>
+              <a href={buildExternalLoginUrl({ email: info.admin_email })}>
                 Continuar para login <ArrowRight className="ml-2 h-4 w-4" />
               </a>
             </Button>
