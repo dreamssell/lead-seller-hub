@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, ShieldCheck, ShieldAlert, ArrowRight } from "lucide-react";
-import { EXTERNAL_LOGIN_URL } from "@/contexts/AuthContext";
+import { EXTERNAL_LOGIN_URL, buildExternalLoginUrl } from "@/contexts/AuthContext";
 
 type Info = {
   sub_company_id: string;
@@ -94,7 +94,7 @@ export default function SubLoginPage() {
               </p>
             </div>
             <Button asChild className="w-full">
-              <a href={`${EXTERNAL_LOGIN_URL}?email=${encodeURIComponent(info.admin_email)}`}>
+              <a href={buildExternalLoginUrl({ email: info.admin_email })}>
                 Continuar para login <ArrowRight className="ml-2 h-4 w-4" />
               </a>
             </Button>

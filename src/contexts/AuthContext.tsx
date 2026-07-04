@@ -30,6 +30,33 @@ const AuthContext = createContext<AuthContextType | null>(null);
 // URL da página externa de login — ajuste conforme necessário
 const EXTERNAL_LOGIN_URL = import.meta.env.VITE_EXTERNAL_LOGIN_URL || 'https://leadseller.com.br';
 
+/**
+ * Monta a URL da página externa de login incluindo o `redirect_to` para o
+ * `/auth/callback` deste hub. Sem isso a página externa (hospedada em outro
+ * domínio) devolve o usuário para o próprio domínio dela e cai em 404.
+ */
+export function buildExternalLoginUrl(extraParams?: Record<string, string>): string {
+  if (!EXTERNAL_LOGIN_URL) return '';
+  try {
+    const url = new URL(EXTERNAL_LOGIN_URL);
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    if (origin) {
+      const callback = `${origin}/auth/callback`;
+      url.searchParams.set('redirect_to', callback);
+      url.searchParams.set('return_to', callback);
+      url.searchParams.set('continue', callback);
+    }
+    if (extraParams) {
+      for (const [k, v] of Object.entries(extraParams)) {
+        if (v) url.searchParams.set(k, v);
+      }
+    }
+    return url.toString();
+  } catch {
+    return EXTERNAL_LOGIN_URL;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -97,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setAccess(null);
     if (EXTERNAL_LOGIN_URL) {
-      window.location.href = EXTERNAL_LOGIN_URL;
+      window.location.href = buildExternalLoginUrl();
     }
   };
 
