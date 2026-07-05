@@ -21,7 +21,7 @@ import type { WhatsAppProviderAdapter } from './adapters';
 // ────────────────────────────────────────────────────────────────────────────
 export const WahaChatIdSchema = z
   .string()
-  .regex(/^[0-9]{5,20}@(c|g)\.us$/, 'chatId must be <digits>@c.us or @g.us');
+  .regex(/^[0-9]{4,20}@(c|g)\.us$/, 'chatId must be <digits>@c.us or @g.us');
 
 export const WahaSendTextSchema = z.object({
   session: z.string().min(1),
