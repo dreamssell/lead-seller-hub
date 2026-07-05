@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Camera, ChevronRight, Settings2, MessageSquare, TrendingUp, Phone, Share2, Video } from 'lucide-react';
+import { Camera, ChevronRight, Settings2, MessageSquare, TrendingUp, Phone, Share2, Video, Server } from 'lucide-react';
 
 const sections = [
   {
@@ -24,6 +24,14 @@ const sections = [
         cta: 'Gerenciar Conexões',
         to: '/whatsapp',
         primary: true,
+      },
+      {
+        icon: <Server className="w-6 h-6 text-teal-500" />,
+        name: 'WAHA (WhatsApp HTTP API)',
+        tags: ['SELF-HOSTED', 'HTTP API'],
+        desc: 'Integração com WAHA — API HTTP self-hosted para WhatsApp (waha.devlike.pro).',
+        cta: 'Configurar WAHA',
+        to: '/whatsapp',
       },
       {
         icon: <Phone className="w-6 h-6 text-emerald-600" />,
