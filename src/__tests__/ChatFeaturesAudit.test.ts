@@ -1,109 +1,70 @@
 import { describe, it, expect, vi } from 'vitest';
 import { getProviderAdapter } from '../components/whatsapp/adapters';
 
-// Mock Supabase
+const { invokeMock, singleMock, updateMock } = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
+  singleMock: vi.fn(() => Promise.resolve({ data: { phone: '5511999999999' }, error: null })),
+  updateMock: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({}) }),
+}));
+
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     from: vi.fn(() => ({
       select: vi.fn(() => ({
         eq: vi.fn(() => ({
-          single: vi.fn(() => Promise.resolve({ data: { phone: '5511999999999' }, error: null })),
+          single: singleMock,
           order: vi.fn(() => Promise.resolve({ data: [], error: null })),
         })),
         order: vi.fn(() => Promise.resolve({ data: [], error: null })),
       })),
+      update: updateMock,
     })),
+    functions: { invoke: invokeMock },
   },
 }));
 
-describe('Chat Features Audit', () => {
-  it('should have functional Evolution API adapter with sendMessage', async () => {
+describe('Chat Features Audit — WhatsApp send pipeline', () => {
+  it('Evolution adapter routes send_text through the evolution-instance edge function', async () => {
+    invokeMock.mockResolvedValueOnce({
+      data: { ok: true, message_id: 'srv-1', latency_ms: 42, mode: 'flat' },
+      error: null,
+    });
     const adapter = getProviderAdapter('evolution');
-    expect(adapter).toBeDefined();
-    expect(adapter.sendMessage).toBeDefined();
-    
-    // Mock global fetch
-    const fetchMock = vi.fn(() => 
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ status: 'sent' }),
-      })
-    );
-    global.fetch = fetchMock as any;
-
-    const mockConn = {
-      id: '123',
-      provider: 'evolution' as const,
-      status: 'connected',
-      metadata: {
-        url: 'https://api.evolution.com',
-        token: 'test-token',
-        instance: 'test-instance'
-      }
-    };
-
-    const result = await adapter.sendMessage(mockConn as any, 'customer-456', 'Hello World');
-    expect(result.status).toBe('sent');
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/message/sendText/test-instance'),
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({
-          apikey: 'test-token'
-        })
-      })
-    );
-    const firstBody = JSON.parse((fetchMock.mock.calls[0] as any)[1].body);
-    expect(firstBody).toEqual(expect.objectContaining({
-      number: '5511999999999',
-      text: 'Hello World',
-      linkPreview: false,
-    }));
-    expect(firstBody.textMessage).toBeUndefined();
-  });
-
-  it('should retry Evolution text payload with nested format when flat schema fails', async () => {
-    const adapter = getProviderAdapter('evolution');
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ response: { message: [["instance requires property \"textMessage\""]] } }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ status: 'sent', data: { key: { id: 'evo-2' } } }),
-      });
-    global.fetch = fetchMock as any;
-
-    const mockConn = {
-      id: 'fallback-conn',
-      provider: 'evolution' as const,
-      status: 'connected',
-      metadata: {
-        url: 'https://api.evolution.com',
-        token: 'test-token',
-        instance: 'fallback-instance'
-      }
-    };
-
-    const result = await adapter.sendMessage(mockConn as any, 'customer-456', 'Fallback Test');
-    expect(result.status).toBe('sent');
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(JSON.parse((fetchMock.mock.calls[0] as any)[1].body)).toEqual(expect.objectContaining({ text: 'Fallback Test' }));
-    expect(JSON.parse((fetchMock.mock.calls[1] as any)[1].body)).toEqual(expect.objectContaining({
-      textMessage: { text: 'Fallback Test' },
+    const conn = { id: 'conn-1', provider: 'evolution', metadata: { url: 'https://e', token: 't', instance: 'i' } };
+    const res = await adapter.sendMessage(conn as any, 'cust-1', 'Hello');
+    expect(res.message_id).toBe('srv-1');
+    expect(invokeMock).toHaveBeenCalledWith('evolution-instance', expect.objectContaining({
+      body: expect.objectContaining({
+        action: 'send_text',
+        connection_id: 'conn-1',
+        customer_id: 'cust-1',
+        text: 'Hello',
+      }),
     }));
   });
 
-  it('should fail if Evolution API config is incomplete', async () => {
+  it('Evolution adapter throws when the edge function returns ok=false', async () => {
+    invokeMock.mockResolvedValueOnce({
+      data: { ok: false, error: 'mentioned does not meet minimum length of 1' },
+      error: null,
+    });
     const adapter = getProviderAdapter('evolution');
-    const mockConnIncomplete = {
-      id: '123',
-      provider: 'evolution' as const,
-      metadata: {}
-    };
+    const conn = { id: 'conn-1', provider: 'evolution', metadata: { url: 'https://e', token: 't', instance: 'i' } };
+    await expect(adapter.sendMessage(conn as any, 'cust-1', 'oi')).rejects.toThrow(/mentioned/i);
+  });
 
-    await expect(adapter.sendMessage(mockConnIncomplete as any, 'cust', 'msg'))
-      .rejects.toThrow('Configurações da Evolution API incompletas.');
+  it('UAZ adapter routes through uaz-send-message edge function with customer_id + content', async () => {
+    invokeMock.mockResolvedValueOnce({ data: { success: true, data: { id: 'uaz-1' } }, error: null });
+    const adapter = getProviderAdapter('uaz');
+    const conn = { id: 'u-1', provider: 'uaz', metadata: { url: 'https://uaz', token: 'ut' } };
+    const res = await adapter.sendMessage(conn as any, 'cust-9', 'hi');
+    expect(res.success).toBe(true);
+    expect(invokeMock).toHaveBeenCalledWith('uaz-send-message', expect.objectContaining({
+      body: expect.objectContaining({
+        customer_id: 'cust-9',
+        content: 'hi',
+        connection_id: 'u-1',
+      }),
+    }));
   });
 });
