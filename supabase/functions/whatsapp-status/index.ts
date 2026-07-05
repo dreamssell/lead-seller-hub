@@ -169,6 +169,38 @@ Deno.serve(async (req) => {
           result = { connected: false, status: "error", error: (e as Error).message };
         }
       }
+    } else if (provider === "waha") {
+      const rawWaha = (url || "").trim().replace(/\/$/, "");
+      const wahaUrl = rawWaha && !/^https?:\/\//i.test(rawWaha) ? `https://${rawWaha}` : rawWaha;
+      const session = body?.instance || body?.session || "default";
+      if (!wahaUrl) {
+        result = { connected: false, status: "unconfigured", error: "URL WAHA é obrigatória." };
+      } else {
+        try {
+          const res = await fetch(`${wahaUrl}/api/sessions/${encodeURIComponent(session)}`, {
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { "X-Api-Key": token } : {}),
+            },
+          });
+          const text = await res.text();
+          let data: any = {};
+          try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+          if (!res.ok) {
+            result = { connected: false, status: "error", error: `WAHA [${res.status}]: ${text.slice(0, 300)}`, status_code: res.status };
+          } else {
+            const state = String(data?.status || data?.state || "unknown");
+            result = {
+              connected: /working|connected|open|running/i.test(state),
+              status: state,
+              phone: data?.me?.id || null,
+              raw: data,
+            };
+          }
+        } catch (e) {
+          result = { connected: false, status: "error", error: (e as Error).message };
+        }
+      }
     } else {
       // Mock Meta for now
       result = { connected: false, status: "disconnected" };
