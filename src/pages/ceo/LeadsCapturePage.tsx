@@ -214,12 +214,68 @@ export default function LeadsCapturePage() {
           );
         })()}
 
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs">
+            <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full border ${
+              rtStatus === 'live'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600'
+                : rtStatus === 'error'
+                ? 'border-rose-500/30 bg-rose-500/10 text-rose-600'
+                : 'border-amber-500/30 bg-amber-500/10 text-amber-600'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                rtStatus === 'live' ? 'bg-emerald-500 animate-pulse'
+                : rtStatus === 'error' ? 'bg-rose-500' : 'bg-amber-500'
+              }`} />
+              {rtStatus === 'live' ? 'Tempo real ativo' : rtStatus === 'error' ? 'Sem conexão em tempo real' : 'Conectando…'}
+            </span>
+            <span className="text-muted-foreground">Novos leads Holmes/DealerSpace aparecem automaticamente.</span>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Kpi icon={Inbox} label="Leads capturados" value={filtered.length} hint={`Período: ${PERIOD_LABELS[filters.period]}`} onClick={() => openDetail(sourceTab)} />
           <Kpi icon={CheckCircle2} label="Convertidos" value={won.length} hint={`${closed.length} fechados`} />
           <Kpi icon={TrendingUp} label="Taxa de conversão" value={`${conv.toFixed(1)}%`} />
           <Kpi icon={Globe} label="Receita gerada" value={`R$ ${revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
         </div>
+
+        {/* Validação backend: prova que Holmes/DealerSpace são somados a LEADS GERADOS */}
+        <Card className="glass-card">
+          <CardHeader>
+            <CardTitle className="text-base">Validação backend · LEADS GERADOS</CardTitle>
+            <CardDescription>
+              Relatório calculado no banco pela função <code className="text-[10px] px-1 py-0.5 rounded bg-muted">get_leads_capture_report</code>.
+              Total do relatório: <strong>{report.reduce((s, r) => s + Number(r.total_leads || 0), 0)}</strong> leads.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {report.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Sem dados no período.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {report.map((r: any) => (
+                  <div key={r.source_category} className="p-3 rounded-lg border border-border">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm font-semibold">{r.source_category}</span>
+                      <Badge variant={r.included_in_leads_gerados ? 'default' : 'destructive'} className="text-[10px]">
+                        {r.included_in_leads_gerados ? 'Somado ao KPI' : 'Fora do KPI'}
+                      </Badge>
+                    </div>
+                    <div className="text-2xl font-bold">{r.total_leads}</div>
+                    <div className="text-[10px] text-muted-foreground mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+                      <span>{r.novos} novos</span>·<span>{r.em_atendimento} em atend.</span>·<span>{r.ganhos} ganhos</span>·<span>{r.perdidos} perdidos</span>
+                    </div>
+                    <div className="text-[10px] text-emerald-600 mt-0.5">
+                      Receita: R$ {Number(r.receita || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card className="glass-card">
