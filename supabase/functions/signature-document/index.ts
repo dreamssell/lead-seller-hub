@@ -1,5 +1,6 @@
 // Authenticated edge function: create document, generate token, send via Resend/Twilio
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { buildHubUrl } from "../_shared/redirect.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
