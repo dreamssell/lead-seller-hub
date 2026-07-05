@@ -121,7 +121,6 @@ export default function DeveloperPage() {
                       )}
                     </button>
                   );
-                  const node = isActive || !isActive ? button : button;
                   if (tab.value === 'connections') {
                     return (
                       <div key={tab.value}>
