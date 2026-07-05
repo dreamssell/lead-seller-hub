@@ -4909,6 +4909,19 @@ export type Database = {
         Args: { p_webhook_id: string }
         Returns: Json
       }
+      get_leads_capture_report: {
+        Args: { p_from?: string; p_owner?: string; p_to?: string }
+        Returns: {
+          em_atendimento: number
+          ganhos: number
+          included_in_leads_gerados: boolean
+          novos: number
+          perdidos: number
+          receita: number
+          source_category: string
+          total_leads: number
+        }[]
+      }
       get_my_account_access: {
         Args: never
         Returns: {
