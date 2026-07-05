@@ -25,7 +25,8 @@ const conn: any = {
 
 // Utility: parse the last invoke call body for evolution-instance.
 const lastInvokeBody = () => {
-  const call = invokeMock.mock.calls.at(-1);
+  const calls = invokeMock.mock.calls;
+  const call = calls[calls.length - 1];
   return call?.[1]?.body;
 };
 
