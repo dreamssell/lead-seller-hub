@@ -58,6 +58,20 @@ export default function LeadsCapturePage() {
   const setSourceTab = (v: string) => setExtra({ src: v });
   const [leads, setLeads] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
+  const [detail, setDetail] = useState<{ open: boolean; origin: string; title: string; description?: string }>({
+    open: false, origin: 'all', title: '',
+  });
+
+  const openDetail = (origin: string) => {
+    const label = origin === 'all' ? 'Todos os leads capturados' : `Leads · ${origin}`;
+    setDetail({
+      open: true,
+      origin,
+      title: label,
+      description: `Período: ${PERIOD_LABELS[filters.period]} · aplicam-se filtros da barra superior (sub-empresa/colaborador).`,
+    });
+  };
+  
   
 
   useEffect(() => {
