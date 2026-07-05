@@ -188,3 +188,86 @@ Deno.test({ name: "get_leads_capture_report: Holmes e DealerSpace são contabili
     await cleanup();
   }
 } });
+
+Deno.test({ name: "get_leads_capture_report: múltiplas origens agregam Holmes/DealerSpace e mantêm desconhecidas separadas", ...testOpts, fn: async () => {
+  const owner = await pickOwner();
+  try {
+    // Semeia variantes de Holmes/DealerSpace + duas origens desconhecidas distintas
+    const seed = [
+      // Holmes: 3 variantes → devem colapsar em 1 categoria "Holmes"
+      { source: "Holmes", status: "novo" },
+      { source: "holmes CRM", status: "ganho", estimated_value: 200 },
+      { source: "HOLMES-API", status: "em_atendimento" },
+      // DealerSpace: 2 variantes → devem colapsar em 1 categoria "DealerSpace"
+      { source: "DealerSpace", status: "ganho", estimated_value: 300 },
+      { source: "dealer_space", status: "perdido" },
+      // Origens desconhecidas: devem permanecer separadas, cada uma como categoria própria
+      { source: "custom-partner-x", status: "novo" },
+      { source: "custom-partner-x", status: "ganho", estimated_value: 150 },
+      { source: "site-organico", status: "em_atendimento" },
+    ];
+    for (const s of seed) {
+      const { error } = await client.from("leads").insert({
+        owner_id: owner,
+        created_by: owner,
+        name: `Multi ${s.source}-${s.status}`,
+        notes: TEST_TAG,
+        ...s,
+      });
+      if (error) throw error;
+    }
+
+    const from = new Date(Date.now() - 60_000).toISOString();
+    const { data, error } = await client.rpc("get_leads_capture_report", {
+      p_owner: owner,
+      p_from: from,
+      p_to: null,
+    });
+    if (error) throw error;
+
+    const rows = (data as any[]) ?? [];
+    const byCat: Record<string, any> = {};
+    for (const r of rows) byCat[r.source_category] = r;
+
+    // Holmes: 3 variantes agregadas → 1 categoria com 3 leads
+    assert(byCat["Holmes"], "categoria 'Holmes' deve existir");
+    assert(Number(byCat["Holmes"].total_leads) >= 3, "Holmes deve agregar as 3 variantes");
+    assertEquals(Number(byCat["Holmes"].ganhos), 1);
+    assertEquals(Number(byCat["Holmes"].receita), 200);
+    assertEquals(byCat["Holmes"].included_in_leads_gerados, true);
+
+    // DealerSpace: 2 variantes agregadas → 1 categoria com 2 leads
+    assert(byCat["DealerSpace"], "categoria 'DealerSpace' deve existir");
+    assert(Number(byCat["DealerSpace"].total_leads) >= 2, "DealerSpace deve agregar as 2 variantes");
+    assertEquals(Number(byCat["DealerSpace"].ganhos), 1);
+    assertEquals(Number(byCat["DealerSpace"].receita), 300);
+    assertEquals(byCat["DealerSpace"].included_in_leads_gerados, true);
+
+    // Origens desconhecidas: cada slug permanece como sua própria categoria (NÃO caem em Holmes/DealerSpace)
+    assert(byCat["custom-partner-x"], "categoria desconhecida 'custom-partner-x' deve permanecer separada");
+    assertEquals(Number(byCat["custom-partner-x"].total_leads), 2);
+    assertEquals(Number(byCat["custom-partner-x"].ganhos), 1);
+    assertEquals(Number(byCat["custom-partner-x"].receita), 150);
+    assertEquals(byCat["custom-partner-x"].included_in_leads_gerados, true);
+
+    assert(byCat["site-organico"], "categoria desconhecida 'site-organico' deve permanecer separada");
+    assertEquals(Number(byCat["site-organico"].total_leads), 1);
+    assertEquals(Number(byCat["site-organico"].em_atendimento), 1);
+
+    // Garantia crítica: as duas desconhecidas NÃO foram fundidas entre si nem com Holmes/DealerSpace
+    assert(
+      byCat["custom-partner-x"] !== byCat["site-organico"],
+      "origens desconhecidas devem ser categorias distintas"
+    );
+    assert(
+      !("custom-partner-x".includes("holmes") || "custom-partner-x".includes("dealer")),
+      "sanity: slug desconhecido não deve casar padrões incluídos"
+    );
+
+    // Sanity global: soma das categorias cobre todos os leads semeados
+    const totalSeeded = rows.reduce((s, r) => s + Number(r.total_leads || 0), 0);
+    assert(totalSeeded >= seed.length, `total agregado (${totalSeeded}) deve incluir ${seed.length} leads semeados`);
+  } finally {
+    await cleanup();
+  }
+} });
