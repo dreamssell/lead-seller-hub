@@ -346,7 +346,10 @@ Deno.serve(async (req) => {
     });
 
     const platformUrl = Deno.env.get("PLATFORM_URL") || "https://hub.leadseller.com.br";
-    const redirectUrl = `${platformUrl}/auth/callback?access_token=${authData.session.access_token}&refresh_token=${authData.session.refresh_token}`;
+    const redirectUrl = buildAuthRedirectUrl(platformUrl, {
+      access_token: authData.session.access_token,
+      refresh_token: authData.session.refresh_token,
+    });
 
     return new Response(
       JSON.stringify({
