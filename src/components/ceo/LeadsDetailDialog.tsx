@@ -221,6 +221,12 @@ export function LeadsDetailDialog({
           <span><strong className="text-foreground">{filtered.length}</strong> leads</span>
           <span>·</span>
           <span>Valor total: <strong className="text-foreground">R$ {totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+          {filtered.length > visible.length && (
+            <>
+              <span>·</span>
+              <span>Exibindo <strong className="text-foreground">{visible.length}</strong> de {filtered.length}</span>
+            </>
+          )}
         </div>
 
         {/* Tabela */}
@@ -244,7 +250,7 @@ export function LeadsDetailDialog({
                     Nenhum lead corresponde aos filtros.
                   </TableCell>
                 </TableRow>
-              ) : filtered.map(l => {
+              ) : visible.map(l => {
                 const st = STATUS_OPTIONS.find(o => o.value === l.status);
                 return (
                   <TableRow key={l.id}>
@@ -274,6 +280,15 @@ export function LeadsDetailDialog({
               })}
             </TableBody>
           </Table>
+
+          {hasMore && (
+            <div className="flex justify-center py-4 border-t border-border">
+              <Button variant="outline" size="sm" onClick={() => setVisibleCount(c => c + PAGE_SIZE)}>
+                <Loader2 className="w-3.5 h-3.5 mr-1.5" />
+                Carregar mais {Math.min(PAGE_SIZE, filtered.length - visible.length)} de {filtered.length - visible.length}
+              </Button>
+            </div>
+          )}
         </ScrollArea>
       </DialogContent>
     </Dialog>
