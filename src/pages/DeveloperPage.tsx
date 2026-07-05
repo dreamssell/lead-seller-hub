@@ -16,7 +16,8 @@ import {
   BookOpen,
   ArrowRightLeft,
   Zap,
-  Phone
+  Phone,
+  Workflow
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import GeneralTab from '@/components/settings/GeneralTab';
@@ -83,7 +84,7 @@ export default function DeveloperPage() {
                 {visibleTabs.map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.value;
-                  return (
+                  const button = (
                     <button
                       key={tab.value}
                       onClick={() => {
@@ -120,6 +121,27 @@ export default function DeveloperPage() {
                       )}
                     </button>
                   );
+                  if (tab.value === 'connections') {
+                    return (
+                      <div key={tab.value}>
+                        {button}
+                        <button
+                          onClick={() => navigate('/automations')}
+                          className="w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 text-muted-foreground hover:text-foreground hover:bg-secondary group"
+                        >
+                          <div className="p-2 rounded-lg bg-secondary">
+                            <Workflow className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold truncate leading-tight">Automações e Integrações</p>
+                            <p className="text-[10px] truncate text-muted-foreground">Fluxos, gatilhos e integrações</p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </button>
+                      </div>
+                    );
+                  }
+                  return button;
                 })}
 
                 <div className="h-px bg-border/40 my-2 mx-3" />
