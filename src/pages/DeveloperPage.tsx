@@ -17,7 +17,7 @@ import {
   ArrowRightLeft,
   Zap,
   Phone,
-  Zap as ZapIcon
+  Workflow
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import GeneralTab from '@/components/settings/GeneralTab';
