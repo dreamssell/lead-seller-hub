@@ -1,5 +1,6 @@
 import { WhatsAppConnection } from './types';
 import { supabase } from '@/integrations/supabase/client';
+import { WahaAdapter } from './wahaAdapter';
 
 export interface WhatsAppProviderAdapter {
   getStatus(conn: WhatsAppConnection): Promise<{ connected: boolean; status: string; phone?: string; error?: string; raw?: any }>;
@@ -520,6 +521,8 @@ export const getProviderAdapter = (provider: string): WhatsAppProviderAdapter =>
       return new WavoipAdapter();
     case 'evolution':
       return new EvolutionAdapter();
+    case 'waha':
+      return new WahaAdapter();
     default:
       throw new Error(`Provider ${provider} not supported`);
   }
