@@ -84,7 +84,7 @@ export default function DeveloperPage() {
                 {visibleTabs.map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.value;
-                  return (
+                  const button = (
                     <button
                       key={tab.value}
                       onClick={() => {
