@@ -20,7 +20,7 @@ const TEST_TAG = `test-holmes-ds-${crypto.randomUUID()}`;
 const client = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
   realtime: { params: { eventsPerSecond: 0 } },
-} });
+});
 
 const testOpts = { sanitizeOps: false, sanitizeResources: false } as const;
 
