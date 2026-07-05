@@ -115,9 +115,11 @@ describe('WahaAdapter — auth & sendMessage', () => {
   });
 
   it('surfaces network-level fetch failures without contaminating other providers', async () => {
-    fetchMock.mockRejectedValueOnce(new Error('network down'));
+    // Persistent network failure (all retries exhausted still surface the error to the caller).
+    fetchMock.mockRejectedValue(new Error('network down'));
     const adapter = new WahaAdapter();
-    await expect(adapter.sendMessage(wahaConn, 'cust-1', 'oi')).rejects.toThrow(/network down/i);
+    await expect(adapter.sendMessage(wahaConn, 'cust-1', 'oi', undefined, { retries: 0 } as any))
+      .rejects.toThrow(/network down/i);
     expect(invokeMock).not.toHaveBeenCalled();
   });
 });
