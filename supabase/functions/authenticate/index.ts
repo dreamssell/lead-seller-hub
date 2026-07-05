@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.49.4";
+import { buildAuthRedirectUrl } from "./redirect.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -345,7 +346,10 @@ Deno.serve(async (req) => {
     });
 
     const platformUrl = Deno.env.get("PLATFORM_URL") || "https://hub.leadseller.com.br";
-    const redirectUrl = `${platformUrl}/auth/callback?access_token=${authData.session.access_token}&refresh_token=${authData.session.refresh_token}`;
+    const redirectUrl = buildAuthRedirectUrl(platformUrl, {
+      access_token: authData.session.access_token,
+      refresh_token: authData.session.refresh_token,
+    });
 
     return new Response(
       JSON.stringify({
