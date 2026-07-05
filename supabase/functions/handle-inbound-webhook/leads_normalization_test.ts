@@ -20,7 +20,7 @@ const TEST_TAG = `test-holmes-ds-${crypto.randomUUID()}`;
 const client = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
   realtime: { params: { eventsPerSecond: 0 } },
-});
+} });
 
 const testOpts = { sanitizeOps: false, sanitizeResources: false } as const;
 
@@ -40,12 +40,12 @@ async function cleanup() {
 }
 
 
-Deno.test("normalize_lead_integration_fields: variantes de Holmes viram 'holmes'", async () => {
+Deno.test({ name: "normalize_lead_integration_fields: variantes de Holmes viram 'holmes'", ...testOpts, fn: async () => {
   const owner = await pickOwner();
   try {
     const variants = ["Holmes", "holmes CRM", "HOLMES-API", "integração holmes"];
     for (const v of variants) {
-      const { data, error } = await admin().from("leads").insert({
+      const { data, error } = await client.from("leads").insert({
         owner_id: owner,
         created_by: owner,
         name: `Lead ${v}`,
@@ -60,14 +60,14 @@ Deno.test("normalize_lead_integration_fields: variantes de Holmes viram 'holmes'
   } finally {
     await cleanup();
   }
-});
+} });
 
-Deno.test("normalize_lead_integration_fields: variantes de DealerSpace viram 'dealerspace'", async () => {
+Deno.test({ name: "normalize_lead_integration_fields: variantes de DealerSpace viram 'dealerspace'", ...testOpts, fn: async () => {
   const owner = await pickOwner();
   try {
     const variants = ["DealerSpace", "dealer space", "dealer-space", "dealer_space", "DEALERSPACE-webhook"];
     for (const v of variants) {
-      const { data, error } = await admin().from("leads").insert({
+      const { data, error } = await client.from("leads").insert({
         owner_id: owner,
         created_by: owner,
         name: `Lead ${v}`,
@@ -82,9 +82,9 @@ Deno.test("normalize_lead_integration_fields: variantes de DealerSpace viram 'de
   } finally {
     await cleanup();
   }
-});
+} });
 
-Deno.test("normalize_lead_integration_fields: mapeamento de status (won/lost/closed_won/closed_lost)", async () => {
+Deno.test({ name: "normalize_lead_integration_fields: mapeamento de status (won/lost/closed_won/closed_lost)", ...testOpts, fn: async () => {
   const owner = await pickOwner();
   try {
     const cases: [string, string][] = [
@@ -97,7 +97,7 @@ Deno.test("normalize_lead_integration_fields: mapeamento de status (won/lost/clo
       ["contacted", "em_atendimento"],
     ];
     for (const [input, expected] of cases) {
-      const { data, error } = await admin().from("leads").insert({
+      const { data, error } = await client.from("leads").insert({
         owner_id: owner,
         created_by: owner,
         name: `Lead status ${input}`,
@@ -111,12 +111,12 @@ Deno.test("normalize_lead_integration_fields: mapeamento de status (won/lost/clo
   } finally {
     await cleanup();
   }
-});
+} });
 
-Deno.test("normalize_lead_integration_fields: fontes desconhecidas são preservadas", async () => {
+Deno.test({ name: "normalize_lead_integration_fields: fontes desconhecidas são preservadas", ...testOpts, fn: async () => {
   const owner = await pickOwner();
   try {
-    const { data, error } = await admin().from("leads").insert({
+    const { data, error } = await client.from("leads").insert({
       owner_id: owner,
       created_by: owner,
       name: "Lead custom",
@@ -129,9 +129,9 @@ Deno.test("normalize_lead_integration_fields: fontes desconhecidas são preserva
   } finally {
     await cleanup();
   }
-});
+} });
 
-Deno.test("get_leads_capture_report: Holmes e DealerSpace são contabilizados em LEADS GERADOS", async () => {
+Deno.test({ name: "get_leads_capture_report: Holmes e DealerSpace são contabilizados em LEADS GERADOS", ...testOpts, fn: async () => {
   const owner = await pickOwner();
   try {
     // Inserimos amostras controladas
@@ -144,7 +144,7 @@ Deno.test("get_leads_capture_report: Holmes e DealerSpace são contabilizados em
       { source: "custom-partner", status: "novo" },
     ];
     for (const s of seed) {
-      const { error } = await admin().from("leads").insert({
+      const { error } = await client.from("leads").insert({
         owner_id: owner,
         created_by: owner,
         name: `Seed ${s.source}-${s.status}`,
@@ -155,7 +155,7 @@ Deno.test("get_leads_capture_report: Holmes e DealerSpace são contabilizados em
     }
 
     const from = new Date(Date.now() - 60_000).toISOString();
-    const { data, error } = await admin().rpc("get_leads_capture_report", {
+    const { data, error } = await client.rpc("get_leads_capture_report", {
       p_owner: owner,
       p_from: from,
       p_to: null,
@@ -187,4 +187,4 @@ Deno.test("get_leads_capture_report: Holmes e DealerSpace são contabilizados em
   } finally {
     await cleanup();
   }
-});
+} });
