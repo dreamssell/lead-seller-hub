@@ -72,9 +72,12 @@ describe('wahaFetch — retries / timeouts / cancellation', () => {
 
   it('timeouts abort in-flight request and retry then give up', async () => {
     const fetchMock = vi.fn().mockImplementation((_url: string, init: any) => new Promise((_res, rej) => {
-      init.signal.addEventListener('abort', (e: any) =>
-        rej(new DOMException(e?.reason?.message || 'timeout', 'TimeoutError'))
-      );
+      let done = false;
+      init.signal.addEventListener('abort', (e: any) => {
+        if (done) return;
+        done = true;
+        rej(new DOMException(e?.reason?.message || 'timeout', 'TimeoutError'));
+      });
     }));
     (global as any).fetch = fetchMock;
     const p = wahaFetch('https://waha.example.com', 'k', '/api/sendText', {
