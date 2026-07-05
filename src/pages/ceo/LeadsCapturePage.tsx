@@ -179,7 +179,7 @@ export default function LeadsCapturePage() {
         })()}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Kpi icon={Inbox} label="Leads capturados" value={filtered.length} hint={`Período: ${PERIOD_LABELS[filters.period]}`} />
+          <Kpi icon={Inbox} label="Leads capturados" value={filtered.length} hint={`Período: ${PERIOD_LABELS[filters.period]}`} onClick={() => openDetail(sourceTab)} />
           <Kpi icon={CheckCircle2} label="Convertidos" value={won.length} hint={`${closed.length} fechados`} />
           <Kpi icon={TrendingUp} label="Taxa de conversão" value={`${conv.toFixed(1)}%`} />
           <Kpi icon={Globe} label="Receita gerada" value={`R$ ${revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
