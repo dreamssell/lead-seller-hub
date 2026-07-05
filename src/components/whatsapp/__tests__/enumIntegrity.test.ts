@@ -7,11 +7,6 @@ import { PROVIDER_CONFIGS, type WhatsAppProvider } from '@/components/whatsapp/t
 // has a matching enum value. Prevents shipping a build where the migration
 // was skipped or the types file was stale.
 describe('whatsapp_provider enum ↔ frontend', () => {
-  const dbEnum = new Set<string>(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((): readonly string[] => (Database as any) && [])() || []
-  );
-
   // The types file exposes enum values only at the type level; we mirror them
   // as a runtime list so the assertion actually checks the *generated* file.
   // If the enum ever drops "waha", TypeScript will fail this line to compile.
