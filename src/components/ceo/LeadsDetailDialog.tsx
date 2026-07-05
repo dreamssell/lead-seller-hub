@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, X, Filter, Download } from 'lucide-react';
+import { Search, X, Filter, Download, Loader2 } from 'lucide-react';
 import { downloadCsv } from '@/lib/ceoExport';
 
 export type LeadRow = any;
@@ -18,6 +18,23 @@ const STATUS_OPTIONS: { value: string; label: string; color: string }[] = [
   { value: 'ganho', label: 'Ganho', color: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' },
   { value: 'perdido', label: 'Perdido', color: 'bg-rose-500/10 text-rose-600 border-rose-500/30' },
 ];
+
+const STORAGE_KEY = 'leads-detail-dialog-filters:v1';
+const PAGE_SIZE = 50;
+
+type Persisted = {
+  search: string;
+  statuses: string[];
+  origin: string;
+  valueRange: [number, number];
+};
+
+function loadPersisted(): Partial<Persisted> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
 
 interface Props {
   open: boolean;
@@ -37,25 +54,40 @@ interface Props {
 export function LeadsDetailDialog({
   open, onOpenChange, title, description, leads, classify, profileName, initialOrigin = 'all',
 }: Props) {
-  const [search, setSearch] = useState('');
-  const [statuses, setStatuses] = useState<string[]>([]);
-  const [origin, setOrigin] = useState<string>(initialOrigin);
-  const [valueRange, setValueRange] = useState<[number, number]>([0, 0]);
+  const persisted = useRef<Partial<Persisted>>(loadPersisted());
+  const [search, setSearch] = useState(persisted.current.search ?? '');
+  const [statuses, setStatuses] = useState<string[]>(persisted.current.statuses ?? []);
+  const [origin, setOrigin] = useState<string>(persisted.current.origin ?? initialOrigin);
+  const [valueRange, setValueRange] = useState<[number, number]>(persisted.current.valueRange ?? [0, 0]);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const maxValue = useMemo(
     () => Math.max(0, ...leads.map(l => Number(l.estimated_value || 0))),
     [leads]
   );
 
-  // Reset filters when opening or when leads change scope
+  // Ao abrir, aplica origem sugerida apenas quando o caller pediu explicitamente
+  // (initialOrigin !== 'all') — caso contrário, respeita o que estava salvo.
   useEffect(() => {
-    if (open) {
+    if (open && initialOrigin && initialOrigin !== 'all') {
       setOrigin(initialOrigin);
-      setSearch('');
-      setStatuses([]);
+    }
+    if (open) setVisibleCount(PAGE_SIZE);
+  }, [open, initialOrigin]);
+
+  // Ajusta o topo do slider quando o maxValue muda e ainda estava zerado
+  useEffect(() => {
+    if (valueRange[1] === 0 && maxValue > 0) {
       setValueRange([0, Math.ceil(maxValue)]);
     }
-  }, [open, initialOrigin, maxValue]);
+  }, [maxValue, valueRange]);
+
+  // Persiste filtros
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ search, statuses, origin, valueRange }));
+    } catch { /* noop */ }
+  }, [search, statuses, origin, valueRange]);
 
   const origins = useMemo(() => {
     const set = new Set<string>();
@@ -78,6 +110,12 @@ export function LeadsDetailDialog({
     });
   }, [leads, search, statuses, origin, valueRange, classify]);
 
+  // Reset do cursor de paginação quando filtros mudam
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, statuses, origin, valueRange]);
+
+  const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+  const hasMore = visibleCount < filtered.length;
+
   const totalValue = filtered.reduce((s, l) => s + Number(l.estimated_value || 0), 0);
 
   const toggleStatus = (s: string) =>
@@ -85,6 +123,7 @@ export function LeadsDetailDialog({
 
   const clearAll = () => {
     setSearch(''); setStatuses([]); setOrigin('all'); setValueRange([0, Math.ceil(maxValue)]);
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
   };
 
   const exportRows = () => filtered.map(l => ({
@@ -182,6 +221,12 @@ export function LeadsDetailDialog({
           <span><strong className="text-foreground">{filtered.length}</strong> leads</span>
           <span>·</span>
           <span>Valor total: <strong className="text-foreground">R$ {totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+          {filtered.length > visible.length && (
+            <>
+              <span>·</span>
+              <span>Exibindo <strong className="text-foreground">{visible.length}</strong> de {filtered.length}</span>
+            </>
+          )}
         </div>
 
         {/* Tabela */}
@@ -205,7 +250,7 @@ export function LeadsDetailDialog({
                     Nenhum lead corresponde aos filtros.
                   </TableCell>
                 </TableRow>
-              ) : filtered.map(l => {
+              ) : visible.map(l => {
                 const st = STATUS_OPTIONS.find(o => o.value === l.status);
                 return (
                   <TableRow key={l.id}>
@@ -235,6 +280,15 @@ export function LeadsDetailDialog({
               })}
             </TableBody>
           </Table>
+
+          {hasMore && (
+            <div className="flex justify-center py-4 border-t border-border">
+              <Button variant="outline" size="sm" onClick={() => setVisibleCount(c => c + PAGE_SIZE)}>
+                <Loader2 className="w-3.5 h-3.5 mr-1.5" />
+                Carregar mais {Math.min(PAGE_SIZE, filtered.length - visible.length)} de {filtered.length - visible.length}
+              </Button>
+            </div>
+          )}
         </ScrollArea>
       </DialogContent>
     </Dialog>
