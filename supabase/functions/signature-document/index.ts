@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
         document_id: doc.id, token, sms_pin, expires_at,
       });
 
-      const portal_url = `${req.headers.get("origin") || "https://app.leadseller.com.br"}/sign/${token}`;
+      const portal_url = buildHubUrl(`/sign/${token}`, undefined, req.headers.get("origin"));
 
       await admin.from("signature_events").insert({
         document_id: doc.id, event_type: "created", status: "draft", actor_id: user.id,
