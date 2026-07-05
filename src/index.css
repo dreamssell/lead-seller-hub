@@ -131,16 +131,12 @@
   }
 
   .sidebar-item {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer outline-none;
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer;
     color: hsl(var(--sidebar-fg));
   }
 
   .sidebar-item:hover {
     background: hsl(var(--sidebar-hover));
-  }
-
-  .sidebar-item:focus-visible {
-    @apply ring-2 ring-ring ring-offset-2 ring-offset-sidebar;
   }
 
   .sidebar-item.active {
