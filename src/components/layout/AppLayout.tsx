@@ -75,10 +75,10 @@ export function AppLayout({ children, title, subtitle }: AppLayoutProps) {
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
-      {/* Desktop sidebar (lg+). Tablets & mobile use the Sheet to avoid overlaying content. */}
+      {/* Desktop / tablet sidebar */}
       <div
         ref={sidebarWrapRef}
-        className="hidden lg:block relative shrink-0"
+        className="hidden md:block relative shrink-0"
         onMouseEnter={() => !pinned && setHoverExpanded(true)}
         onMouseLeave={() => !pinned && setHoverExpanded(false)}
         onFocusCapture={() => !pinned && setFocusExpanded(true)}
