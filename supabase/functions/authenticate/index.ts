@@ -9,49 +9,6 @@ const ALL_PAGES = [
   "reports", "pipeline", "ceo", "settings", "api-keys", "status", "profile",
 ];
 
-const DEFAULT_PLATFORM_URL = "https://hub.leadseller.com.br";
-const FALLBACK_PLATFORM_URL = "https://hub.leadseller.com.br";
-const ALLOWED_CALLBACK_HOSTS = new Set([
-  "hub.leadseller.com.br",
-  "connecto-center.lovable.app",
-  "id-preview--12ffc7ed-fdc7-4baf-9184-2fc1869c926f.lovable.app",
-  "localhost:8080",
-]);
-
-function sanitizePlatformUrl(value?: string | null) {
-  const raw = (value || DEFAULT_PLATFORM_URL).trim();
-  try {
-    const url = new URL(raw);
-    if (!ALLOWED_CALLBACK_HOSTS.has(url.host)) {
-      return DEFAULT_PLATFORM_URL;
-    }
-    url.pathname = "";
-    url.search = "";
-    url.hash = "";
-    return url.toString().replace(/\/$/, "");
-  } catch {
-    return FALLBACK_PLATFORM_URL;
-  }
-}
-
-function resolveCallbackUrl(requestedRedirectTo?: string | null) {
-  if (requestedRedirectTo) {
-    try {
-      const requested = new URL(requestedRedirectTo);
-      if (ALLOWED_CALLBACK_HOSTS.has(requested.host)) {
-        requested.pathname = "/auth/callback";
-        requested.search = "";
-        requested.hash = "";
-        return requested;
-      }
-    } catch {
-      // Ignora redirect_to inválido e usa o domínio configurado do Hub.
-    }
-  }
-
-  return new URL(`${sanitizePlatformUrl(Deno.env.get("PLATFORM_URL"))}/auth/callback`);
-}
-
 async function findUserByEmail(supabaseAdmin: ReturnType<typeof createClient>, email: string) {
   const normalized = String(email).trim().toLowerCase();
   for (let page = 1; page <= 20; page += 1) {
@@ -117,7 +74,7 @@ Deno.serve(async (req) => {
   let normalizedEmail = "";
 
   try {
-    const { email, password, api_key, redirect_to, return_to, continue: continueTo } = await req.json();
+    const { email, password, api_key } = await req.json();
     normalizedEmail = String(email || "").trim().toLowerCase();
 
     if (!normalizedEmail || !password || !api_key) {
@@ -387,10 +344,8 @@ Deno.serve(async (req) => {
       user_id: existing.id,
     });
 
-    const callbackUrl = resolveCallbackUrl(redirect_to || return_to || continueTo);
-    callbackUrl.searchParams.set("access_token", authData.session.access_token);
-    callbackUrl.searchParams.set("refresh_token", authData.session.refresh_token);
-    const redirectUrl = callbackUrl.toString();
+    const platformUrl = Deno.env.get("PLATFORM_URL") || "https://hub.leadseller.com.br";
+    const redirectUrl = `${platformUrl}/auth/callback?access_token=${authData.session.access_token}&refresh_token=${authData.session.refresh_token}`;
 
     return new Response(
       JSON.stringify({

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth, EXTERNAL_LOGIN_URL, buildExternalLoginUrl } from '@/contexts/AuthContext';
+import { useAuth, EXTERNAL_LOGIN_URL } from '@/contexts/AuthContext';
 import { getPageKeyByPath, type SidebarPageKey } from '@/lib/navigation';
 import { logRouteTelemetry } from '@/lib/routeTelemetry';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
@@ -48,7 +48,7 @@ export default function ProtectedRoute({ children, pageKey, ownerOnly }: Protect
       metadata: { path: location.pathname, redirect_to: EXTERNAL_LOGIN_URL || '/auth/callback' },
     });
     if (EXTERNAL_LOGIN_URL) {
-      window.location.href = buildExternalLoginUrl();
+      window.location.href = EXTERNAL_LOGIN_URL;
       return null;
     }
     return <Navigate to="/auth/callback" replace />;
