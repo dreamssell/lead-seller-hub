@@ -224,19 +224,40 @@ export default function LeadsCapturePage() {
         <TopRanking title="Top 3 colaboradores em captura" description="Ranqueado por volume de leads no período" items={ranking} />
 
         <Card className="glass-card">
-          <CardHeader><CardTitle className="text-base">Detalhamento qualitativo</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-base">Detalhamento qualitativo</CardTitle>
+            <CardDescription>Clique em um canal para abrir a tabela com filtros inteligentes</CardDescription>
+          </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {bySource.map(s => (
-                <div key={s.name} className="flex items-center justify-between p-3 rounded-lg border border-border">
-                  <span className="text-sm font-medium">{s.name}</span>
+                <button
+                  key={s.name}
+                  onClick={() => openDetail(s.name)}
+                  className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/5 transition text-left"
+                >
+                  <div>
+                    <span className="text-sm font-medium block">{s.name}</span>
+                    <span className="text-[10px] text-primary font-medium">Ver detalhes →</span>
+                  </div>
                   <Badge variant="secondary">{s.value}</Badge>
-                </div>
+                </button>
               ))}
             </div>
           </CardContent>
         </Card>
       </div>
+
+      <LeadsDetailDialog
+        open={detail.open}
+        onOpenChange={(v) => setDetail(d => ({ ...d, open: v }))}
+        title={detail.title}
+        description={detail.description}
+        leads={filtered}
+        classify={classify}
+        profileName={profileName}
+        initialOrigin={detail.origin}
+      />
     </AppLayout>
   );
 }
