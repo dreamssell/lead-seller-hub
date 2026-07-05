@@ -1,9 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { getProviderAdapter } from '../components/whatsapp/adapters';
 
-const invokeMock = vi.fn();
-const singleMock = vi.fn(() => Promise.resolve({ data: { phone: '5511999999999' }, error: null }));
-const updateMock = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({}) });
+const { invokeMock, singleMock, updateMock } = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
+  singleMock: vi.fn(() => Promise.resolve({ data: { phone: '5511999999999' }, error: null })),
+  updateMock: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({}) }),
+}));
 
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
