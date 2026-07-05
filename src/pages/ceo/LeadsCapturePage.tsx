@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { downloadCsv, downloadPdf } from '@/lib/ceoExport';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Inbox, CheckCircle2, TrendingUp, Globe, Link as LinkIcon, Download, FileText } from 'lucide-react';
+import { LeadsDetailDialog } from '@/components/ceo/LeadsDetailDialog';
 
 const SOURCE_GROUPS: Record<string, RegExp> = {
   Holmes: /holmes/i,
