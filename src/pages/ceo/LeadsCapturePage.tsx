@@ -27,15 +27,23 @@ function classify(source?: string | null) {
   return source;
 }
 
-function Kpi({ icon: Icon, label, value, hint }: any) {
+function Kpi({ icon: Icon, label, value, hint, onClick }: any) {
+  const interactive = !!onClick;
   return (
-    <Card className="glass-card">
+    <Card
+      className={`glass-card ${interactive ? 'cursor-pointer hover:border-primary/50 hover:shadow-lg transition' : ''}`}
+      onClick={onClick}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onKeyDown={interactive ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+    >
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">{label}</p>
             <p className="text-2xl font-bold mt-1.5">{value}</p>
             {hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
+            {interactive && <p className="text-[10px] text-primary mt-1.5 font-medium">Clique para ver detalhes →</p>}
           </div>
           <div className="p-2.5 rounded-lg bg-primary/10 text-primary"><Icon className="w-5 h-5" /></div>
         </div>
