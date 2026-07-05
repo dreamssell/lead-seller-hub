@@ -158,7 +158,7 @@ describe('EvolutionAdapter — media & rich (direct fetch)', () => {
       type: 'buttons', title: 'T', description: 'D',
       buttons: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }],
     });
-    const lastCall = fetchMock.mock.calls.at(-1);
+    const lastCall = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
     expect(lastCall[0]).toContain('/sendText/');
     const body = JSON.parse(lastCall[1].body);
     expect(body.text || body.textMessage?.text).toMatch(/A/);
