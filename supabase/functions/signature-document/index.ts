@@ -1,5 +1,6 @@
 // Authenticated edge function: create document, generate token, send via Resend/Twilio
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { buildHubUrl } from "../_shared/redirect.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -96,7 +97,7 @@ Deno.serve(async (req) => {
         document_id: doc.id, token, sms_pin, expires_at,
       });
 
-      const portal_url = `${req.headers.get("origin") || "https://app.leadseller.com.br"}/sign/${token}`;
+      const portal_url = buildHubUrl(`/sign/${token}`, undefined, req.headers.get("origin"));
 
       await admin.from("signature_events").insert({
         document_id: doc.id, event_type: "created", status: "draft", actor_id: user.id,

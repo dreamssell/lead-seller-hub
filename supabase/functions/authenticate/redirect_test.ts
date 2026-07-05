@@ -42,15 +42,29 @@ Deno.test("buildAuthRedirectUrl always hits /auth/callback on the hub", () => {
   assertEquals(url.searchParams.get("refresh_token"), "r.t");
 });
 
-Deno.test("buildAuthRedirectUrl honors a valid https override", () => {
+Deno.test("buildAuthRedirectUrl honors PLATFORM_URL env override", () => {
+  const prev = Deno.env.get("PLATFORM_URL");
+  Deno.env.set("PLATFORM_URL", "https://staging.leadseller.com.br");
+  try {
+    const url = new URL(
+      buildAuthRedirectUrl(null, { access_token: "x", refresh_token: "y" }),
+    );
+    assertEquals(url.origin, "https://staging.leadseller.com.br");
+    assertEquals(url.pathname, "/auth/callback");
+  } finally {
+    if (prev === undefined) Deno.env.delete("PLATFORM_URL");
+    else Deno.env.set("PLATFORM_URL", prev);
+  }
+});
+
+Deno.test("buildAuthRedirectUrl downgrades untrusted candidate to hub", () => {
   const url = new URL(
-    buildAuthRedirectUrl("https://staging.leadseller.com.br", {
+    buildAuthRedirectUrl("https://evil.example.com", {
       access_token: "x",
       refresh_token: "y",
     }),
   );
-  assertEquals(url.origin, "https://staging.leadseller.com.br");
-  assertEquals(url.pathname, "/auth/callback");
+  assertEquals(url.origin, HUB);
 });
 
 Deno.test("buildAuthRedirectUrl URL-encodes tokens with unsafe characters", () => {
