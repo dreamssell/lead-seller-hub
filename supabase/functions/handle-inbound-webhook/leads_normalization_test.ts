@@ -17,12 +17,15 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const TEST_TAG = `test-holmes-ds-${crypto.randomUUID()}`;
 
-function admin() {
-  return createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
-}
+const client = createClient(SUPABASE_URL, SERVICE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false },
+  realtime: { params: { eventsPerSecond: 0 } },
+});
+
+const testOpts = { sanitizeOps: false, sanitizeResources: false } as const;
 
 async function pickOwner(): Promise<string> {
-  const { data, error } = await admin()
+  const { data, error } = await client
     .from("profiles")
     .select("user_id")
     .limit(1)
@@ -33,8 +36,9 @@ async function pickOwner(): Promise<string> {
 }
 
 async function cleanup() {
-  await admin().from("leads").delete().eq("notes", TEST_TAG);
+  await client.from("leads").delete().eq("notes", TEST_TAG);
 }
+
 
 Deno.test("normalize_lead_integration_fields: variantes de Holmes viram 'holmes'", async () => {
   const owner = await pickOwner();
