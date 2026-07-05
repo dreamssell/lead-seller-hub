@@ -58,6 +58,8 @@ export default function LeadsCapturePage() {
   const setSourceTab = (v: string) => setExtra({ src: v });
   const [leads, setLeads] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
+  const [report, setReport] = useState<any[]>([]);
+  const [rtStatus, setRtStatus] = useState<'connecting' | 'live' | 'error'>('connecting');
   const [detail, setDetail] = useState<{ open: boolean; origin: string; title: string; description?: string }>({
     open: false, origin: 'all', title: '',
   });
@@ -71,8 +73,16 @@ export default function LeadsCapturePage() {
       description: `Período: ${PERIOD_LABELS[filters.period]} · aplicam-se filtros da barra superior (sub-empresa/colaborador).`,
     });
   };
-  
-  
+
+  const loadReport = async () => {
+    const start = periodStart(filters.period);
+    const { data, error } = await supabase.rpc('get_leads_capture_report', {
+      p_owner: null,
+      p_from: start ? start.toISOString() : null,
+      p_to: null,
+    });
+    if (!error) setReport((data as any) || []);
+  };
 
   useEffect(() => {
     (async () => {
@@ -83,6 +93,32 @@ export default function LeadsCapturePage() {
       setLeads((l.data as any) || []);
       setProfiles((p.data as any) || []);
     })();
+    loadReport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.period]);
+
+  // Realtime: novos leads (Holmes/DealerSpace/qualquer canal) refletem imediatamente
+  useEffect(() => {
+    const channel = supabase
+      .channel('leads-capture-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads' }, (payload) => {
+        setLeads(prev => (prev.some(x => x.id === (payload.new as any).id) ? prev : [payload.new as any, ...prev]));
+        loadReport();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leads' }, (payload) => {
+        setLeads(prev => prev.map(x => x.id === (payload.new as any).id ? { ...x, ...(payload.new as any) } : x));
+        loadReport();
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'leads' }, (payload) => {
+        setLeads(prev => prev.filter(x => x.id !== (payload.old as any).id));
+        loadReport();
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') setRtStatus('live');
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setRtStatus('error');
+      });
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const profileName = (uid?: string | null) =>
