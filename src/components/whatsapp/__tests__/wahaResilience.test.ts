@@ -71,18 +71,16 @@ describe('wahaFetch — retries / timeouts / cancellation', () => {
   });
 
   it('timeouts abort in-flight request and retry then give up', async () => {
-    // Simulate a timeout at the fetch layer directly (avoids relying on the
-    // AbortSignal-listener plumbing, which produced a spurious unhandled
-    // rejection under jsdom's AbortController).
+    vi.useRealTimers(); // real setTimeout so backoff resolves naturally
     const fetchMock = vi.fn().mockRejectedValue(
       Object.assign(new Error('timeout'), { name: 'TimeoutError' })
     );
     (global as any).fetch = fetchMock;
-    const p = wahaFetch('https://waha.example.com', 'k', '/api/sendText', {
-      method: 'POST', body: {}, timeoutMs: 10, retries: 1,
-    }).catch((e) => { throw e; });
-    await vi.runAllTimersAsync();
-    await expect(p).rejects.toBeTruthy();
+    await expect(
+      wahaFetch('https://waha.example.com', 'k', '/api/sendText', {
+        method: 'POST', body: {}, timeoutMs: 5, retries: 1,
+      })
+    ).rejects.toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(2); // initial + 1 retry
   });
 
