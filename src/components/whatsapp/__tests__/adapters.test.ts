@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// Mock supabase before importing the module under test.
-const updateMock = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({}) });
-const singleMock = vi.fn().mockResolvedValue({ data: { phone: '5511999999999' } });
-const invokeMock = vi.fn();
+// vi.hoisted keeps these references available inside the hoisted vi.mock factory.
+const { updateMock, singleMock, invokeMock } = vi.hoisted(() => ({
+  updateMock: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({}) }),
+  singleMock: vi.fn().mockResolvedValue({ data: { phone: '5511999999999' } }),
+  invokeMock: vi.fn(),
+}));
 
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
