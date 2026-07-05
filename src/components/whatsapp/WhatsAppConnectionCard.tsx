@@ -250,19 +250,44 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
         )}
 
         {conn.provider === 'waha' && (
-          <div className="rounded-lg border border-teal-500/20 bg-teal-500/5 p-3 text-xs space-y-1">
+          <div
+            data-testid="waha-status-banner"
+            data-status={conn.status}
+            className="rounded-lg border border-teal-500/20 bg-teal-500/5 p-3 text-xs space-y-2"
+          >
             <p className="font-bold uppercase text-teal-600 tracking-wider text-[10px] flex items-center gap-1">
-              <Activity className="w-3 h-3" /> WAHA
+              <Activity className="w-3 h-3" /> WAHA · Status detalhado
             </p>
+            <ul className="grid grid-cols-2 gap-1 text-[11px] text-muted-foreground">
+              <li className="flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${conn.status === 'connecting' ? 'bg-amber-500 animate-pulse' : 'bg-muted'}`} />
+                Enviando
+              </li>
+              <li className="flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${conn.status === 'connected' ? 'bg-emerald-500' : 'bg-muted'}`} />
+                Entregue
+              </li>
+              <li className="flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${conn.status === 'error' ? 'bg-red-500' : 'bg-muted'}`} />
+                Falha
+              </li>
+              <li className="flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${conn.status === 'disconnected' ? 'bg-zinc-500' : 'bg-muted'}`} />
+                Desconectado
+              </li>
+            </ul>
             <p className="text-muted-foreground leading-relaxed">
               {conn.status === 'connected'
-                ? 'Sessão WAHA ativa — mensagens serão enviadas via /api/sendText.'
+                ? 'Sessão WAHA ativa — mensagens serão enviadas via /api/sendText, sendImage, sendVideo, sendFile ou sendVoice.'
                 : conn.status === 'error'
-                ? 'Falha na sessão WAHA. Verifique URL, X-Api-Key e o nome da sessão. O envio ficará indisponível até a reconexão (não afeta UAZ / Wavoip / Evolution).'
-                : 'Configure URL, X-Api-Key e o nome da sessão. Depois clique em Testar Conexão para validar a sessão antes de enviar.'}
+                ? 'Falha na sessão WAHA. O adaptador fará fallback automático com retries e timeout; se persistir, o envio ficará indisponível até a reconexão (não afeta UAZ / Wavoip / Evolution).'
+                : conn.status === 'disconnected'
+                ? 'Sessão desconectada. Reautentique o QR na sua instância WAHA — os outros provedores continuam operando normalmente.'
+                : 'Configure URL, X-Api-Key e o nome da sessão. Depois clique em Testar Conexão para validar antes de enviar.'}
             </p>
           </div>
         )}
+
 
 
 
