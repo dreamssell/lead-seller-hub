@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { downloadCsv, downloadPdf } from '@/lib/ceoExport';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Inbox, CheckCircle2, TrendingUp, Globe, Link as LinkIcon, Download, FileText } from 'lucide-react';
+import { LeadsDetailDialog } from '@/components/ceo/LeadsDetailDialog';
 
 const SOURCE_GROUPS: Record<string, RegExp> = {
   Holmes: /holmes/i,
@@ -26,15 +27,23 @@ function classify(source?: string | null) {
   return source;
 }
 
-function Kpi({ icon: Icon, label, value, hint }: any) {
+function Kpi({ icon: Icon, label, value, hint, onClick }: any) {
+  const interactive = !!onClick;
   return (
-    <Card className="glass-card">
+    <Card
+      className={`glass-card ${interactive ? 'cursor-pointer hover:border-primary/50 hover:shadow-lg transition' : ''}`}
+      onClick={onClick}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onKeyDown={interactive ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+    >
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">{label}</p>
             <p className="text-2xl font-bold mt-1.5">{value}</p>
             {hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
+            {interactive && <p className="text-[10px] text-primary mt-1.5 font-medium">Clique para ver detalhes →</p>}
           </div>
           <div className="p-2.5 rounded-lg bg-primary/10 text-primary"><Icon className="w-5 h-5" /></div>
         </div>
@@ -49,6 +58,20 @@ export default function LeadsCapturePage() {
   const setSourceTab = (v: string) => setExtra({ src: v });
   const [leads, setLeads] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
+  const [detail, setDetail] = useState<{ open: boolean; origin: string; title: string; description?: string }>({
+    open: false, origin: 'all', title: '',
+  });
+
+  const openDetail = (origin: string) => {
+    const label = origin === 'all' ? 'Todos os leads capturados' : `Leads · ${origin}`;
+    setDetail({
+      open: true,
+      origin,
+      title: label,
+      description: `Período: ${PERIOD_LABELS[filters.period]} · aplicam-se filtros da barra superior (sub-empresa/colaborador).`,
+    });
+  };
+  
   
 
   useEffect(() => {
@@ -156,7 +179,7 @@ export default function LeadsCapturePage() {
         })()}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Kpi icon={Inbox} label="Leads capturados" value={filtered.length} hint={`Período: ${PERIOD_LABELS[filters.period]}`} />
+          <Kpi icon={Inbox} label="Leads capturados" value={filtered.length} hint={`Período: ${PERIOD_LABELS[filters.period]}`} onClick={() => openDetail(sourceTab)} />
           <Kpi icon={CheckCircle2} label="Convertidos" value={won.length} hint={`${closed.length} fechados`} />
           <Kpi icon={TrendingUp} label="Taxa de conversão" value={`${conv.toFixed(1)}%`} />
           <Kpi icon={Globe} label="Receita gerada" value={`R$ ${revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
@@ -201,19 +224,40 @@ export default function LeadsCapturePage() {
         <TopRanking title="Top 3 colaboradores em captura" description="Ranqueado por volume de leads no período" items={ranking} />
 
         <Card className="glass-card">
-          <CardHeader><CardTitle className="text-base">Detalhamento qualitativo</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-base">Detalhamento qualitativo</CardTitle>
+            <CardDescription>Clique em um canal para abrir a tabela com filtros inteligentes</CardDescription>
+          </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {bySource.map(s => (
-                <div key={s.name} className="flex items-center justify-between p-3 rounded-lg border border-border">
-                  <span className="text-sm font-medium">{s.name}</span>
+                <button
+                  key={s.name}
+                  onClick={() => openDetail(s.name)}
+                  className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/5 transition text-left"
+                >
+                  <div>
+                    <span className="text-sm font-medium block">{s.name}</span>
+                    <span className="text-[10px] text-primary font-medium">Ver detalhes →</span>
+                  </div>
                   <Badge variant="secondary">{s.value}</Badge>
-                </div>
+                </button>
               ))}
             </div>
           </CardContent>
         </Card>
       </div>
+
+      <LeadsDetailDialog
+        open={detail.open}
+        onOpenChange={(v) => setDetail(d => ({ ...d, open: v }))}
+        title={detail.title}
+        description={detail.description}
+        leads={filtered}
+        classify={classify}
+        profileName={profileName}
+        initialOrigin={detail.origin}
+      />
     </AppLayout>
   );
 }
