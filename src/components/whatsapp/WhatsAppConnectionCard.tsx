@@ -249,6 +249,23 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
           <WidgetSettings conn={conn} onSaved={onSaved} />
         )}
 
+        {conn.provider === 'waha' && (
+          <div className="rounded-lg border border-teal-500/20 bg-teal-500/5 p-3 text-xs space-y-1">
+            <p className="font-bold uppercase text-teal-600 tracking-wider text-[10px] flex items-center gap-1">
+              <Activity className="w-3 h-3" /> WAHA
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              {conn.status === 'connected'
+                ? 'Sessão WAHA ativa — mensagens serão enviadas via /api/sendText.'
+                : conn.status === 'error'
+                ? 'Falha na sessão WAHA. Verifique URL, X-Api-Key e o nome da sessão. O envio ficará indisponível até a reconexão (não afeta UAZ / Wavoip / Evolution).'
+                : 'Configure URL, X-Api-Key e o nome da sessão. Depois clique em Testar Conexão para validar a sessão antes de enviar.'}
+            </p>
+          </div>
+        )}
+
+
+
         {/* Common Configuration Fields (Only show if not widget or explicitly toggled) */}
         {conn.provider !== 'widget' && conn.provider !== 'facebook' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
