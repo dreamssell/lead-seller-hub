@@ -265,6 +265,71 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
               />
             </Field>
           </section>
+
+          <Separator />
+
+          {/* Session lifecycle on the WAHA server (multi-tenant) */}
+          <section className="space-y-3">
+            <h4 className="text-xs font-bold uppercase text-muted-foreground">Sessão no servidor WAHA</h4>
+            <p className="text-[11px] text-muted-foreground">
+              Gerencia a sessão <code>{cfg.session || '(vazia)'}</code> diretamente no servidor WAHA desta empresa/sub-empresa.
+              Cada conexão é isolada por tenant.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm" variant="secondary"
+                disabled={busyAction !== null}
+                onClick={() => runSessionAction('create')}
+                className="gap-1"
+              >
+                {busyAction === 'create' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlusCircle className="w-3.5 h-3.5" />}
+                Criar sessão no WAHA
+              </Button>
+              <Button
+                size="sm" variant="outline"
+                disabled={busyAction !== null}
+                onClick={() => runSessionAction('logout', 'Encerrar a sessão do dispositivo autenticado? Será necessário escanear o QR novamente.')}
+                className="gap-1"
+              >
+                {busyAction === 'logout' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+                Logout do dispositivo
+              </Button>
+              <Button
+                size="sm" variant="outline"
+                disabled={busyAction !== null}
+                onClick={() => runSessionAction('list_remote')}
+                className="gap-1"
+              >
+                {busyAction === 'list' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ListRestart className="w-3.5 h-3.5" />}
+                Listar sessões remotas
+              </Button>
+              <Button
+                size="sm" variant="destructive"
+                disabled={busyAction !== null}
+                onClick={() => runSessionAction('delete', `Excluir a sessão "${cfg.session}" do servidor WAHA? Esta ação é irreversível.`)}
+                className="gap-1"
+              >
+                {busyAction === 'delete' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                Excluir sessão remota
+              </Button>
+            </div>
+            {remoteSessions && (
+              <div className="rounded-md border border-border/60 bg-secondary/30 p-2 max-h-40 overflow-auto">
+                <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">
+                  Sessões no servidor ({remoteSessions.length})
+                </p>
+                <ul className="text-[11px] font-mono space-y-1">
+                  {remoteSessions.length === 0 && <li className="text-muted-foreground">— nenhuma sessão —</li>}
+                  {remoteSessions.map((s, i) => (
+                    <li key={i} className="flex items-center justify-between gap-2">
+                      <span>{s?.name ?? s?.session ?? JSON.stringify(s)}</span>
+                      <span className="text-[10px] uppercase text-muted-foreground">{s?.status ?? ''}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </section>
         </div>
 
         <DialogFooter className="gap-2">
