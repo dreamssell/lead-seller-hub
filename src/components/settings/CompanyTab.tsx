@@ -268,8 +268,9 @@ export default function CompanyTab() {
         <div className="pt-2">
           <button
             onClick={handleSave}
-            disabled={saving || loading}
-            className="flex items-center gap-2 bg-primary text-primary-foreground px-6 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+            disabled={saving || loading || !canEdit}
+            title={canEdit ? undefined : 'Somente o titular da conta pode salvar alterações'}
+            className="flex items-center gap-2 bg-primary text-primary-foreground px-6 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {saving ? 'Salvando...' : 'Salvar Alterações'}
