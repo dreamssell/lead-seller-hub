@@ -454,6 +454,14 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
           autoStart={wizardAutoStart}
         />
       )}
+      {conn.provider === 'waha' && (
+        <WahaConfigDialog
+          open={showWahaConfig}
+          onOpenChange={setShowWahaConfig}
+          conn={conn}
+          onSaved={onSaved}
+        />
+      )}
 
     </Card>
   );
