@@ -40,6 +40,10 @@ export function WahaLiveBadge({ conn }: { conn: WhatsAppConnection }) {
   );
   const disconnectedToastRef = useRef<string | number | null>(null);
   const realtimeOkRef = useRef(false);
+  // Progressive-retry state for auto-reconnect when WAHA drops.
+  const retryAttemptRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryingRef = useRef(false);
 
   // Push a new ACK into the history buffer if it hasn't been seen.
   const pushAck = (ack: { id?: string; status?: string; at?: string } | undefined) => {
@@ -51,20 +55,68 @@ export function WahaLiveBadge({ conn }: { conn: WhatsAppConnection }) {
     setHistory((h) => [{ id: ack.id, status: ack.status!, at }, ...h].slice(0, HISTORY_MAX));
   };
 
-  // Discreet toast when connection transitions to disconnected/error.
+  // Cancel any pending progressive-retry cycle.
+  const cancelRetry = () => {
+    if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
+    retryAttemptRef.current = 0;
+    retryingRef.current = false;
+  };
+
+  // Kick off a progressive-retry cycle: 10s, 30s, 60s, 120s, capped at 300s.
+  const scheduleRetry = () => {
+    if (retryingRef.current) return;
+    retryingRef.current = true;
+    const attempt = retryAttemptRef.current;
+    const delays = [10_000, 30_000, 60_000, 120_000, 300_000];
+    const delay = delays[Math.min(attempt, delays.length - 1)];
+    retryTimerRef.current = setTimeout(async () => {
+      retryAttemptRef.current = attempt + 1;
+      const toastId = toast.loading(`Reconectando WAHA (tentativa ${attempt + 1})…`, {
+        description: `Tentando restart automático da sessão ${conn.metadata?.session || ''}.`,
+      });
+      try {
+        const { data, error } = await supabase.functions.invoke('waha-session', {
+          body: { action: 'restart', connection_id: conn.id },
+        });
+        if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'Falha no restart');
+        toast.dismiss(toastId);
+        toast.success('WAHA reiniciada', {
+          description: `Estado: ${data.status}. Se pedir QR, abra o card para escanear.`,
+          duration: 4000,
+        });
+      } catch (e: any) {
+        toast.dismiss(toastId);
+        toast.warning(`Tentativa ${attempt + 1} falhou`, {
+          description: `${e?.message ?? 'Erro'} — próxima tentativa em ${(delays[Math.min(attempt + 1, delays.length - 1)] / 1000)}s.`,
+          duration: 5000,
+        });
+      } finally {
+        retryingRef.current = false;
+        // Schedule another retry only if still not connected.
+        if (!(live?.connected)) scheduleRetry();
+      }
+    }, delay);
+  };
+
+  // Discreet toast + progressive-retry when connection drops.
   const notifyStatusChange = (next: string, prev: string) => {
     if (next === prev) return;
     if ((next === 'disconnected' || next === 'error') && prev !== 'disconnected' && prev !== 'error') {
-      const id = toast.warning(`WAHA ${next === 'error' ? 'com erro' : 'desconectado'}`, {
-        description: 'A sessão WAHA caiu. UAZ, Evolution e Wavoip seguem operando normalmente.',
+      const id = toast.warning(`WAHA ${next === 'error' ? 'com falha' : 'desconectada'}`, {
+        description: 'Iniciando reconexão automática com retry progressivo. UAZ, Evolution e Wavoip seguem operando.',
         duration: 6000,
       });
       disconnectedToastRef.current = id;
+      scheduleRetry();
     } else if (next === 'connected' && (prev === 'disconnected' || prev === 'error')) {
       if (disconnectedToastRef.current != null) toast.dismiss(disconnectedToastRef.current);
-      toast.success('WAHA reconectado', { duration: 3000 });
+      cancelRetry();
+      toast.success('WAHA reconectada', { duration: 3000 });
     }
   };
+
+  // Cleanup retry timer on unmount.
+  useEffect(() => () => cancelRetry(), []);
 
   // Realtime subscription on the connection row itself.
   useEffect(() => {

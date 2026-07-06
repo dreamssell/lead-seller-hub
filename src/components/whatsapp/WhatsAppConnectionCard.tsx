@@ -28,6 +28,7 @@ import { EvolutionDebugPanel } from './EvolutionDebugPanel';
 import { EvolutionWebhookAlert } from './EvolutionWebhookAlert';
 import { WahaConfigDialog } from './WahaConfigDialog';
 import { WahaLiveBadge } from './WahaLiveBadge';
+import { WahaQrCard } from './WahaQrCard';
 import { Settings2 } from 'lucide-react';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
@@ -292,6 +293,7 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
                 ? 'Sessão desconectada. Reautentique o QR na sua instância WAHA — os outros provedores continuam operando normalmente.'
                 : 'Configure URL, X-Api-Key e o nome da sessão. Depois clique em Testar Conexão para validar antes de enviar.'}
             </p>
+            <WahaQrCard conn={conn} />
           </div>
         )}
 
