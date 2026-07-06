@@ -108,19 +108,20 @@ export default function TeamPage() {
 
   const loadPlanLimit = async () => {
     if (isOwner) { setMaxUsers(null); setPlanName('Ilimitado (Dono)'); return; }
-    let planSlug: string | null = null;
-    if (scopeSubId) {
-      const { data } = await supabase.from('sub_companies').select('plan_slug').eq('id', scopeSubId).maybeSingle();
-      planSlug = data?.plan_slug ?? null;
-    } else if (user?.id) {
-      const { data } = await supabase.from('client_companies').select('plan_slug').eq('owner_id', user.id).limit(1).maybeSingle();
-      planSlug = data?.plan_slug ?? null;
-    }
-    if (!planSlug) { setMaxUsers(null); setPlanName('Ilimitado'); return; }
+    const ownerId = access?.owner_id ?? user?.id ?? null;
+    if (!ownerId) { setMaxUsers(null); setPlanName('Ilimitado'); return; }
+    // Fonte da verdade: RPC no banco (mesma regra usada pelo trigger de bloqueio).
+    const { data: usage } = await (supabase as any).rpc('get_member_seat_usage', {
+      p_owner_id: ownerId,
+      p_sub_company_id: scopeSubId,
+    });
+    const row = Array.isArray(usage) ? usage[0] : usage;
+    const slug: string | null = row?.plan_slug ?? null;
+    setMaxUsers(row?.max_users ?? null);
+    if (!slug) { setPlanName('Ilimitado'); return; }
     const { data: plan } = await supabase
-      .from('plan_packages').select('name, max_users').eq('slug', planSlug).maybeSingle();
-    setMaxUsers(plan?.max_users ?? null);
-    setPlanName(plan?.name ?? planSlug);
+      .from('plan_packages').select('name').eq('slug', slug).maybeSingle();
+    setPlanName(plan?.name ?? slug);
   };
 
   const loadAudit = async () => {
@@ -209,6 +210,14 @@ export default function TeamPage() {
   const save = async () => {
     if (!form.display_name.trim()) { toast({ title: 'Informe o nome', variant: 'destructive' }); return; }
     if (!editing) {
+      if (limitReached && !unlimited) {
+        toast({
+          title: 'Limite do plano atingido',
+          description: `Seu plano ${planName} permite ${maxUsers} usuário(s). Remova alguém ou solicite upgrade antes de adicionar.`,
+          variant: 'destructive',
+        });
+        return;
+      }
       if (!form.email.trim() || !form.password || form.password.length < 6) {
         toast({ title: 'E-mail e senha (mín. 6) obrigatórios', variant: 'destructive' });
         return;
@@ -249,11 +258,26 @@ export default function TeamPage() {
       const isPipelineErr =
         surfaced.code === 'pipeline_required' ||
         /funil|pipeline/i.test(surfaced.message);
+      const isSeatErr = /plan_seat_limit_reached|limite/i.test(surfaced.message);
+      const isOwnerErr = /owner_protected/i.test(surfaced.message);
       if (isPipelineErr) {
         flashPipelineField();
         toast({
           title: '⚠ Selecione pelo menos 1 funil',
           description: `${surfaced.message} O campo "Funis atribuídos" foi destacado abaixo.`,
+          variant: 'destructive',
+        });
+      } else if (isSeatErr) {
+        toast({
+          title: 'Limite do plano atingido',
+          description: `Seu plano ${planName || ''} não tem mais assentos disponíveis. Remova um usuário ou solicite upgrade.`,
+          variant: 'destructive',
+        });
+        loadPlanLimit();
+      } else if (isOwnerErr) {
+        toast({
+          title: 'Ação bloqueada',
+          description: 'Somente o dono da plataforma pode alterar o titular da conta.',
           variant: 'destructive',
         });
       } else {
@@ -264,6 +288,7 @@ export default function TeamPage() {
     toast({ title: editing ? 'Membro atualizado' : 'Membro adicionado' });
     setDialogOpen(false);
     loadMembers();
+    loadPlanLimit();
   };
 
   const remove = async (m: Member) => {
@@ -466,6 +491,33 @@ export default function TeamPage() {
             <DialogDescription>
               {editing ? 'Atualize os dados de acesso deste colaborador.' : 'Crie um novo acesso à plataforma.'}
             </DialogDescription>
+            {!editing && (() => {
+              const nearing = !unlimited && maxUsers != null && total >= Math.max(1, Math.ceil(maxUsers * 0.8));
+              const remaining = unlimited ? null : Math.max(0, (maxUsers ?? 0) - total);
+              const tone = limitReached
+                ? 'bg-destructive/10 text-destructive border-destructive/30'
+                : nearing
+                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                : 'bg-primary/10 text-primary border-primary/30';
+              return (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  data-testid="seat-usage-badge"
+                  className={`mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium w-fit ${tone}`}
+                >
+                  {unlimited ? (
+                    <><InfinityIcon className="w-3.5 h-3.5" /> Assentos ilimitados · Plano {planName || '—'}</>
+                  ) : limitReached ? (
+                    <>⛔ Limite atingido: {total}/{maxUsers} · Plano {planName}</>
+                  ) : nearing ? (
+                    <>⚠ Restam {remaining} assento(s) · {total}/{maxUsers} · Plano {planName}</>
+                  ) : (
+                    <>{remaining} assento(s) disponíveis · {total}/{maxUsers} · Plano {planName}</>
+                  )}
+                </div>
+              );
+            })()}
           </DialogHeader>
 
           <div className="space-y-3">

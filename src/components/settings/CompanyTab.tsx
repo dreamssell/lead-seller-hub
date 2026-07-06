@@ -1,12 +1,15 @@
-import { Building2, Mail, Phone, Globe, FileText, MapPin, Save, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Building2, Mail, Phone, Globe, FileText, MapPin, Save, Loader2, Image as ImageIcon, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
 export default function CompanyTab() {
   const { access } = useAuth();
+  const { isOwner: isPlatformOwner } = usePlatformOwner();
+  const canEdit = isPlatformOwner || !!access?.is_account_admin;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -71,6 +74,14 @@ export default function CompanyTab() {
   }, [subCompanyId]);
 
   const handleLogoUpload = async (file: File) => {
+    if (!canEdit) {
+      toast({
+        title: 'Ação bloqueada',
+        description: 'Somente o titular da conta ou o dono da plataforma pode alterar a logo da empresa matriz.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setUploadingLogo(true);
     const ext = file.name.split('.').pop();
     const path = `company/${Date.now()}.${ext}`;
@@ -102,8 +113,17 @@ export default function CompanyTab() {
   };
 
   const handleSave = async () => {
+    if (!canEdit) {
+      toast({
+        title: 'Ação bloqueada',
+        description: 'Somente o titular da conta ou o dono da plataforma pode alterar os dados da empresa matriz.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setSaving(true);
     let error;
+
 
     if (subCompanyId) {
       const { error: subErr } = await supabase
@@ -158,6 +178,20 @@ export default function CompanyTab() {
 
   return (
     <div className="space-y-6">
+      {!canEdit && (
+        <div
+          role="alert"
+          data-testid="company-locked-warning"
+          className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-700 dark:text-amber-400 flex items-start gap-2"
+        >
+          <ShieldCheck className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            <b>Dados da empresa matriz protegidos.</b> Apenas o titular desta conta (ou o dono da plataforma) pode alterar
+            o nome e a logo herdados. Você pode continuar personalizando sua própria foto de perfil na aba <b>Dados do Perfil</b>.
+          </span>
+        </div>
+      )}
+
       <motion.div
         className="glass-card p-6 flex items-center gap-6"
         initial={{ opacity: 0, y: 12 }}
@@ -172,9 +206,10 @@ export default function CompanyTab() {
             )}
           </div>
           <button
-            onClick={() => logoInputRef.current?.click()}
-            disabled={uploadingLogo}
-            className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-lg disabled:opacity-50"
+            onClick={() => canEdit && logoInputRef.current?.click()}
+            disabled={uploadingLogo || !canEdit}
+            title={canEdit ? 'Alterar logo' : 'Somente o titular da conta pode alterar a logo'}
+            className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {uploadingLogo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
           </button>
@@ -183,6 +218,7 @@ export default function CompanyTab() {
             type="file"
             accept="image/*"
             className="hidden"
+            disabled={!canEdit}
             onChange={(e) => e.target.files?.[0] && handleLogoUpload(e.target.files[0])}
           />
         </div>
@@ -191,6 +227,7 @@ export default function CompanyTab() {
           <p className="text-sm text-muted-foreground">{subCompanyId ? 'Sub-empresa' : 'Empresa Principal'}</p>
         </div>
       </motion.div>
+
 
       <motion.div
         className="glass-card p-6 space-y-4"
@@ -216,9 +253,11 @@ export default function CompanyTab() {
                 <input
                   type="text"
                   value={(form as any)[field.key]}
-                  disabled={loading}
-                  onChange={(e) => setForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                  className="bg-transparent text-sm outline-none flex-1 text-foreground"
+                  disabled={loading || !canEdit}
+                  readOnly={!canEdit}
+                  title={canEdit ? undefined : 'Somente o titular da conta pode alterar este campo'}
+                  onChange={(e) => canEdit && setForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                  className={`bg-transparent text-sm outline-none flex-1 text-foreground ${!canEdit ? 'cursor-not-allowed opacity-70' : ''}`}
                   placeholder={`Informe o ${field.label.toLowerCase()}`}
                 />
               </div>
@@ -229,8 +268,9 @@ export default function CompanyTab() {
         <div className="pt-2">
           <button
             onClick={handleSave}
-            disabled={saving || loading}
-            className="flex items-center gap-2 bg-primary text-primary-foreground px-6 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+            disabled={saving || loading || !canEdit}
+            title={canEdit ? undefined : 'Somente o titular da conta pode salvar alterações'}
+            className="flex items-center gap-2 bg-primary text-primary-foreground px-6 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {saving ? 'Salvando...' : 'Salvar Alterações'}
