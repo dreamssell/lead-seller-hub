@@ -142,18 +142,33 @@ export default function CEODashboardPage() {
     })();
   }, []);
 
-  // Resolve context name (sub-empresa > empresa direta > display_name).
+  // Resolve context name (sub-empresa > empresa direta do dono > display_name > fallback confiável).
   useEffect(() => {
-    if (access?.sub_company_name) { setContextName(access.sub_company_name); return; }
-    if (!user?.id) return;
+    const trimmed = (access?.sub_company_name || '').trim();
+    if (trimmed) { setContextName(trimmed); return; }
+    if (!user?.id) { setContextName('Minha empresa'); return; }
     (async () => {
-      const { data } = await (supabase as any)
+      // 1) empresa cujo login é o próprio usuário
+      const { data: byAuth } = await (supabase as any)
         .from('client_companies')
         .select('name')
         .eq('auth_user_id', user.id)
         .maybeSingle();
-      if (data?.name) setContextName(data.name);
-      else setContextName(user.user_metadata?.display_name || user.email || '');
+      const n1 = (byAuth?.name || '').trim();
+      if (n1) { setContextName(n1); return; }
+      // 2) empresa cujo owner_id é o usuário (dono da plataforma sem auth vinculado)
+      const { data: byOwner } = await (supabase as any)
+        .from('client_companies')
+        .select('name')
+        .eq('owner_id', user.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      const n2 = (byOwner?.name || '').trim();
+      if (n2) { setContextName(n2); return; }
+      // 3) metadata / email / fallback
+      const meta = (user.user_metadata?.display_name || '').trim();
+      setContextName(meta || user.email || 'Minha empresa');
     })();
   }, [access?.sub_company_name, user?.id]);
 
@@ -334,27 +349,35 @@ export default function CEODashboardPage() {
   return (
     <AppLayout title="Performance da Empresa" subtitle="Visão estratégica para a liderança — dados em tempo real do ecossistema">
       <div className="space-y-6">
-        {/* Breadcrumbs + contexto */}
-        <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+        {/* Breadcrumbs + contexto — responsivo (mobile-first) */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <nav
+            aria-label="Breadcrumb"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0"
           >
-            <Home className="w-3.5 h-3.5" /> Início
-          </button>
-          <ChevronRight className="w-3.5 h-3.5 opacity-60" />
-          <span className="text-foreground font-medium">Performance da Empresa</span>
-          {contextName && (
-            <>
-              <ChevronRight className="w-3.5 h-3.5 opacity-60" />
-              <span className="truncate max-w-[240px]" title={contextName}>{contextName}</span>
-            </>
-          )}
-          <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-[11px] font-medium text-primary">
-            <Crown className="w-3 h-3" /> Painel executivo completo
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="inline-flex items-center gap-1 hover:text-foreground transition-colors shrink-0"
+            >
+              <Home className="w-3.5 h-3.5" /> <span className="hidden xs:inline sm:inline">Início</span>
+            </button>
+            <ChevronRight className="w-3.5 h-3.5 opacity-60 shrink-0" />
+            <span className="text-foreground font-medium shrink-0">Performance da Empresa</span>
+            <ChevronRight className="w-3.5 h-3.5 opacity-60 shrink-0" />
+            <span
+              className="truncate min-w-0 max-w-[45vw] sm:max-w-[240px] md:max-w-[360px]"
+              title={contextName || 'Minha empresa'}
+            >
+              {contextName || 'Minha empresa'}
+            </span>
+          </nav>
+          <span className="inline-flex items-center gap-1.5 self-start sm:self-auto shrink-0 rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-[11px] font-medium text-primary">
+            <Crown className="w-3 h-3" />
+            <span className="hidden sm:inline">Painel executivo completo</span>
+            <span className="sm:hidden">Painel executivo</span>
           </span>
-        </nav>
+        </div>
 
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-3">

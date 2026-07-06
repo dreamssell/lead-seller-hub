@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfileLevel } from '@/hooks/useUserProfileLevel';
 
 const allServices = [
-  { key: 'ceo', icon: Crown, title: 'Dashboard CEO', description: 'Indicadores executivos completos.', color: 'bg-warning/10 text-warning', path: '/ceo' },
+  { key: 'ceo', icon: Crown, title: 'Performance da Empresa', description: 'Painel executivo completo.', color: 'bg-warning/10 text-warning', path: '/ceo' },
   { key: 'tickets', icon: Headphones, title: 'Central de Atendimento', description: 'Todos os atendimentos em tempo real.', color: 'bg-primary/10 text-primary', path: '/tickets' },
   { key: 'ai-agents', icon: Bot, title: 'Agentes de I.A. (SDR)', description: 'Bots e qualificação automática.', color: 'bg-success/10 text-success', path: '/ai-agents' },
   { key: 'calls', icon: Phone, title: 'VoIP & Gravação', description: 'Chamadas VoIP com gravação.', color: 'bg-warning/10 text-warning', path: '/calls' },
