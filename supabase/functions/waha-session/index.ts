@@ -54,8 +54,22 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const action = (body?.action ?? "status") as
-      | "status" | "qr" | "restart" | "logout" | "create" | "delete" | "list_remote";
+      | "status" | "qr" | "restart" | "logout" | "create" | "delete"
+      | "list_remote" | "test_webhook" | "cleanup_scan";
     const connectionId: string | undefined = body?.connection_id;
+
+    const logEvent = async (evType: string, status: string, extra: Record<string, unknown> = {}) => {
+      if (!connectionId) return;
+      try {
+        await supabaseAdmin.from("connection_events").insert({
+          connection_id: connectionId,
+          event_type: `waha.action.${evType}`,
+          status,
+          payload: extra as any,
+          metadata_json: { source: "waha-session", actor: null },
+        });
+      } catch (_) { /* best effort */ }
+    };
 
     let url: string | undefined = body?.url;
     let token: string | undefined = body?.token;
