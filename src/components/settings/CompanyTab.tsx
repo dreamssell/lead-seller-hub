@@ -113,8 +113,17 @@ export default function CompanyTab() {
   };
 
   const handleSave = async () => {
+    if (!canEdit) {
+      toast({
+        title: 'Ação bloqueada',
+        description: 'Somente o titular da conta ou o dono da plataforma pode alterar os dados da empresa matriz.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setSaving(true);
     let error;
+
 
     if (subCompanyId) {
       const { error: subErr } = await supabase
