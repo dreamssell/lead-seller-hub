@@ -350,34 +350,7 @@ export default function CEODashboardPage() {
     <AppLayout title="Performance da Empresa" subtitle="Visão estratégica para a liderança — dados em tempo real do ecossistema">
       <div className="space-y-6">
         {/* Breadcrumbs + contexto — responsivo (mobile-first) */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <nav
-            aria-label="Breadcrumb"
-            className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0"
-          >
-            <button
-              type="button"
-              onClick={() => navigate('/')}
-              className="inline-flex items-center gap-1 hover:text-foreground transition-colors shrink-0"
-            >
-              <Home className="w-3.5 h-3.5" /> <span className="hidden xs:inline sm:inline">Início</span>
-            </button>
-            <ChevronRight className="w-3.5 h-3.5 opacity-60 shrink-0" />
-            <span className="text-foreground font-medium shrink-0">Performance da Empresa</span>
-            <ChevronRight className="w-3.5 h-3.5 opacity-60 shrink-0" />
-            <span
-              className="truncate min-w-0 max-w-[45vw] sm:max-w-[240px] md:max-w-[360px]"
-              title={contextName || 'Minha empresa'}
-            >
-              {contextName || 'Minha empresa'}
-            </span>
-          </nav>
-          <span className="inline-flex items-center gap-1.5 self-start sm:self-auto shrink-0 rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-[11px] font-medium text-primary">
-            <Crown className="w-3 h-3" />
-            <span className="hidden sm:inline">Painel executivo completo</span>
-            <span className="sm:hidden">Painel executivo</span>
-          </span>
-        </div>
+        <CeoBreadcrumb contextName={contextName} onHomeClick={() => navigate('/')} />
 
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-3">
