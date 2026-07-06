@@ -12,8 +12,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Building2, Plus, Pencil, Trash2, Search, Mail, Phone, Globe, MapPin, FileText, Info } from 'lucide-react';
+import { Building2, Plus, Pencil, Trash2, Search, Mail, Phone, Globe, MapPin, FileText, Info, ShieldOff } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { BLOCKABLE_PAGES } from '@/lib/navigation';
+
 
 type Company = {
   id: string;
