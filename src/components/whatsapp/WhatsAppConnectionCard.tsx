@@ -345,6 +345,11 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
                   {testing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} 
                   Testar Conexão
                 </Button>
+                {conn.provider === 'waha' && (
+                  <Button size="sm" variant="secondary" onClick={() => setShowWahaConfig(true)} className="gap-2">
+                    <Settings2 className="w-4 h-4" /> Configuração completa
+                  </Button>
+                )}
                 {conn.provider === 'evolution' && (
                   <>
                     <Button
