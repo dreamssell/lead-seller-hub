@@ -535,12 +535,31 @@ function useWLSettings() {
 }
 
 function DomainBrandSection() {
-  const { user } = useAuth();
+  const { user, access } = useAuth();
   const { settings, setSettings, save } = useWLSettings();
   const [copied, setCopied] = useState(false);
 
+  // Somente o dono da plataforma OU o titular/administrador desta conta pode alterar
+  // nome, logos e cor primária. Membros comuns e sub-empresas herdando da matriz
+  // ficam impedidos por UI (o banco também bloqueia via trigger protect_platform_branding).
+  const [isPlatformOwner, setIsPlatformOwner] = useState(false);
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' as any });
+      setIsPlatformOwner(data === true);
+    })();
+  }, [user?.id]);
+
+  const canEditBrand = isPlatformOwner || !!access?.is_account_admin;
+  const lockedTitle = 'Marca protegida: somente o dono da plataforma pode alterar o nome e as logos da Lead Seller.';
+
   const uploadLogo = async (field: 'logo_light_url' | 'logo_dark_url' | 'logo_icon_url', file: File) => {
     if (!user) return;
+    if (!canEditBrand) {
+      toast({ title: 'Ação bloqueada', description: lockedTitle, variant: 'destructive' });
+      return;
+    }
     const path = `${user.id}/${field}-${Date.now()}.${file.name.split('.').pop()}`;
     const { error } = await supabase.storage.from('company-logos').upload(path, file, { upsert: true });
     if (error) { toast({ title: 'Erro no upload', description: error.message, variant: 'destructive' }); return; }
