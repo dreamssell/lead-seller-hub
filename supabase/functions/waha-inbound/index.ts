@@ -109,6 +109,37 @@ Deno.serve(async (req) => {
   }
   const { event = 'message', payload = {} } = parsed.data;
   const providerMsgId = extractId(payload.id);
+  const isTest = (payload as any)?._test === true;
+
+  // Observability: log every event into connection_events so the UI can render
+  // a real-time feed (Realtime is enabled on this table). Best-effort — a
+  // logging failure must not break inbound.
+  try {
+    const statusForLog =
+      event === 'session.status'
+        ? String((payload as any)?.status || 'unknown').toLowerCase()
+        : event === 'message.ack' || event === 'ack'
+        ? `ack:${(payload as any)?.ack ?? '?'}`
+        : isTest ? 'test' : 'received';
+    await supabase.from('connection_events').insert({
+      connection_id: connectionId,
+      event_type: `waha.${event}`,
+      status: statusForLog,
+      status_detail: (payload as any)?.status ?? null,
+      payload: payload as any,
+      metadata_json: {
+        source: 'waha-inbound',
+        session: parsed.data.session ?? null,
+        connection_param: connectionId,
+        provider_msg_id: providerMsgId,
+        is_test: isTest,
+      },
+      test_event_id: isTest ? providerMsgId : null,
+    });
+  } catch (_) { /* swallow */ }
+
+  // Test events short-circuit: they exist only to prove the webhook wiring.
+  if (isTest) return json({ ok: true, test: true, id: providerMsgId });
 
   // Idempotency: same event id from same connection = no-op.
   if (providerMsgId) {
