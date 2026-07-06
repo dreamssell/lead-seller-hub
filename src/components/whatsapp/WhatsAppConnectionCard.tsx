@@ -77,6 +77,7 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
   const [showDebug, setShowDebug] = useState(false);
   const [debugInfo, setDebugInfo] = useState<{ url: string; headers: string[]; error: any } | null>(null);
   const [showWahaConfig, setShowWahaConfig] = useState(false);
+  const [showWahaMonitor, setShowWahaMonitor] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const handleDeleteConnection = async () => {
