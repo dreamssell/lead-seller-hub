@@ -182,6 +182,35 @@ Deno.serve(async (req) => {
 
     const headers = { "X-Api-Key": token, "Content-Type": "application/json" };
 
+    // ─── test_webhook ──────────────────────────────────────────────────────
+    // Fires a synthetic event at our own waha-inbound endpoint carrying the
+    // caller's connection token, so the UI can prove the ?connection= routing
+    // and X-Api-Key check are wired correctly for this specific connection.
+    if (action === "test_webhook") {
+      if (!connectionId) return json({ ok: false, error: "connection_id_required" });
+      const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+      const inboundUrl = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/waha-inbound?connection=${connectionId}`;
+      const testId = crypto.randomUUID();
+      const payload = {
+        event: "message",
+        session: sess,
+        payload: {
+          id: `test-${testId}`,
+          from: "0000000000@c.us",
+          body: `[teste ${new Date().toISOString()}] ping de webhook`,
+          timestamp: Math.floor(Date.now() / 1000),
+          _test: true,
+        },
+      };
+      const r = await fetch(inboundUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Api-Key": token },
+        body: JSON.stringify(payload),
+      });
+      const respText = await r.text();
+      return json({ ok: r.ok, status_code: r.status, test_event_id: testId, response: respText.slice(0, 500) });
+    }
+
     // ─── list_remote ───────────────────────────────────────────────────────
     if (action === "list_remote") {
       const res = await fetch(`${base}/api/sessions`, { headers });
