@@ -142,18 +142,33 @@ export default function CEODashboardPage() {
     })();
   }, []);
 
-  // Resolve context name (sub-empresa > empresa direta > display_name).
+  // Resolve context name (sub-empresa > empresa direta do dono > display_name > fallback confiável).
   useEffect(() => {
-    if (access?.sub_company_name) { setContextName(access.sub_company_name); return; }
-    if (!user?.id) return;
+    const trimmed = (access?.sub_company_name || '').trim();
+    if (trimmed) { setContextName(trimmed); return; }
+    if (!user?.id) { setContextName('Minha empresa'); return; }
     (async () => {
-      const { data } = await (supabase as any)
+      // 1) empresa cujo login é o próprio usuário
+      const { data: byAuth } = await (supabase as any)
         .from('client_companies')
         .select('name')
         .eq('auth_user_id', user.id)
         .maybeSingle();
-      if (data?.name) setContextName(data.name);
-      else setContextName(user.user_metadata?.display_name || user.email || '');
+      const n1 = (byAuth?.name || '').trim();
+      if (n1) { setContextName(n1); return; }
+      // 2) empresa cujo owner_id é o usuário (dono da plataforma sem auth vinculado)
+      const { data: byOwner } = await (supabase as any)
+        .from('client_companies')
+        .select('name')
+        .eq('owner_id', user.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      const n2 = (byOwner?.name || '').trim();
+      if (n2) { setContextName(n2); return; }
+      // 3) metadata / email / fallback
+      const meta = (user.user_metadata?.display_name || '').trim();
+      setContextName(meta || user.email || 'Minha empresa');
     })();
   }, [access?.sub_company_name, user?.id]);
 
