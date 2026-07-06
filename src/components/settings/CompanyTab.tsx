@@ -178,6 +178,20 @@ export default function CompanyTab() {
 
   return (
     <div className="space-y-6">
+      {!canEdit && (
+        <div
+          role="alert"
+          data-testid="company-locked-warning"
+          className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-700 dark:text-amber-400 flex items-start gap-2"
+        >
+          <ShieldCheck className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            <b>Dados da empresa matriz protegidos.</b> Apenas o titular desta conta (ou o dono da plataforma) pode alterar
+            o nome e a logo herdados. Você pode continuar personalizando sua própria foto de perfil na aba <b>Dados do Perfil</b>.
+          </span>
+        </div>
+      )}
+
       <motion.div
         className="glass-card p-6 flex items-center gap-6"
         initial={{ opacity: 0, y: 12 }}
@@ -192,9 +206,10 @@ export default function CompanyTab() {
             )}
           </div>
           <button
-            onClick={() => logoInputRef.current?.click()}
-            disabled={uploadingLogo}
-            className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-lg disabled:opacity-50"
+            onClick={() => canEdit && logoInputRef.current?.click()}
+            disabled={uploadingLogo || !canEdit}
+            title={canEdit ? 'Alterar logo' : 'Somente o titular da conta pode alterar a logo'}
+            className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {uploadingLogo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
           </button>
@@ -203,6 +218,7 @@ export default function CompanyTab() {
             type="file"
             accept="image/*"
             className="hidden"
+            disabled={!canEdit}
             onChange={(e) => e.target.files?.[0] && handleLogoUpload(e.target.files[0])}
           />
         </div>
@@ -211,6 +227,7 @@ export default function CompanyTab() {
           <p className="text-sm text-muted-foreground">{subCompanyId ? 'Sub-empresa' : 'Empresa Principal'}</p>
         </div>
       </motion.div>
+
 
       <motion.div
         className="glass-card p-6 space-y-4"
