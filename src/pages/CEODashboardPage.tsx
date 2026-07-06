@@ -108,8 +108,11 @@ export default function CEODashboardPage() {
   const [period, setPeriod] = useState<Period>('30d');
   const [exporting, setExporting] = useState(false);
   const [drill, setDrill] = useState<DrillType | null>(null);
+  const [contextName, setContextName] = useState<string>('');
   const dashboardRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { user, access } = useAuth();
+
 
   const focusCards = [
     { title: 'Captura de Leads', desc: 'Holmes, DealerSpace e demais canais', icon: Inbox, path: '/ceo/leads-capture', tint: 'from-primary/20' },
