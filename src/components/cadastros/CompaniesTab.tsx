@@ -386,11 +386,47 @@ export default function CompaniesTab() {
               )}
             </div>
 
+            <div className="md:col-span-2 border-t border-border/40 pt-4 mt-2">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-md bg-destructive/10 flex items-center justify-center">
+                  <ShieldOff className="w-3.5 h-3.5 text-destructive" />
+                </div>
+                <h4 className="text-sm font-semibold">Páginas bloqueadas</h4>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                Marque as funcionalidades que esta empresa <strong>NÃO</strong> poderá acessar. As alterações valem no próximo login e afetam todos os usuários da conta.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {BLOCKABLE_PAGES.map((p) => {
+                  const checked = (editing?.blocked_pages || []).includes(p.key);
+                  const toggle = () => setEditing((prev) => {
+                    if (!prev) return prev;
+                    const cur = prev.blocked_pages || [];
+                    const next = checked ? cur.filter((k) => k !== p.key) : [...cur, p.key];
+                    return { ...prev, blocked_pages: next };
+                  });
+                  return (
+                    <label
+                      key={p.key}
+                      className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-colors ${checked ? 'border-destructive/60 bg-destructive/5' : 'border-border hover:bg-muted/40'}`}
+                    >
+                      <input type="checkbox" checked={checked} onChange={toggle} className="mt-1" />
+                      <div>
+                        <p className="text-sm font-medium">{p.label}</p>
+                        <p className="text-xs text-muted-foreground">{p.desc}</p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="md:col-span-2">
               <Label>Notas internas</Label>
               <Textarea rows={3} value={editing?.notes || ''} onChange={(e) => setEditing((p) => ({ ...p!, notes: e.target.value }))} />
             </div>
           </div>
+
 
 
           <DialogFooter>
