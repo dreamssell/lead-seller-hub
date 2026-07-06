@@ -258,11 +258,26 @@ export default function TeamPage() {
       const isPipelineErr =
         surfaced.code === 'pipeline_required' ||
         /funil|pipeline/i.test(surfaced.message);
+      const isSeatErr = /plan_seat_limit_reached|limite/i.test(surfaced.message);
+      const isOwnerErr = /owner_protected/i.test(surfaced.message);
       if (isPipelineErr) {
         flashPipelineField();
         toast({
           title: '⚠ Selecione pelo menos 1 funil',
           description: `${surfaced.message} O campo "Funis atribuídos" foi destacado abaixo.`,
+          variant: 'destructive',
+        });
+      } else if (isSeatErr) {
+        toast({
+          title: 'Limite do plano atingido',
+          description: `Seu plano ${planName || ''} não tem mais assentos disponíveis. Remova um usuário ou solicite upgrade.`,
+          variant: 'destructive',
+        });
+        loadPlanLimit();
+      } else if (isOwnerErr) {
+        toast({
+          title: 'Ação bloqueada',
+          description: 'Somente o dono da plataforma pode alterar o titular da conta.',
           variant: 'destructive',
         });
       } else {
@@ -273,6 +288,7 @@ export default function TeamPage() {
     toast({ title: editing ? 'Membro atualizado' : 'Membro adicionado' });
     setDialogOpen(false);
     loadMembers();
+    loadPlanLimit();
   };
 
   const remove = async (m: Member) => {
