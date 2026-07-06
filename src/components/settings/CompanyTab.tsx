@@ -253,9 +253,11 @@ export default function CompanyTab() {
                 <input
                   type="text"
                   value={(form as any)[field.key]}
-                  disabled={loading}
-                  onChange={(e) => setForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                  className="bg-transparent text-sm outline-none flex-1 text-foreground"
+                  disabled={loading || !canEdit}
+                  readOnly={!canEdit}
+                  title={canEdit ? undefined : 'Somente o titular da conta pode alterar este campo'}
+                  onChange={(e) => canEdit && setForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                  className={`bg-transparent text-sm outline-none flex-1 text-foreground ${!canEdit ? 'cursor-not-allowed opacity-70' : ''}`}
                   placeholder={`Informe o ${field.label.toLowerCase()}`}
                 />
               </div>
