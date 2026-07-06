@@ -675,6 +675,7 @@ export type Database = {
         Row: {
           address: string | null
           auth_user_id: string | null
+          blocked_pages: string[]
           city: string | null
           created_at: string
           created_by: string | null
@@ -699,6 +700,7 @@ export type Database = {
         Insert: {
           address?: string | null
           auth_user_id?: string | null
+          blocked_pages?: string[]
           city?: string | null
           created_at?: string
           created_by?: string | null
@@ -723,6 +725,7 @@ export type Database = {
         Update: {
           address?: string | null
           auth_user_id?: string | null
+          blocked_pages?: string[]
           city?: string | null
           created_at?: string
           created_by?: string | null

@@ -113,7 +113,22 @@ Deno.serve(async (req) => {
       display_name: display_name ?? company.name,
     }, { onConflict: "user_id" });
 
+    // Ensure a user_account_access row exists so blocked_pages/status on the
+    // client_companies row take effect for this login. The row marks the login
+    // as the account titular (is_owner + is_account_admin) and the trigger
+    // "protect_account_owner" prevents non-platform admins from removing it.
+    await admin.from("user_account_access").upsert({
+      user_id: authUserId,
+      owner_id: authUserId,
+      sub_company_id: null,
+      allowed_pages: [] as string[],
+      is_account_admin: true,
+      is_owner: true,
+      created_by: caller.id,
+    }, { onConflict: "user_id,owner_id" });
+
     return json({ ok: true, auth_user_id: authUserId, login_email });
+
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }

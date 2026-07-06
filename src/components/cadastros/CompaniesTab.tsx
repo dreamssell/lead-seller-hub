@@ -12,8 +12,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Building2, Plus, Pencil, Trash2, Search, Mail, Phone, Globe, MapPin, FileText, Info } from 'lucide-react';
+import { Building2, Plus, Pencil, Trash2, Search, Mail, Phone, Globe, MapPin, FileText, Info, ShieldOff } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { BLOCKABLE_PAGES } from '@/lib/navigation';
+
 
 type Company = {
   id: string;
@@ -35,6 +37,7 @@ type Company = {
   login_email: string | null;
   auth_user_id: string | null;
   display_name: string | null;
+  blocked_pages: string[] | null;
   created_at: string;
 };
 
@@ -42,7 +45,9 @@ const EMPTY: Partial<Company> & { password?: string } = {
   name: '', document: '', email: '', phone: '', website: '',
   address: '', city: '', state: '', segment: '', plan_slug: 'basic',
   status: 'active', notes: '', login_email: '', password: '', display_name: '',
+  blocked_pages: [],
 };
+
 
 export default function CompaniesTab() {
   const { user, access } = useAuth();
@@ -101,7 +106,9 @@ export default function CompaniesTab() {
       status: editing.status || 'active',
       notes: editing.notes || null,
       display_name: editing.display_name || editing.name?.trim() || null,
+      blocked_pages: Array.isArray(editing.blocked_pages) ? editing.blocked_pages : [],
     };
+
     let companyId = editing.id as string | undefined;
     let error;
     let beforeRow: any = null;
@@ -379,11 +386,47 @@ export default function CompaniesTab() {
               )}
             </div>
 
+            <div className="md:col-span-2 border-t border-border/40 pt-4 mt-2">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-md bg-destructive/10 flex items-center justify-center">
+                  <ShieldOff className="w-3.5 h-3.5 text-destructive" />
+                </div>
+                <h4 className="text-sm font-semibold">Páginas bloqueadas</h4>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                Marque as funcionalidades que esta empresa <strong>NÃO</strong> poderá acessar. As alterações valem no próximo login e afetam todos os usuários da conta.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {BLOCKABLE_PAGES.map((p) => {
+                  const checked = (editing?.blocked_pages || []).includes(p.key);
+                  const toggle = () => setEditing((prev) => {
+                    if (!prev) return prev;
+                    const cur = prev.blocked_pages || [];
+                    const next = checked ? cur.filter((k) => k !== p.key) : [...cur, p.key];
+                    return { ...prev, blocked_pages: next };
+                  });
+                  return (
+                    <label
+                      key={p.key}
+                      className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-colors ${checked ? 'border-destructive/60 bg-destructive/5' : 'border-border hover:bg-muted/40'}`}
+                    >
+                      <input type="checkbox" checked={checked} onChange={toggle} className="mt-1" />
+                      <div>
+                        <p className="text-sm font-medium">{p.label}</p>
+                        <p className="text-xs text-muted-foreground">{p.desc}</p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="md:col-span-2">
               <Label>Notas internas</Label>
               <Textarea rows={3} value={editing?.notes || ''} onChange={(e) => setEditing((p) => ({ ...p!, notes: e.target.value }))} />
             </div>
           </div>
+
 
 
           <DialogFooter>
