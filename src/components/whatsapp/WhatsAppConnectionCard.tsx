@@ -498,12 +498,19 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
         />
       )}
       {conn.provider === 'waha' && (
-        <WahaConfigDialog
-          open={showWahaConfig}
-          onOpenChange={setShowWahaConfig}
-          conn={conn}
-          onSaved={onSaved}
-        />
+        <>
+          <WahaConfigDialog
+            open={showWahaConfig}
+            onOpenChange={setShowWahaConfig}
+            conn={conn}
+            onSaved={onSaved}
+          />
+          <WahaMonitorDialog
+            open={showWahaMonitor}
+            onOpenChange={setShowWahaMonitor}
+            conn={conn}
+          />
+        </>
       )}
 
     </Card>
