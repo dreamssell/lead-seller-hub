@@ -74,6 +74,14 @@ export default function CompanyTab() {
   }, [subCompanyId]);
 
   const handleLogoUpload = async (file: File) => {
+    if (!canEdit) {
+      toast({
+        title: 'Ação bloqueada',
+        description: 'Somente o titular da conta ou o dono da plataforma pode alterar a logo da empresa matriz.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setUploadingLogo(true);
     const ext = file.name.split('.').pop();
     const path = `company/${Date.now()}.${ext}`;
