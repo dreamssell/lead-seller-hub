@@ -88,6 +88,60 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
     toast.success(`${label} copiado`);
   };
 
+  const runSessionAction = async (
+    action: 'create' | 'delete' | 'logout' | 'list_remote',
+    confirmMsg?: string,
+  ) => {
+    if (!cfg.url || !cfg.token) return toast.error('Preencha URL e API Key antes.');
+    if ((action === 'create' || action === 'delete') && !cfg.session)
+      return toast.error('Informe o Session Name antes.');
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+
+    const key = action === 'list_remote' ? 'list' : (action as 'create' | 'delete' | 'logout');
+    setBusyAction(key);
+    const toastId = toast.loading(
+      action === 'create' ? 'Criando sessão no servidor WAHA…'
+      : action === 'delete' ? 'Excluindo sessão do servidor WAHA…'
+      : action === 'logout' ? 'Encerrando sessão do dispositivo…'
+      : 'Listando sessões remotas…',
+    );
+    try {
+      const { data, error } = await supabase.functions.invoke('waha-session', {
+        body: {
+          action,
+          connection_id: conn.id,
+          url: cfg.url,
+          token: cfg.token,
+          session: cfg.session,
+        },
+      });
+      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'Falha WAHA');
+
+      if (action === 'list_remote') {
+        const arr = Array.isArray(data.sessions) ? data.sessions : [];
+        setRemoteSessions(arr);
+        toast.success(`${arr.length} sessão(ões) encontradas`, { id: toastId });
+      } else if (action === 'create') {
+        toast.success('Sessão criada no servidor WAHA', {
+          id: toastId,
+          description: 'Webhook já configurado. Escaneie o QR para autenticar.',
+        });
+        onSaved();
+      } else if (action === 'delete') {
+        toast.success('Sessão removida do servidor WAHA', { id: toastId });
+        onSaved();
+      } else {
+        toast.success('Dispositivo desconectado', { id: toastId });
+        onSaved();
+      }
+    } catch (e: any) {
+      toast.error('Falha WAHA', { id: toastId, description: e?.message ?? String(e) });
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
