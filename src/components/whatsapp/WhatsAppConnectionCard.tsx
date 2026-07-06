@@ -27,6 +27,7 @@ import { EvolutionStatusBanner } from './EvolutionStatusBanner';
 import { EvolutionDebugPanel } from './EvolutionDebugPanel';
 import { EvolutionWebhookAlert } from './EvolutionWebhookAlert';
 import { WahaConfigDialog } from './WahaConfigDialog';
+import { WahaLiveBadge } from './WahaLiveBadge';
 import { Settings2 } from 'lucide-react';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
