@@ -37,6 +37,7 @@ type Company = {
   login_email: string | null;
   auth_user_id: string | null;
   display_name: string | null;
+  blocked_pages: string[] | null;
   created_at: string;
 };
 
@@ -44,7 +45,9 @@ const EMPTY: Partial<Company> & { password?: string } = {
   name: '', document: '', email: '', phone: '', website: '',
   address: '', city: '', state: '', segment: '', plan_slug: 'basic',
   status: 'active', notes: '', login_email: '', password: '', display_name: '',
+  blocked_pages: [],
 };
+
 
 export default function CompaniesTab() {
   const { user, access } = useAuth();
