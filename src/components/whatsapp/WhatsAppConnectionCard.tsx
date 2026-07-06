@@ -30,6 +30,7 @@ import { WahaConfigDialog } from './WahaConfigDialog';
 import { WahaLiveBadge } from './WahaLiveBadge';
 import { WahaQrCard } from './WahaQrCard';
 import { WahaRestartButton } from './WahaRestartButton';
+import { WahaMonitorDialog } from './WahaMonitorDialog';
 import { Settings2 } from 'lucide-react';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
