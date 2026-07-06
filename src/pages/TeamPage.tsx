@@ -108,19 +108,20 @@ export default function TeamPage() {
 
   const loadPlanLimit = async () => {
     if (isOwner) { setMaxUsers(null); setPlanName('Ilimitado (Dono)'); return; }
-    let planSlug: string | null = null;
-    if (scopeSubId) {
-      const { data } = await supabase.from('sub_companies').select('plan_slug').eq('id', scopeSubId).maybeSingle();
-      planSlug = data?.plan_slug ?? null;
-    } else if (user?.id) {
-      const { data } = await supabase.from('client_companies').select('plan_slug').eq('owner_id', user.id).limit(1).maybeSingle();
-      planSlug = data?.plan_slug ?? null;
-    }
-    if (!planSlug) { setMaxUsers(null); setPlanName('Ilimitado'); return; }
+    const ownerId = access?.owner_id ?? user?.id ?? null;
+    if (!ownerId) { setMaxUsers(null); setPlanName('Ilimitado'); return; }
+    // Fonte da verdade: RPC no banco (mesma regra usada pelo trigger de bloqueio).
+    const { data: usage } = await (supabase as any).rpc('get_member_seat_usage', {
+      p_owner_id: ownerId,
+      p_sub_company_id: scopeSubId,
+    });
+    const row = Array.isArray(usage) ? usage[0] : usage;
+    const slug: string | null = row?.plan_slug ?? null;
+    setMaxUsers(row?.max_users ?? null);
+    if (!slug) { setPlanName('Ilimitado'); return; }
     const { data: plan } = await supabase
-      .from('plan_packages').select('name, max_users').eq('slug', planSlug).maybeSingle();
-    setMaxUsers(plan?.max_users ?? null);
-    setPlanName(plan?.name ?? planSlug);
+      .from('plan_packages').select('name').eq('slug', slug).maybeSingle();
+    setPlanName(plan?.name ?? slug);
   };
 
   const loadAudit = async () => {
