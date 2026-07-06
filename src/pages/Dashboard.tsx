@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { AgentDashboard } from '@/components/dashboard/AgentDashboard';
 import { ManagerDashboard } from '@/components/dashboard/ManagerDashboard';
 import { ExecutiveDashboard } from '@/components/dashboard/ExecutiveDashboard';
+import CEODashboardPage from '@/pages/CEODashboardPage';
 import { useUserProfileLevel } from '@/hooks/useUserProfileLevel';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 
 export default function Dashboard() {
   const { level, loading } = useUserProfileLevel();
-  const { user, canAccessPage } = useAuth();
+  const { user } = useAuth();
   const [isOwner, setIsOwner] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -34,9 +34,10 @@ export default function Dashboard() {
     executive: 'Visão executiva completa da operação',
   };
 
-  // Donos de Empresa/Sub-empresa abrem direto no Dashboard CEO
-  if (isOwner && canAccessPage('ceo')) {
-    return <Navigate to="/ceo" replace />;
+  // Donos de Empresa/Sub-empresa veem o Dashboard CEO completo diretamente
+  // na página inicial (sem menu separado "Dashboard CEO").
+  if (isOwner) {
+    return <CEODashboardPage />;
   }
 
   return (

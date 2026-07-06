@@ -73,7 +73,7 @@ export const navSections: { label: string; items: SidebarNavItem[] }[] = [
       { key: 'reports', icon: BarChart3, label: 'Relatórios', path: '/reports', desc: 'Métricas, analytics e relatórios' },
       { key: 'pipeline', icon: FileText, label: 'Kanban / Pipeline', path: '/pipeline', desc: 'Pipeline comercial e oportunidades' },
       { key: 'signatures', icon: PenLine, label: 'Assinaturas', path: '/signatures', desc: 'Documentos, acompanhamento e equipe de assinatura' },
-      { key: 'ceo', icon: Crown, label: 'Dashboard CEO', path: '/ceo', desc: 'Indicadores executivos' },
+      
       { key: 'outros', icon: Link2, label: 'Captura de Leads', path: '/outros', desc: 'Páginas de captura, CTAs e QR Codes (DealerSpace e canais externos)' },
     ],
   },
