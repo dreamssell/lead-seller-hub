@@ -142,6 +142,22 @@ export default function CEODashboardPage() {
     })();
   }, []);
 
+  // Resolve context name (sub-empresa > empresa direta > display_name).
+  useEffect(() => {
+    if (access?.sub_company_name) { setContextName(access.sub_company_name); return; }
+    if (!user?.id) return;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('client_companies')
+        .select('name')
+        .eq('auth_user_id', user.id)
+        .maybeSingle();
+      if (data?.name) setContextName(data.name);
+      else setContextName(user.user_metadata?.display_name || user.email || '');
+    })();
+  }, [access?.sub_company_name, user?.id]);
+
+
   // Filter by selected period (created_at)
   const startDate = periodStart(period);
   const inPeriod = (row: any) => !startDate || new Date(row.created_at) >= startDate;
