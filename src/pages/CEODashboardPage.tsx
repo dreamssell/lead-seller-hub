@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { CeoBreadcrumb } from '@/components/dashboard/CeoBreadcrumb';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
