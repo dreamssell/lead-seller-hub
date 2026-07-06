@@ -29,6 +29,8 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
   const [cfg, setCfg] = useState<WahaConfig>(initial);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [busyAction, setBusyAction] = useState<null | 'create' | 'delete' | 'logout' | 'list'>(null);
+  const [remoteSessions, setRemoteSessions] = useState<any[] | null>(null);
 
   const functionsBase = (import.meta as any).env?.VITE_SUPABASE_URL
     ? `${(import.meta as any).env.VITE_SUPABASE_URL.replace(/\/$/, '')}/functions/v1`
