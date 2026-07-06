@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Copy, Loader2, ExternalLink, Wifi } from 'lucide-react';
+import { Copy, Loader2, ExternalLink, Wifi, PlusCircle, Trash2, LogOut, ListRestart } from 'lucide-react';
 import { WahaConfigSchema, readWahaConfig, buildWahaWebhookUrl, type WahaConfig } from './wahaConfig';
 import type { WhatsAppConnection } from './types';
 
