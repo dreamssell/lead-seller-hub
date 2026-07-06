@@ -259,9 +259,12 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
             data-status={conn.status}
             className="rounded-lg border border-teal-500/20 bg-teal-500/5 p-3 text-xs space-y-2"
           >
-            <p className="font-bold uppercase text-teal-600 tracking-wider text-[10px] flex items-center gap-1">
-              <Activity className="w-3 h-3" /> WAHA · Status detalhado
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-bold uppercase text-teal-600 tracking-wider text-[10px] flex items-center gap-1">
+                <Activity className="w-3 h-3" /> WAHA · Status detalhado
+              </p>
+              <WahaLiveBadge conn={conn} />
+            </div>
             <ul className="grid grid-cols-2 gap-1 text-[11px] text-muted-foreground">
               <li className="flex items-center gap-1">
                 <span className={`w-1.5 h-1.5 rounded-full ${conn.status === 'connecting' ? 'bg-amber-500 animate-pulse' : 'bg-muted'}`} />
