@@ -4871,6 +4871,7 @@ export type Database = {
         Returns: string
       }
       calculate_next_retry: { Args: { retry_count: number }; Returns: string }
+      can_current_user_access: { Args: { _page: string }; Returns: boolean }
       can_user_manage_pipelines: {
         Args: { p_owner_id: string; p_sub_company_id: string }
         Returns: boolean
@@ -4891,6 +4892,7 @@ export type Database = {
           webhook_id: string
         }[]
       }
+      current_user_blocked_pages: { Args: never; Returns: string[] }
       generate_sub_login_token: {
         Args: { p_hours?: number; p_label?: string; p_sub_company_id: string }
         Returns: {

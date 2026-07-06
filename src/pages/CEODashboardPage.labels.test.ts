@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const src = readFileSync(resolve(__dirname, '../pages/CEODashboardPage.tsx'), 'utf8');
+const breadcrumbSrc = readFileSync(resolve(__dirname, '../components/dashboard/CeoBreadcrumb.tsx'), 'utf8');
 const navSrc = readFileSync(resolve(__dirname, '../lib/navigation.ts'), 'utf8');
 const dashSrc = readFileSync(resolve(__dirname, '../pages/Dashboard.tsx'), 'utf8');
 
@@ -19,8 +20,8 @@ describe('CEO Home · textos do dono', () => {
     expect(src).toMatch(/title="Performance da Empresa"/);
   });
 
-  it('mostra o indicador "Painel executivo completo"', () => {
-    expect(src).toMatch(/Painel executivo completo/);
+  it('mostra o indicador "Painel executivo completo" (via CeoBreadcrumb)', () => {
+    expect(breadcrumbSrc).toMatch(/Painel executivo completo/);
   });
 
   it('inclui a seção "Acompanhar leads por estágio"', () => {
