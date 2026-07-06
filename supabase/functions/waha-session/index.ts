@@ -260,6 +260,7 @@ Deno.serve(async (req) => {
           status: "connecting",
         }).eq("id", conn.id);
       }
+      await logEvent("create", res.ok ? "success" : "failed", { status_code: res.status, session: sess });
       return json({ ok: res.ok, status_code: res.status, session: sess, raw: data });
     }
 
