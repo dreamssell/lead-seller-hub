@@ -1,12 +1,15 @@
-import { Building2, Mail, Phone, Globe, FileText, MapPin, Save, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Building2, Mail, Phone, Globe, FileText, MapPin, Save, Loader2, Image as ImageIcon, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
 export default function CompanyTab() {
   const { access } = useAuth();
+  const { isOwner: isPlatformOwner } = usePlatformOwner();
+  const canEdit = isPlatformOwner || !!access?.is_account_admin;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
