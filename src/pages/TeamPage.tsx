@@ -210,6 +210,14 @@ export default function TeamPage() {
   const save = async () => {
     if (!form.display_name.trim()) { toast({ title: 'Informe o nome', variant: 'destructive' }); return; }
     if (!editing) {
+      if (limitReached && !unlimited) {
+        toast({
+          title: 'Limite do plano atingido',
+          description: `Seu plano ${planName} permite ${maxUsers} usuário(s). Remova alguém ou solicite upgrade antes de adicionar.`,
+          variant: 'destructive',
+        });
+        return;
+      }
       if (!form.email.trim() || !form.password || form.password.length < 6) {
         toast({ title: 'E-mail e senha (mín. 6) obrigatórios', variant: 'destructive' });
         return;
