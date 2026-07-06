@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { 
   CheckCircle2, Loader2, Plug, RefreshCw, XCircle, 
   Activity, AlertCircle, FileSpreadsheet, Eye, History,
-  Bug, Terminal, AlertOctagon, Phone, ShieldCheck, QrCode
+  Bug, Terminal, AlertOctagon, Phone, ShieldCheck, QrCode, Trash2
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -76,6 +76,20 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
   const [showDebug, setShowDebug] = useState(false);
   const [debugInfo, setDebugInfo] = useState<{ url: string; headers: string[]; error: any } | null>(null);
   const [showWahaConfig, setShowWahaConfig] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteConnection = async () => {
+    const msg = conn.provider === 'waha'
+      ? `Excluir a conexão "${conn.display_name}"?\n\nIsto remove APENAS a conexão do Lead Seller.\nA sessão no servidor WAHA continua ativa — para removê-la também, use "Excluir sessão remota" em "Configuração completa" antes.`
+      : `Excluir a conexão "${conn.display_name}"? Esta ação é irreversível.`;
+    if (!window.confirm(msg)) return;
+    setDeleting(true);
+    const { error } = await supabase.from('whatsapp_connections').delete().eq('id', conn.id);
+    setDeleting(false);
+    if (error) return toast.error('Falha ao excluir', { description: error.message });
+    toast.success('Conexão excluída');
+    onSaved();
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -226,7 +240,19 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
               </CardDescription>
             </div>
           </div>
-          {statusBadge(conn.status)}
+          <div className="flex items-center gap-2">
+            {statusBadge(conn.status)}
+            <Button
+              variant="ghost" size="sm"
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+              onClick={handleDeleteConnection}
+              disabled={deleting}
+              title="Excluir conexão"
+              data-testid="delete-connection-button"
+            >
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       

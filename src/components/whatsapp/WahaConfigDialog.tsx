@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Copy, Loader2, ExternalLink, Wifi } from 'lucide-react';
+import { Copy, Loader2, ExternalLink, Wifi, PlusCircle, Trash2, LogOut, ListRestart } from 'lucide-react';
 import { WahaConfigSchema, readWahaConfig, buildWahaWebhookUrl, type WahaConfig } from './wahaConfig';
 import type { WhatsAppConnection } from './types';
 
@@ -29,6 +29,8 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
   const [cfg, setCfg] = useState<WahaConfig>(initial);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [busyAction, setBusyAction] = useState<null | 'create' | 'delete' | 'logout' | 'list'>(null);
+  const [remoteSessions, setRemoteSessions] = useState<any[] | null>(null);
 
   const functionsBase = (import.meta as any).env?.VITE_SUPABASE_URL
     ? `${(import.meta as any).env.VITE_SUPABASE_URL.replace(/\/$/, '')}/functions/v1`
@@ -85,6 +87,60 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
     await navigator.clipboard.writeText(text);
     toast.success(`${label} copiado`);
   };
+
+  const runSessionAction = async (
+    action: 'create' | 'delete' | 'logout' | 'list_remote',
+    confirmMsg?: string,
+  ) => {
+    if (!cfg.url || !cfg.token) return toast.error('Preencha URL e API Key antes.');
+    if ((action === 'create' || action === 'delete') && !cfg.session)
+      return toast.error('Informe o Session Name antes.');
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+
+    const key = action === 'list_remote' ? 'list' : (action as 'create' | 'delete' | 'logout');
+    setBusyAction(key);
+    const toastId = toast.loading(
+      action === 'create' ? 'Criando sessão no servidor WAHA…'
+      : action === 'delete' ? 'Excluindo sessão do servidor WAHA…'
+      : action === 'logout' ? 'Encerrando sessão do dispositivo…'
+      : 'Listando sessões remotas…',
+    );
+    try {
+      const { data, error } = await supabase.functions.invoke('waha-session', {
+        body: {
+          action,
+          connection_id: conn.id,
+          url: cfg.url,
+          token: cfg.token,
+          session: cfg.session,
+        },
+      });
+      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'Falha WAHA');
+
+      if (action === 'list_remote') {
+        const arr = Array.isArray(data.sessions) ? data.sessions : [];
+        setRemoteSessions(arr);
+        toast.success(`${arr.length} sessão(ões) encontradas`, { id: toastId });
+      } else if (action === 'create') {
+        toast.success('Sessão criada no servidor WAHA', {
+          id: toastId,
+          description: 'Webhook já configurado. Escaneie o QR para autenticar.',
+        });
+        onSaved();
+      } else if (action === 'delete') {
+        toast.success('Sessão removida do servidor WAHA', { id: toastId });
+        onSaved();
+      } else {
+        toast.success('Dispositivo desconectado', { id: toastId });
+        onSaved();
+      }
+    } catch (e: any) {
+      toast.error('Falha WAHA', { id: toastId, description: e?.message ?? String(e) });
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -208,6 +264,71 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
                 placeholder={`chatwoot.to.whatsapp.message.text: |-\n  {{#chatwoot.sender.name}}*{{{chatwoot.sender.name}}}*:\n  {{/chatwoot.sender.name}}{{{ content }}}`}
               />
             </Field>
+          </section>
+
+          <Separator />
+
+          {/* Session lifecycle on the WAHA server (multi-tenant) */}
+          <section className="space-y-3">
+            <h4 className="text-xs font-bold uppercase text-muted-foreground">Sessão no servidor WAHA</h4>
+            <p className="text-[11px] text-muted-foreground">
+              Gerencia a sessão <code>{cfg.session || '(vazia)'}</code> diretamente no servidor WAHA desta empresa/sub-empresa.
+              Cada conexão é isolada por tenant.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm" variant="secondary"
+                disabled={busyAction !== null}
+                onClick={() => runSessionAction('create')}
+                className="gap-1"
+              >
+                {busyAction === 'create' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlusCircle className="w-3.5 h-3.5" />}
+                Criar sessão no WAHA
+              </Button>
+              <Button
+                size="sm" variant="outline"
+                disabled={busyAction !== null}
+                onClick={() => runSessionAction('logout', 'Encerrar a sessão do dispositivo autenticado? Será necessário escanear o QR novamente.')}
+                className="gap-1"
+              >
+                {busyAction === 'logout' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+                Logout do dispositivo
+              </Button>
+              <Button
+                size="sm" variant="outline"
+                disabled={busyAction !== null}
+                onClick={() => runSessionAction('list_remote')}
+                className="gap-1"
+              >
+                {busyAction === 'list' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ListRestart className="w-3.5 h-3.5" />}
+                Listar sessões remotas
+              </Button>
+              <Button
+                size="sm" variant="destructive"
+                disabled={busyAction !== null}
+                onClick={() => runSessionAction('delete', `Excluir a sessão "${cfg.session}" do servidor WAHA? Esta ação é irreversível.`)}
+                className="gap-1"
+              >
+                {busyAction === 'delete' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                Excluir sessão remota
+              </Button>
+            </div>
+            {remoteSessions && (
+              <div className="rounded-md border border-border/60 bg-secondary/30 p-2 max-h-40 overflow-auto">
+                <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">
+                  Sessões no servidor ({remoteSessions.length})
+                </p>
+                <ul className="text-[11px] font-mono space-y-1">
+                  {remoteSessions.length === 0 && <li className="text-muted-foreground">— nenhuma sessão —</li>}
+                  {remoteSessions.map((s, i) => (
+                    <li key={i} className="flex items-center justify-between gap-2">
+                      <span>{s?.name ?? s?.session ?? JSON.stringify(s)}</span>
+                      <span className="text-[10px] uppercase text-muted-foreground">{s?.status ?? ''}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
         </div>
 
