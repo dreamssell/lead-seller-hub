@@ -1401,6 +1401,57 @@ export type Database = {
           },
         ]
       }
+      error_reports: {
+        Row: {
+          component_stack: string | null
+          created_at: string
+          id: string
+          message: string
+          metadata: Json
+          owner_id: string | null
+          path: string | null
+          route: string | null
+          severity: string
+          source: string
+          stack: string | null
+          sub_company_id: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          component_stack?: string | null
+          created_at?: string
+          id?: string
+          message: string
+          metadata?: Json
+          owner_id?: string | null
+          path?: string | null
+          route?: string | null
+          severity?: string
+          source?: string
+          stack?: string | null
+          sub_company_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          component_stack?: string | null
+          created_at?: string
+          id?: string
+          message?: string
+          metadata?: Json
+          owner_id?: string | null
+          path?: string | null
+          route?: string | null
+          severity?: string
+          source?: string
+          stack?: string | null
+          sub_company_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       evolution_import_runs: {
         Row: {
           congruence: string | null
