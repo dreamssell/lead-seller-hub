@@ -54,8 +54,22 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const action = (body?.action ?? "status") as
-      | "status" | "qr" | "restart" | "logout" | "create" | "delete" | "list_remote";
+      | "status" | "qr" | "restart" | "logout" | "create" | "delete"
+      | "list_remote" | "test_webhook" | "cleanup_scan";
     const connectionId: string | undefined = body?.connection_id;
+
+    const logEvent = async (evType: string, status: string, extra: Record<string, unknown> = {}) => {
+      if (!connectionId) return;
+      try {
+        await supabaseAdmin.from("connection_events").insert({
+          connection_id: connectionId,
+          event_type: `waha.action.${evType}`,
+          status,
+          payload: extra as any,
+          metadata_json: { source: "waha-session", actor: null },
+        });
+      } catch (_) { /* best effort */ }
+    };
 
     let url: string | undefined = body?.url;
     let token: string | undefined = body?.token;
@@ -112,10 +126,90 @@ Deno.serve(async (req) => {
 
     const base = normalizeUrl(url);
     const sess = (session || "default").trim();
+
+    // ─── cleanup_scan (no url/token required) ───────────────────────────────
+    // Lists WAHA connections the caller can see that have been disconnected/error
+    // for at least `days` days (default 14). The UI decides whether to purge.
+    if (action === "cleanup_scan") {
+      const days = Math.max(1, Math.min(90, Number(body?.days ?? 14)));
+      const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+      const { data: rows } = await supabaseAdmin
+        .from("whatsapp_connections")
+        .select("id, display_name, status, updated_at, last_checked_at, metadata, owner_id, sub_company_id")
+        .eq("provider", "waha")
+        .in("status", ["disconnected", "error"])
+        .lt("updated_at", cutoff);
+
+      let visible = rows ?? [];
+      if (callerId) {
+        // Global admin bypasses filter.
+        const { data: roles } = await supabaseAdmin
+          .from("user_roles").select("role").eq("user_id", callerId).eq("role", "admin");
+        if (!roles?.length) {
+          const { data: access } = await supabaseAdmin
+            .from("user_account_access")
+            .select("owner_id, sub_company_id, is_account_admin")
+            .eq("user_id", callerId);
+          visible = visible.filter((c: any) =>
+            c.owner_id === callerId
+            || (access ?? []).some((a: any) =>
+              a.is_account_admin
+              && a.owner_id === c.owner_id
+              && (a.sub_company_id === null || a.sub_company_id === c.sub_company_id)
+            )
+          );
+        }
+      }
+
+      const candidates = visible.map((c: any) => {
+        const lastSeen = c.last_checked_at ?? c.updated_at;
+        const idleDays = Math.floor((Date.now() - new Date(lastSeen).getTime()) / 86_400_000);
+        const recommendation =
+          idleDays >= days * 2 ? "delete_remote"
+          : idleDays >= days ? "review"
+          : "keep";
+        return {
+          id: c.id, display_name: c.display_name, status: c.status,
+          session: c.metadata?.session ?? null, url: c.metadata?.url ?? null,
+          last_seen_at: lastSeen, idle_days: idleDays, recommendation,
+        };
+      });
+      return json({ ok: true, threshold_days: days, candidates });
+    }
+
     if (!base) return json({ ok: false, error: "WAHA URL ausente" });
     if (!token) return json({ ok: false, error: "WAHA token ausente" });
 
     const headers = { "X-Api-Key": token, "Content-Type": "application/json" };
+
+    // ─── test_webhook ──────────────────────────────────────────────────────
+    // Fires a synthetic event at our own waha-inbound endpoint carrying the
+    // caller's connection token, so the UI can prove the ?connection= routing
+    // and X-Api-Key check are wired correctly for this specific connection.
+    if (action === "test_webhook") {
+      if (!connectionId) return json({ ok: false, error: "connection_id_required" });
+      const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+      const inboundUrl = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/waha-inbound?connection=${connectionId}`;
+      const testId = crypto.randomUUID();
+      const payload = {
+        event: "message",
+        session: sess,
+        payload: {
+          id: `test-${testId}`,
+          from: "0000000000@c.us",
+          body: `[teste ${new Date().toISOString()}] ping de webhook`,
+          timestamp: Math.floor(Date.now() / 1000),
+          _test: true,
+        },
+      };
+      const r = await fetch(inboundUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Api-Key": token },
+        body: JSON.stringify(payload),
+      });
+      const respText = await r.text();
+      return json({ ok: r.ok, status_code: r.status, test_event_id: testId, response: respText.slice(0, 500) });
+    }
 
     // ─── list_remote ───────────────────────────────────────────────────────
     if (action === "list_remote") {
@@ -166,6 +260,7 @@ Deno.serve(async (req) => {
           status: "connecting",
         }).eq("id", conn.id);
       }
+      await logEvent("create", res.ok ? "success" : "failed", { status_code: res.status, session: sess });
       return json({ ok: res.ok, status_code: res.status, session: sess, raw: data });
     }
 
@@ -183,6 +278,7 @@ Deno.serve(async (req) => {
           metadata: { ...(conn.metadata ?? {}), session: null },
         }).eq("id", conn.id);
       }
+      await logEvent("delete", res.ok || res.status === 404 ? "success" : "failed", { status_code: res.status, session: sess });
       return json({ ok: res.ok || res.status === 404, status_code: res.status, raw: data });
     }
 
@@ -194,6 +290,7 @@ Deno.serve(async (req) => {
       const text = await res.text();
       let data: any = {};
       try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+      await logEvent("logout", res.ok ? "success" : "failed", { status_code: res.status });
       return json({ ok: res.ok, status_code: res.status, raw: data });
     }
 
@@ -208,6 +305,7 @@ Deno.serve(async (req) => {
       const startText = await startRes.text();
       let startData: any = {};
       try { startData = startText ? JSON.parse(startText) : {}; } catch { /* keep */ }
+      await logEvent("restart", startRes.ok ? "success" : "failed", { status: startData?.status ?? "UNKNOWN" });
       return json({
         ok: startRes.ok, action: "restart",
         status: startData?.status ?? "UNKNOWN", raw: startData,
