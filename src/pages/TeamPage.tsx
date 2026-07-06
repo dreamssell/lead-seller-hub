@@ -467,6 +467,33 @@ export default function TeamPage() {
             <DialogDescription>
               {editing ? 'Atualize os dados de acesso deste colaborador.' : 'Crie um novo acesso à plataforma.'}
             </DialogDescription>
+            {!editing && (() => {
+              const nearing = !unlimited && maxUsers != null && total >= Math.max(1, Math.ceil(maxUsers * 0.8));
+              const remaining = unlimited ? null : Math.max(0, (maxUsers ?? 0) - total);
+              const tone = limitReached
+                ? 'bg-destructive/10 text-destructive border-destructive/30'
+                : nearing
+                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                : 'bg-primary/10 text-primary border-primary/30';
+              return (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  data-testid="seat-usage-badge"
+                  className={`mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium w-fit ${tone}`}
+                >
+                  {unlimited ? (
+                    <><InfinityIcon className="w-3.5 h-3.5" /> Assentos ilimitados · Plano {planName || '—'}</>
+                  ) : limitReached ? (
+                    <>⛔ Limite atingido: {total}/{maxUsers} · Plano {planName}</>
+                  ) : nearing ? (
+                    <>⚠ Restam {remaining} assento(s) · {total}/{maxUsers} · Plano {planName}</>
+                  ) : (
+                    <>{remaining} assento(s) disponíveis · {total}/{maxUsers} · Plano {planName}</>
+                  )}
+                </div>
+              );
+            })()}
           </DialogHeader>
 
           <div className="space-y-3">
