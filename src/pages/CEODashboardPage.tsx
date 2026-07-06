@@ -334,6 +334,28 @@ export default function CEODashboardPage() {
   return (
     <AppLayout title="Performance da Empresa" subtitle="Visão estratégica para a liderança — dados em tempo real do ecossistema">
       <div className="space-y-6">
+        {/* Breadcrumbs + contexto */}
+        <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+          >
+            <Home className="w-3.5 h-3.5" /> Início
+          </button>
+          <ChevronRight className="w-3.5 h-3.5 opacity-60" />
+          <span className="text-foreground font-medium">Performance da Empresa</span>
+          {contextName && (
+            <>
+              <ChevronRight className="w-3.5 h-3.5 opacity-60" />
+              <span className="truncate max-w-[240px]" title={contextName}>{contextName}</span>
+            </>
+          )}
+          <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-[11px] font-medium text-primary">
+            <Crown className="w-3 h-3" /> Painel executivo completo
+          </span>
+        </nav>
+
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -358,7 +380,8 @@ export default function CEODashboardPage() {
           <div className="glass-card p-6 bg-gradient-to-br from-primary/10 via-transparent to-accent/10">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <Badge variant="outline" className="mb-2">Central de Inteligência do CEO</Badge>
+                <Badge variant="outline" className="mb-2">Painel Executivo da Empresa</Badge>
+
                 <h2 className="text-2xl font-bold">Performance da Empresa</h2>
                 <p className="text-sm text-muted-foreground mt-1">
                   Período: <span className="font-medium text-foreground">{PERIOD_LABELS[period]}</span>
