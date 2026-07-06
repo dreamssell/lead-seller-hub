@@ -569,7 +569,7 @@ function DomainBrandSection() {
   };
 
   const LogoCard = ({ field, title, where, hint }: any) => (
-    <div className="rounded-2xl border border-border bg-card/40 p-4">
+    <div className={`rounded-2xl border border-border bg-card/40 p-4 ${!canEditBrand ? 'opacity-70' : ''}`}>
       <div className="aspect-[2/1] rounded-xl bg-secondary/60 flex items-center justify-center mb-3 overflow-hidden">
         {settings[field as keyof WLSettings] ? (
           <img src={settings[field as keyof WLSettings] as string} alt="" className="max-h-full max-w-full object-contain" />
@@ -580,11 +580,22 @@ function DomainBrandSection() {
       <p className="text-sm font-medium">{title}</p>
       <p className="text-xs text-muted-foreground mt-1"><span className="font-medium text-foreground">Onde aparece:</span> {where}</p>
       <p className="text-xs text-muted-foreground mt-1"><span className="font-medium text-foreground">Dica:</span> {hint}</p>
-      <label className="mt-3 inline-flex items-center justify-center gap-2 w-full rounded-lg border border-border bg-background hover:bg-accent text-sm py-2 cursor-pointer">
+      <label
+        className={`mt-3 inline-flex items-center justify-center gap-2 w-full rounded-lg border border-border text-sm py-2 ${
+          canEditBrand ? 'bg-background hover:bg-accent cursor-pointer' : 'bg-muted cursor-not-allowed'
+        }`}
+        title={canEditBrand ? undefined : lockedTitle}
+      >
         <Upload className="w-4 h-4" />{settings[field as keyof WLSettings] ? 'Trocar' : 'Enviar'}
-        <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && uploadLogo(field, e.target.files[0])} />
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          disabled={!canEditBrand}
+          onChange={e => e.target.files?.[0] && uploadLogo(field, e.target.files[0])}
+        />
       </label>
-      {settings[field as keyof WLSettings] && (
+      {settings[field as keyof WLSettings] && canEditBrand && (
         <button onClick={async () => { setSettings({ ...settings, [field]: null }); await save({ [field]: null } as any); }} className="mt-2 text-xs text-destructive w-full text-center">Remover</button>
       )}
     </div>
@@ -598,9 +609,30 @@ function DomainBrandSection() {
           <p className="text-xs text-muted-foreground">Conecte seu próprio domínio (ex: app.suaempresa.com), configure logo, nome e cor primária.</p>
         </div>
 
+        {!canEditBrand && (
+          <div
+            role="alert"
+            data-testid="brand-locked-warning"
+            className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-700 dark:text-amber-400 flex items-start gap-2"
+          >
+            <ShieldCheck className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>
+              <b>Marca Lead Seller protegida.</b> O nome, as logos e a cor primária da conta-matriz só podem ser alterados pelo dono da plataforma.
+              Você continua podendo alterar a foto do seu próprio perfil normalmente.
+            </span>
+          </div>
+        )}
+
         <div>
           <Label>Nome da Empresa</Label>
-          <Input value={settings.company_name || ''} onChange={e => setSettings({ ...settings, company_name: e.target.value })} onBlur={() => save({ company_name: settings.company_name })} />
+          <Input
+            value={settings.company_name || ''}
+            readOnly={!canEditBrand}
+            disabled={!canEditBrand}
+            title={canEditBrand ? undefined : lockedTitle}
+            onChange={e => canEditBrand && setSettings({ ...settings, company_name: e.target.value })}
+            onBlur={() => canEditBrand && save({ company_name: settings.company_name })}
+          />
         </div>
 
         <div>
@@ -616,12 +648,13 @@ function DomainBrandSection() {
         <div>
           <Label className="flex items-center gap-2">🎨 Cor Primária</Label>
           <div className="flex items-center gap-3 mt-2">
-            <input type="color" value={settings.primary_color || '#00033e'} onChange={e => setSettings({ ...settings, primary_color: e.target.value })} onBlur={() => save({ primary_color: settings.primary_color })} className="w-12 h-10 rounded-lg border border-border cursor-pointer" />
-            <Input value={settings.primary_color || ''} placeholder="#00033e" onChange={e => setSettings({ ...settings, primary_color: e.target.value })} onBlur={() => save({ primary_color: settings.primary_color })} className="max-w-[200px] font-mono" />
-            <Button variant="ghost" size="sm" onClick={async () => { setSettings({ ...settings, primary_color: '' }); await save({ primary_color: null }); }}>Resetar</Button>
+            <input type="color" disabled={!canEditBrand} value={settings.primary_color || '#00033e'} onChange={e => canEditBrand && setSettings({ ...settings, primary_color: e.target.value })} onBlur={() => canEditBrand && save({ primary_color: settings.primary_color })} className={`w-12 h-10 rounded-lg border border-border ${canEditBrand ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`} />
+            <Input value={settings.primary_color || ''} placeholder="#00033e" readOnly={!canEditBrand} disabled={!canEditBrand} onChange={e => canEditBrand && setSettings({ ...settings, primary_color: e.target.value })} onBlur={() => canEditBrand && save({ primary_color: settings.primary_color })} className="max-w-[200px] font-mono" />
+            <Button variant="ghost" size="sm" disabled={!canEditBrand} onClick={async () => { setSettings({ ...settings, primary_color: '' }); await save({ primary_color: null }); }}>Resetar</Button>
           </div>
           <p className="text-xs text-muted-foreground mt-1">Deixe vazio para usar a cor padrão do sistema</p>
         </div>
+
 
         <div>
           <div className="flex items-center gap-2 mb-2">
