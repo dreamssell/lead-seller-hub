@@ -310,7 +310,7 @@ export default function CEODashboardPage() {
   };
 
   return (
-    <AppLayout title="Dashboard Executivo" subtitle="Visão estratégica para a liderança — dados em tempo real do ecossistema">
+    <AppLayout title="Performance da Empresa" subtitle="Visão estratégica para a liderança — dados em tempo real do ecossistema">
       <div className="space-y-6">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-3">
