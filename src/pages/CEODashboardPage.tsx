@@ -300,7 +300,7 @@ export default function CEODashboardPage() {
         }
       }
 
-      pdf.save(`dashboard-ceo-${period}-${new Date().toISOString().slice(0, 10)}.pdf`);
+      pdf.save(`performance-empresa-${period}-${new Date().toISOString().slice(0, 10)}.pdf`);
       toast({ title: 'Relatório exportado', description: 'Download iniciado.' });
     } catch (e: any) {
       toast({ title: 'Erro ao exportar', description: e.message, variant: 'destructive' });
