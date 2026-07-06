@@ -240,7 +240,19 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
               </CardDescription>
             </div>
           </div>
-          {statusBadge(conn.status)}
+          <div className="flex items-center gap-2">
+            {statusBadge(conn.status)}
+            <Button
+              variant="ghost" size="sm"
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+              onClick={handleDeleteConnection}
+              disabled={deleting}
+              title="Excluir conexão"
+              data-testid="delete-connection-button"
+            >
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       
