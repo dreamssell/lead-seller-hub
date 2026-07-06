@@ -126,6 +126,57 @@ Deno.serve(async (req) => {
 
     const base = normalizeUrl(url);
     const sess = (session || "default").trim();
+
+    // ─── cleanup_scan (no url/token required) ───────────────────────────────
+    // Lists WAHA connections the caller can see that have been disconnected/error
+    // for at least `days` days (default 14). The UI decides whether to purge.
+    if (action === "cleanup_scan") {
+      const days = Math.max(1, Math.min(90, Number(body?.days ?? 14)));
+      const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+      const { data: rows } = await supabaseAdmin
+        .from("whatsapp_connections")
+        .select("id, display_name, status, updated_at, last_checked_at, metadata, owner_id, sub_company_id")
+        .eq("provider", "waha")
+        .in("status", ["disconnected", "error"])
+        .lt("updated_at", cutoff);
+
+      let visible = rows ?? [];
+      if (callerId) {
+        // Global admin bypasses filter.
+        const { data: roles } = await supabaseAdmin
+          .from("user_roles").select("role").eq("user_id", callerId).eq("role", "admin");
+        if (!roles?.length) {
+          const { data: access } = await supabaseAdmin
+            .from("user_account_access")
+            .select("owner_id, sub_company_id, is_account_admin")
+            .eq("user_id", callerId);
+          visible = visible.filter((c: any) =>
+            c.owner_id === callerId
+            || (access ?? []).some((a: any) =>
+              a.is_account_admin
+              && a.owner_id === c.owner_id
+              && (a.sub_company_id === null || a.sub_company_id === c.sub_company_id)
+            )
+          );
+        }
+      }
+
+      const candidates = visible.map((c: any) => {
+        const lastSeen = c.last_checked_at ?? c.updated_at;
+        const idleDays = Math.floor((Date.now() - new Date(lastSeen).getTime()) / 86_400_000);
+        const recommendation =
+          idleDays >= days * 2 ? "delete_remote"
+          : idleDays >= days ? "review"
+          : "keep";
+        return {
+          id: c.id, display_name: c.display_name, status: c.status,
+          session: c.metadata?.session ?? null, url: c.metadata?.url ?? null,
+          last_seen_at: lastSeen, idle_days: idleDays, recommendation,
+        };
+      });
+      return json({ ok: true, threshold_days: days, candidates });
+    }
+
     if (!base) return json({ ok: false, error: "WAHA URL ausente" });
     if (!token) return json({ ok: false, error: "WAHA token ausente" });
 
