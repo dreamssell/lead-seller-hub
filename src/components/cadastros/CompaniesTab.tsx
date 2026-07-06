@@ -106,7 +106,9 @@ export default function CompaniesTab() {
       status: editing.status || 'active',
       notes: editing.notes || null,
       display_name: editing.display_name || editing.name?.trim() || null,
+      blocked_pages: Array.isArray(editing.blocked_pages) ? editing.blocked_pages : [],
     };
+
     let companyId = editing.id as string | undefined;
     let error;
     let beforeRow: any = null;
