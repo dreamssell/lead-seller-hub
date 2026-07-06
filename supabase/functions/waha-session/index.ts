@@ -278,6 +278,7 @@ Deno.serve(async (req) => {
           metadata: { ...(conn.metadata ?? {}), session: null },
         }).eq("id", conn.id);
       }
+      await logEvent("delete", res.ok || res.status === 404 ? "success" : "failed", { status_code: res.status, session: sess });
       return json({ ok: res.ok || res.status === 404, status_code: res.status, raw: data });
     }
 
