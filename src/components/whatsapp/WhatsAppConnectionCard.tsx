@@ -76,6 +76,20 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
   const [showDebug, setShowDebug] = useState(false);
   const [debugInfo, setDebugInfo] = useState<{ url: string; headers: string[]; error: any } | null>(null);
   const [showWahaConfig, setShowWahaConfig] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteConnection = async () => {
+    const msg = conn.provider === 'waha'
+      ? `Excluir a conexão "${conn.display_name}"?\n\nIsto remove APENAS a conexão do Lead Seller.\nA sessão no servidor WAHA continua ativa — para removê-la também, use "Excluir sessão remota" em "Configuração completa" antes.`
+      : `Excluir a conexão "${conn.display_name}"? Esta ação é irreversível.`;
+    if (!window.confirm(msg)) return;
+    setDeleting(true);
+    const { error } = await supabase.from('whatsapp_connections').delete().eq('id', conn.id);
+    setDeleting(false);
+    if (error) return toast.error('Falha ao excluir', { description: error.message });
+    toast.success('Conexão excluída');
+    onSaved();
+  };
 
   const handleSave = async () => {
     setSaving(true);
