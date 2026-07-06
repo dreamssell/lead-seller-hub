@@ -17,10 +17,13 @@ import {
   TrendingUp, TrendingDown, Users, DollarSign, Target,
   CheckCircle2, Activity, Briefcase, Award, Zap, ShieldCheck,
   Download, ChevronRight, Calendar, Inbox, Phone, PhoneCall, FileSignature,
+  Home, Crown,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+
 
 const CHART_COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
