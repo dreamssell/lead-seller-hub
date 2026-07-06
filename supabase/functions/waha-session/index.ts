@@ -290,6 +290,7 @@ Deno.serve(async (req) => {
       const text = await res.text();
       let data: any = {};
       try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+      await logEvent("logout", res.ok ? "success" : "failed", { status_code: res.status });
       return json({ ok: res.ok, status_code: res.status, raw: data });
     }
 
