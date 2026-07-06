@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 import type { WhatsAppConnection } from './types';
 import type { WhatsAppProviderAdapter } from './adapters';
+import { DEFAULT_WAHA_TEXT_TEMPLATE, renderWahaTemplate } from './wahaConfig';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Zod schemas — the "contract" of what we send to WAHA. Exported so the
