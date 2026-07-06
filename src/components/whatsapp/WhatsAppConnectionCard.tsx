@@ -26,6 +26,8 @@ import { EvolutionWizardDialog } from './EvolutionWizardDialog';
 import { EvolutionStatusBanner } from './EvolutionStatusBanner';
 import { EvolutionDebugPanel } from './EvolutionDebugPanel';
 import { EvolutionWebhookAlert } from './EvolutionWebhookAlert';
+import { WahaConfigDialog } from './WahaConfigDialog';
+import { Settings2 } from 'lucide-react';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
 
@@ -70,6 +72,7 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
 
   const [showDebug, setShowDebug] = useState(false);
   const [debugInfo, setDebugInfo] = useState<{ url: string; headers: string[]; error: any } | null>(null);
+  const [showWahaConfig, setShowWahaConfig] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
@@ -342,6 +345,11 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
                   {testing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} 
                   Testar Conexão
                 </Button>
+                {conn.provider === 'waha' && (
+                  <Button size="sm" variant="secondary" onClick={() => setShowWahaConfig(true)} className="gap-2">
+                    <Settings2 className="w-4 h-4" /> Configuração completa
+                  </Button>
+                )}
                 {conn.provider === 'evolution' && (
                   <>
                     <Button
@@ -444,6 +452,14 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
           conn={conn}
           onConnected={onSaved}
           autoStart={wizardAutoStart}
+        />
+      )}
+      {conn.provider === 'waha' && (
+        <WahaConfigDialog
+          open={showWahaConfig}
+          onOpenChange={setShowWahaConfig}
+          conn={conn}
+          onSaved={onSaved}
         />
       )}
 

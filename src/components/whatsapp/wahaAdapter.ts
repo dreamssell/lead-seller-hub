@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 import type { WhatsAppConnection } from './types';
 import type { WhatsAppProviderAdapter } from './adapters';
+import { DEFAULT_WAHA_TEXT_TEMPLATE, renderWahaTemplate } from './wahaConfig';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Zod schemas — the "contract" of what we send to WAHA. Exported so the
@@ -208,10 +209,25 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       .single();
     if (custErr || !customer?.phone) throw new Error('Cliente sem telefone cadastrado.');
 
+    // Apply agent-name template when the config toggle is on. Mirrors the
+    // WAHA/Chatwoot App override `chatwoot.to.whatsapp.message.text`.
+    let text = String(content ?? '');
+    if (conn.metadata?.templates_with_agent_name) {
+      try {
+        const { data: authUser } = await supabase.auth.getUser();
+        const agentName = authUser?.user?.user_metadata?.display_name
+          || authUser?.user?.user_metadata?.full_name
+          || authUser?.user?.email?.split('@')[0]
+          || '';
+        const tpl = conn.metadata?.language_overrides_text || DEFAULT_WAHA_TEXT_TEMPLATE;
+        text = renderWahaTemplate(tpl, { content: text, chatwoot: { sender: { name: agentName } } });
+      } catch { /* best-effort — never block send on template errors */ }
+    }
+
     const rawPayload = {
       session: this.sessionOf(conn),
       chatId: normalizeChatId(customer.phone),
-      text: String(content ?? ''),
+      text,
     };
     const parsed = WahaSendTextSchema.safeParse(rawPayload);
     if (!parsed.success) {
