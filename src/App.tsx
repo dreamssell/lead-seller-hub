@@ -104,10 +104,11 @@ const App = () => (
               <Route path="/automations" element={<ProtectedRoute><AutomationsPage /></ProtectedRoute>} />
               <Route path="/3cx" element={<ProtectedRoute><ThreeCxDashboardPage /></ProtectedRoute>} />
               <Route path="/cadastros" element={<ProtectedRoute><CadastrosPage /></ProtectedRoute>} />
-              <Route path="/ceo" element={<ProtectedRoute><CEODashboardPage /></ProtectedRoute>} />
-              <Route path="/ceo/leads-capture" element={<ProtectedRoute><LeadsCapturePage /></ProtectedRoute>} />
-              <Route path="/ceo/calls" element={<ProtectedRoute><CallsPerformancePage /></ProtectedRoute>} />
-              <Route path="/ceo/signatures" element={<ProtectedRoute><SignaturesPerformancePage /></ProtectedRoute>} />
+              <Route path="/ceo" element={<ProtectedRoute pageKey="ceo"><CEODashboardPage /></ProtectedRoute>} />
+              <Route path="/ceo/leads-capture" element={<ProtectedRoute pageKey="ceo"><LeadsCapturePage /></ProtectedRoute>} />
+              <Route path="/ceo/calls" element={<ProtectedRoute pageKey="ceo"><CallsPerformancePage /></ProtectedRoute>} />
+              <Route path="/ceo/signatures" element={<ProtectedRoute pageKey="ceo"><SignaturesPerformancePage /></ProtectedRoute>} />
+
               <Route path="/outros" element={<ProtectedRoute pageKey="outros"><OutrosPage /></ProtectedRoute>} />
               <Route path="/outros/:id/editar" element={<ProtectedRoute pageKey="outros"><LandingBuilderPage /></ProtectedRoute>} />
               <Route path="/outros/:id/preview" element={<ProtectedRoute pageKey="outros"><LandingPreviewPage /></ProtectedRoute>} />
