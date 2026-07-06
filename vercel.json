@@ -23,9 +23,6 @@
     }
   ],
   "rewrites": [
-    {
-      "source": "/((?!assets/|.*\\.(?:js|css|png|jpg|jpeg|gif|svg|webp|ico|webmanifest|map|txt|xml|woff|woff2|ttf|otf|mp4|webm)$|sw\\.js$|robots\\.txt$|sitemap\\.xml$).*)",
-      "destination": "/index.html"
-    }
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
