@@ -434,8 +434,9 @@ export default function CEODashboardPage() {
 
                 <Card className="glass-card">
                   <CardHeader>
-                    <CardTitle>Funil — leads por status</CardTitle>
-                    <CardDescription>Saúde geral do pipeline</CardDescription>
+                    <CardTitle>Acompanhar leads por estágio</CardTitle>
+                    <CardDescription>Saúde geral do pipeline por status</CardDescription>
+
                   </CardHeader>
                   <CardContent>
                     <ResponsiveContainer width="100%" height={280}>
