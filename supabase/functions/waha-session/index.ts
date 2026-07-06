@@ -305,6 +305,7 @@ Deno.serve(async (req) => {
       const startText = await startRes.text();
       let startData: any = {};
       try { startData = startText ? JSON.parse(startText) : {}; } catch { /* keep */ }
+      await logEvent("restart", startRes.ok ? "success" : "failed", { status: startData?.status ?? "UNKNOWN" });
       return json({
         ok: startRes.ok, action: "restart",
         status: startData?.status ?? "UNKNOWN", raw: startData,
