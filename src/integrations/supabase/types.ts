@@ -3797,6 +3797,7 @@ export type Database = {
           created_by: string | null
           id: string
           is_account_admin: boolean
+          is_owner: boolean
           owner_id: string
           sub_company_id: string | null
           updated_at: string
@@ -3810,6 +3811,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           is_account_admin?: boolean
+          is_owner?: boolean
           owner_id: string
           sub_company_id?: string | null
           updated_at?: string
@@ -3823,6 +3825,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           is_account_admin?: boolean
+          is_owner?: boolean
           owner_id?: string
           sub_company_id?: string | null
           updated_at?: string
@@ -4922,6 +4925,15 @@ export type Database = {
           total_leads: number
         }[]
       }
+      get_member_seat_usage: {
+        Args: { p_owner_id: string; p_sub_company_id?: string }
+        Returns: {
+          current_users: number
+          max_users: number
+          plan_slug: string
+          remaining: number
+        }[]
+      }
       get_my_account_access: {
         Args: never
         Returns: {
@@ -5028,6 +5040,7 @@ export type Database = {
           created_by: string | null
           id: string
           is_account_admin: boolean
+          is_owner: boolean
           owner_id: string
           sub_company_id: string | null
           updated_at: string
