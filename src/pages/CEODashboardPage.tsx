@@ -17,10 +17,13 @@ import {
   TrendingUp, TrendingDown, Users, DollarSign, Target,
   CheckCircle2, Activity, Briefcase, Award, Zap, ShieldCheck,
   Download, ChevronRight, Calendar, Inbox, Phone, PhoneCall, FileSignature,
+  Home, Crown,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+
 
 const CHART_COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -105,8 +108,11 @@ export default function CEODashboardPage() {
   const [period, setPeriod] = useState<Period>('30d');
   const [exporting, setExporting] = useState(false);
   const [drill, setDrill] = useState<DrillType | null>(null);
+  const [contextName, setContextName] = useState<string>('');
   const dashboardRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { user, access } = useAuth();
+
 
   const focusCards = [
     { title: 'Captura de Leads', desc: 'Holmes, DealerSpace e demais canais', icon: Inbox, path: '/ceo/leads-capture', tint: 'from-primary/20' },
@@ -135,6 +141,22 @@ export default function CEODashboardPage() {
       setLoading(false);
     })();
   }, []);
+
+  // Resolve context name (sub-empresa > empresa direta > display_name).
+  useEffect(() => {
+    if (access?.sub_company_name) { setContextName(access.sub_company_name); return; }
+    if (!user?.id) return;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('client_companies')
+        .select('name')
+        .eq('auth_user_id', user.id)
+        .maybeSingle();
+      if (data?.name) setContextName(data.name);
+      else setContextName(user.user_metadata?.display_name || user.email || '');
+    })();
+  }, [access?.sub_company_name, user?.id]);
+
 
   // Filter by selected period (created_at)
   const startDate = periodStart(period);
@@ -300,7 +322,7 @@ export default function CEODashboardPage() {
         }
       }
 
-      pdf.save(`dashboard-ceo-${period}-${new Date().toISOString().slice(0, 10)}.pdf`);
+      pdf.save(`performance-empresa-${period}-${new Date().toISOString().slice(0, 10)}.pdf`);
       toast({ title: 'Relatório exportado', description: 'Download iniciado.' });
     } catch (e: any) {
       toast({ title: 'Erro ao exportar', description: e.message, variant: 'destructive' });
@@ -312,6 +334,28 @@ export default function CEODashboardPage() {
   return (
     <AppLayout title="Performance da Empresa" subtitle="Visão estratégica para a liderança — dados em tempo real do ecossistema">
       <div className="space-y-6">
+        {/* Breadcrumbs + contexto */}
+        <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+          >
+            <Home className="w-3.5 h-3.5" /> Início
+          </button>
+          <ChevronRight className="w-3.5 h-3.5 opacity-60" />
+          <span className="text-foreground font-medium">Performance da Empresa</span>
+          {contextName && (
+            <>
+              <ChevronRight className="w-3.5 h-3.5 opacity-60" />
+              <span className="truncate max-w-[240px]" title={contextName}>{contextName}</span>
+            </>
+          )}
+          <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-[11px] font-medium text-primary">
+            <Crown className="w-3 h-3" /> Painel executivo completo
+          </span>
+        </nav>
+
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -336,7 +380,8 @@ export default function CEODashboardPage() {
           <div className="glass-card p-6 bg-gradient-to-br from-primary/10 via-transparent to-accent/10">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <Badge variant="outline" className="mb-2">Central de Inteligência do CEO</Badge>
+                <Badge variant="outline" className="mb-2">Painel Executivo da Empresa</Badge>
+
                 <h2 className="text-2xl font-bold">Performance da Empresa</h2>
                 <p className="text-sm text-muted-foreground mt-1">
                   Período: <span className="font-medium text-foreground">{PERIOD_LABELS[period]}</span>

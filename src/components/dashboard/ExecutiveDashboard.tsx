@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 const services = [
-  { icon: Crown, title: 'Dashboard CEO', description: 'Indicadores executivos completos.', color: 'bg-warning/10 text-warning', path: '/ceo' },
+  { icon: Crown, title: 'Performance da Empresa', description: 'Painel executivo completo.', color: 'bg-warning/10 text-warning', path: '/ceo' },
   { icon: Headphones, title: 'Central de Atendimento', description: 'Todos os atendimentos em tempo real.', color: 'bg-primary/10 text-primary', path: '/tickets' },
   { icon: Bot, title: 'Agentes de I.A. (SDR)', description: 'Bots e qualificação automática.', color: 'bg-success/10 text-success', path: '/ai-agents' },
   { icon: Phone, title: 'VoIP & Gravação', description: 'Chamadas VoIP com gravação.', color: 'bg-warning/10 text-warning', path: '/calls' },
