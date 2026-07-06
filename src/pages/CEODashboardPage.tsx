@@ -337,7 +337,7 @@ export default function CEODashboardPage() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <Badge variant="outline" className="mb-2">Central de Inteligência do CEO</Badge>
-                <h2 className="text-2xl font-bold">Performance consolidada do ecossistema</h2>
+                <h2 className="text-2xl font-bold">Performance da Empresa</h2>
                 <p className="text-sm text-muted-foreground mt-1">
                   Período: <span className="font-medium text-foreground">{PERIOD_LABELS[period]}</span>
                 </p>
