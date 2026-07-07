@@ -171,10 +171,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [session?.user?.id]);
 
   const canAccessPage = (page: SidebarPageKey) => {
-    if (!access) return true;
+    // SECURITY: default-deny when no access context is available (except profile).
+    // Previously returned true, which exposed the full menu to users without
+    // an account_access row (e.g. client-company logins provisioned before the
+    // fallback existed).
+    if (!access) return page === 'profile';
     if (access.status === 'blocked') return page === 'profile';
     if (access.blocked_pages?.includes(page)) return false;
-    // Feature flag: módulo "Outros" só aparece se a sub-empresa contratou
     if (page === 'outros' && access.sub_company_id && !access.feature_landing_builder) return false;
     if (access.is_account_admin || access.allowed_pages.length === 0) return true;
     return access.allowed_pages.includes(page) || page === 'profile';
