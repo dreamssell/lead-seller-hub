@@ -58,7 +58,7 @@ const ROLE_OPTS = [
 ];
 
 export default function SignaturesPage() {
-  const { user } = useAuth();
+  const { user, access } = useAuth();
   const { isOwner } = usePlatformOwner();
 
   const [docs, setDocs] = useState<Doc[]>([]);
