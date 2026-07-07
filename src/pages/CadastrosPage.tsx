@@ -2745,10 +2745,15 @@ export default function CadastrosPage() {
   const showCompanies = isOwner;
   const showWhiteLabel = isOwner && canAccessPage('white-label');
   const visibleCount = 7 + (showCompanies ? 1 : 0) + (showWhiteLabel ? 1 : 0) + 1; // +audit
+  const gridColsClass =
+    visibleCount >= 10 ? 'md:grid-cols-10'
+    : visibleCount === 9 ? 'md:grid-cols-9'
+    : visibleCount === 8 ? 'md:grid-cols-8'
+    : 'md:grid-cols-7';
   return (
     <AppLayout title="Cadastros & CRM" subtitle="Gestão centralizada de contatos, leads, clientes e auditoria">
       <Tabs defaultValue="contacts" className="w-full">
-        <TabsList className={`grid grid-cols-3 md:grid-cols-${visibleCount} mb-6`}>
+        <TabsList className={`grid grid-cols-3 ${gridColsClass} mb-6`}>
           <TabsTrigger value="contacts"><UserPlus className="w-4 h-4 mr-2" />CRM</TabsTrigger>
           <TabsTrigger value="leads"><Users className="w-4 h-4 mr-2" />Leads</TabsTrigger>
           <TabsTrigger value="customers"><Briefcase className="w-4 h-4 mr-2" />Clientes</TabsTrigger>
