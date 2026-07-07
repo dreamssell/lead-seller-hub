@@ -25,12 +25,25 @@ function BlockedTelemetry({ pageKey, path }: { pageKey: string; path: string }) 
 }
 
 export default function ProtectedRoute({ children, pageKey, ownerOnly }: ProtectedRouteProps) {
-  const { session, loading, accessLoading, canAccessPage } = useAuth();
+  const { session, loading, accessLoading, canAccessPage, sessionValidated, tenantResolved } = useAuth();
   const { isOwner, loading: ownerLoading } = usePlatformOwner();
   const location = useLocation();
 
-  if (loading || accessLoading || (ownerOnly && ownerLoading)) {
-
+  // SECURITY GATE: never render tenant-scoped children until:
+  //  1. Auth listener finished bootstrapping (loading)
+  //  2. Session was revalidated against Supabase Auth (sessionValidated)
+  //  3. Access/tenant scope was resolved for the current user (tenantResolved)
+  //  4. Owner check finished when the route is owner-only
+  // This prevents a prior user's data from being briefly rendered while the
+  // new session is being established, and blocks tampered sessions from
+  // reaching any page other than the sign-in redirect.
+  if (
+    loading ||
+    accessLoading ||
+    (session && !sessionValidated) ||
+    (session && !tenantResolved) ||
+    (ownerOnly && ownerLoading)
+  ) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">

@@ -21,6 +21,15 @@ interface AuthContextType {
   loading: boolean;
   access: AccountAccess | null;
   accessLoading: boolean;
+  /**
+   * True once the current session has been revalidated against Supabase Auth
+   * (getUser) AND the resulting user.id matches the local session. While false,
+   * consumers MUST NOT render tenant-scoped data — the session might belong to
+   * a different user or be stale/tampered with.
+   */
+  sessionValidated: boolean;
+  /** Set once the tenant scope has been resolved (owner_id/sub_company_id known or explicitly none). */
+  tenantResolved: boolean;
   canAccessPage: (page: SidebarPageKey) => boolean;
   signOut: () => Promise<void>;
 }
@@ -35,10 +44,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [access, setAccess] = useState<AccountAccess | null>(null);
   const [accessLoading, setAccessLoading] = useState(false);
+  const [sessionValidated, setSessionValidated] = useState(false);
+  const [tenantResolved, setTenantResolved] = useState(false);
 
   useEffect(() => {
     // 1. Listener primeiro (evita race conditions)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      // Any auth change invalidates prior tenant/session validation until we
+      // reconfirm identity + scope for the new session below.
+      setSessionValidated(false);
+      setTenantResolved(false);
       setSession(newSession);
       setLoading(false);
     });
@@ -51,6 +66,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // SECURITY: revalidate session against Supabase Auth on every change.
+  // getUser() re-hits the auth server (not the local storage snapshot), so
+  // it will reject tampered tokens or tokens that don't match the account
+  // currently in localStorage. If the returned user.id differs from the
+  // local session, we force sign-out to prevent cross-tenant leaks.
+  useEffect(() => {
+    let cancelled = false;
+    if (!session?.user) {
+      setSessionValidated(false);
+      return;
+    }
+    const expected = session.user.id;
+    (async () => {
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (cancelled) return;
+        if (error || !data?.user || data.user.id !== expected) {
+          console.warn('[AuthContext] session revalidation failed — forcing sign out', {
+            expected, received: data?.user?.id ?? null, error: error?.message,
+          });
+          setSessionValidated(false);
+          await supabase.auth.signOut().catch(() => undefined);
+          setSession(null);
+          setAccess(null);
+          setTenantResolved(false);
+          return;
+        }
+        setSessionValidated(true);
+      } catch (err) {
+        if (cancelled) return;
+        console.warn('[AuthContext] getUser threw during revalidation', err);
+        setSessionValidated(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [session?.user?.id]);
 
   const reloadAccess = async () => {
     if (!session?.user) {
@@ -105,9 +157,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setAccess(row || null);
     setAccessLoading(false);
+    setTenantResolved(true);
   };
 
   useEffect(() => {
+    // Reset tenant resolution whenever the user changes so we never render a
+    // new user with a previous user's scope.
+    setTenantResolved(false);
     reloadAccess();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
@@ -194,7 +250,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, access, accessLoading, canAccessPage, signOut }}>
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, access, accessLoading, sessionValidated, tenantResolved, canAccessPage, signOut }}>
       {children}
     </AuthContext.Provider>
   );
