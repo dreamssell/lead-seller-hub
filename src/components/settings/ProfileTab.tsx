@@ -4,6 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
+import { sanitizeFilename } from '@/lib/sanitizeFilename';
+
+const MAX_AVATAR_MB = 5;
+const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
 
 export default function ProfileTab() {
   const { signOut, user } = useAuth();
