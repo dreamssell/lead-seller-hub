@@ -109,19 +109,21 @@ Deno.serve(async (req) => {
     let provider = body?.provider;
     let url = body?.url;
     let token = body?.token;
+    let sessionFromDb: string | undefined;
     connectionId = body?.connection_id;
 
-    if (connectionId && !provider) {
+    if (connectionId) {
       const { data: conn } = await supabaseAdmin
         .from("whatsapp_connections")
         .select("*")
         .eq("id", connectionId)
         .single();
-      
+
       if (conn) {
-        provider = conn.provider;
-        url = conn.metadata?.url;
-        token = conn.metadata?.token;
+        if (!provider) provider = conn.provider;
+        if (!url) url = conn.metadata?.url;
+        if (!token) token = conn.metadata?.token;
+        sessionFromDb = conn.metadata?.session || conn.metadata?.instance;
       }
     }
 
