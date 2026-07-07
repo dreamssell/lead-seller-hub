@@ -96,7 +96,11 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = (body?.action ?? "status") as
       | "status" | "qr" | "restart" | "logout" | "create" | "delete"
-      | "list_remote" | "test_webhook" | "cleanup_scan" | "configure_webhook";
+      | "list_remote" | "test_webhook" | "cleanup_scan" | "configure_webhook"
+      | "validate_webhook" | "validate_all_webhooks";
+    // When true, `status` will auto-heal a missing/outdated webhook config
+    // in the WAHA server without requiring a separate call. Defaults to true.
+    const autoHeal: boolean = body?.auto_heal !== false;
     const connectionId: string | undefined = body?.connection_id;
 
     const logEvent = async (evType: string, status: string, extra: Record<string, unknown> = {}) => {
