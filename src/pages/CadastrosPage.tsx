@@ -766,7 +766,7 @@ function UsersTab() {
       is_account_admin: !!row.is_account_admin,
       allowed_pages: (row.allowed_pages && row.allowed_pages.length > 0)
         ? row.allowed_pages
-        : BLOCKABLE_PAGES.map(p => p.key),
+        : selectablePages.map(p => p.key),
     });
     setOpen(true);
   };
