@@ -199,8 +199,8 @@ export default function CompaniesTab() {
       >
         <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
         <div className="text-sm text-muted-foreground">
-          <p className="font-medium text-foreground mb-0.5">Cadastro de Empresas (consumidor final)</p>
-          <p>Registre aqui as empresas que consomem sua plataforma como clientes. Este cadastro <strong>não cria sub-empresas</strong> nem concede acesso ao painel — para isso utilize <em>Cadastros de Sub-Empresas</em> em White Label.</p>
+          <p className="font-medium text-foreground mb-0.5">Cadastro de Empresas (exclusivo do dono da plataforma)</p>
+          <p>Registre aqui as <strong>empresas clientes</strong> que consomem a plataforma Lead Seller como consumidor final. Este cadastro <strong>não cria sub-empresas</strong> e não permite que a empresa cliente revenda a plataforma. Empresas cadastradas aqui <strong>não veem esta aba</strong> nem a aba <em>White Label</em>. Para criar sub-empresas (revenda / marca branca), utilize a aba <em>White Label → Sub-Empresas</em>.</p>
         </div>
       </motion.div>
 
