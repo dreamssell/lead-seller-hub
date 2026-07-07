@@ -713,6 +713,11 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
 
 function UsersTab() {
   const { user, access } = useAuth();
+  const { isOwner } = usePlatformOwner();
+  const selectablePages = getSelectablePages({
+    isPlatformOwner: isOwner,
+    isSubCompanyScope: !!access?.sub_company_id,
+  });
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -723,7 +728,7 @@ function UsersTab() {
   const emptyForm = {
     email: '', password: '', display_name: '', phone: '', role_label: 'Atendente',
     is_active: true, is_account_admin: false,
-    allowed_pages: BLOCKABLE_PAGES.map(p => p.key) as string[],
+    allowed_pages: selectablePages.map(p => p.key) as string[],
   };
   const [form, setForm] = useState<any>(emptyForm);
 
