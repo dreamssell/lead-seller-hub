@@ -59,8 +59,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     setAccessLoading(true);
-    const { data } = await (supabase as any).rpc('get_my_account_access');
-    const row = Array.isArray(data) ? data[0] : null;
+    const uid = session.user.id;
+    const client = supabase as any;
+    const safe = async <T,>(p: Promise<T> | undefined | null): Promise<T | { data: null } | { data: null; error: unknown }> => {
+      if (!p || typeof (p as any).then !== 'function') return { data: null } as any;
+      try { return await p; } catch { return { data: null } as any; }
+    };
+    const [{ data }, roleRes, ccRes] = await Promise.all([
+      safe(client.rpc?.('get_my_account_access')),
+      safe(client.rpc?.('has_role', { _user_id: uid, _role: 'admin' })),
+      safe(client.from?.('client_companies')?.select?.('id, owner_id, sub_company_id, status').eq('auth_user_id', uid).maybeSingle()),
+    ]) as any;
+    let row: AccountAccess | null = Array.isArray(data) ? data[0] : null;
+
+    // Fallback: platform owner (admin app_role) — grants full access.
+    if (!row && roleRes?.data === true) {
+      row = {
+        owner_id: uid,
+        sub_company_id: null,
+        sub_company_name: null,
+        allowed_pages: [],
+        is_account_admin: true,
+        blocked_pages: [],
+        status: 'active',
+        allow_custom_logic: true,
+        feature_landing_builder: true,
+      };
+    }
+
+    // Fallback: user is the direct owner of a client_company — scope to own account.
+    if (!row && ccRes?.data) {
+      const cc = ccRes.data as { owner_id: string | null; sub_company_id: string | null; status: string | null };
+      row = {
+        owner_id: cc.owner_id || uid,
+        sub_company_id: cc.sub_company_id,
+        sub_company_name: null,
+        allowed_pages: [],
+        is_account_admin: true,
+        blocked_pages: [],
+        status: cc.status === 'blocked' ? 'blocked' : 'active',
+        allow_custom_logic: true,
+        feature_landing_builder: false,
+      };
+    }
+
     setAccess(row || null);
     setAccessLoading(false);
   };
@@ -130,10 +172,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [session?.user?.id]);
 
   const canAccessPage = (page: SidebarPageKey) => {
-    if (!access) return true;
+    // SECURITY: default-deny when no access context is available (except profile).
+    // Previously returned true, which exposed the full menu to users without
+    // an account_access row (e.g. client-company logins provisioned before the
+    // fallback existed).
+    if (!access) return page === 'profile';
     if (access.status === 'blocked') return page === 'profile';
     if (access.blocked_pages?.includes(page)) return false;
-    // Feature flag: módulo "Outros" só aparece se a sub-empresa contratou
     if (page === 'outros' && access.sub_company_id && !access.feature_landing_builder) return false;
     if (access.is_account_admin || access.allowed_pages.length === 0) return true;
     return access.allowed_pages.includes(page) || page === 'profile';

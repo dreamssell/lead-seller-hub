@@ -194,6 +194,22 @@ Deno.serve(async (req) => {
           .update({ auth_user_id: existing.id })
           .eq("id", cc.id);
 
+        // SECURITY: ensure the client-company login has a scoped access row so
+        // AuthContext.canAccessPage does not fall back to allow-all.
+        {
+          const blocked: string[] = [];
+          const allowed = ALL_PAGES.filter((p) => !blocked.includes(p));
+          await supabaseAdmin.from("user_account_access").upsert({
+            user_id: existing.id,
+            owner_id: cc.owner_id,
+            sub_company_id: cc.sub_company_id,
+            allowed_pages: allowed,
+            is_account_admin: true,
+            created_by: cc.owner_id,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: cc.sub_company_id ? "user_id,owner_id,sub_company_id" : "user_id,owner_id" });
+        }
+
         await logEvent(supabaseAdmin, req, {
           email: normalizedEmail, event: "user_provisioned", success: true,
           user_id: existing.id, metadata: { client_company_id: cc.id },
