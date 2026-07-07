@@ -161,6 +161,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // Reset tenant resolution whenever the user changes so we never render a
+    // new user with a previous user's scope.
+    setTenantResolved(false);
     reloadAccess();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
