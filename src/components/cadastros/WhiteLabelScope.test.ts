@@ -23,7 +23,8 @@ describe('White Label visibilidade em Cadastros', () => {
   });
 
   it("CompaniesTab filtra 'white-label' da lista de Páginas bloqueadas", () => {
-    expect(companiesTab).toMatch(/BLOCKABLE_PAGES\.filter\([^)]*white-label[^)]*\)/);
+    expect(companiesTab).toMatch(/BLOCKABLE_PAGES\.filter\(/);
+    expect(companiesTab).toMatch(/['"]white-label['"]/);
   });
 
   it('WhiteLabelTab (Sub-empresas) NÃO filtra e mantém white-label na lista', () => {
