@@ -299,8 +299,11 @@ export function WahaMonitorPanel() {
                     ) : (
                       <StatusBadge status={st?.status ?? conn.status?.toUpperCase()} />
                     )}
-                    <Button variant="ghost" size="sm" onClick={() => probe(conn)}>
+                    <Button variant="ghost" size="sm" onClick={() => probe(conn)} title="Consultar status">
                       <RefreshCw className={`w-3.5 h-3.5 ${st?.loading ? 'animate-spin' : ''}`} />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => configureWebhook(conn)} title="Reaplicar webhook no WAHA (necessário se as mensagens não estão chegando)">
+                      Reaplicar webhook
                     </Button>
                   </div>
                 </div>
