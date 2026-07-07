@@ -43,6 +43,47 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function expectedWebhookUrl(connectionId: string): string {
+  const supabaseUrl = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
+  return `${supabaseUrl}/functions/v1/waha-inbound?connection=${connectionId}`;
+}
+
+function sessionHasOurWebhook(sessionData: any, connectionId: string): boolean {
+  const target = expectedWebhookUrl(connectionId);
+  const hooks: any[] = sessionData?.config?.webhooks ?? [];
+  return Array.isArray(hooks) && hooks.some((h) => String(h?.url ?? "").trim() === target);
+}
+
+// Rewrites the WAHA session config so `waha-inbound?connection=<id>` receives
+// every relevant event. Stops the session, PUTs the new config, then starts.
+// Returns { ok, status_code, raw } — never throws.
+async function applyWebhookConfig(
+  base: string, sess: string, token: string, connectionId: string,
+): Promise<{ ok: boolean; status_code: number; raw: string }> {
+  const headers = { "X-Api-Key": token, "Content-Type": "application/json" };
+  const cfg = {
+    webhooks: [
+      {
+        url: expectedWebhookUrl(connectionId),
+        events: ["message", "message.any", "message.ack", "session.status"],
+        hmac: null,
+        retries: { policy: "linear", delaySeconds: 2, attempts: 3 },
+        customHeaders: [{ name: "X-Api-Key", value: token }],
+      },
+    ],
+  };
+  await fetch(`${base}/api/sessions/${encodeURIComponent(sess)}/stop`, { method: "POST", headers })
+    .catch(() => null);
+  const putRes = await fetch(`${base}/api/sessions/${encodeURIComponent(sess)}`, {
+    method: "PUT", headers, body: JSON.stringify({ name: sess, config: cfg }),
+  });
+  const raw = await putRes.text().catch(() => "");
+  await fetch(`${base}/api/sessions/${encodeURIComponent(sess)}/start`, { method: "POST", headers })
+    .catch(() => null);
+  return { ok: putRes.ok, status_code: putRes.status, raw: raw.slice(0, 500) };
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
