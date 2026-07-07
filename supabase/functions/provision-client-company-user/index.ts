@@ -107,14 +107,18 @@ Deno.serve(async (req) => {
     if (linkErr) return json({ error: linkErr.message }, 400);
 
     // Ensure profile mirror exists (handle_new_user only fires on signup, not admin create).
-    // Ensure profile mirror exists (handle_new_user only fires on signup, not admin create).
-    // The titular (dono da empresa) recebe automaticamente o cargo CEO.
-    await admin.from("profiles").upsert({
+    // The titular (dono da Empresa) recebe automaticamente o cargo CEO.
+    const titularRole = "CEO";
+    console.log(`[provision-client-company-user] titular role_label="${titularRole}" company_id=${company.id} auth_user_id=${authUserId} email=${login_email}`);
+    const { error: profileErr } = await admin.from("profiles").upsert({
       user_id: authUserId,
       email: login_email,
       display_name: display_name ?? company.name,
-      role_label: "CEO",
+      role_label: titularRole,
     }, { onConflict: "user_id" });
+    if (profileErr) {
+      console.error(`[provision-client-company-user] profile_upsert_failed: ${profileErr.message}`);
+    }
 
     // Ensure a user_account_access row exists so blocked_pages/status on the
     // client_companies row take effect for this login. The row marks the login
