@@ -896,7 +896,7 @@ function UsersTab() {
                 <TableCell className="text-muted-foreground">{r.profile?.email || '—'}</TableCell>
                 <TableCell>{r.profile?.phone || '—'}</TableCell>
                 <TableCell>{r.profile?.role_label || '—'}</TableCell>
-                <TableCell><Badge variant="outline">{(r.allowed_pages || []).length} / {BLOCKABLE_PAGES.length}</Badge></TableCell>
+                <TableCell><Badge variant="outline">{(r.allowed_pages || []).length} / {selectablePages.length}</Badge></TableCell>
                 <TableCell>{r.is_account_admin ? <Badge>Sim</Badge> : <Badge variant="secondary">Não</Badge>}</TableCell>
                 <TableCell><Badge variant={r.profile?.is_active ? 'default' : 'secondary'}>{r.profile?.is_active ? 'Ativo' : 'Inativo'}</Badge></TableCell>
                 <TableCell className="text-right">
