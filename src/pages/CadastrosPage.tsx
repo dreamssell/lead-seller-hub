@@ -817,6 +817,7 @@ function UsersTab() {
         email: form.email,
         name: form.display_name,
         password: form.password,
+        role_label: form.role_label,
         allowed_pages: form.allowed_pages,
         is_account_admin: form.is_account_admin,
       };
