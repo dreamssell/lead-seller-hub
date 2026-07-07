@@ -58,7 +58,7 @@ const ROLE_OPTS = [
 ];
 
 export default function SignaturesPage() {
-  const { user } = useAuth();
+  const { user, access } = useAuth();
   const { isOwner } = usePlatformOwner();
 
   const [docs, setDocs] = useState<Doc[]>([]);
@@ -100,8 +100,11 @@ export default function SignaturesPage() {
       .select('role')
       .eq('user_id', user.id);
     const rolesArr = (roles || []) as any[];
-    setHasAnyRole(rolesArr.length > 0);
-    setIsLeader(rolesArr.some((r: any) => ['supervisor', 'coordenador', 'diretor'].includes(r.role)));
+    // Admins da conta (dono da empresa/sub-empresa) e dono da plataforma sempre têm acesso ao módulo,
+    // independentemente de terem cargo atribuído em user_signature_roles.
+    const isAccountAdmin = !!access?.is_account_admin;
+    setHasAnyRole(rolesArr.length > 0 || isAccountAdmin || isOwner);
+    setIsLeader(isOwner || isAccountAdmin || rolesArr.some((r: any) => ['supervisor', 'coordenador', 'diretor'].includes(r.role)));
 
     const userIds = Array.from(new Set(list.map((d) => d.created_by)));
     const subIds = Array.from(new Set(list.map((d) => d.sub_company_id).filter(Boolean) as string[]));

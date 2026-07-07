@@ -14,7 +14,8 @@ import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Building2, Plus, Pencil, Trash2, Search, Mail, Phone, Globe, MapPin, FileText, Info, ShieldOff } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { BLOCKABLE_PAGES } from '@/lib/navigation';
+import { getSelectablePages } from '@/lib/navigation';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
 
 type Company = {
@@ -51,6 +52,8 @@ const EMPTY: Partial<Company> & { password?: string } = {
 
 export default function CompaniesTab() {
   const { user, access } = useAuth();
+  const { isOwner } = usePlatformOwner();
+  const selectablePages = getSelectablePages({ isPlatformOwner: isOwner, isSubCompanyScope: false });
   const [rows, setRows] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
@@ -397,7 +400,7 @@ export default function CompaniesTab() {
                 Marque as funcionalidades que esta empresa <strong>NÃO</strong> poderá acessar. As alterações valem no próximo login e afetam todos os usuários da conta.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {BLOCKABLE_PAGES.filter((p) => p.key !== 'white-label').map((p) => {
+                {selectablePages.map((p) => {
                   const checked = (editing?.blocked_pages || []).includes(p.key);
                   const toggle = () => setEditing((prev) => {
                     if (!prev) return prev;

@@ -21,7 +21,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import WhiteLabelTab from '@/components/cadastros/WhiteLabelTab';
 import CompaniesTab from '@/components/cadastros/CompaniesTab';
 import { logAudit } from '@/lib/audit';
-import { BLOCKABLE_PAGES } from '@/lib/navigation';
+import { getSelectablePages } from '@/lib/navigation';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { extractManageUserError } from '@/lib/manageAccountUserErrors';
 
 type Entity = 'leads' | 'customers' | 'products' | 'tasks' | 'users' | 'contacts';
@@ -712,6 +713,11 @@ function CrudTab({ entity }: { entity: Exclude<Entity, 'users'> }) {
 
 function UsersTab() {
   const { user, access } = useAuth();
+  const { isOwner } = usePlatformOwner();
+  const selectablePages = getSelectablePages({
+    isPlatformOwner: isOwner,
+    isSubCompanyScope: !!access?.sub_company_id,
+  });
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -722,7 +728,7 @@ function UsersTab() {
   const emptyForm = {
     email: '', password: '', display_name: '', phone: '', role_label: 'Atendente',
     is_active: true, is_account_admin: false,
-    allowed_pages: BLOCKABLE_PAGES.map(p => p.key) as string[],
+    allowed_pages: selectablePages.map(p => p.key) as string[],
   };
   const [form, setForm] = useState<any>(emptyForm);
 
@@ -760,7 +766,7 @@ function UsersTab() {
       is_account_admin: !!row.is_account_admin,
       allowed_pages: (row.allowed_pages && row.allowed_pages.length > 0)
         ? row.allowed_pages
-        : BLOCKABLE_PAGES.map(p => p.key),
+        : selectablePages.map(p => p.key),
     });
     setOpen(true);
   };
@@ -890,7 +896,7 @@ function UsersTab() {
                 <TableCell className="text-muted-foreground">{r.profile?.email || '—'}</TableCell>
                 <TableCell>{r.profile?.phone || '—'}</TableCell>
                 <TableCell>{r.profile?.role_label || '—'}</TableCell>
-                <TableCell><Badge variant="outline">{(r.allowed_pages || []).length} / {BLOCKABLE_PAGES.length}</Badge></TableCell>
+                <TableCell><Badge variant="outline">{(r.allowed_pages || []).length} / {selectablePages.length}</Badge></TableCell>
                 <TableCell>{r.is_account_admin ? <Badge>Sim</Badge> : <Badge variant="secondary">Não</Badge>}</TableCell>
                 <TableCell><Badge variant={r.profile?.is_active ? 'default' : 'secondary'}>{r.profile?.is_active ? 'Ativo' : 'Inativo'}</Badge></TableCell>
                 <TableCell className="text-right">
@@ -967,13 +973,13 @@ function UsersTab() {
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-sm font-medium">Permissões por página (Sidebar)</Label>
                 <div className="flex gap-1">
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, allowed_pages: BLOCKABLE_PAGES.map(p => p.key) })}>Tudo</Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, allowed_pages: selectablePages.map(p => p.key) })}>Tudo</Button>
                   <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, allowed_pages: ['profile'] })}>Nada</Button>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground mb-3">Marque apenas as páginas que este usuário poderá acessar. "Meu Perfil" deve permanecer marcado.</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {BLOCKABLE_PAGES.map(p => {
+                {selectablePages.map(p => {
                   const checked = form.allowed_pages.includes(p.key);
                   const Icon = p.icon;
                   return (

@@ -13,7 +13,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Building2, Globe, LayoutDashboard, Plus, Pencil, Trash2, Ban, LogIn, Copy, Check, Sparkles, Crown, Star, Wand2, Upload, ShieldCheck, RefreshCw, AlertCircle } from 'lucide-react';
 import { SubCompanyManageDialog } from './SubCompanyManageDialog';
-import { BLOCKABLE_PAGES, ALL_PERMISSION_KEYS } from '@/lib/navigation';
+import { BLOCKABLE_PAGES, ALL_PERMISSION_KEYS, getSelectablePages } from '@/lib/navigation';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { normalizeAdminEmail, dedupeSubCompaniesByEmail } from '@/lib/subCompanyUtils';
 
 type Plan = {
@@ -244,6 +245,8 @@ function SubCompanyDialog({
 }: any) {
   const [form, setForm] = useState<Partial<SubCompany>>({});
   const [saving, setSaving] = useState(false);
+  const { isOwner } = usePlatformOwner();
+  const selectablePages = getSelectablePages({ isPlatformOwner: isOwner, isSubCompanyScope: true });
   useEffect(() => {
     if (editing) setForm(editing);
     else setForm({ name: '', admin_name: '', admin_email: '', admin_password: '', whatsapp_limit: 10, inherit_branding: true, byok_inherit: true, blocked_pages: [], allow_custom_logic: false } as any);
@@ -474,7 +477,7 @@ function SubCompanyDialog({
               <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Páginas bloqueadas</h4>
               <p className="text-xs text-muted-foreground mb-3">Selecione as páginas que a sub-empresa NÃO poderá acessar</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {BLOCKABLE_PAGES.map(p => {
+                {selectablePages.map(p => {
                   const checked = (form.blocked_pages || []).includes(p.key);
                   return (
                     <label key={p.key} className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer ${checked ? 'border-primary bg-primary/5' : 'border-border'}`}>
