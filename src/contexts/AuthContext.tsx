@@ -70,16 +70,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
-  // Realtime: refresh quando sub_companies (blocked_pages) ou user_account_access mudar
+  // Realtime: escuta alterações de blocked_pages filtradas por ID
+  // (client_companies.auth_user_id = owner atual, sub_companies.id = sub atual,
+  //  user_account_access.user_id = usuário atual). Isso garante update instantâneo
+  // sem depender de refresh e reduz tráfego de eventos irrelevantes.
+  const ownerId = access?.owner_id ?? session?.user?.id ?? null;
+  const subId = access?.sub_company_id ?? null;
   useEffect(() => {
     if (!session?.user) return;
-    const channel = supabase
-      .channel('access-watch')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sub_companies' }, () => reloadAccess())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'client_companies' }, () => reloadAccess())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_account_access' }, () => reloadAccess())
-      .subscribe();
+    const uid = session.user.id;
+    const channel = supabase.channel(`access-watch:${uid}`);
+
+    // client_companies: filtra pela empresa cujo login é o próprio usuário OU pelo owner_id conhecido
+    channel.on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'client_companies', filter: `auth_user_id=eq.${ownerId ?? uid}` },
+      () => reloadAccess(),
+    );
+
+    if (subId) {
+      channel.on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'sub_companies', filter: `id=eq.${subId}` },
+        () => reloadAccess(),
+      );
+    }
+
+    channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'user_account_access', filter: `user_id=eq.${uid}` },
+      () => reloadAccess(),
+    );
+
+    channel.subscribe((status) => {
+      // Após reconectar (SUBSCRIBED depois de perda), força re-sync para não ficar
+      // com estado desatualizado caso eventos tenham sido perdidos offline.
+      if (status === 'SUBSCRIBED') reloadAccess();
+    });
+
     return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id, ownerId, subId]);
+
+  // Re-sync ao voltar do background (visibilitychange) ou ao recuperar conexão (online).
+  // Garante que blocked_pages reflita o banco mesmo se eventos realtime foram perdidos.
+  useEffect(() => {
+    if (!session?.user) return;
+    const onVisible = () => { if (document.visibilityState === 'visible') reloadAccess(); };
+    const onOnline = () => reloadAccess();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('focus', onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
