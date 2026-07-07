@@ -174,7 +174,7 @@ Deno.serve(async (req) => {
     } else if (provider === "waha") {
       const rawWaha = (url || "").trim().replace(/\/$/, "");
       const wahaUrl = rawWaha && !/^https?:\/\//i.test(rawWaha) ? `https://${rawWaha}` : rawWaha;
-      const session = body?.instance || body?.session || "default";
+      const session = body?.instance || body?.session || sessionFromDb || "default";
       if (!wahaUrl) {
         result = { connected: false, status: "unconfigured", error: "URL WAHA é obrigatória." };
       } else {
