@@ -245,6 +245,8 @@ function SubCompanyDialog({
 }: any) {
   const [form, setForm] = useState<Partial<SubCompany>>({});
   const [saving, setSaving] = useState(false);
+  const { isOwner } = usePlatformOwner();
+  const selectablePages = getSelectablePages({ isPlatformOwner: isOwner, isSubCompanyScope: true });
   useEffect(() => {
     if (editing) setForm(editing);
     else setForm({ name: '', admin_name: '', admin_email: '', admin_password: '', whatsapp_limit: 10, inherit_branding: true, byok_inherit: true, blocked_pages: [], allow_custom_logic: false } as any);
