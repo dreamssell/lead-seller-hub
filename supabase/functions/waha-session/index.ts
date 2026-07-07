@@ -43,6 +43,47 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function expectedWebhookUrl(connectionId: string): string {
+  const supabaseUrl = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
+  return `${supabaseUrl}/functions/v1/waha-inbound?connection=${connectionId}`;
+}
+
+function sessionHasOurWebhook(sessionData: any, connectionId: string): boolean {
+  const target = expectedWebhookUrl(connectionId);
+  const hooks: any[] = sessionData?.config?.webhooks ?? [];
+  return Array.isArray(hooks) && hooks.some((h) => String(h?.url ?? "").trim() === target);
+}
+
+// Rewrites the WAHA session config so `waha-inbound?connection=<id>` receives
+// every relevant event. Stops the session, PUTs the new config, then starts.
+// Returns { ok, status_code, raw } — never throws.
+async function applyWebhookConfig(
+  base: string, sess: string, token: string, connectionId: string,
+): Promise<{ ok: boolean; status_code: number; raw: string }> {
+  const headers = { "X-Api-Key": token, "Content-Type": "application/json" };
+  const cfg = {
+    webhooks: [
+      {
+        url: expectedWebhookUrl(connectionId),
+        events: ["message", "message.any", "message.ack", "session.status"],
+        hmac: null,
+        retries: { policy: "linear", delaySeconds: 2, attempts: 3 },
+        customHeaders: [{ name: "X-Api-Key", value: token }],
+      },
+    ],
+  };
+  await fetch(`${base}/api/sessions/${encodeURIComponent(sess)}/stop`, { method: "POST", headers })
+    .catch(() => null);
+  const putRes = await fetch(`${base}/api/sessions/${encodeURIComponent(sess)}`, {
+    method: "PUT", headers, body: JSON.stringify({ name: sess, config: cfg }),
+  });
+  const raw = await putRes.text().catch(() => "");
+  await fetch(`${base}/api/sessions/${encodeURIComponent(sess)}/start`, { method: "POST", headers })
+    .catch(() => null);
+  return { ok: putRes.ok, status_code: putRes.status, raw: raw.slice(0, 500) };
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -55,7 +96,11 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = (body?.action ?? "status") as
       | "status" | "qr" | "restart" | "logout" | "create" | "delete"
-      | "list_remote" | "test_webhook" | "cleanup_scan" | "configure_webhook";
+      | "list_remote" | "test_webhook" | "cleanup_scan" | "configure_webhook"
+      | "validate_webhook" | "validate_all_webhooks";
+    // When true, `status` will auto-heal a missing/outdated webhook config
+    // in the WAHA server without requiring a separate call. Defaults to true.
+    const autoHeal: boolean = body?.auto_heal !== false;
     const connectionId: string | undefined = body?.connection_id;
 
     const logEvent = async (evType: string, status: string, extra: Record<string, unknown> = {}) => {
@@ -267,48 +312,103 @@ Deno.serve(async (req) => {
     }
 
     // ─── configure_webhook ─────────────────────────────────────────────────
-    // Updates the webhook configuration on an existing WAHA session so it
-    // starts delivering events to waha-inbound. Necessary when the session
-    // was adopted from an external WAHA instance without our webhook baked in.
+    // Force-writes the webhook config for this connection's WAHA session.
     if (action === "configure_webhook") {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-      const webhookUrl = connectionId
-        ? `${supabaseUrl.replace(/\/$/, "")}/functions/v1/waha-inbound?connection=${connectionId}`
-        : undefined;
-      if (!webhookUrl) return json({ error: "missing_connection_id" }, 400);
-
-      const cfg = {
-        webhooks: [
-          {
-            url: webhookUrl,
-            events: ["message", "message.any", "message.ack", "session.status"],
-            hmac: null,
-            retries: { policy: "linear", delaySeconds: 2, attempts: 3 },
-            customHeaders: [{ name: "X-Api-Key", value: token }],
-          },
-        ],
-      };
-
-      // WAHA requires the session to be stopped before PUT /api/sessions/{name}.
-      await fetch(`${base}/api/sessions/${encodeURIComponent(sess)}/stop`, {
-        method: "POST", headers,
-      }).catch(() => null);
-
-      const putRes = await fetch(`${base}/api/sessions/${encodeURIComponent(sess)}`, {
-        method: "PUT", headers, body: JSON.stringify({ name: sess, config: cfg }),
+      if (!connectionId) return json({ ok: false, error: "connection_id_required" }, 400);
+      const r = await applyWebhookConfig(base, sess, token, connectionId);
+      await logEvent("configure_webhook", r.ok ? "success" : "failed", {
+        status_code: r.status_code, webhook_url: expectedWebhookUrl(connectionId),
       });
-      const putText = await putRes.text();
-
-      // Restart the session so the new webhook takes effect.
-      await fetch(`${base}/api/sessions/${encodeURIComponent(sess)}/start`, {
-        method: "POST", headers,
-      }).catch(() => null);
-
-      await logEvent("configure_webhook", putRes.ok ? "success" : "failed", {
-        status_code: putRes.status, webhook_url: webhookUrl,
-      });
-      return json({ ok: putRes.ok, status_code: putRes.status, webhook_url: webhookUrl, raw: putText.slice(0, 500) });
+      return json({ ok: r.ok, status_code: r.status_code, webhook_url: expectedWebhookUrl(connectionId), raw: r.raw });
     }
+
+    // ─── validate_webhook ──────────────────────────────────────────────────
+    // Checks the remote WAHA session config. If the expected webhook is
+    // missing/mismatched, reprograms it automatically (unless dry_run=true).
+    if (action === "validate_webhook") {
+      if (!connectionId) return json({ ok: false, error: "connection_id_required" }, 400);
+      const st = await fetchStatus(base, sess, token);
+      const expected = expectedWebhookUrl(connectionId);
+      const hooks: any[] = st.data?.config?.webhooks ?? [];
+      const valid = sessionHasOurWebhook(st.data, connectionId);
+      let repaired = false;
+      let repair: any = null;
+      if (!valid && body?.dry_run !== true) {
+        repair = await applyWebhookConfig(base, sess, token, connectionId);
+        repaired = repair.ok;
+        await logEvent("validate_webhook", repaired ? "auto_repaired" : "repair_failed", {
+          expected, current: hooks.map((h) => h?.url), status_code: repair.status_code,
+        });
+      } else {
+        await logEvent("validate_webhook", valid ? "ok" : "mismatch_dry_run", {
+          expected, current: hooks.map((h) => h?.url),
+        });
+      }
+      return json({
+        ok: true, valid, repaired, expected_webhook: expected,
+        current_webhooks: hooks.map((h) => ({ url: h?.url, events: h?.events })),
+        repair,
+      });
+    }
+
+    // ─── validate_all_webhooks ─────────────────────────────────────────────
+    // Sweeps every WAHA connection the caller can see and validates/repairs
+    // each session's webhook. Designed to be called from cron or on demand.
+    if (action === "validate_all_webhooks") {
+      const { data: allRows } = await supabaseAdmin
+        .from("whatsapp_connections")
+        .select("id, display_name, status, metadata, owner_id, sub_company_id")
+        .eq("provider", "waha");
+
+      let scope = allRows ?? [];
+      if (callerId) {
+        const { data: roles } = await supabaseAdmin
+          .from("user_roles").select("role").eq("user_id", callerId).eq("role", "admin");
+        if (!roles?.length) {
+          const { data: access } = await supabaseAdmin
+            .from("user_account_access")
+            .select("owner_id, sub_company_id, is_account_admin")
+            .eq("user_id", callerId);
+          scope = scope.filter((c: any) =>
+            c.owner_id === callerId
+            || (access ?? []).some((a: any) =>
+              a.is_account_admin && a.owner_id === c.owner_id
+              && (a.sub_company_id === null || a.sub_company_id === c.sub_company_id)
+            )
+          );
+        }
+      }
+
+      const dryRun = body?.dry_run === true;
+      const results: any[] = [];
+      for (const c of scope) {
+        const cUrl = normalizeUrl(c.metadata?.url);
+        const cTok = c.metadata?.token;
+        const cSess = (c.metadata?.session || "default").trim();
+        if (!cUrl || !cTok) {
+          results.push({ id: c.id, display_name: c.display_name, skipped: "missing_url_or_token" });
+          continue;
+        }
+        const st = await fetchStatus(cUrl, cSess, cTok);
+        const valid = sessionHasOurWebhook(st.data, c.id);
+        let repaired = false;
+        if (!valid && !dryRun) {
+          const r = await applyWebhookConfig(cUrl, cSess, cTok, c.id);
+          repaired = r.ok;
+          await supabaseAdmin.from("connection_events").insert({
+            connection_id: c.id,
+            event_type: "waha.action.validate_webhook",
+            status: repaired ? "auto_repaired" : "repair_failed",
+            payload: { expected: expectedWebhookUrl(c.id), status_code: r.status_code } as any,
+            metadata_json: { source: "waha-session.validate_all", actor: callerId },
+          }).catch(() => null);
+        }
+        results.push({ id: c.id, display_name: c.display_name, valid, repaired });
+      }
+      return json({ ok: true, dry_run: dryRun, checked: results.length, results });
+    }
+
+
 
     // ─── delete ────────────────────────────────────────────────────────────
     if (action === "delete") {
@@ -383,11 +483,32 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Auto-heal: if this is a status probe on a connected session and the
+    // remote WAHA config no longer points at our waha-inbound, silently
+    // reprogram it. Skipped when the session is not yet running (webhook
+    // updates require a running/stopped-then-started session).
+    let webhookHealed = false;
+    let webhookValid: boolean | null = null;
+    if (
+      connectionId && autoHeal && action !== "qr"
+      && /working|connected|open|running|starting/i.test(rawStatus)
+    ) {
+      webhookValid = sessionHasOurWebhook(st.data, connectionId);
+      if (!webhookValid) {
+        const r = await applyWebhookConfig(base, sess, token, connectionId);
+        webhookHealed = r.ok;
+        await logEvent("auto_heal_webhook", r.ok ? "auto_repaired" : "repair_failed", {
+          expected: expectedWebhookUrl(connectionId), status_code: r.status_code,
+        });
+      }
+    }
+
     return json({
       ok: true, action, status: rawStatus,
       connected: /working|connected|open|running/i.test(rawStatus),
       phone: st.data?.me?.id ?? null,
       qr: qrDataUrl, qr_error: qrError,
+      webhook_valid: webhookValid, webhook_healed: webhookHealed,
     });
   } catch (err) {
     return json({ ok: false, error: (err as Error).message });
