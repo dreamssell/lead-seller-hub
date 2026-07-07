@@ -9,11 +9,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const companiesTab = fs.readFileSync(
-  path.resolve(__dirname, '../../src/components/cadastros/CompaniesTab.tsx'),
+  path.resolve(__dirname, 'CompaniesTab.tsx'),
   'utf8',
 );
 const whiteLabelTab = fs.readFileSync(
-  path.resolve(__dirname, '../../src/components/cadastros/WhiteLabelTab.tsx'),
+  path.resolve(__dirname, 'WhiteLabelTab.tsx'),
   'utf8',
 );
 
