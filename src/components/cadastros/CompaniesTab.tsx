@@ -400,7 +400,7 @@ export default function CompaniesTab() {
                 Marque as funcionalidades que esta empresa <strong>NÃO</strong> poderá acessar. As alterações valem no próximo login e afetam todos os usuários da conta.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {BLOCKABLE_PAGES.filter((p) => p.key !== 'white-label').map((p) => {
+                {selectablePages.map((p) => {
                   const checked = (editing?.blocked_pages || []).includes(p.key);
                   const toggle = () => setEditing((prev) => {
                     if (!prev) return prev;
