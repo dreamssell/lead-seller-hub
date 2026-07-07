@@ -541,6 +541,18 @@ Deno.serve(async (req) => {
         );
       }
 
+      await adminClient.from("role_label_history").insert({
+        user_id: newUser.id,
+        owner_id: scope.owner_id,
+        sub_company_id: scope.sub_company_id,
+        from_label: null,
+        to_label: normalizedRole,
+        source: "manage-account-user:create",
+        changed_by: caller.user.id,
+        changed_by_email: caller.user.email ?? null,
+        target_email: normalizedEmail,
+      });
+
       const accessPayload: any = {
         user_id: newUser.id,
         owner_id: scope.owner_id,
