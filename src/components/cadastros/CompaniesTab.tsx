@@ -52,6 +52,8 @@ const EMPTY: Partial<Company> & { password?: string } = {
 
 export default function CompaniesTab() {
   const { user, access } = useAuth();
+  const { isOwner } = usePlatformOwner();
+  const selectablePages = getSelectablePages({ isPlatformOwner: isOwner, isSubCompanyScope: false });
   const [rows, setRows] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
