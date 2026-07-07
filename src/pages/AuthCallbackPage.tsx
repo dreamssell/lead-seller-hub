@@ -62,7 +62,25 @@ export default function AuthCallbackPage() {
 
     const setSessionFromTokens = async () => {
       try {
-        log('setSession:start');
+        // SECURITY: extract sub (user id) from access_token so we can verify the
+        // session Supabase gives us actually matches the token issued for this login.
+        // Prevents a stale session (e.g. previous admin login in same browser) from
+        // leaking through if setSession silently fails or returns cached state.
+        let expectedUserId: string | null = null;
+        try {
+          const payload = JSON.parse(atob(accessToken!.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+          expectedUserId = payload?.sub ?? null;
+        } catch {
+          log('token_decode_failed');
+        }
+
+        // Clear any pre-existing session before applying the new one to prevent
+        // cross-account bleed on shared browsers (e.g. platform owner testing
+        // a client login on the same tab).
+        log('signOut:previous');
+        await supabase.auth.signOut().catch(() => undefined);
+
+        log('setSession:start', { expectedUserId });
         const { data, error: sessionError } = await supabase.auth.setSession({
           access_token: accessToken!,
           refresh_token: refreshToken!,
@@ -78,11 +96,21 @@ export default function AuthCallbackPage() {
           return;
         }
 
+        const receivedUserId = data.session?.user?.id ?? null;
+        if (expectedUserId && receivedUserId && receivedUserId !== expectedUserId) {
+          log('session_user_mismatch', { expectedUserId, receivedUserId });
+          await supabase.auth.signOut().catch(() => undefined);
+          setError('Falha de segurança: a sessão retornada não corresponde ao usuário autenticado. Faça login novamente.');
+          return;
+        }
+
         log('setSession:ok', {
-          userId: data.session?.user?.id ?? null,
+          userId: receivedUserId,
           expiresAt: data.session?.expires_at ?? null,
           durationMs: Math.round(performance.now() - started),
         });
+
+
 
         // Redireciona para destino salvo (se houver) ou dashboard
         const next = searchParams.get('next') || sessionStorage.getItem('auth:next') || '/';
