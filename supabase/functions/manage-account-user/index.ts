@@ -439,6 +439,7 @@ Deno.serve(async (req) => {
           ? access_level
           : (is_account_admin ? "administracao" : "atendimento");
       const normalizedEmail = String(email || "").trim().toLowerCase();
+      const normalizedRole = typeof role_label === "string" ? role_label.trim() : "";
       if (!normalizedEmail || !name || !password || password.length < 6) {
         return userError(
           "Informe e-mail, nome e senha (mínimo 6 caracteres).",
@@ -446,6 +447,14 @@ Deno.serve(async (req) => {
           "invalid_create_payload",
         );
       }
+      if (!normalizedRole) {
+        return userError(
+          "O campo Cargo é obrigatório.",
+          400,
+          "role_label_required",
+        );
+      }
+      console.log(`[manage-account-user] create role_label="${normalizedRole}" email=${normalizedEmail} level=${level}`);
       const pages = Array.isArray(allowed_pages) && allowed_pages.length > 0
         ? allowed_pages
         : ALL_PAGES;
