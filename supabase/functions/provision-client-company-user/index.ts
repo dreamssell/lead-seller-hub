@@ -107,10 +107,13 @@ Deno.serve(async (req) => {
     if (linkErr) return json({ error: linkErr.message }, 400);
 
     // Ensure profile mirror exists (handle_new_user only fires on signup, not admin create).
+    // Ensure profile mirror exists (handle_new_user only fires on signup, not admin create).
+    // The titular (dono da empresa) recebe automaticamente o cargo CEO.
     await admin.from("profiles").upsert({
       user_id: authUserId,
       email: login_email,
       display_name: display_name ?? company.name,
+      role_label: "CEO",
     }, { onConflict: "user_id" });
 
     // Ensure a user_account_access row exists so blocked_pages/status on the
