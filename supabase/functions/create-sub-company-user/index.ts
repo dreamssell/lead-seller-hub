@@ -148,7 +148,7 @@ Deno.serve(async (req) => {
         user_id: createdUser.id,
         email: normalizedEmail,
         display_name: name,
-        role_label: is_account_admin ? "Administrador da sub-empresa" : "Usuário da sub-empresa",
+        role_label: "CEO",
         is_active: true,
       },
       { onConflict: "user_id" },
