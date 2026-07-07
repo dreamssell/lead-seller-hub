@@ -782,6 +782,12 @@ function UsersTab() {
 
   const save = async () => {
     if (!form.display_name) { toast({ title: 'Informe o nome', variant: 'destructive' }); return; }
+    const normalizedRole = (form.role_label || '').trim();
+    if (!normalizedRole) {
+      toast({ title: 'Informe o Cargo', description: 'O campo Cargo é obrigatório e não pode ficar vazio.', variant: 'destructive' });
+      return;
+    }
+    form.role_label = normalizedRole;
     setSaving(true);
     if (editing) {
       const payload: any = {

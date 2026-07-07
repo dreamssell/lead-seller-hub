@@ -143,16 +143,21 @@ Deno.serve(async (req) => {
     }
 
     const createdUser = userResult.data.user;
-    await admin.from("profiles").upsert(
+    const titularRole = "CEO";
+    console.log(`[create-sub-company-user] titular role_label="${titularRole}" sub_company_id=${sub_company_id} auth_user_id=${createdUser.id} email=${normalizedEmail}`);
+    const { error: profileUpsertErr } = await admin.from("profiles").upsert(
       {
         user_id: createdUser.id,
         email: normalizedEmail,
         display_name: name,
-        role_label: "CEO",
+        role_label: titularRole,
         is_active: true,
       },
       { onConflict: "user_id" },
     );
+    if (profileUpsertErr) {
+      console.error(`[create-sub-company-user] profile_upsert_failed: ${profileUpsertErr.message}`);
+    }
 
     const { error: accessError } = await admin.from("user_account_access").upsert(
       {

@@ -439,6 +439,7 @@ Deno.serve(async (req) => {
           ? access_level
           : (is_account_admin ? "administracao" : "atendimento");
       const normalizedEmail = String(email || "").trim().toLowerCase();
+      const normalizedRole = typeof role_label === "string" ? role_label.trim() : "";
       if (!normalizedEmail || !name || !password || password.length < 6) {
         return userError(
           "Informe e-mail, nome e senha (mínimo 6 caracteres).",
@@ -446,6 +447,14 @@ Deno.serve(async (req) => {
           "invalid_create_payload",
         );
       }
+      if (!normalizedRole) {
+        return userError(
+          "O campo Cargo é obrigatório.",
+          400,
+          "role_label_required",
+        );
+      }
+      console.log(`[manage-account-user] create role_label="${normalizedRole}" email=${normalizedEmail} level=${level}`);
       const pages = Array.isArray(allowed_pages) && allowed_pages.length > 0
         ? allowed_pages
         : ALL_PAGES;
@@ -519,7 +528,7 @@ Deno.serve(async (req) => {
           user_id: newUser.id,
           email: normalizedEmail,
           display_name: name,
-          role_label: role_label || null,
+          role_label: normalizedRole,
           is_active: true,
         },
         { onConflict: "user_id" },
@@ -726,7 +735,18 @@ Deno.serve(async (req) => {
       const profileUpdate: any = {};
       if (typeof name === "string") profileUpdate.display_name = name;
       if (typeof phone === "string") profileUpdate.phone = phone;
-      if (typeof role_label === "string") profileUpdate.role_label = role_label;
+      if (typeof role_label === "string") {
+        const trimmedRole = role_label.trim();
+        if (!trimmedRole) {
+          return userError(
+            "O campo Cargo é obrigatório e não pode ficar vazio.",
+            400,
+            "role_label_required",
+          );
+        }
+        profileUpdate.role_label = trimmedRole;
+        console.log(`[manage-account-user] update role_label="${trimmedRole}" user_id=${user_id}`);
+      }
       if (typeof is_active === "boolean") profileUpdate.is_active = is_active;
       if (Object.keys(profileUpdate).length > 0) {
         const { error: profileError } = await adminClient.from("profiles")
