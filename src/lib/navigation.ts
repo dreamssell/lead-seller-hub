@@ -101,14 +101,37 @@ export function getPageKeyByPath(pathname: string): SidebarPageKey {
   return nested?.key || 'dashboard';
 }
 // Sub-features that can be blocked per user/sub-company but are not standalone routes.
-export const EXTRA_PERMISSION_KEYS: { key: SidebarPageKey; icon: LucideIcon; label: string; desc: string }[] = [
-  { key: 'white-label', icon: Sparkles, label: 'White Label', desc: 'Personalização de marca (aba em Cadastros)' },
+export type BlockablePage = {
+  key: SidebarPageKey;
+  icon: LucideIcon;
+  label: string;
+  desc: string;
+  ownerOnly?: boolean;
+  subCompanyOnly?: boolean;
+};
+
+export const EXTRA_PERMISSION_KEYS: BlockablePage[] = [
+  { key: 'white-label', icon: Sparkles, label: 'White Label', desc: 'Personalização de marca (aba em Cadastros)', subCompanyOnly: true },
 ];
 
 // Used by the "blocked pages" selector — includes routes + extra permission keys.
-export const BLOCKABLE_PAGES = [
-  ...PAGE_OPTIONS.map(p => ({ key: p.key, icon: p.icon, label: p.label, desc: p.desc })),
+export const BLOCKABLE_PAGES: BlockablePage[] = [
+  ...PAGE_OPTIONS.map((p) => ({ key: p.key, icon: p.icon, label: p.label, desc: p.desc, ownerOnly: p.ownerOnly })),
   ...EXTRA_PERMISSION_KEYS,
 ];
 
-export const ALL_PERMISSION_KEYS: SidebarPageKey[] = BLOCKABLE_PAGES.map(p => p.key);
+export const ALL_PERMISSION_KEYS: SidebarPageKey[] = BLOCKABLE_PAGES.map((p) => p.key);
+
+/**
+ * Filtro canônico do seletor de páginas (permissões por usuário / blocked_pages
+ * de Empresa ou Sub-empresa). Regras:
+ *  - Páginas `ownerOnly` (ex.: Status do Backend) só aparecem para o dono da plataforma.
+ *  - Páginas `subCompanyOnly` (ex.: White Label) só aparecem no escopo de Sub-empresa.
+ */
+export function getSelectablePages(opts: { isPlatformOwner: boolean; isSubCompanyScope: boolean }): BlockablePage[] {
+  return BLOCKABLE_PAGES.filter((p) => {
+    if (p.ownerOnly && !opts.isPlatformOwner) return false;
+    if (p.subCompanyOnly && !opts.isSubCompanyScope) return false;
+    return true;
+  });
+}
