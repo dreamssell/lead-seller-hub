@@ -60,15 +60,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setAccessLoading(true);
     const uid = session.user.id;
+    const client = supabase as any;
+    const safe = async <T,>(p: Promise<T> | undefined | null): Promise<T | { data: null } | { data: null; error: unknown }> => {
+      if (!p || typeof (p as any).then !== 'function') return { data: null } as any;
+      try { return await p; } catch { return { data: null } as any; }
+    };
     const [{ data }, roleRes, ccRes] = await Promise.all([
-      (supabase as any).rpc('get_my_account_access'),
-      (supabase as any).rpc('has_role', { _user_id: uid, _role: 'admin' as any }),
-      (supabase as any)
-        .from('client_companies')
-        .select('id, owner_id, sub_company_id, status')
-        .eq('auth_user_id', uid)
-        .maybeSingle(),
-    ]);
+      safe(client.rpc?.('get_my_account_access')),
+      safe(client.rpc?.('has_role', { _user_id: uid, _role: 'admin' })),
+      safe(client.from?.('client_companies')?.select?.('id, owner_id, sub_company_id, status').eq('auth_user_id', uid).maybeSingle()),
+    ]) as any;
     let row: AccountAccess | null = Array.isArray(data) ? data[0] : null;
 
     // Fallback: platform owner (admin app_role) — grants full access.
