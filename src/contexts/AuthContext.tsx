@@ -76,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const channel = supabase
       .channel('access-watch')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sub_companies' }, () => reloadAccess())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'client_companies' }, () => reloadAccess())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_account_access' }, () => reloadAccess())
       .subscribe();
     return () => { supabase.removeChannel(channel); };

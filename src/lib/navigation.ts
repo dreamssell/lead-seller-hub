@@ -85,7 +85,7 @@ export const navSections: { label: string; items: SidebarNavItem[] }[] = [
       { key: 'documentation', icon: FileText, label: 'Documentação', path: '/documentation', desc: 'Manuais técnicos e API' },
       // Itens abaixo são apenas do dono da plataforma — diagnósticos internos, status técnico e
       // ferramentas de desenvolvimento não devem ser expostos a clientes ou sub-empresas.
-      { key: 'developer', icon: Settings, label: 'Desenvolvedor', path: '/developer', desc: 'Preferências e integrações técnicas', ownerOnly: true },
+      { key: 'developer', icon: Settings, label: 'Desenvolvedor', path: '/developer', desc: 'Preferências e integrações técnicas' },
       { key: 'status', icon: Activity, label: 'Status do Backend', path: '/status', desc: 'Saúde técnica da plataforma', ownerOnly: true },
     ],
   },
