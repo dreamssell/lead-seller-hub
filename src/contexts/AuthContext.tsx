@@ -59,8 +59,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     setAccessLoading(true);
-    const { data } = await (supabase as any).rpc('get_my_account_access');
-    const row = Array.isArray(data) ? data[0] : null;
+    const uid = session.user.id;
+    const [{ data }, roleRes, ccRes] = await Promise.all([
+      (supabase as any).rpc('get_my_account_access'),
+      (supabase as any).rpc('has_role', { _user_id: uid, _role: 'admin' as any }),
+      (supabase as any)
+        .from('client_companies')
+        .select('id, owner_id, sub_company_id, status')
+        .eq('auth_user_id', uid)
+        .maybeSingle(),
+    ]);
+    let row: AccountAccess | null = Array.isArray(data) ? data[0] : null;
+
+    // Fallback: platform owner (admin app_role) — grants full access.
+    if (!row && roleRes?.data === true) {
+      row = {
+        owner_id: uid,
+        sub_company_id: null,
+        sub_company_name: null,
+        allowed_pages: [],
+        is_account_admin: true,
+        blocked_pages: [],
+        status: 'active',
+        allow_custom_logic: true,
+        feature_landing_builder: true,
+      };
+    }
+
+    // Fallback: user is the direct owner of a client_company — scope to own account.
+    if (!row && ccRes?.data) {
+      const cc = ccRes.data as { owner_id: string | null; sub_company_id: string | null; status: string | null };
+      row = {
+        owner_id: cc.owner_id || uid,
+        sub_company_id: cc.sub_company_id,
+        sub_company_name: null,
+        allowed_pages: [],
+        is_account_admin: true,
+        blocked_pages: [],
+        status: cc.status === 'blocked' ? 'blocked' : 'active',
+        allow_custom_logic: true,
+        feature_landing_builder: false,
+      };
+    }
+
     setAccess(row || null);
     setAccessLoading(false);
   };
