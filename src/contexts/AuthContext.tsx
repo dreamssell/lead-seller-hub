@@ -157,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setAccess(row || null);
     setAccessLoading(false);
+    setTenantResolved(true);
   };
 
   useEffect(() => {
