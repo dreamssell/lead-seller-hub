@@ -154,6 +154,24 @@ export function WahaMonitorPanel() {
     }
   }, []);
 
+  const configureWebhook = useCallback(async (conn: WahaConn) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('waha-session', {
+        body: { action: 'configure_webhook', connection_id: conn.id },
+      });
+      if (error) throw error;
+      if ((data as any)?.ok) {
+        toast({ title: 'Webhook configurado', description: 'Novas mensagens agora serão sincronizadas.' });
+        setTimeout(() => probe(conn), 3000);
+      } else {
+        toast({ title: 'Falha ao configurar webhook', description: JSON.stringify(data).slice(0, 200), variant: 'destructive' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err?.message ?? 'Erro', variant: 'destructive' });
+    }
+  }, [probe]);
+
+
   // Auto-probe once when connections load
   useEffect(() => {
     connections.forEach((c) => {
