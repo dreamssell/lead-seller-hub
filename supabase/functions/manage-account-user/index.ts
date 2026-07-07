@@ -528,7 +528,7 @@ Deno.serve(async (req) => {
           user_id: newUser.id,
           email: normalizedEmail,
           display_name: name,
-          role_label: role_label || null,
+          role_label: normalizedRole,
           is_active: true,
         },
         { onConflict: "user_id" },
