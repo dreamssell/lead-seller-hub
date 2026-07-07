@@ -21,7 +21,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import WhiteLabelTab from '@/components/cadastros/WhiteLabelTab';
 import CompaniesTab from '@/components/cadastros/CompaniesTab';
 import { logAudit } from '@/lib/audit';
-import { BLOCKABLE_PAGES, getSelectablePages } from '@/lib/navigation';
+import { getSelectablePages } from '@/lib/navigation';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { extractManageUserError } from '@/lib/manageAccountUserErrors';
 
