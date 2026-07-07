@@ -2708,6 +2708,84 @@ export type Database = {
         }
         Relationships: []
       }
+      role_label_backfill_runs: {
+        Row: {
+          created_at: string
+          empty_defaulted: number
+          errors: Json
+          finished_at: string | null
+          id: string
+          started_at: string
+          status: string
+          titulares_ceo: number
+          triggered_by: string
+        }
+        Insert: {
+          created_at?: string
+          empty_defaulted?: number
+          errors?: Json
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          titulares_ceo?: number
+          triggered_by?: string
+        }
+        Update: {
+          created_at?: string
+          empty_defaulted?: number
+          errors?: Json
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          titulares_ceo?: number
+          triggered_by?: string
+        }
+        Relationships: []
+      }
+      role_label_history: {
+        Row: {
+          changed_by: string | null
+          changed_by_email: string | null
+          created_at: string
+          from_label: string | null
+          id: string
+          owner_id: string | null
+          source: string
+          sub_company_id: string | null
+          target_email: string | null
+          to_label: string | null
+          user_id: string
+        }
+        Insert: {
+          changed_by?: string | null
+          changed_by_email?: string | null
+          created_at?: string
+          from_label?: string | null
+          id?: string
+          owner_id?: string | null
+          source: string
+          sub_company_id?: string | null
+          target_email?: string | null
+          to_label?: string | null
+          user_id: string
+        }
+        Update: {
+          changed_by?: string | null
+          changed_by_email?: string | null
+          created_at?: string
+          from_label?: string | null
+          id?: string
+          owner_id?: string | null
+          source?: string
+          sub_company_id?: string | null
+          target_email?: string | null
+          to_label?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       routing_rules: {
         Row: {
           active: boolean
