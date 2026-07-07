@@ -4,6 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
+import { sanitizeFilename } from '@/lib/sanitizeFilename';
+
+const MAX_AVATAR_MB = 5;
+const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
 
 export default function ProfileTab() {
   const { signOut, user } = useAuth();
@@ -45,26 +49,75 @@ export default function ProfileTab() {
   }, [user]);
 
   const handleAvatarUpload = async (file: File) => {
-    if (!user) return;
+    if (!user) {
+      toast({ title: 'Sessão expirada', description: 'Faça login novamente.', variant: 'destructive' });
+      return;
+    }
+    // Validate size
+    const sizeMb = file.size / (1024 * 1024);
+    if (sizeMb > MAX_AVATAR_MB) {
+      toast({
+        title: 'Arquivo muito grande',
+        description: `A foto tem ${sizeMb.toFixed(1)} MB. O limite é ${MAX_AVATAR_MB} MB.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    // Validate type (HEIC / others rejected — many browsers can't render them)
+    const type = (file.type || '').toLowerCase();
+    if (type && !ALLOWED_AVATAR_TYPES.includes(type)) {
+      toast({
+        title: 'Formato não suportado',
+        description: 'Envie uma imagem JPG, PNG, WEBP ou GIF. Fotos HEIC do iPhone não são compatíveis — converta para JPG.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setUploadingAvatar(true);
-    const ext = file.name.split('.').pop();
-    const path = `${user.id}/${Date.now()}.${ext}`;
-    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
-    if (upErr) {
+    try {
+      const safeName = sanitizeFilename(file.name || 'avatar.jpg');
+      const path = `${user.id}/${Date.now()}_${safeName}`;
+      const { error: upErr } = await supabase.storage
+        .from('avatars')
+        .upload(path, file, {
+          upsert: true,
+          contentType: file.type || 'image/jpeg',
+          cacheControl: '3600',
+        });
+      if (upErr) {
+        console.error('[avatar upload] storage error', upErr);
+        throw new Error(upErr.message || 'Falha ao enviar imagem para o armazenamento.');
+      }
+      const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+      const url = `${pub.publicUrl}?v=${Date.now()}`;
+
+      // Upsert to guarantee row exists even if the trigger did not create it
+      const { error: updErr } = await supabase
+        .from('profiles')
+        .upsert(
+          { user_id: user.id, email: user.email ?? '', avatar_url: url },
+          { onConflict: 'user_id' },
+        );
+      if (updErr) {
+        console.error('[avatar upload] profile update error', updErr);
+        throw new Error(updErr.message || 'Falha ao salvar a foto no perfil.');
+      }
+
+      setAvatarUrl(url);
+      window.dispatchEvent(new Event('profile:updated'));
+      toast({ title: 'Foto atualizada', description: 'Sua nova foto de perfil foi salva.' });
+    } catch (err: any) {
+      console.error('[avatar upload] failed', err);
+      toast({
+        title: 'Erro no upload',
+        description: err?.message || 'Não foi possível enviar a foto. Tente novamente.',
+        variant: 'destructive',
+      });
+    } finally {
       setUploadingAvatar(false);
-      toast({ title: 'Erro no upload', description: upErr.message, variant: 'destructive' });
-      return;
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
     }
-    const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
-    const url = pub.publicUrl;
-    const { error: updErr } = await supabase.from('profiles').update({ avatar_url: url }).eq('user_id', user.id);
-    setUploadingAvatar(false);
-    if (updErr) {
-      toast({ title: 'Erro ao salvar', description: updErr.message, variant: 'destructive' });
-      return;
-    }
-    setAvatarUrl(url);
-    toast({ title: 'Foto atualizada' });
   };
 
   const handleSave = async () => {
