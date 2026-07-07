@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = (body?.action ?? "status") as
       | "status" | "qr" | "restart" | "logout" | "create" | "delete"
-      | "list_remote" | "test_webhook" | "cleanup_scan";
+      | "list_remote" | "test_webhook" | "cleanup_scan" | "configure_webhook";
     const connectionId: string | undefined = body?.connection_id;
 
     const logEvent = async (evType: string, status: string, extra: Record<string, unknown> = {}) => {
