@@ -735,7 +735,18 @@ Deno.serve(async (req) => {
       const profileUpdate: any = {};
       if (typeof name === "string") profileUpdate.display_name = name;
       if (typeof phone === "string") profileUpdate.phone = phone;
-      if (typeof role_label === "string") profileUpdate.role_label = role_label;
+      if (typeof role_label === "string") {
+        const trimmedRole = role_label.trim();
+        if (!trimmedRole) {
+          return userError(
+            "O campo Cargo é obrigatório e não pode ficar vazio.",
+            400,
+            "role_label_required",
+          );
+        }
+        profileUpdate.role_label = trimmedRole;
+        console.log(`[manage-account-user] update role_label="${trimmedRole}" user_id=${user_id}`);
+      }
       if (typeof is_active === "boolean") profileUpdate.is_active = is_active;
       if (Object.keys(profileUpdate).length > 0) {
         const { error: profileError } = await adminClient.from("profiles")
