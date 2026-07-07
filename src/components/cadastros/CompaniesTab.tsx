@@ -14,7 +14,8 @@ import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Building2, Plus, Pencil, Trash2, Search, Mail, Phone, Globe, MapPin, FileText, Info, ShieldOff } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { BLOCKABLE_PAGES } from '@/lib/navigation';
+import { BLOCKABLE_PAGES, getSelectablePages } from '@/lib/navigation';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
 
 type Company = {
