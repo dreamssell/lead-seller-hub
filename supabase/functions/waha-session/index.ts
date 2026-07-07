@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = (body?.action ?? "status") as
       | "status" | "qr" | "restart" | "logout" | "create" | "delete"
-      | "list_remote" | "test_webhook" | "cleanup_scan";
+      | "list_remote" | "test_webhook" | "cleanup_scan" | "configure_webhook";
     const connectionId: string | undefined = body?.connection_id;
 
     const logEvent = async (evType: string, status: string, extra: Record<string, unknown> = {}) => {
@@ -264,6 +264,50 @@ Deno.serve(async (req) => {
       }
       await logEvent("create", res.ok ? "success" : "failed", { status_code: res.status, session: sess });
       return json({ ok: res.ok, status_code: res.status, session: sess, raw: data });
+    }
+
+    // ─── configure_webhook ─────────────────────────────────────────────────
+    // Updates the webhook configuration on an existing WAHA session so it
+    // starts delivering events to waha-inbound. Necessary when the session
+    // was adopted from an external WAHA instance without our webhook baked in.
+    if (action === "configure_webhook") {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+      const webhookUrl = connectionId
+        ? `${supabaseUrl.replace(/\/$/, "")}/functions/v1/waha-inbound?connection=${connectionId}`
+        : undefined;
+      if (!webhookUrl) return json({ error: "missing_connection_id" }, 400);
+
+      const cfg = {
+        webhooks: [
+          {
+            url: webhookUrl,
+            events: ["message", "message.any", "message.ack", "session.status"],
+            hmac: null,
+            retries: { policy: "linear", delaySeconds: 2, attempts: 3 },
+            customHeaders: [{ name: "X-Api-Key", value: token }],
+          },
+        ],
+      };
+
+      // WAHA requires the session to be stopped before PUT /api/sessions/{name}.
+      await fetch(`${base}/api/sessions/${encodeURIComponent(sess)}/stop`, {
+        method: "POST", headers,
+      }).catch(() => null);
+
+      const putRes = await fetch(`${base}/api/sessions/${encodeURIComponent(sess)}`, {
+        method: "PUT", headers, body: JSON.stringify({ name: sess, config: cfg }),
+      });
+      const putText = await putRes.text();
+
+      // Restart the session so the new webhook takes effect.
+      await fetch(`${base}/api/sessions/${encodeURIComponent(sess)}/start`, {
+        method: "POST", headers,
+      }).catch(() => null);
+
+      await logEvent("configure_webhook", putRes.ok ? "success" : "failed", {
+        status_code: putRes.status, webhook_url: webhookUrl,
+      });
+      return json({ ok: putRes.ok, status_code: putRes.status, webhook_url: webhookUrl, raw: putText.slice(0, 500) });
     }
 
     // ─── delete ────────────────────────────────────────────────────────────
