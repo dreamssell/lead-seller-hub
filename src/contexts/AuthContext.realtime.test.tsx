@@ -59,9 +59,9 @@ describe('AuthContext · realtime blocked_pages', () => {
   beforeEach(() => { currentBlocked = []; realtimeCallback = null; subscribeCb = null; });
 
   it('Assinaturas e Desenvolvedor iniciam liberados quando não estão em blocked_pages', async () => {
-    const { getByTestId } = render(<AuthProvider><Probe /></AuthProvider>);
-    await waitFor(() => expect(getByTestId('sig').textContent).toBe('true'));
-    expect(getByTestId('dev').textContent).toBe('true');
+    const { getByTestId, queryByTestId } = render(<AuthProvider><Probe /></AuthProvider>);
+    await waitFor(() => expect(queryByTestId('sig')?.textContent).toBe('true'));
+    await waitFor(() => expect(getByTestId('dev').textContent).toBe('true'));
   });
 
   it('quando um UPDATE de client_companies bloqueia signatures/developer, o UI reflete sem refresh', async () => {
