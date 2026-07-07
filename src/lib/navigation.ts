@@ -40,7 +40,8 @@ export type SidebarPageKey =
   | 'profile'
   | 'documentation'
   | 'signatures'
-  | 'white-label';
+  | 'white-label'
+  | 'role-label-audit';
 
 export type SidebarNavItem = {
   key: SidebarPageKey;
