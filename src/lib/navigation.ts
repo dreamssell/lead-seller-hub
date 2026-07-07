@@ -87,6 +87,7 @@ export const navSections: { label: string; items: SidebarNavItem[] }[] = [
       // ferramentas de desenvolvimento não devem ser expostos a clientes ou sub-empresas.
       { key: 'developer', icon: Settings, label: 'Desenvolvedor', path: '/developer', desc: 'Preferências e integrações técnicas' },
       { key: 'status', icon: Activity, label: 'Status do Backend', path: '/status', desc: 'Saúde técnica da plataforma', ownerOnly: true },
+      { key: 'role-label-audit', icon: Activity, label: 'Auditoria de Cargos', path: '/internal/role-label-audit', desc: 'Execuções do job de correção de Cargo e histórico de mudanças', ownerOnly: true },
     ],
   },
 
