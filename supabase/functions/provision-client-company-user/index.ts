@@ -118,6 +118,18 @@ Deno.serve(async (req) => {
     }, { onConflict: "user_id" });
     if (profileErr) {
       console.error(`[provision-client-company-user] profile_upsert_failed: ${profileErr.message}`);
+    } else {
+      await admin.from("role_label_history").insert({
+        user_id: authUserId,
+        owner_id: authUserId,
+        sub_company_id: null,
+        from_label: null,
+        to_label: titularRole,
+        source: "provision-client-company-user:titular-ceo",
+        changed_by: caller.id,
+        changed_by_email: caller.email ?? null,
+        target_email: login_email,
+      });
     }
 
     // Ensure a user_account_access row exists so blocked_pages/status on the

@@ -541,6 +541,18 @@ Deno.serve(async (req) => {
         );
       }
 
+      await adminClient.from("role_label_history").insert({
+        user_id: newUser.id,
+        owner_id: scope.owner_id,
+        sub_company_id: scope.sub_company_id,
+        from_label: null,
+        to_label: normalizedRole,
+        source: "manage-account-user:create",
+        changed_by: caller.user.id,
+        changed_by_email: caller.user.email ?? null,
+        target_email: normalizedEmail,
+      });
+
       const accessPayload: any = {
         user_id: newUser.id,
         owner_id: scope.owner_id,
@@ -759,6 +771,21 @@ Deno.serve(async (req) => {
           );
         }
       }
+
+      if (typeof profileUpdate.role_label === "string" && profileUpdate.role_label !== (beforeProfile?.role_label ?? null)) {
+        await adminClient.from("role_label_history").insert({
+          user_id,
+          owner_id: scope.owner_id,
+          sub_company_id: scope.sub_company_id,
+          from_label: beforeProfile?.role_label ?? null,
+          to_label: profileUpdate.role_label,
+          source: "manage-account-user:update",
+          changed_by: caller.user.id,
+          changed_by_email: caller.user.email ?? null,
+          target_email: beforeProfile?.email ?? null,
+        });
+      }
+
 
       const accessUpdate: any = { updated_at: new Date().toISOString() };
       if (Array.isArray(allowed_pages)) {

@@ -157,6 +157,18 @@ Deno.serve(async (req) => {
     );
     if (profileUpsertErr) {
       console.error(`[create-sub-company-user] profile_upsert_failed: ${profileUpsertErr.message}`);
+    } else {
+      await admin.from("role_label_history").insert({
+        user_id: createdUser.id,
+        owner_id: sub.owner_id,
+        sub_company_id,
+        from_label: null,
+        to_label: titularRole,
+        source: "create-sub-company-user:titular-ceo",
+        changed_by: caller.user.id,
+        changed_by_email: caller.user.email ?? null,
+        target_email: normalizedEmail,
+      });
     }
 
     const { error: accessError } = await admin.from("user_account_access").upsert(

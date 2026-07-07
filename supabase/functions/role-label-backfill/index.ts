@@ -25,24 +25,30 @@ Deno.serve(async (req) => {
 
   const startedAt = new Date().toISOString();
   const summary = { titulares_ceo: 0, generic_cleared: 0, empty_defaulted: 0, errors: [] as string[] };
+  let triggered_by = "cron";
+  try {
+    const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+    if (typeof body?.triggered_by === "string") triggered_by = body.triggered_by;
+  } catch { /* ignore */ }
+
+  async function recordHistory(rows: Array<{ user_id: string; from: string | null; to: string }>) {
+    if (rows.length === 0) return;
+    const payload = rows.map((r) => ({
+      user_id: r.user_id,
+      from_label: r.from,
+      to_label: r.to,
+      source: "backfill_job",
+      changed_by: null,
+    }));
+    const { error } = await admin.from("role_label_history").insert(payload);
+    if (error) summary.errors.push(`history_insert: ${error.message}`);
+  }
 
   try {
-    // 1) Titulares (client_companies.auth_user_id / sub_companies.owner_id / user_account_access.is_owner)
-    //    → role_label = 'CEO' quando estiver vazio ou for um rótulo genérico.
-    const titularUpdate = await admin.rpc as unknown;
-    // Sem RPC específica: usamos update parametrizado direto na tabela.
-    const { data: titularIds } = await admin
-      .from("user_account_access")
-      .select("user_id")
-      .eq("is_owner", true);
-    const { data: ccIds } = await admin
-      .from("client_companies")
-      .select("auth_user_id")
-      .not("auth_user_id", "is", null);
-    const { data: subIds } = await admin
-      .from("sub_companies")
-      .select("owner_id")
-      .not("owner_id", "is", null);
+    // 1) Titulares → 'CEO'
+    const { data: titularIds } = await admin.from("user_account_access").select("user_id").eq("is_owner", true);
+    const { data: ccIds } = await admin.from("client_companies").select("auth_user_id").not("auth_user_id", "is", null);
+    const { data: subIds } = await admin.from("sub_companies").select("owner_id").not("owner_id", "is", null);
 
     const titulares = new Set<string>();
     (titularIds || []).forEach((r: any) => r.user_id && titulares.add(r.user_id));
@@ -51,33 +57,30 @@ Deno.serve(async (req) => {
 
     if (titulares.size > 0) {
       const ids = Array.from(titulares);
-      const { data: needsFix } = await admin
-        .from("profiles")
-        .select("user_id, role_label")
-        .in("user_id", ids);
-      const toFix = (needsFix || []).filter((p: any) => {
+      const { data: needsFix } = await admin.from("profiles").select("user_id, role_label").in("user_id", ids);
+      const targets = (needsFix || []).filter((p: any) => {
         const v = (p.role_label || "").trim();
         return !v || GENERIC_LABELS.includes(v);
-      }).map((p: any) => p.user_id);
-
+      });
+      const toFix = targets.map((p: any) => p.user_id);
       if (toFix.length > 0) {
         const { error, count } = await admin
           .from("profiles")
           .update({ role_label: "CEO", updated_at: new Date().toISOString() }, { count: "exact" })
           .in("user_id", toFix);
         if (error) summary.errors.push(`titulares_ceo: ${error.message}`);
-        else summary.titulares_ceo = count ?? toFix.length;
+        else {
+          summary.titulares_ceo = count ?? toFix.length;
+          await recordHistory(targets.map((p: any) => ({ user_id: p.user_id, from: p.role_label ?? null, to: "CEO" })));
+        }
       }
     }
 
-    // 2) Demais perfis com role_label vazio → "Colaborador" (rótulo neutro, editável).
-    const { data: emptyProfiles } = await admin
-      .from("profiles")
-      .select("user_id, role_label");
-    const emptyIds = (emptyProfiles || [])
-      .filter((p: any) => !((p.role_label || "").trim()))
-      .map((p: any) => p.user_id)
-      .filter((id: string) => !titulares.has(id));
+    // 2) Demais perfis vazios → 'Colaborador'
+    const { data: emptyProfiles } = await admin.from("profiles").select("user_id, role_label");
+    const emptyTargets = (emptyProfiles || [])
+      .filter((p: any) => !((p.role_label || "").trim()) && !titulares.has(p.user_id));
+    const emptyIds = emptyTargets.map((p: any) => p.user_id);
 
     if (emptyIds.length > 0) {
       const { error, count } = await admin
@@ -85,19 +88,41 @@ Deno.serve(async (req) => {
         .update({ role_label: "Colaborador", updated_at: new Date().toISOString() }, { count: "exact" })
         .in("user_id", emptyIds);
       if (error) summary.errors.push(`empty_defaulted: ${error.message}`);
-      else summary.empty_defaulted = count ?? emptyIds.length;
+      else {
+        summary.empty_defaulted = count ?? emptyIds.length;
+        await recordHistory(emptyTargets.map((p: any) => ({ user_id: p.user_id, from: p.role_label ?? null, to: "Colaborador" })));
+      }
     }
 
-    console.log(`[role-label-backfill] started_at=${startedAt} summary=${JSON.stringify(summary)}`);
-    return new Response(JSON.stringify({ ok: true, started_at: startedAt, ...summary }), {
+    const status = summary.errors.length > 0 ? "partial" : "success";
+    await admin.from("role_label_backfill_runs").insert({
+      started_at: startedAt,
+      finished_at: new Date().toISOString(),
+      titulares_ceo: summary.titulares_ceo,
+      empty_defaulted: summary.empty_defaulted,
+      errors: summary.errors,
+      status,
+      triggered_by,
+    });
+    console.log(`[role-label-backfill] started_at=${startedAt} status=${status} summary=${JSON.stringify(summary)}`);
+    return new Response(JSON.stringify({ ok: true, started_at: startedAt, status, ...summary }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
-    console.error(`[role-label-backfill] unexpected: ${e?.message || e}`);
-    return new Response(JSON.stringify({ ok: false, error: String(e?.message || e), ...summary }), {
+    const msg = String(e?.message || e);
+    console.error(`[role-label-backfill] unexpected: ${msg}`);
+    await admin.from("role_label_backfill_runs").insert({
+      started_at: startedAt,
+      finished_at: new Date().toISOString(),
+      status: "failed",
+      errors: [msg, ...summary.errors],
+      triggered_by,
+    });
+    return new Response(JSON.stringify({ ok: false, error: msg, ...summary }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
+
