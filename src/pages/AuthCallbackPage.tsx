@@ -78,7 +78,7 @@ export default function AuthCallbackPage() {
         // cross-account bleed on shared browsers (e.g. platform owner testing
         // a client login on the same tab).
         log('signOut:previous');
-        await supabase.auth.signOut().catch(() => undefined);
+        try { await (supabase.auth as any).signOut?.(); } catch { /* ignore */ }
 
         log('setSession:start', { expectedUserId });
         const { data, error: sessionError } = await supabase.auth.setSession({
