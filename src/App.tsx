@@ -95,7 +95,7 @@ const App = () => (
               <Route path="/pipeline" element={<ProtectedRoute><PipelinePage /></ProtectedRoute>} />
               <Route path="/signatures" element={<ProtectedRoute pageKey="signatures"><SignaturesPage /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><AccountSettingsPage /></ProtectedRoute>} />
-              <Route path="/developer" element={<ProtectedRoute ownerOnly><DeveloperPage /></ProtectedRoute>} />
+              <Route path="/developer" element={<ProtectedRoute pageKey="developer"><DeveloperPage /></ProtectedRoute>} />
               <Route path="/api-keys" element={<ProtectedRoute><APIKeysPage /></ProtectedRoute>} />
               <Route path="/wavoip" element={<ProtectedRoute pageKey="wavoip"><WavoipPage standalone={true} /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
