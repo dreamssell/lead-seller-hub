@@ -80,7 +80,7 @@ export default function RoleLabelAuditPage() {
   const totalFixed = runs.reduce((sum, r) => sum + (r.titulares_ceo || 0) + (r.empty_defaulted || 0), 0);
 
   return (
-    <AppLayout>
+    <AppLayout title="Auditoria de Cargos">
       <div className="space-y-6 p-6">
         <div className="flex items-center justify-between">
           <div>
