@@ -49,8 +49,10 @@ export default function ProfileTab() {
   }, [user]);
 
   const handleAvatarUpload = async (file: File) => {
-    if (!user) return;
-    setUploadingAvatar(true);
+    if (!user) {
+      toast({ title: 'Sessão expirada', description: 'Faça login novamente.', variant: 'destructive' });
+      return;
+    }
     // Validate size
     const sizeMb = file.size / (1024 * 1024);
     if (sizeMb > MAX_AVATAR_MB) {
