@@ -973,13 +973,13 @@ function UsersTab() {
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-sm font-medium">Permissões por página (Sidebar)</Label>
                 <div className="flex gap-1">
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, allowed_pages: BLOCKABLE_PAGES.map(p => p.key) })}>Tudo</Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, allowed_pages: selectablePages.map(p => p.key) })}>Tudo</Button>
                   <Button type="button" variant="ghost" size="sm" onClick={() => setForm({ ...form, allowed_pages: ['profile'] })}>Nada</Button>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground mb-3">Marque apenas as páginas que este usuário poderá acessar. "Meu Perfil" deve permanecer marcado.</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {BLOCKABLE_PAGES.map(p => {
+                {selectablePages.map(p => {
                   const checked = form.allowed_pages.includes(p.key);
                   const Icon = p.icon;
                   return (
