@@ -254,7 +254,9 @@ Deno.serve(async (req) => {
       let data: any = {};
       try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
 
-      if (res.ok && conn) {
+      // Persist config even if remote already had the session (422). This lets
+      // the platform "adopt" a pre-existing WAHA session without recreating it.
+      if ((res.ok || res.status === 422 || res.status === 409) && conn) {
         await supabaseAdmin.from("whatsapp_connections").update({
           metadata: { ...(conn.metadata ?? {}), url: base, token, session: sess },
           status: "connecting",
