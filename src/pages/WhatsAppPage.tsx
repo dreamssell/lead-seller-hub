@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import UazAuditTab from '@/components/settings/UazAuditTab';
 import { WhatsAppConnectionCard } from '@/components/whatsapp/WhatsAppConnectionCard';
 import { EvolutionAuditAggregatePanel } from '@/components/whatsapp/EvolutionAuditAggregatePanel';
+import { WahaMonitorPanel } from '@/components/whatsapp/WahaMonitorPanel';
 import { WhatsAppConnection, WhatsAppProvider } from '@/components/whatsapp/types';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
@@ -109,6 +110,10 @@ export default function WhatsAppPage() {
                   Auditoria & Logs
                 </TabsTrigger>
               )}
+              <TabsTrigger value="waha" className="gap-2">
+                <Smartphone className="w-4 h-4" />
+                WAHA Monitor
+              </TabsTrigger>
               <TabsTrigger value="aggregate" className="gap-2">
                 <Activity className="w-4 h-4" />
                 Auditoria Consolidada
@@ -199,6 +204,10 @@ export default function WhatsAppPage() {
             </TabsContent>
           )}
 
+
+          <TabsContent value="waha" className="mt-0">
+            <WahaMonitorPanel />
+          </TabsContent>
 
           <TabsContent value="aggregate" className="mt-0">
             <EvolutionAuditAggregatePanel connections={connections} />
