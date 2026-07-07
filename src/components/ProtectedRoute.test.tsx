@@ -16,6 +16,8 @@ const authState: any = {
   session: { user: { id: 'u1' } },
   loading: false,
   accessLoading: false,
+  sessionValidated: true,
+  tenantResolved: true,
   access: { blocked_pages: [], allowed_pages: [], is_account_admin: true, status: 'active', sub_company_id: null, feature_landing_builder: false },
 };
 
