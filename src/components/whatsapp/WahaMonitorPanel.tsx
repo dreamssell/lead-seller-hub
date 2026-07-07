@@ -161,13 +161,13 @@ export function WahaMonitorPanel() {
       });
       if (error) throw error;
       if ((data as any)?.ok) {
-        toast({ title: 'Webhook configurado', description: 'Novas mensagens agora serão sincronizadas.' });
+        toast.success('Webhook configurado', { description: 'Novas mensagens agora serão sincronizadas.' });
         setTimeout(() => probe(conn), 3000);
       } else {
-        toast({ title: 'Falha ao configurar webhook', description: JSON.stringify(data).slice(0, 200), variant: 'destructive' });
+        toast.error('Falha ao configurar webhook', { description: JSON.stringify(data).slice(0, 200) });
       }
     } catch (err: any) {
-      toast({ title: 'Erro', description: err?.message ?? 'Erro', variant: 'destructive' });
+      toast.error('Erro', { description: err?.message ?? 'Erro' });
     }
   }, [probe]);
 
