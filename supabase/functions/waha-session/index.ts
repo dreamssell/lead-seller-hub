@@ -483,11 +483,32 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Auto-heal: if this is a status probe on a connected session and the
+    // remote WAHA config no longer points at our waha-inbound, silently
+    // reprogram it. Skipped when the session is not yet running (webhook
+    // updates require a running/stopped-then-started session).
+    let webhookHealed = false;
+    let webhookValid: boolean | null = null;
+    if (
+      connectionId && autoHeal && action !== "qr"
+      && /working|connected|open|running|starting/i.test(rawStatus)
+    ) {
+      webhookValid = sessionHasOurWebhook(st.data, connectionId);
+      if (!webhookValid) {
+        const r = await applyWebhookConfig(base, sess, token, connectionId);
+        webhookHealed = r.ok;
+        await logEvent("auto_heal_webhook", r.ok ? "auto_repaired" : "repair_failed", {
+          expected: expectedWebhookUrl(connectionId), status_code: r.status_code,
+        });
+      }
+    }
+
     return json({
       ok: true, action, status: rawStatus,
       connected: /working|connected|open|running/i.test(rawStatus),
       phone: st.data?.me?.id ?? null,
       qr: qrDataUrl, qr_error: qrError,
+      webhook_valid: webhookValid, webhook_healed: webhookHealed,
     });
   } catch (err) {
     return json({ ok: false, error: (err as Error).message });
