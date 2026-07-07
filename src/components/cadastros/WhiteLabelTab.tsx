@@ -50,8 +50,8 @@ export default function WhiteLabelTab() {
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><Sparkles className="w-5 h-5 text-primary" /></div>
           <div>
-            <h3 className="text-base font-semibold text-foreground">White Label</h3>
-            <p className="text-sm text-muted-foreground">Crie sub-empresas, personalize sua marca, conecte um domínio próprio e personalize a página de login. Suas sub-empresas herdam automaticamente sua identidade visual.</p>
+            <h3 className="text-base font-semibold text-foreground">White Label · Sub-Empresas (exclusivo do dono da plataforma)</h3>
+            <p className="text-sm text-muted-foreground">Área reservada para você (dono da plataforma Lead Seller) criar <strong>sub-empresas revendedoras</strong>, personalizar marca, conectar domínio próprio e customizar a página de login. Somente sub-empresas podem herdar a marca e utilizar a opção <em>White Label</em> nas permissões — empresas clientes comuns não têm acesso a esta aba.</p>
           </div>
         </div>
       </div>
