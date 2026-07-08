@@ -185,7 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [{ data }, roleRes, ccRes] = await Promise.all([
       safe(client.rpc?.('get_my_account_access')),
       safe(client.rpc?.('has_role', { _user_id: uid, _role: 'admin' })),
-      safe(client.from?.('client_companies')?.select?.('id, owner_id, sub_company_id, status').eq('auth_user_id', uid).maybeSingle()),
+      safe(client.from?.('client_companies')?.select?.('id, owner_id, auth_user_id, sub_company_id, status').eq('auth_user_id', uid).maybeSingle()),
     ]) as any;
     let row: AccountAccess | null = Array.isArray(data) ? data[0] : null;
 
@@ -204,9 +204,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (!row && ccRes?.data) {
-      const cc = ccRes.data as { owner_id: string | null; sub_company_id: string | null; status: string | null };
+      const cc = ccRes.data as { owner_id: string | null; auth_user_id: string | null; sub_company_id: string | null; status: string | null };
       row = {
-        owner_id: cc.owner_id || uid,
+        owner_id: cc.auth_user_id === uid ? uid : (cc.owner_id || uid),
         sub_company_id: cc.sub_company_id,
         sub_company_name: null,
         allowed_pages: [],
