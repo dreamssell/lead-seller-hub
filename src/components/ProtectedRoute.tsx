@@ -25,34 +25,47 @@ function BlockedTelemetry({ pageKey, path }: { pageKey: string; path: string }) 
 }
 
 export default function ProtectedRoute({ children, pageKey, ownerOnly }: ProtectedRouteProps) {
-  const { session, loading, accessLoading, canAccessPage, sessionValidated, tenantResolved } = useAuth();
+  const { session, loading, accessLoading, canAccessPage, sessionValidated, tenantResolved, authStatus } = useAuth();
   const { isOwner, loading: ownerLoading } = usePlatformOwner();
   const location = useLocation();
 
-  // SECURITY GATE: never render tenant-scoped children until:
-  //  1. Auth listener finished bootstrapping (loading)
-  //  2. Session was revalidated against Supabase Auth (sessionValidated)
-  //  3. Access/tenant scope was resolved for the current user (tenantResolved)
-  //  4. Owner check finished when the route is owner-only
-  // This prevents a prior user's data from being briefly rendered while the
-  // new session is being established, and blocks tampered sessions from
-  // reaching any page other than the sign-in redirect.
-  if (
+  const showSpinner =
     loading ||
     accessLoading ||
     (session && !sessionValidated) ||
     (session && !tenantResolved) ||
-    (ownerOnly && ownerLoading)
-  ) {
+    (ownerOnly && ownerLoading);
+
+  useEffect(() => {
+    if (!showSpinner) return;
+    void logRouteTelemetry({
+      type: 'auth_spinner_shown',
+      message: `Spinner de autenticação exibido em ${location.pathname}`,
+      metadata: {
+        path: location.pathname,
+        auth_status: authStatus,
+        loading, accessLoading, sessionValidated, tenantResolved, ownerLoading: !!ownerLoading,
+      },
+    });
+  }, [showSpinner, authStatus, loading, accessLoading, sessionValidated, tenantResolved, ownerLoading, location.pathname]);
+
+  if (showSpinner) {
+    const label =
+      authStatus === 'unavailable'
+        ? 'Conexão instável — tentando revalidar sua sessão...'
+        : authStatus === 'expiring'
+        ? 'Renovando sua sessão...'
+        : 'Verificando autenticação...';
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-muted-foreground">Verificando autenticação...</span>
+          <span className="text-sm text-muted-foreground">{label}</span>
         </div>
       </div>
     );
   }
+
 
   if (!session) {
     void logRouteTelemetry({
