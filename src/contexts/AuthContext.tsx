@@ -228,8 +228,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Garante que blocked_pages reflita o banco mesmo se eventos realtime foram perdidos.
   useEffect(() => {
     if (!session?.user) return;
-    const onVisible = () => { if (document.visibilityState === 'visible') reloadAccess(); };
-    const onOnline = () => reloadAccess();
+    const onVisible = () => { if (document.visibilityState === 'visible') reloadAccess({ background: true }); };
+    const onOnline = () => reloadAccess({ background: true });
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('online', onOnline);
     window.addEventListener('focus', onVisible);
