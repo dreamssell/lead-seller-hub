@@ -60,7 +60,7 @@ export function useUserRoleLabel(): UserRoleLabel {
     ((user?.user_metadata as any)?.role_label as string | null) ??
     null;
 
-  const signatureRole = sigLevel && sigLevel !== 'atendente'
+  const signatureRole = sigLevel && sigLevel !== 'agente'
     ? sigLevel.charAt(0).toUpperCase() + sigLevel.slice(1)
     : null;
 
