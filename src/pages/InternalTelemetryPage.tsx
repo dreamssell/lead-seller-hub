@@ -80,6 +80,7 @@ export default function InternalTelemetryPage() {
   const [path, setPath] = useState('');
   const [pageKey, setPageKey] = useState('');
   const [userQuery, setUserQuery] = useState('');
+  const [tenantQuery, setTenantQuery] = useState('');
   const [reason, setReason] = useState('');
   const today = new Date().toISOString().slice(0, 10);
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -115,9 +116,13 @@ export default function InternalTelemetryPage() {
           .from('telemetry_logs')
           .select('id, correlation_id, type, message, metadata, created_at')
           .order('created_at', { ascending: false })
-          .limit(500);
+          .limit(1000);
 
-        if (type !== 'all') q = q.eq('type', type);
+        if (type === 'auth_only') {
+          q = q.in('type', AUTH_TYPES as unknown as string[]);
+        } else if (type !== 'all') {
+          q = q.eq('type', type);
+        }
         if (from) q = q.gte('created_at', `${from}T00:00:00`);
         if (to) q = q.lte('created_at', `${to}T23:59:59`);
 
@@ -125,7 +130,7 @@ export default function InternalTelemetryPage() {
         if (error) throw error;
         let result = (data ?? []) as TelemetryRow[];
 
-        // client-side filters on metadata json (small dataset, <=500 rows)
+        // client-side filters on metadata json
         const norm = (s: string) => s.trim().toLowerCase();
         if (path) {
           const p = norm(path);
@@ -155,13 +160,25 @@ export default function InternalTelemetryPage() {
               String(r.metadata?.user_id ?? '').toLowerCase().includes(u),
           );
         }
+        if (tenantQuery) {
+          const t2 = norm(tenantQuery);
+          result = result.filter((r) => {
+            const m = r.metadata ?? {};
+            return (
+              String((m as any).owner_id ?? '').toLowerCase().includes(t2) ||
+              String((m as any).sub_company_id ?? '').toLowerCase().includes(t2) ||
+              String((m as any).user_email ?? '').toLowerCase().includes(t2) ||
+              String((m as any).user_id ?? '').toLowerCase().includes(t2)
+            );
+          });
+        }
 
         setRows(result);
       } finally {
         setLoading(false);
       }
     },
-    [type, from, to, path, pageKey, userQuery, reason],
+    [type, from, to, path, pageKey, userQuery, tenantQuery, reason],
   );
 
   useEffect(() => {
