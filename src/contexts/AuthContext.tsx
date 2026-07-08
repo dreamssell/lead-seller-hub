@@ -49,12 +49,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // 1. Listener primeiro (evita race conditions)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      // Any auth change invalidates prior tenant/session validation until we
-      // reconfirm identity + scope for the new session below.
-      setSessionValidated(false);
-      setTenantResolved(false);
-      setSession(newSession);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+      // Só invalidar sessão/tenant quando a identidade realmente mudou
+      // (SIGNED_IN de outro usuário, SIGNED_OUT ou USER_UPDATED). Eventos
+      // frequentes como TOKEN_REFRESHED e o disparo de INITIAL_SESSION ao
+      // voltar de outra aba NÃO devem forçar o spinner "Verificando
+      // autenticação..." nem recarregar o tenant.
+      setSession((prev) => {
+        const prevId = prev?.user?.id ?? null;
+        const nextId = newSession?.user?.id ?? null;
+        if (prevId !== nextId || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
+          setSessionValidated(false);
+          setTenantResolved(false);
+        }
+        return newSession;
+      });
       setLoading(false);
     });
 
@@ -104,13 +113,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, [session?.user?.id]);
 
-  const reloadAccess = async () => {
+  const reloadAccess = async (opts?: { background?: boolean }) => {
     if (!session?.user) {
       setAccess(null);
       setAccessLoading(false);
       return;
     }
-    setAccessLoading(true);
+    // Refresh silencioso (visibilitychange/focus/online/realtime) não deve
+    // acionar o spinner global de "Verificando autenticação..." — só o
+    // primeiro carregamento (quando ainda não há tenant resolvido) mostra
+    // loading. Isso evita que o app "recarregue" ao voltar de outra aba.
+    if (!opts?.background) setAccessLoading(true);
+
     const uid = session.user.id;
     const client = supabase as any;
     const safe = async <T,>(p: Promise<T> | undefined | null): Promise<T | { data: null } | { data: null; error: unknown }> => {
@@ -183,27 +197,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     channel.on(
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'client_companies', filter: `auth_user_id=eq.${ownerId ?? uid}` },
-      () => reloadAccess(),
+      () => reloadAccess({ background: true }),
     );
 
     if (subId) {
       channel.on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'sub_companies', filter: `id=eq.${subId}` },
-        () => reloadAccess(),
+        () => reloadAccess({ background: true }),
       );
     }
 
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'user_account_access', filter: `user_id=eq.${uid}` },
-      () => reloadAccess(),
+      () => reloadAccess({ background: true }),
     );
 
     channel.subscribe((status) => {
       // Após reconectar (SUBSCRIBED depois de perda), força re-sync para não ficar
       // com estado desatualizado caso eventos tenham sido perdidos offline.
-      if (status === 'SUBSCRIBED') reloadAccess();
+      if (status === 'SUBSCRIBED') reloadAccess({ background: true });
     });
 
     return () => { supabase.removeChannel(channel); };
@@ -214,8 +228,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Garante que blocked_pages reflita o banco mesmo se eventos realtime foram perdidos.
   useEffect(() => {
     if (!session?.user) return;
-    const onVisible = () => { if (document.visibilityState === 'visible') reloadAccess(); };
-    const onOnline = () => reloadAccess();
+    const onVisible = () => { if (document.visibilityState === 'visible') reloadAccess({ background: true }); };
+    const onOnline = () => reloadAccess({ background: true });
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('online', onOnline);
     window.addEventListener('focus', onVisible);
