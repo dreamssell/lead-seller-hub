@@ -279,6 +279,10 @@ export default function InternalTelemetryPage() {
               <Input value={userQuery} onChange={(e) => setUserQuery(e.target.value)} placeholder="user@empresa.com" />
             </div>
             <div className="space-y-1">
+              <Label className="text-xs">Tenant (owner_id / sub_company_id / email)</Label>
+              <Input value={tenantQuery} onChange={(e) => setTenantQuery(e.target.value)} placeholder="uuid ou email" />
+            </div>
+            <div className="space-y-1">
               <Label className="text-xs">De</Label>
               <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             </div>
