@@ -298,6 +298,33 @@ export default function InternalTelemetryPage() {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Shield className="w-4 h-4 text-primary" />
+              Resumo · AuthContext (janela filtrada)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {[
+              { label: 'Total de eventos', value: authStats.total, cls: 'text-foreground' },
+              { label: 'Resets de sessão', value: authStats.resets, cls: 'text-blue-600' },
+              { label: 'Spinners exibidos', value: authStats.spinners, cls: 'text-cyan-600' },
+              { label: 'Refresh (visibilidade)', value: authStats.refreshes, cls: 'text-emerald-600' },
+              { label: 'Revalidações falhas', value: authStats.failures, cls: 'text-red-600' },
+            ].map((s) => (
+              <div key={s.label} className="rounded-lg border border-border p-3">
+                <div className="text-xs text-muted-foreground">{s.label}</div>
+                <div className={`text-2xl font-semibold mt-1 ${s.cls}`}>{s.value}</div>
+              </div>
+            ))}
+            <div className="rounded-lg border border-border p-3 md:col-span-5">
+              <div className="text-xs text-muted-foreground">Usuários únicos afetados</div>
+              <div className="text-2xl font-semibold mt-1 text-foreground">{uniqueAuthUsers}</div>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline">Total: {rows.length}</Badge>
           {Object.entries(counts).map(([t, n]) => (
@@ -306,6 +333,7 @@ export default function InternalTelemetryPage() {
             </Badge>
           ))}
         </div>
+
 
         <Card>
           <CardContent className="p-0">
