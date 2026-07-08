@@ -214,6 +214,18 @@ export default function InternalTelemetryPage() {
     return acc;
   }, {});
 
+  const authRows = rows.filter((r) => (AUTH_TYPES as readonly string[]).includes(r.type ?? ''));
+  const authStats = {
+    total: authRows.length,
+    resets: authRows.filter((r) => r.type === 'auth_reset').length,
+    spinners: authRows.filter((r) => r.type === 'auth_spinner_shown').length,
+    refreshes: authRows.filter((r) => r.type === 'auth_visibility_refresh').length,
+    failures: authRows.filter((r) => r.type === 'auth_revalidation_failed').length,
+  };
+  const uniqueAuthUsers = new Set(
+    authRows.map((r) => String((r.metadata as any)?.user_id ?? (r.metadata as any)?.user_email ?? '')).filter(Boolean),
+  ).size;
+
   return (
     <AppLayout title="Telemetria interna">
       <div className="p-6 space-y-6">
