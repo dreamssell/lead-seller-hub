@@ -1,7 +1,8 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Session, User } from '@supabase/supabase-js';
 import type { SidebarPageKey } from '@/lib/navigation';
+import { logRouteTelemetry } from '@/lib/routeTelemetry';
 
 type AccountAccess = {
   owner_id: string;
@@ -15,29 +16,37 @@ type AccountAccess = {
   feature_landing_builder: boolean;
 };
 
+/**
+ * Estado consolidado da autenticação, para consumidores exibirem UI
+ * apropriada em cenários de lentidão/refresh silencioso.
+ *  - unauthenticated: sem sessão
+ *  - validating: primeira validação da sessão em andamento
+ *  - valid: sessão validada e utilizável
+ *  - expiring: token expira em <60s (renovação em background)
+ *  - unavailable: revalidação falhou (rede/servidor); ainda temos sessão local
+ */
+export type AuthStatus = 'unauthenticated' | 'validating' | 'valid' | 'expiring' | 'unavailable';
+
 interface AuthContextType {
   session: Session | null;
   user: User | null;
   loading: boolean;
   access: AccountAccess | null;
   accessLoading: boolean;
-  /**
-   * True once the current session has been revalidated against Supabase Auth
-   * (getUser) AND the resulting user.id matches the local session. While false,
-   * consumers MUST NOT render tenant-scoped data — the session might belong to
-   * a different user or be stale/tampered with.
-   */
   sessionValidated: boolean;
-  /** Set once the tenant scope has been resolved (owner_id/sub_company_id known or explicitly none). */
   tenantResolved: boolean;
+  authStatus: AuthStatus;
   canAccessPage: (page: SidebarPageKey) => boolean;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-// URL da página externa de login — ajuste conforme necessário
 const EXTERNAL_LOGIN_URL = import.meta.env.VITE_EXTERNAL_LOGIN_URL || 'https://leadseller.com.br';
+
+// Debounce entre refreshes disparados por visibilitychange/online. Evita
+// avalanche de chamadas quando o usuário troca de aba várias vezes seguidas.
+const VISIBILITY_REFRESH_DEBOUNCE_MS = 5000;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -46,28 +55,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [accessLoading, setAccessLoading] = useState(false);
   const [sessionValidated, setSessionValidated] = useState(false);
   const [tenantResolved, setTenantResolved] = useState(false);
+  const [authStatus, setAuthStatus] = useState<AuthStatus>('unauthenticated');
+
+  const lastVisibilityRefreshRef = useRef(0);
+  const lastKnownUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // 1. Listener primeiro (evita race conditions)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
-      // Só invalidar sessão/tenant quando a identidade realmente mudou
-      // (SIGNED_IN de outro usuário, SIGNED_OUT ou USER_UPDATED). Eventos
-      // frequentes como TOKEN_REFRESHED e o disparo de INITIAL_SESSION ao
-      // voltar de outra aba NÃO devem forçar o spinner "Verificando
-      // autenticação..." nem recarregar o tenant.
       setSession((prev) => {
         const prevId = prev?.user?.id ?? null;
         const nextId = newSession?.user?.id ?? null;
-        if (prevId !== nextId || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
+        const identityChanged = prevId !== nextId;
+        const shouldReset = identityChanged || event === 'SIGNED_OUT' || event === 'USER_UPDATED';
+
+        if (shouldReset) {
           setSessionValidated(false);
           setTenantResolved(false);
+          void logRouteTelemetry({
+            type: 'auth_reset',
+            message: `Reset de auth: event=${event} prev=${prevId ?? 'none'} next=${nextId ?? 'none'}`,
+            metadata: { event, prev_user_id: prevId, next_user_id: nextId },
+          });
         }
         return newSession;
       });
       setLoading(false);
     });
 
-    // 2. Depois busca sessão atual
     supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
       setSession(currentSession);
       setLoading(false);
@@ -76,42 +90,83 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // SECURITY: revalidate session against Supabase Auth on every change.
-  // getUser() re-hits the auth server (not the local storage snapshot), so
-  // it will reject tampered tokens or tokens that don't match the account
-  // currently in localStorage. If the returned user.id differs from the
-  // local session, we force sign-out to prevent cross-tenant leaks.
+  // Revalida sessão contra Supabase Auth quando a identidade muda.
   useEffect(() => {
     let cancelled = false;
+    const currentId = session?.user?.id ?? null;
+
     if (!session?.user) {
       setSessionValidated(false);
+      setAuthStatus('unauthenticated');
+      lastKnownUserIdRef.current = null;
       return;
     }
+
+    // Se a identidade não mudou e já foi validada, não repete a chamada.
+    if (currentId === lastKnownUserIdRef.current && sessionValidated) {
+      return;
+    }
+
+    setAuthStatus('validating');
     const expected = session.user.id;
     (async () => {
       try {
         const { data, error } = await supabase.auth.getUser();
         if (cancelled) return;
         if (error || !data?.user || data.user.id !== expected) {
-          console.warn('[AuthContext] session revalidation failed — forcing sign out', {
+          console.warn('[AuthContext] session revalidation failed', {
             expected, received: data?.user?.id ?? null, error: error?.message,
           });
+          void logRouteTelemetry({
+            type: 'auth_revalidation_failed',
+            message: `Revalidação falhou: ${error?.message ?? 'user mismatch'}`,
+            metadata: { expected_user_id: expected, received_user_id: data?.user?.id ?? null, error: error?.message ?? null },
+          });
+          if (error && !data?.user) {
+            // rede/servidor indisponível — mantém sessão local mas sinaliza
+            setAuthStatus('unavailable');
+            return;
+          }
           setSessionValidated(false);
           await supabase.auth.signOut().catch(() => undefined);
           setSession(null);
           setAccess(null);
           setTenantResolved(false);
+          setAuthStatus('unauthenticated');
           return;
         }
         setSessionValidated(true);
+        lastKnownUserIdRef.current = expected;
+        setAuthStatus('valid');
       } catch (err) {
         if (cancelled) return;
         console.warn('[AuthContext] getUser threw during revalidation', err);
-        setSessionValidated(false);
+        void logRouteTelemetry({
+          type: 'auth_revalidation_failed',
+          message: `getUser lançou exceção: ${(err as Error)?.message ?? 'unknown'}`,
+          metadata: { expected_user_id: expected },
+        });
+        setAuthStatus('unavailable');
       }
     })();
     return () => { cancelled = true; };
-  }, [session?.user?.id]);
+  }, [session?.user?.id, sessionValidated]);
+
+  // Monitora expiração do token para expor status 'expiring' sem forçar reload.
+  useEffect(() => {
+    if (!session?.expires_at) return;
+    const check = () => {
+      const secondsLeft = (session.expires_at ?? 0) - Math.floor(Date.now() / 1000);
+      if (secondsLeft <= 0) {
+        setAuthStatus('unavailable');
+      } else if (secondsLeft < 60 && authStatus === 'valid') {
+        setAuthStatus('expiring');
+      }
+    };
+    check();
+    const id = window.setInterval(check, 15000);
+    return () => window.clearInterval(id);
+  }, [session?.expires_at, authStatus]);
 
   const reloadAccess = async (opts?: { background?: boolean }) => {
     if (!session?.user) {
@@ -119,10 +174,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessLoading(false);
       return;
     }
-    // Refresh silencioso (visibilitychange/focus/online/realtime) não deve
-    // acionar o spinner global de "Verificando autenticação..." — só o
-    // primeiro carregamento (quando ainda não há tenant resolvido) mostra
-    // loading. Isso evita que o app "recarregue" ao voltar de outra aba.
     if (!opts?.background) setAccessLoading(true);
 
     const uid = session.user.id;
@@ -138,7 +189,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ]) as any;
     let row: AccountAccess | null = Array.isArray(data) ? data[0] : null;
 
-    // Fallback: platform owner (admin app_role) — grants full access.
     if (!row && roleRes?.data === true) {
       row = {
         owner_id: uid,
@@ -153,7 +203,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
     }
 
-    // Fallback: user is the direct owner of a client_company — scope to own account.
     if (!row && ccRes?.data) {
       const cc = ccRes.data as { owner_id: string | null; sub_company_id: string | null; status: string | null };
       row = {
@@ -174,18 +223,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTenantResolved(true);
   };
 
+  // Recarrega tenant SOMENTE quando a identidade muda de fato.
   useEffect(() => {
-    // Reset tenant resolution whenever the user changes so we never render a
-    // new user with a previous user's scope.
+    const uid = session?.user?.id ?? null;
+    if (uid && uid === access?.owner_id && tenantResolved) {
+      // mesma identidade já resolvida — não recarrega
+      return;
+    }
     setTenantResolved(false);
     reloadAccess();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
-  // Realtime: escuta alterações de blocked_pages filtradas por ID
-  // (client_companies.auth_user_id = owner atual, sub_companies.id = sub atual,
-  //  user_account_access.user_id = usuário atual). Isso garante update instantâneo
-  // sem depender de refresh e reduz tráfego de eventos irrelevantes.
   const ownerId = access?.owner_id ?? session?.user?.id ?? null;
   const subId = access?.sub_company_id ?? null;
   useEffect(() => {
@@ -193,7 +242,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const uid = session.user.id;
     const channel = supabase.channel(`access-watch:${uid}`);
 
-    // client_companies: filtra pela empresa cujo login é o próprio usuário OU pelo owner_id conhecido
     channel.on(
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'client_companies', filter: `auth_user_id=eq.${ownerId ?? uid}` },
@@ -215,8 +263,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     channel.subscribe((status) => {
-      // Após reconectar (SUBSCRIBED depois de perda), força re-sync para não ficar
-      // com estado desatualizado caso eventos tenham sido perdidos offline.
       if (status === 'SUBSCRIBED') reloadAccess({ background: true });
     });
 
@@ -224,28 +270,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id, ownerId, subId]);
 
-  // Re-sync ao voltar do background (visibilitychange) ou ao recuperar conexão (online).
-  // Garante que blocked_pages reflita o banco mesmo se eventos realtime foram perdidos.
+  // Re-sync APENAS em visibilitychange, com debounce. Removemos focus/online
+  // duplicados para evitar cascatas de requisições redundantes quando o
+  // usuário volta de outra aba.
   useEffect(() => {
     if (!session?.user) return;
-    const onVisible = () => { if (document.visibilityState === 'visible') reloadAccess({ background: true }); };
-    const onOnline = () => reloadAccess({ background: true });
+    const maybeRefresh = (reason: string) => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastVisibilityRefreshRef.current < VISIBILITY_REFRESH_DEBOUNCE_MS) return;
+      lastVisibilityRefreshRef.current = now;
+      void logRouteTelemetry({
+        type: 'auth_visibility_refresh',
+        message: `Refresh silencioso disparado por ${reason}`,
+        metadata: { reason },
+      });
+      reloadAccess({ background: true });
+    };
+    const onVisible = () => maybeRefresh('visibilitychange');
+    const onOnline = () => maybeRefresh('online');
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('online', onOnline);
-    window.addEventListener('focus', onVisible);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('online', onOnline);
-      window.removeEventListener('focus', onVisible);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
   const canAccessPage = (page: SidebarPageKey) => {
-    // SECURITY: default-deny when no access context is available (except profile).
-    // Previously returned true, which exposed the full menu to users without
-    // an account_access row (e.g. client-company logins provisioned before the
-    // fallback existed).
     if (!access) return page === 'profile';
     if (access.status === 'blocked') return page === 'profile';
     if (access.blocked_pages?.includes(page)) return false;
@@ -258,13 +311,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     setSession(null);
     setAccess(null);
+    setAuthStatus('unauthenticated');
     if (EXTERNAL_LOGIN_URL) {
       window.location.href = EXTERNAL_LOGIN_URL;
     }
   };
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, access, accessLoading, sessionValidated, tenantResolved, canAccessPage, signOut }}>
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, access, accessLoading, sessionValidated, tenantResolved, authStatus, canAccessPage, signOut }}>
       {children}
     </AuthContext.Provider>
   );
