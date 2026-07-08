@@ -197,27 +197,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     channel.on(
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'client_companies', filter: `auth_user_id=eq.${ownerId ?? uid}` },
-      () => reloadAccess(),
+      () => reloadAccess({ background: true }),
     );
 
     if (subId) {
       channel.on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'sub_companies', filter: `id=eq.${subId}` },
-        () => reloadAccess(),
+        () => reloadAccess({ background: true }),
       );
     }
 
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'user_account_access', filter: `user_id=eq.${uid}` },
-      () => reloadAccess(),
+      () => reloadAccess({ background: true }),
     );
 
     channel.subscribe((status) => {
       // Após reconectar (SUBSCRIBED depois de perda), força re-sync para não ficar
       // com estado desatualizado caso eventos tenham sido perdidos offline.
-      if (status === 'SUBSCRIBED') reloadAccess();
+      if (status === 'SUBSCRIBED') reloadAccess({ background: true });
     });
 
     return () => { supabase.removeChannel(channel); };
