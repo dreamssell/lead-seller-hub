@@ -74,6 +74,9 @@ export default function InternalTelemetryPage() {
 
   const [rows, setRows] = useState<TelemetryRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
 
   // filters
   const [type, setType] = useState('all');
