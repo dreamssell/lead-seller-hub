@@ -115,11 +115,13 @@ export default function InternalTelemetryPage() {
     () => async () => {
       setLoading(true);
       try {
+        const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
         let q = supabase
           .from('telemetry_logs')
-          .select('id, correlation_id, type, message, metadata, created_at')
-          .order('created_at', { ascending: false })
-          .limit(1000);
+          .select('id, correlation_id, type, message, metadata, created_at', { count: 'exact' })
+          .order('created_at', { ascending: false });
 
         if (type === 'auth_only') {
           q = q.in('type', AUTH_TYPES as unknown as string[]);
@@ -129,11 +131,39 @@ export default function InternalTelemetryPage() {
         if (from) q = q.gte('created_at', `${from}T00:00:00`);
         if (to) q = q.lte('created_at', `${to}T23:59:59`);
 
-        const { data, error } = await q;
+        // === Filtros server-side por metadata (JSON containment) quando o
+        // valor digitado é um UUID/email exato — mantém performance em grandes
+        // volumes sem depender de paginação client-side.
+        const tenantTrim = tenantQuery.trim();
+        if (tenantTrim) {
+          if (UUID_RE.test(tenantTrim)) {
+            q = q.or(
+              `metadata->>owner_id.eq.${tenantTrim},metadata->>sub_company_id.eq.${tenantTrim},metadata->>user_id.eq.${tenantTrim}`,
+            );
+          } else if (EMAIL_RE.test(tenantTrim)) {
+            q = q.eq('metadata->>user_email', tenantTrim.toLowerCase());
+          }
+        }
+        const userTrim = userQuery.trim();
+        if (userTrim) {
+          if (UUID_RE.test(userTrim)) {
+            q = q.eq('metadata->>user_id', userTrim);
+          } else if (EMAIL_RE.test(userTrim)) {
+            q = q.eq('metadata->>user_email', userTrim.toLowerCase());
+          }
+        }
+
+        // Paginação server-side
+        const fromIdx = page * pageSize;
+        const toIdx = fromIdx + pageSize - 1;
+        q = q.range(fromIdx, toIdx);
+
+        const { data, error, count } = await q;
         if (error) throw error;
         let result = (data ?? []) as TelemetryRow[];
+        setTotalCount(count ?? 0);
 
-        // client-side filters on metadata json
+        // Filtros client-side (busca parcial) — aplicados apenas na página atual.
         const norm = (s: string) => s.trim().toLowerCase();
         if (path) {
           const p = norm(path);
@@ -155,16 +185,17 @@ export default function InternalTelemetryPage() {
               String(r.metadata?.reason ?? '').toLowerCase().includes(r2),
           );
         }
-        if (userQuery) {
-          const u = norm(userQuery);
+        // busca parcial (não-uuid/não-email) — dentro da página atual
+        if (userTrim && !UUID_RE.test(userTrim) && !EMAIL_RE.test(userTrim)) {
+          const u = norm(userTrim);
           result = result.filter(
             (r) =>
               String(r.metadata?.user_email ?? '').toLowerCase().includes(u) ||
               String(r.metadata?.user_id ?? '').toLowerCase().includes(u),
           );
         }
-        if (tenantQuery) {
-          const t2 = norm(tenantQuery);
+        if (tenantTrim && !UUID_RE.test(tenantTrim) && !EMAIL_RE.test(tenantTrim)) {
+          const t2 = norm(tenantTrim);
           result = result.filter((r) => {
             const m = r.metadata ?? {};
             return (
@@ -181,8 +212,14 @@ export default function InternalTelemetryPage() {
         setLoading(false);
       }
     },
-    [type, from, to, path, pageKey, userQuery, tenantQuery, reason],
+    [type, from, to, path, pageKey, userQuery, tenantQuery, reason, page, pageSize],
   );
+
+  // Reseta paginação quando filtros mudam
+  useEffect(() => {
+    setPage(0);
+  }, [type, from, to, path, pageKey, userQuery, tenantQuery, reason, pageSize]);
+
 
   useEffect(() => {
     if (adminCheck === 'allowed') void fetchLogs();
