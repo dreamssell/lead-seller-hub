@@ -5,7 +5,11 @@ export type RouteTelemetryType =
   | 'protected_route_blocked'
   | 'protected_route_unauthenticated'
   | 'api_unauthorized'
-  | 'api_forbidden';
+  | 'api_forbidden'
+  | 'auth_reset'
+  | 'auth_spinner_shown'
+  | 'auth_revalidation_failed'
+  | 'auth_visibility_refresh';
 
 interface LogParams {
   type: RouteTelemetryType;
