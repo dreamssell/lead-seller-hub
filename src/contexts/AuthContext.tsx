@@ -49,12 +49,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // 1. Listener primeiro (evita race conditions)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      // Any auth change invalidates prior tenant/session validation until we
-      // reconfirm identity + scope for the new session below.
-      setSessionValidated(false);
-      setTenantResolved(false);
-      setSession(newSession);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+      // Só invalidar sessão/tenant quando a identidade realmente mudou
+      // (SIGNED_IN de outro usuário, SIGNED_OUT ou USER_UPDATED). Eventos
+      // frequentes como TOKEN_REFRESHED e o disparo de INITIAL_SESSION ao
+      // voltar de outra aba NÃO devem forçar o spinner "Verificando
+      // autenticação..." nem recarregar o tenant.
+      setSession((prev) => {
+        const prevId = prev?.user?.id ?? null;
+        const nextId = newSession?.user?.id ?? null;
+        if (prevId !== nextId || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
+          setSessionValidated(false);
+          setTenantResolved(false);
+        }
+        return newSession;
+      });
       setLoading(false);
     });
 
