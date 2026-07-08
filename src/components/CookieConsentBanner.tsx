@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 
 const STORAGE_KEY = 'lgpd:consent:v1';
 const CONSENT_EVENT = 'lgpd:consent-changed';
+const LGPD_BANNER_ENABLED = false;
 
 type Consent = {
   essential: true;
@@ -29,6 +30,7 @@ export function CookieConsentBanner() {
   const [marketing, setMarketing] = useState(false);
 
   useEffect(() => {
+    if (!LGPD_BANNER_ENABLED) return;
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) setOpen(true);
@@ -36,6 +38,8 @@ export function CookieConsentBanner() {
       setOpen(true);
     }
   }, []);
+
+  if (!LGPD_BANNER_ENABLED) return null;
 
   const save = (consent: Consent) => {
     let persisted = false;
