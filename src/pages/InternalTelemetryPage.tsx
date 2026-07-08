@@ -36,12 +36,24 @@ type TelemetryRow = {
 
 const TYPE_OPTIONS = [
   { value: 'all', label: 'Todos os tipos' },
+  { value: 'auth_only', label: '★ Somente eventos do AuthContext' },
   { value: 'route_404', label: '404 (rota não encontrada)' },
   { value: 'protected_route_blocked', label: 'ProtectedRoute · bloqueado' },
   { value: 'protected_route_unauthenticated', label: 'ProtectedRoute · sem sessão' },
   { value: 'api_unauthorized', label: 'API 401 (não autenticado)' },
   { value: 'api_forbidden', label: 'API 403 (não autorizado)' },
+  { value: 'auth_reset', label: 'Auth · reset de sessão' },
+  { value: 'auth_spinner_shown', label: 'Auth · spinner exibido' },
+  { value: 'auth_visibility_refresh', label: 'Auth · refresh por visibilidade' },
+  { value: 'auth_revalidation_failed', label: 'Auth · revalidação falhou' },
 ];
+
+const AUTH_TYPES = [
+  'auth_reset',
+  'auth_spinner_shown',
+  'auth_visibility_refresh',
+  'auth_revalidation_failed',
+] as const;
 
 const TYPE_BADGE: Record<string, string> = {
   route_404: 'bg-amber-500/15 text-amber-600 border-amber-500/30',
@@ -49,6 +61,10 @@ const TYPE_BADGE: Record<string, string> = {
   protected_route_unauthenticated: 'bg-orange-500/15 text-orange-600 border-orange-500/30',
   api_unauthorized: 'bg-fuchsia-500/15 text-fuchsia-600 border-fuchsia-500/30',
   api_forbidden: 'bg-rose-500/15 text-rose-600 border-rose-500/30',
+  auth_reset: 'bg-blue-500/15 text-blue-600 border-blue-500/30',
+  auth_spinner_shown: 'bg-cyan-500/15 text-cyan-600 border-cyan-500/30',
+  auth_visibility_refresh: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',
+  auth_revalidation_failed: 'bg-red-500/15 text-red-600 border-red-500/30',
 };
 
 export default function InternalTelemetryPage() {
@@ -64,6 +80,7 @@ export default function InternalTelemetryPage() {
   const [path, setPath] = useState('');
   const [pageKey, setPageKey] = useState('');
   const [userQuery, setUserQuery] = useState('');
+  const [tenantQuery, setTenantQuery] = useState('');
   const [reason, setReason] = useState('');
   const today = new Date().toISOString().slice(0, 10);
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -99,9 +116,13 @@ export default function InternalTelemetryPage() {
           .from('telemetry_logs')
           .select('id, correlation_id, type, message, metadata, created_at')
           .order('created_at', { ascending: false })
-          .limit(500);
+          .limit(1000);
 
-        if (type !== 'all') q = q.eq('type', type);
+        if (type === 'auth_only') {
+          q = q.in('type', AUTH_TYPES as unknown as string[]);
+        } else if (type !== 'all') {
+          q = q.eq('type', type);
+        }
         if (from) q = q.gte('created_at', `${from}T00:00:00`);
         if (to) q = q.lte('created_at', `${to}T23:59:59`);
 
@@ -109,7 +130,7 @@ export default function InternalTelemetryPage() {
         if (error) throw error;
         let result = (data ?? []) as TelemetryRow[];
 
-        // client-side filters on metadata json (small dataset, <=500 rows)
+        // client-side filters on metadata json
         const norm = (s: string) => s.trim().toLowerCase();
         if (path) {
           const p = norm(path);
@@ -139,13 +160,25 @@ export default function InternalTelemetryPage() {
               String(r.metadata?.user_id ?? '').toLowerCase().includes(u),
           );
         }
+        if (tenantQuery) {
+          const t2 = norm(tenantQuery);
+          result = result.filter((r) => {
+            const m = r.metadata ?? {};
+            return (
+              String((m as any).owner_id ?? '').toLowerCase().includes(t2) ||
+              String((m as any).sub_company_id ?? '').toLowerCase().includes(t2) ||
+              String((m as any).user_email ?? '').toLowerCase().includes(t2) ||
+              String((m as any).user_id ?? '').toLowerCase().includes(t2)
+            );
+          });
+        }
 
         setRows(result);
       } finally {
         setLoading(false);
       }
     },
-    [type, from, to, path, pageKey, userQuery, reason],
+    [type, from, to, path, pageKey, userQuery, tenantQuery, reason],
   );
 
   useEffect(() => {
@@ -180,6 +213,18 @@ export default function InternalTelemetryPage() {
     acc[t] = (acc[t] ?? 0) + 1;
     return acc;
   }, {});
+
+  const authRows = rows.filter((r) => (AUTH_TYPES as readonly string[]).includes(r.type ?? ''));
+  const authStats = {
+    total: authRows.length,
+    resets: authRows.filter((r) => r.type === 'auth_reset').length,
+    spinners: authRows.filter((r) => r.type === 'auth_spinner_shown').length,
+    refreshes: authRows.filter((r) => r.type === 'auth_visibility_refresh').length,
+    failures: authRows.filter((r) => r.type === 'auth_revalidation_failed').length,
+  };
+  const uniqueAuthUsers = new Set(
+    authRows.map((r) => String((r.metadata as any)?.user_id ?? (r.metadata as any)?.user_email ?? '')).filter(Boolean),
+  ).size;
 
   return (
     <AppLayout title="Telemetria interna">
@@ -234,6 +279,10 @@ export default function InternalTelemetryPage() {
               <Input value={userQuery} onChange={(e) => setUserQuery(e.target.value)} placeholder="user@empresa.com" />
             </div>
             <div className="space-y-1">
+              <Label className="text-xs">Tenant (owner_id / sub_company_id / email)</Label>
+              <Input value={tenantQuery} onChange={(e) => setTenantQuery(e.target.value)} placeholder="uuid ou email" />
+            </div>
+            <div className="space-y-1">
               <Label className="text-xs">De</Label>
               <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             </div>
@@ -249,6 +298,33 @@ export default function InternalTelemetryPage() {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Shield className="w-4 h-4 text-primary" />
+              Resumo · AuthContext (janela filtrada)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {[
+              { label: 'Total de eventos', value: authStats.total, cls: 'text-foreground' },
+              { label: 'Resets de sessão', value: authStats.resets, cls: 'text-blue-600' },
+              { label: 'Spinners exibidos', value: authStats.spinners, cls: 'text-cyan-600' },
+              { label: 'Refresh (visibilidade)', value: authStats.refreshes, cls: 'text-emerald-600' },
+              { label: 'Revalidações falhas', value: authStats.failures, cls: 'text-red-600' },
+            ].map((s) => (
+              <div key={s.label} className="rounded-lg border border-border p-3">
+                <div className="text-xs text-muted-foreground">{s.label}</div>
+                <div className={`text-2xl font-semibold mt-1 ${s.cls}`}>{s.value}</div>
+              </div>
+            ))}
+            <div className="rounded-lg border border-border p-3 md:col-span-5">
+              <div className="text-xs text-muted-foreground">Usuários únicos afetados</div>
+              <div className="text-2xl font-semibold mt-1 text-foreground">{uniqueAuthUsers}</div>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline">Total: {rows.length}</Badge>
           {Object.entries(counts).map(([t, n]) => (
@@ -257,6 +333,7 @@ export default function InternalTelemetryPage() {
             </Badge>
           ))}
         </div>
+
 
         <Card>
           <CardContent className="p-0">
