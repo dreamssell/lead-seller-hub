@@ -36,12 +36,24 @@ type TelemetryRow = {
 
 const TYPE_OPTIONS = [
   { value: 'all', label: 'Todos os tipos' },
+  { value: 'auth_only', label: '★ Somente eventos do AuthContext' },
   { value: 'route_404', label: '404 (rota não encontrada)' },
   { value: 'protected_route_blocked', label: 'ProtectedRoute · bloqueado' },
   { value: 'protected_route_unauthenticated', label: 'ProtectedRoute · sem sessão' },
   { value: 'api_unauthorized', label: 'API 401 (não autenticado)' },
   { value: 'api_forbidden', label: 'API 403 (não autorizado)' },
+  { value: 'auth_reset', label: 'Auth · reset de sessão' },
+  { value: 'auth_spinner_shown', label: 'Auth · spinner exibido' },
+  { value: 'auth_visibility_refresh', label: 'Auth · refresh por visibilidade' },
+  { value: 'auth_revalidation_failed', label: 'Auth · revalidação falhou' },
 ];
+
+const AUTH_TYPES = [
+  'auth_reset',
+  'auth_spinner_shown',
+  'auth_visibility_refresh',
+  'auth_revalidation_failed',
+] as const;
 
 const TYPE_BADGE: Record<string, string> = {
   route_404: 'bg-amber-500/15 text-amber-600 border-amber-500/30',
@@ -49,6 +61,10 @@ const TYPE_BADGE: Record<string, string> = {
   protected_route_unauthenticated: 'bg-orange-500/15 text-orange-600 border-orange-500/30',
   api_unauthorized: 'bg-fuchsia-500/15 text-fuchsia-600 border-fuchsia-500/30',
   api_forbidden: 'bg-rose-500/15 text-rose-600 border-rose-500/30',
+  auth_reset: 'bg-blue-500/15 text-blue-600 border-blue-500/30',
+  auth_spinner_shown: 'bg-cyan-500/15 text-cyan-600 border-cyan-500/30',
+  auth_visibility_refresh: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',
+  auth_revalidation_failed: 'bg-red-500/15 text-red-600 border-red-500/30',
 };
 
 export default function InternalTelemetryPage() {
