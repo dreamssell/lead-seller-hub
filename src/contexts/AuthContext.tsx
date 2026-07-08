@@ -113,13 +113,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, [session?.user?.id]);
 
-  const reloadAccess = async () => {
+  const reloadAccess = async (opts?: { background?: boolean }) => {
     if (!session?.user) {
       setAccess(null);
       setAccessLoading(false);
       return;
     }
-    setAccessLoading(true);
+    // Refresh silencioso (visibilitychange/focus/online/realtime) não deve
+    // acionar o spinner global de "Verificando autenticação..." — só o
+    // primeiro carregamento (quando ainda não há tenant resolvido) mostra
+    // loading. Isso evita que o app "recarregue" ao voltar de outra aba.
+    if (!opts?.background) setAccessLoading(true);
+
     const uid = session.user.id;
     const client = supabase as any;
     const safe = async <T,>(p: Promise<T> | undefined | null): Promise<T | { data: null } | { data: null; error: unknown }> => {
