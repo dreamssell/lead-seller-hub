@@ -65,7 +65,8 @@ const App = () => (
         <TooltipProvider>
         <Toaster />
         <Sonner />
-        <CookieConsentBanner />
+        {/* Banner LGPD desativado temporariamente — componente preservado em src/components/CookieConsentBanner.tsx */}
+        {false && <CookieConsentBanner />}
         <BrowserRouter>
           <AuthProvider>
             <VoipProvider>
