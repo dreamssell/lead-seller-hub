@@ -434,6 +434,43 @@ export default function InternalTelemetryPage() {
             </Table>
           </CardContent>
         </Card>
+
+        {/* Paginação server-side */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-xs text-muted-foreground">
+            Mostrando <span className="font-medium text-foreground">{rows.length}</span> de{' '}
+            <span className="font-medium text-foreground">{totalCount}</span> registros ·
+            página <span className="font-medium text-foreground">{page + 1}</span> de{' '}
+            <span className="font-medium text-foreground">{Math.max(1, Math.ceil(totalCount / pageSize))}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+              <SelectTrigger className="w-[110px] h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[25, 50, 100, 200].map((n) => (
+                  <SelectItem key={n} value={String(n)}>{n} / página</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page === 0 || loading}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={loading || (page + 1) * pageSize >= totalCount}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Próxima
+            </Button>
+          </div>
+        </div>
+
       </div>
     </AppLayout>
   );
