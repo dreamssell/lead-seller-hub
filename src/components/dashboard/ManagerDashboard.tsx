@@ -2,6 +2,7 @@ import { StatCard } from './StatCard';
 import { ServiceCard } from './ServiceCard';
 import { LineTrend, BarByStage, DonutChannel } from './charts/DashboardCharts';
 import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
+import { CallHistoryTable } from '@/components/calls/CallHistoryTable';
 import {
   MessageSquare, Phone, Users, TrendingUp,
   Headphones, Video, BarChart3, FileText, PenLine,
