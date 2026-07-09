@@ -2,6 +2,7 @@ import { StatCard } from './StatCard';
 import { ServiceCard } from './ServiceCard';
 import { LineTrend, BarByStage, DonutChannel } from './charts/DashboardCharts';
 import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
+import { CallHistoryTable } from '@/components/calls/CallHistoryTable';
 import {
   MessageSquare, Phone, Users, TrendingUp,
   Headphones, Video, BarChart3, FileText, PenLine,
@@ -45,6 +46,14 @@ export function ManagerDashboard() {
             </ul>
           </div>
         </div>
+      </div>
+
+      <div className="mb-8">
+        <CallHistoryTable
+          title="Chamadas recentes da equipe"
+          description="Histórico consolidado — VoIP e Wavoip"
+          filter={{ limit: 50 }}
+        />
       </div>
 
       <div>

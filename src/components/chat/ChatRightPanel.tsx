@@ -12,6 +12,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MentionTextarea } from './MentionTextarea';
 import { AssignmentTimeline } from './AssignmentTimeline';
+import { CustomerServiceHistory } from './CustomerServiceHistory';
 import { Customer360Timeline } from './Customer360Timeline';
 import { AIInsightsPanel } from './AIInsightsPanel';
 import { Sparkles } from 'lucide-react';
@@ -473,7 +474,7 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
         </TabsContent>
 
         <TabsContent value="history" className="flex-1 flex flex-col mt-3 px-3 pb-3 data-[state=inactive]:hidden">
-          <AssignmentTimeline customerId={customerId} />
+          <CustomerServiceHistory customerId={customerId} />
         </TabsContent>
       </Tabs>
 

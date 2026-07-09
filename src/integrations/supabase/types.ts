@@ -421,6 +421,103 @@ export type Database = {
         }
         Relationships: []
       }
+      call_history: {
+        Row: {
+          answered_at: string | null
+          channel: string
+          connection_id: string | null
+          connection_label: string | null
+          contact_name: string | null
+          created_at: string
+          customer_id: string | null
+          direction: string
+          duration_seconds: number
+          ended_at: string | null
+          id: string
+          lead_id: string | null
+          metadata: Json
+          owner_id: string
+          phone_number: string
+          recording_path: string | null
+          recording_url: string | null
+          started_at: string
+          status: string
+          sub_company_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          answered_at?: string | null
+          channel?: string
+          connection_id?: string | null
+          connection_label?: string | null
+          contact_name?: string | null
+          created_at?: string
+          customer_id?: string | null
+          direction?: string
+          duration_seconds?: number
+          ended_at?: string | null
+          id?: string
+          lead_id?: string | null
+          metadata?: Json
+          owner_id: string
+          phone_number: string
+          recording_path?: string | null
+          recording_url?: string | null
+          started_at?: string
+          status?: string
+          sub_company_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          answered_at?: string | null
+          channel?: string
+          connection_id?: string | null
+          connection_label?: string | null
+          contact_name?: string | null
+          created_at?: string
+          customer_id?: string | null
+          direction?: string
+          duration_seconds?: number
+          ended_at?: string | null
+          id?: string
+          lead_id?: string | null
+          metadata?: Json
+          owner_id?: string
+          phone_number?: string
+          recording_path?: string | null
+          recording_url?: string | null
+          started_at?: string
+          status?: string
+          sub_company_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_history_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_history_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_history_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       channel_routing: {
         Row: {
           channel: string
@@ -1259,6 +1356,63 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      customer_assignments_history: {
+        Row: {
+          channel: string | null
+          created_at: string
+          customer_id: string
+          event_type: string
+          id: string
+          metadata: Json
+          notes: string | null
+          owner_id: string
+          source: string | null
+          sub_company_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          channel?: string | null
+          created_at?: string
+          customer_id: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          owner_id: string
+          source?: string | null
+          sub_company_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          channel?: string | null
+          created_at?: string
+          customer_id?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          owner_id?: string
+          source?: string | null
+          sub_company_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_assignments_history_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_assignments_history_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       customer_notes: {
         Row: {
