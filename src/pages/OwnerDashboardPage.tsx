@@ -40,6 +40,9 @@ export default function OwnerDashboardPage() {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Button asChild variant="outline" size="sm" className="gap-2">
+              <Link to="/owner/platform-health"><Activity className="w-4 h-4" /> Saúde da plataforma</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="gap-2">
               <Link to="/owner/access-health"><HeartPulse className="w-4 h-4" /> Saúde de acessos</Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="gap-2">
