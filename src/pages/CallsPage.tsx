@@ -209,12 +209,15 @@ export default function CallsPage() {
   };
 
 
+  // Wavoip SIP Trunk defaults (host sipv2.wavoip.com). Preenchemos usuário/senha
+  // com as credenciais fornecidas pela Wavoip para o tenant atual — o dono só
+  // precisa clicar em "Salvar" para persistir criptografado no backend.
   const [sipConfig, setSipConfig] = useState({
     server: 'sipv2.wavoip.com',
     port: '5060',
     wsUri: 'wss://sipv2.wavoip.com:7443',
-    username: '',
-    password: '',
+    username: 'e552c166-cc90-40df-9600-7930e4ea0a46',
+    password: 'e552c166-cc90-40df-9600-7930e4ea0a46',
     displayName: 'Lead Seller',
     transport: 'WSS',
     autoRecord: true,
@@ -264,6 +267,16 @@ export default function CallsPage() {
     return () => { cancelled = true; };
   }, [isOwner]);
 
+  // Auto-registra no Wavoip assim que as credenciais estiverem em memória
+  // (dono da plataforma). Evita nova tentativa quando já está conectado.
+  useEffect(() => {
+    if (!isOwner) return;
+    if (sipStatus !== 'disconnected') return;
+    if (!sipConfig.username || !sipConfig.password || !sipConfig.server) return;
+    handleTestSip();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner, sipConfig.username, sipConfig.password, sipConfig.server]);
+
 
 
   const filteredRecordings = useMemo(() => {
@@ -279,16 +292,38 @@ export default function CallsPage() {
   const handleKey = (k: string) => setNumber((n) => n + k);
   const handleBackspace = () => setNumber((n) => n.slice(0, -1));
 
-  const handleCall = () => {
+  const handleCall = async () => {
     if (!number) {
       toast({ title: 'Digite um número', variant: 'destructive' });
       return;
+    }
+    // Se o UA SIP estiver registrado, coloca a chamada real via Wavoip
+    const ua = sipRef.current;
+    if (ua && sipStatus === 'connected') {
+      try {
+        const target = `sip:${number.replace(/[^0-9+*#]/g, '')}@${sipConfig.server}`;
+        const session = ua.call(target, {
+          mediaConstraints: { audio: true, video: false },
+          pcConfig: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
+        });
+        session?.connection?.addEventListener?.('addstream', (e: any) => {
+          const audio = document.getElementById('sip-remote-audio') as HTMLAudioElement | null;
+          if (audio) { audio.srcObject = e.stream; audio.play().catch(() => {}); }
+        });
+        setInCall(true);
+        toast({ title: 'Chamando via Wavoip...', description: number });
+        return;
+      } catch (e: any) {
+        toast({ title: 'Falha ao iniciar chamada', description: String(e?.message || e), variant: 'destructive' });
+        return;
+      }
     }
     setInCall(true);
     toast({ title: 'Chamando...', description: number });
   };
 
   const handleHangup = () => {
+    try { sipRef.current?.terminateSessions?.(); } catch {}
     setInCall(false);
     setMuted(false);
     setOnHold(false);
@@ -424,6 +459,8 @@ export default function CallsPage() {
 
   return (
     <AppLayout title="VoIP & Chamadas" subtitle="Central de chamadas com gravação automática">
+      {/* Áudio remoto da chamada SIP (Wavoip) */}
+      <audio id="sip-remote-audio" autoPlay playsInline className="hidden" />
       {/* Status SIP + Quick Action */}
       <motion.div
         className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6"
