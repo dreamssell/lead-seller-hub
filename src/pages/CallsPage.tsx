@@ -85,6 +85,7 @@ import {
   Cell,
   Legend,
 } from 'recharts';
+import { supabase } from '@/integrations/supabase/client';
 
 const callHistory = [
   { id: 1, name: 'Maria Santos', number: '+55 11 98765-4321', type: 'incoming', duration: '12:34', time: 'Hoje 14:30', recorded: true, agent: 'João Silva' },
