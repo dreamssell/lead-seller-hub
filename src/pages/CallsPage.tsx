@@ -267,6 +267,16 @@ export default function CallsPage() {
     return () => { cancelled = true; };
   }, [isOwner]);
 
+  // Auto-registra no Wavoip assim que as credenciais estiverem em memória
+  // (dono da plataforma). Evita nova tentativa quando já está conectado.
+  useEffect(() => {
+    if (!isOwner) return;
+    if (sipStatus !== 'disconnected') return;
+    if (!sipConfig.username || !sipConfig.password || !sipConfig.server) return;
+    handleTestSip();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner, sipConfig.username, sipConfig.password, sipConfig.server]);
+
 
 
   const filteredRecordings = useMemo(() => {
