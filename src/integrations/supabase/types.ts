@@ -201,8 +201,10 @@ export type Database = {
           changes: Json | null
           created_at: string
           id: string
+          owner_id: string | null
           record_id: string | null
           record_label: string | null
+          sub_company_id: string | null
           table_name: string
         }
         Insert: {
@@ -211,8 +213,10 @@ export type Database = {
           changes?: Json | null
           created_at?: string
           id?: string
+          owner_id?: string | null
           record_id?: string | null
           record_label?: string | null
+          sub_company_id?: string | null
           table_name: string
         }
         Update: {
@@ -221,8 +225,10 @@ export type Database = {
           changes?: Json | null
           created_at?: string
           id?: string
+          owner_id?: string | null
           record_id?: string | null
           record_label?: string | null
+          sub_company_id?: string | null
           table_name?: string
         }
         Relationships: []
@@ -5194,8 +5200,10 @@ export type Database = {
           changes: Json | null
           created_at: string | null
           id: string | null
+          owner_id: string | null
           record_id: string | null
           record_label: string | null
+          sub_company_id: string | null
           table_name: string | null
         }
         Relationships: []
@@ -5340,6 +5348,13 @@ export type Database = {
         Args: { p_sub_company_id: string }
         Returns: boolean
       }
+      list_audit_actors: {
+        Args: { p_owner?: string }
+        Returns: {
+          name: string
+          user_id: string
+        }[]
+      }
       log_video_action: {
         Args: {
           p_action: string
@@ -5370,6 +5385,33 @@ export type Database = {
           id: string
           record_id: string
           record_label: string
+          table_name: string
+          total_count: number
+        }[]
+      }
+      search_audit_logs_scoped: {
+        Args: {
+          p_action?: string
+          p_from?: string
+          p_limit?: number
+          p_offset?: number
+          p_owner?: string
+          p_sub?: string
+          p_table?: string
+          p_to?: string
+          p_user?: string
+        }
+        Returns: {
+          action: string
+          changed_by: string
+          changed_by_name: string
+          changes: Json
+          created_at: string
+          id: string
+          owner_id: string
+          record_id: string
+          record_label: string
+          sub_company_id: string
           table_name: string
           total_count: number
         }[]
