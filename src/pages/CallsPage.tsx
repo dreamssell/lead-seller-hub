@@ -1594,7 +1594,7 @@ export default function CallsPage() {
                       <Volume2 className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={handleHangup}
+                      onClick={() => handleHangup()}
                       className="w-12 h-12 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 flex items-center justify-center"
                     >
                       <PhoneOff className="w-4 h-4" />
