@@ -268,6 +268,7 @@ Deno.serve(async (req) => {
         name: pushName || phone,
         phone,
         channel: 'whatsapp',
+        created_by: conn.owner_id,
         owner_id: conn.owner_id,
         sub_company_id: conn.sub_company_id,
         origin_connection_id: conn.id,
@@ -276,7 +277,7 @@ Deno.serve(async (req) => {
       .single();
     if (createErr) return json({ error: 'customer_insert_failed', detail: createErr.message }, 500);
     customerId = created.id;
-  } else if (pushName && (!existingCustomer?.name || existingCustomer.name === phone)) {
+  } else if (pushName && (!existingCustomer?.name || existingCustomer.name === phone || /^Contato\s+\d{2,}$/i.test(existingCustomer.name))) {
     // Enrich name if we only had the phone number stored.
     await supabase.from('customers').update({ name: pushName }).eq('id', customerId);
   }
