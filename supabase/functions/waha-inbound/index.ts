@@ -141,9 +141,23 @@ Deno.serve(async (req) => {
   // Test events short-circuit: they exist only to prove the webhook wiring.
   if (isTest) return json({ ok: true, test: true, id: providerMsgId });
 
-  // Idempotency: same event id from same connection = no-op.
-  if (providerMsgId) {
-    const idemKey = `waha:${event}:${providerMsgId}`;
+  // Whitelist events we actually persist. With 25+ WAHA events enabled we get
+  // presence/chat/label/etc noise — those are already captured into
+  // connection_events for observability, so returning early here prevents
+  // phantom customer rows and spurious errors.
+  const isMessageEvent = event === 'message';
+  const isAckEvent = event === 'message.ack' || event === 'ack';
+  const isSessionEvent = event === 'session.status';
+  if (!isMessageEvent && !isAckEvent && !isSessionEvent) {
+    return json({ ok: true, ignored: event });
+  }
+
+  // Idempotency: same message id from same connection = no-op, regardless of
+  // which WAHA event variant delivered it. WAHA fires both `message` and
+  // `message.any` for the same payload, so keying on the event name lets
+  // duplicates through and produces double chat rows.
+  if (providerMsgId && (isMessageEvent || isAckEvent)) {
+    const idemKey = isAckEvent ? `waha:ack:${providerMsgId}` : `waha:msg:${providerMsgId}`;
     const { data: existing } = await supabase
       .from('webhook_idempotency_keys')
       .select('id')
@@ -158,7 +172,7 @@ Deno.serve(async (req) => {
   }
 
   // ── Route by event ─────────────────────────────────────────────────────
-  if (event === 'session.status') {
+  if (isSessionEvent) {
     const status = String(payload.status || '').toLowerCase();
     const mapped =
       /working|connected|open|running/.test(status) ? 'connected'
@@ -172,7 +186,7 @@ Deno.serve(async (req) => {
     return json({ ok: true, status: mapped });
   }
 
-  if (event === 'message.ack' || event === 'ack') {
+  if (isAckEvent) {
     const mapAck: Record<number, string> = { 1: 'sent', 2: 'delivered', 3: 'read', 4: 'played' };
     const ackLabel = mapAck[payload.ack ?? 0] || String(payload.status || 'unknown');
     await supabase
@@ -184,23 +198,51 @@ Deno.serve(async (req) => {
         },
       })
       .eq('id', connectionId);
+    // Best-effort: reflect delivery status on the persisted message row so the
+    // composer stops showing "enviando pelo servidor".
+    if (providerMsgId) {
+      const { data: msgRow } = await supabase
+        .from('chat_messages')
+        .select('id, metadata')
+        .eq('uaz_msg_id', providerMsgId)
+        .maybeSingle();
+      if (msgRow) {
+        await supabase
+          .from('chat_messages')
+          .update({
+            metadata: {
+              ...(msgRow.metadata || {}),
+              delivery_status: ackLabel,
+              status: ackLabel,
+              confirmed_at: new Date().toISOString(),
+            },
+          })
+          .eq('id', msgRow.id);
+      }
+    }
     return json({ ok: true, ack: ackLabel, id: providerMsgId });
   }
 
-  // Default: inbound message.
-  // Ignore WhatsApp status broadcasts (contacts posting stories) — they arrive
-  // as `status@broadcast` and would otherwise create phantom "customer" rows.
-  if (typeof payload.from === 'string' && payload.from.includes('status@broadcast')) {
+  // Inbound message: WAHA "message" event.
+  // WAHA/Baileys sometimes wrap everything inside payload._data — fall back to
+  // those fields so we still capture sender/body correctly.
+  const info = (payload as any)?._data?.Info || {};
+  const fromRaw: string | undefined =
+    payload.from ||
+    (typeof info.Chat === 'string' ? info.Chat : undefined) ||
+    (typeof info.Sender === 'string' ? info.Sender : undefined);
+  const fromMeFlag = payload.fromMe === true || info.IsFromMe === true;
+  const isGroup = info.IsGroup === true || (typeof fromRaw === 'string' && fromRaw.endsWith('@g.us'));
+
+  if (typeof fromRaw === 'string' && fromRaw.includes('status@broadcast')) {
     return json({ ok: true, skipped: 'status_broadcast' });
   }
-  // Ignore messages sent by our own instance (`fromMe=true`) — the outbound
-  // adapter already persisted them; re-inserting would create a duplicate
-  // "customer"-side row and confuse the conversation.
-  if (payload.fromMe === true) {
-    return json({ ok: true, skipped: 'from_me' });
-  }
-  const phone = normalizePhone(payload.from);
+  if (fromMeFlag) return json({ ok: true, skipped: 'from_me' });
+  if (isGroup) return json({ ok: true, skipped: 'group_message' });
+
+  const phone = normalizePhone(fromRaw);
   if (!phone) return json({ ok: true, skipped: 'no_individual_sender' });
+
 
   // Upsert customer by phone under this owner.
   const { data: existingCustomer } = await supabase
