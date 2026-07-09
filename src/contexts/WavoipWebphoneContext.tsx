@@ -2,6 +2,21 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  startCallLog,
+  markCallAnswered,
+  endCallLog,
+  uploadCallRecording,
+} from '@/lib/callHistory';
+
+export interface WavoipCallMeta {
+  customerId?: string | null;
+  leadId?: string | null;
+  contactName?: string | null;
+  ownerId?: string | null;
+  subCompanyId?: string | null;
+  userId?: string | null;
+}
 
 /**
  * WavoipWebphoneContext
