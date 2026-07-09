@@ -509,6 +509,13 @@ function RulesTab({ sub }: { sub: SubCompany }) {
             <p className="text-xs text-muted-foreground">Libera o criador de páginas, CTAs e QR Codes. Aparece no menu como "Outros" ao lado dos canais externos.</p>
           </div>
         </div>
+        <div className="flex items-start gap-3 rounded-lg border p-3 bg-emerald-500/5">
+          <Switch checked={recording} onCheckedChange={setRecording} />
+          <div>
+            <p className="text-sm font-medium">Gravar chamadas (Wavoip & VoIP)</p>
+            <p className="text-xs text-muted-foreground">Ao ligar por esta sub-empresa, o áudio é gravado e salvo no histórico de chamadas com opção de reproduzir e baixar. Certifique-se de informar os interlocutores sobre a gravação (LGPD).</p>
+          </div>
+        </div>
         <Button onClick={save} disabled={saving} className="w-full">{saving ? 'Salvando...' : 'Salvar regras'}</Button>
       </div>
     </div>
