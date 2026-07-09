@@ -308,6 +308,14 @@ export function CallHistoryTable({
                 ))}
               </TableBody>
             </Table>
+            {hasMore && (
+              <div className="flex justify-center pt-3">
+                <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
+                  {loadingMore ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
+                  Carregar mais
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </CardContent>
