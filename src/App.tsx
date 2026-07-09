@@ -53,6 +53,7 @@ import BotFlowsPage from "./pages/BotFlowsPage";
 import OwnerDashboardPage from "./pages/OwnerDashboardPage";
 import AccessHealthPage from "./pages/owner/AccessHealthPage";
 import AuditTrailPage from "./pages/owner/AuditTrailPage";
+import PlatformHealthPage from "./pages/owner/PlatformHealthPage";
 import { CookieConsentBanner } from "./components/CookieConsentBanner";
 
 
@@ -125,6 +126,7 @@ const App = () => (
               <Route path="/owner" element={<ProtectedRoute ownerOnly><OwnerDashboardPage /></ProtectedRoute>} />
               <Route path="/owner/access-health" element={<ProtectedRoute ownerOnly><AccessHealthPage /></ProtectedRoute>} />
               <Route path="/owner/audit-trail" element={<ProtectedRoute ownerOnly><AuditTrailPage /></ProtectedRoute>} />
+              <Route path="/owner/platform-health" element={<ProtectedRoute ownerOnly><PlatformHealthPage /></ProtectedRoute>} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>

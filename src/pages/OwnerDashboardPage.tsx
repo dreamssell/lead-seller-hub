@@ -1,7 +1,7 @@
 import { Link, Navigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, Building, Users, MessagesSquare, TrendingUp, DollarSign, ShieldCheck, Ban, Crown, HeartPulse, ScrollText } from 'lucide-react';
+import { Building2, Building, Users, MessagesSquare, TrendingUp, DollarSign, ShieldCheck, Ban, Crown, HeartPulse, ScrollText, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { useOwnerPlatformMetrics } from '@/hooks/useOwnerPlatformMetrics';
@@ -39,6 +39,9 @@ export default function OwnerDashboardPage() {
             Área restrita — apenas o dono da plataforma tem acesso a estas informações.
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <Button asChild variant="outline" size="sm" className="gap-2">
+              <Link to="/owner/platform-health"><Activity className="w-4 h-4" /> Saúde da plataforma</Link>
+            </Button>
             <Button asChild variant="outline" size="sm" className="gap-2">
               <Link to="/owner/access-health"><HeartPulse className="w-4 h-4" /> Saúde de acessos</Link>
             </Button>
