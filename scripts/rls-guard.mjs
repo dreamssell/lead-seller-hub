@@ -9,8 +9,8 @@
  *  - CREATE POLICY para INSERT/UPDATE/DELETE sem referência a auth.uid()/has_role/user_account_access.
  *  - CREATE TABLE public.<x> sem GRANT correspondente na mesma migração.
  */
-import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
+
 
 const MIG_DIR = 'supabase/migrations';
 const errors = [];
