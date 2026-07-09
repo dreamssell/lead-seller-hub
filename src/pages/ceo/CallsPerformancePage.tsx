@@ -9,6 +9,7 @@ import { useCeoFilters } from '@/hooks/useCeoFilters';
 import { TopRanking } from '@/components/ceo/TopRanking';
 import { supabase } from '@/integrations/supabase/client';
 import { downloadCsv, downloadPdf } from '@/lib/ceoExport';
+import { CallHistoryTable } from '@/components/calls/CallHistoryTable';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, TrendingUp, Wifi, Activity, Download, FileText } from 'lucide-react';
 
