@@ -315,6 +315,9 @@ Deno.serve(async (req) => {
       raw: gowsData ?? webPayload,
     },
   });
+  if (msgErr?.code === '23505') {
+    return json({ ok: true, idempotent: true, message_id: providerMsgId, phone });
+  }
   if (msgErr) return json({ error: 'message_insert_failed', detail: msgErr.message }, 500);
 
   return json({ ok: true, customer_id: customerId, message_id: providerMsgId, phone });
