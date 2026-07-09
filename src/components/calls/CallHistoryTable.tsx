@@ -55,8 +55,11 @@ export function CallHistoryTable({
   customerId,
   showFilters = true,
 }: Props) {
+  const pageSize = filter?.limit ?? 50;
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [subs, setSubs] = useState<Record<string, string>>({});
   const [period, setPeriod] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
@@ -66,34 +69,59 @@ export function CallHistoryTable({
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
 
-  const load = async () => {
-    setLoading(true);
+  const buildQuery = (from: number, to: number) => {
     let q: any = (supabase as any).from('call_history').select('*')
       .order('started_at', { ascending: false })
-      .limit(filter?.limit ?? 200);
+      .range(from, to);
     if (filter?.ownerId) q = q.eq('owner_id', filter.ownerId);
     if (filter?.subCompanyId) q = q.eq('sub_company_id', filter.subCompanyId);
     if (filter?.userId) q = q.eq('user_id', filter.userId);
     if (filter?.channel && filter.channel !== 'all') q = q.eq('channel', filter.channel);
     if (customerId) q = q.eq('customer_id', customerId);
-    const { data, error } = await q;
-    if (error) console.warn('[CallHistoryTable]', error);
-    setRows((data as Row[]) || []);
-    const uids = Array.from(new Set((data || []).map((r: any) => r.user_id).filter(Boolean))) as string[];
-    const sids = Array.from(new Set((data || []).map((r: any) => r.sub_company_id).filter(Boolean))) as string[];
+    return q;
+  };
+
+  const enrich = async (list: Row[]) => {
+    const uids = Array.from(new Set(list.map((r) => r.user_id).filter(Boolean))) as string[];
+    const sids = Array.from(new Set(list.map((r) => r.sub_company_id).filter(Boolean))) as string[];
     if (uids.length) {
       const { data: p } = await supabase.from('profiles').select('user_id,display_name,email').in('user_id', uids);
-      const map: Record<string, string> = {};
-      (p || []).forEach((x: any) => { map[x.user_id] = x.display_name || x.email || x.user_id.slice(0, 8); });
-      setProfiles(map);
+      setProfiles((prev) => {
+        const next = { ...prev };
+        (p || []).forEach((x: any) => { next[x.user_id] = x.display_name || x.email || x.user_id.slice(0, 8); });
+        return next;
+      });
     }
     if (sids.length) {
       const { data: s } = await (supabase as any).from('sub_companies').select('id,name').in('id', sids);
-      const map: Record<string, string> = {};
-      (s || []).forEach((x: any) => { map[x.id] = x.name; });
-      setSubs(map);
+      setSubs((prev) => {
+        const next = { ...prev };
+        (s || []).forEach((x: any) => { next[x.id] = x.name; });
+        return next;
+      });
     }
+  };
+
+  const load = async () => {
+    setLoading(true);
+    const { data, error } = await buildQuery(0, pageSize - 1);
+    if (error) console.warn('[CallHistoryTable]', error);
+    const list = (data as Row[]) || [];
+    setRows(list);
+    setHasMore(list.length === pageSize);
+    await enrich(list);
     setLoading(false);
+  };
+
+  const loadMore = async () => {
+    setLoadingMore(true);
+    const { data, error } = await buildQuery(rows.length, rows.length + pageSize - 1);
+    if (error) console.warn('[CallHistoryTable]', error);
+    const list = (data as Row[]) || [];
+    setRows((prev) => [...prev, ...list]);
+    setHasMore(list.length === pageSize);
+    await enrich(list);
+    setLoadingMore(false);
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [
