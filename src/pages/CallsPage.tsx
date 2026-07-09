@@ -152,6 +152,7 @@ export default function CallsPage() {
   const { isOwner } = usePlatformOwner();
   useSipStoragePurge();
   const [dialerOpen, setDialerOpen] = useState(false);
+  const activeCallRef = useRef<{ id: string | null; startedAt: number; recorder: MediaRecorder | null; chunks: Blob[]; ownerId: string | null; stream: MediaStream | null }>({ id: null, startedAt: 0, recorder: null, chunks: [], ownerId: null, stream: null });
 
   const [number, setNumber] = useState('');
   const [inCall, setInCall] = useState(false);
