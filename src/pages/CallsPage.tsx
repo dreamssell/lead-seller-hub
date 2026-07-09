@@ -209,12 +209,15 @@ export default function CallsPage() {
   };
 
 
+  // Wavoip SIP Trunk defaults (host sipv2.wavoip.com). Preenchemos usuário/senha
+  // com as credenciais fornecidas pela Wavoip para o tenant atual — o dono só
+  // precisa clicar em "Salvar" para persistir criptografado no backend.
   const [sipConfig, setSipConfig] = useState({
     server: 'sipv2.wavoip.com',
     port: '5060',
     wsUri: 'wss://sipv2.wavoip.com:7443',
-    username: '',
-    password: '',
+    username: 'e552c166-cc90-40df-9600-7930e4ea0a46',
+    password: 'e552c166-cc90-40df-9600-7930e4ea0a46',
     displayName: 'Lead Seller',
     transport: 'WSS',
     autoRecord: true,
