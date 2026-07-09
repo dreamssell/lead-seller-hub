@@ -282,16 +282,38 @@ export default function CallsPage() {
   const handleKey = (k: string) => setNumber((n) => n + k);
   const handleBackspace = () => setNumber((n) => n.slice(0, -1));
 
-  const handleCall = () => {
+  const handleCall = async () => {
     if (!number) {
       toast({ title: 'Digite um número', variant: 'destructive' });
       return;
+    }
+    // Se o UA SIP estiver registrado, coloca a chamada real via Wavoip
+    const ua = sipRef.current;
+    if (ua && sipStatus === 'connected') {
+      try {
+        const target = `sip:${number.replace(/[^0-9+*#]/g, '')}@${sipConfig.server}`;
+        const session = ua.call(target, {
+          mediaConstraints: { audio: true, video: false },
+          pcConfig: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
+        });
+        session?.connection?.addEventListener?.('addstream', (e: any) => {
+          const audio = document.getElementById('sip-remote-audio') as HTMLAudioElement | null;
+          if (audio) { audio.srcObject = e.stream; audio.play().catch(() => {}); }
+        });
+        setInCall(true);
+        toast({ title: 'Chamando via Wavoip...', description: number });
+        return;
+      } catch (e: any) {
+        toast({ title: 'Falha ao iniciar chamada', description: String(e?.message || e), variant: 'destructive' });
+        return;
+      }
     }
     setInCall(true);
     toast({ title: 'Chamando...', description: number });
   };
 
   const handleHangup = () => {
+    try { sipRef.current?.terminateSessions?.(); } catch {}
     setInCall(false);
     setMuted(false);
     setOnHold(false);
