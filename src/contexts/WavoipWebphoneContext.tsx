@@ -2,6 +2,21 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  startCallLog,
+  markCallAnswered,
+  endCallLog,
+  uploadCallRecording,
+} from '@/lib/callHistory';
+
+export interface WavoipCallMeta {
+  customerId?: string | null;
+  leadId?: string | null;
+  contactName?: string | null;
+  ownerId?: string | null;
+  subCompanyId?: string | null;
+  userId?: string | null;
+}
 
 /**
  * WavoipWebphoneContext
@@ -59,7 +74,7 @@ interface Ctx {
   setEnabled: (enabled: boolean) => void;
   reload: () => Promise<void>;
   openDialer: () => void;
-  callWhatsApp: (phone: string, deviceId?: string) => Promise<boolean>;
+  callWhatsApp: (phone: string, deviceId?: string, meta?: WavoipCallMeta) => Promise<boolean>;
   validateConnection: () => Promise<ValidationResult>;
   isValidating: boolean;
   lastValidation: ValidationResult | null;
@@ -354,7 +369,7 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
     try { (window as any).wavoip?.widget?.open?.(); } catch (e) { console.warn('[Wavoip] widget.open falhou', e); }
   }, []);
 
-  const callWhatsApp = useCallback(async (phone: string, deviceId?: string): Promise<boolean> => {
+  const callWhatsApp = useCallback(async (phone: string, deviceId?: string, meta?: WavoipCallMeta): Promise<boolean> => {
     if (!config.enabled || config.devices.length === 0) {
       toast.error('Tronco Wavoip não configurado. Cadastre um Device Token em Configurações > Wavoip.');
       return false;
@@ -367,6 +382,55 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
     if (!device) { toast.error('Nenhum device Wavoip disponível.'); return false; }
     const normalized = phone.replace(/\D/g, '');
     if (!normalized) { toast.error('Número de telefone inválido.'); return false; }
+
+    // ---- Registro no histórico de chamadas ------------------------------
+    const effectiveOwner = meta?.ownerId ?? owner_id;
+    const effectiveSub = meta?.subCompanyId ?? sub_company_id;
+    let callLogId: string | null = null;
+    let recorder: MediaRecorder | null = null;
+    let chunks: Blob[] = [];
+    let recordingEnabled = false;
+    if (effectiveOwner) {
+      try {
+        const { data: rec } = await (supabase as any).rpc('get_recording_enabled', {
+          p_owner_id: effectiveOwner,
+          p_sub_company_id: effectiveSub,
+        });
+        recordingEnabled = !!rec;
+      } catch (e) { console.warn('[Wavoip] get_recording_enabled falhou', e); }
+
+      callLogId = await startCallLog({
+        phone: normalized,
+        contactName: meta?.contactName ?? null,
+        customerId: meta?.customerId ?? null,
+        leadId: meta?.leadId ?? null,
+        ownerId: effectiveOwner,
+        subCompanyId: effectiveSub,
+        userId: meta?.userId ?? user?.id ?? null,
+        channel: 'wavoip',
+        direction: 'outbound',
+        connectionLabel: device.label,
+        metadata: { device_id: device.id, recording_enabled: recordingEnabled },
+      });
+    }
+
+    const startedAt = Date.now();
+    const finish = async (status: 'ended' | 'failed' | 'missed' | 'rejected' = 'ended') => {
+      if (!callLogId || !effectiveOwner) return;
+      let recordingPath: string | null = null;
+      if (recorder && recorder.state !== 'inactive') {
+        try {
+          recorder.stop();
+          await new Promise((r) => setTimeout(r, 200));
+          if (chunks.length) {
+            const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+            recordingPath = await uploadCallRecording(callLogId, effectiveOwner, blob);
+          }
+        } catch (e) { console.warn('[Wavoip] recorder stop/upload falhou', e); }
+      }
+      await endCallLog(callLogId, { status, startedAt, recordingPath });
+    };
+
     try {
       const api = (window as any).wavoip;
       const { call, err } = await api.call.start(normalized, {
@@ -376,17 +440,48 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
       if (err) {
         const detail = err.devices?.map((d: any) => `${d.token.slice(0,8)}…: ${d.reason}`).join(' | ') || err.message;
         toast.error(`Wavoip recusou a chamada: ${detail}`);
+        await finish('rejected');
         return false;
       }
+
+      // Best-effort: assinar eventos do objeto call devolvido pelo SDK.
+      const bindEnd = (event: string, status: 'ended' | 'failed' | 'missed') => {
+        try { call?.on?.(event, () => { finish(status); }); } catch { /* noop */ }
+      };
+      bindEnd('end', 'ended');
+      bindEnd('ended', 'ended');
+      bindEnd('terminate', 'ended');
+      bindEnd('cancel', 'missed');
+      bindEnd('failed', 'failed');
+      try { call?.on?.('accept', () => callLogId && markCallAnswered(callLogId)); } catch { /* noop */ }
+      try { call?.on?.('answered', () => callLogId && markCallAnswered(callLogId)); } catch { /* noop */ }
+
+      // Recording (opt-in) — tenta obter o stream remoto exposto pelo SDK.
+      if (recordingEnabled) {
+        try {
+          const stream: MediaStream | undefined =
+            call?.remoteStream || call?.stream || api?.getRemoteStream?.();
+          if (stream && typeof MediaRecorder !== 'undefined') {
+            recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            recorder.ondataavailable = (ev) => { if (ev.data.size) chunks.push(ev.data); };
+            recorder.start(1000);
+          } else {
+            console.info('[Wavoip] gravação opt-in ativa, mas o SDK não expôs stream remoto.');
+          }
+        } catch (e) { console.warn('[Wavoip] MediaRecorder init falhou', e); }
+      }
+
       openDialer();
-      toast.success(`Discando ${normalized} via ${device.label} (call ${call?.id?.slice(0,8) || ''})`);
+      toast.success(`Discando ${normalized} via ${device.label}${recordingEnabled ? ' · gravando' : ''}`);
       return true;
     } catch (e: any) {
       console.error('[Wavoip] callWhatsApp error', e);
       toast.error(`Falha ao ligar via Wavoip: ${e?.message || 'erro desconhecido'}`);
+      await finish('failed');
       return false;
     }
-  }, [config, status, bootSdk, openDialer]);
+  }, [config, status, bootSdk, openDialer, owner_id, sub_company_id, user?.id]);
+
 
   return (
     <WavoipWebphoneCtx.Provider

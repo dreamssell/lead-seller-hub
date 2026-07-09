@@ -787,6 +787,7 @@ export type Database = {
           owner_id: string
           phone: string | null
           plan_slug: string | null
+          recording_enabled: boolean
           segment: string | null
           state: string | null
           status: string
@@ -812,6 +813,7 @@ export type Database = {
           owner_id: string
           phone?: string | null
           plan_slug?: string | null
+          recording_enabled?: boolean
           segment?: string | null
           state?: string | null
           status?: string
@@ -837,6 +839,7 @@ export type Database = {
           owner_id?: string
           phone?: string | null
           plan_slug?: string | null
+          recording_enabled?: boolean
           segment?: string | null
           state?: string | null
           status?: string
@@ -3523,6 +3526,7 @@ export type Database = {
           name: string
           owner_id: string
           plan_slug: string
+          recording_enabled: boolean
           status: string
           updated_at: string
           whatsapp_limit: number
@@ -3550,6 +3554,7 @@ export type Database = {
           name: string
           owner_id: string
           plan_slug?: string
+          recording_enabled?: boolean
           status?: string
           updated_at?: string
           whatsapp_limit?: number
@@ -3577,6 +3582,7 @@ export type Database = {
           name?: string
           owner_id?: string
           plan_slug?: string
+          recording_enabled?: boolean
           status?: string
           updated_at?: string
           whatsapp_limit?: number
@@ -5239,6 +5245,10 @@ export type Database = {
       get_my_signature_role: {
         Args: { p_sub_company_id: string }
         Returns: Database["public"]["Enums"]["signature_role"]
+      }
+      get_recording_enabled: {
+        Args: { p_owner_id: string; p_sub_company_id?: string }
+        Returns: boolean
       }
       get_room_invite_token: { Args: { p_room_id: string }; Returns: string }
       get_webhook_idempotency_stats: {
