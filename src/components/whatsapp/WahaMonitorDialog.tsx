@@ -182,12 +182,18 @@ export function WahaMonitorDialog({ open, onOpenChange, conn }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="webhook" className="mt-2">
-          <TabsList className="grid grid-cols-3">
+        <Tabs defaultValue="diagnose" className="mt-2">
+          <TabsList className="grid grid-cols-4">
+            <TabsTrigger value="diagnose" className="gap-1"><Stethoscope className="w-3.5 h-3.5" /> Diagnóstico</TabsTrigger>
             <TabsTrigger value="webhook" className="gap-1"><RadioTower className="w-3.5 h-3.5" /> Webhook</TabsTrigger>
             <TabsTrigger value="history" className="gap-1"><Timer className="w-3.5 h-3.5" /> Histórico</TabsTrigger>
             <TabsTrigger value="cleanup" className="gap-1"><Trash2 className="w-3.5 h-3.5" /> Manutenção</TabsTrigger>
           </TabsList>
+
+          {/* ── Onda 3: relatório consolidado com auto-reparo ─────────────── */}
+          <TabsContent value="diagnose" className="mt-4">
+            <WahaDiagnosticsPanel connectionId={conn.id} />
+          </TabsContent>
 
           {/* ── Webhook tester ────────────────────────────────────────────── */}
           <TabsContent value="webhook" className="space-y-3 mt-4">
