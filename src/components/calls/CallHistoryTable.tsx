@@ -79,8 +79,8 @@ export function CallHistoryTable({
     const { data, error } = await q;
     if (error) console.warn('[CallHistoryTable]', error);
     setRows((data as Row[]) || []);
-    const uids = Array.from(new Set((data || []).map((r: any) => r.user_id).filter(Boolean)));
-    const sids = Array.from(new Set((data || []).map((r: any) => r.sub_company_id).filter(Boolean)));
+    const uids = Array.from(new Set((data || []).map((r: any) => r.user_id).filter(Boolean))) as string[];
+    const sids = Array.from(new Set((data || []).map((r: any) => r.sub_company_id).filter(Boolean))) as string[];
     if (uids.length) {
       const { data: p } = await supabase.from('profiles').select('user_id,display_name,email').in('user_id', uids);
       const map: Record<string, string> = {};
