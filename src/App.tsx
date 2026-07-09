@@ -51,6 +51,7 @@ import InternalTelemetryPage from "./pages/InternalTelemetryPage";
 import RoleLabelAuditPage from "./pages/RoleLabelAuditPage";
 import BotFlowsPage from "./pages/BotFlowsPage";
 import OwnerDashboardPage from "./pages/OwnerDashboardPage";
+import AccessHealthPage from "./pages/owner/AccessHealthPage";
 import { CookieConsentBanner } from "./components/CookieConsentBanner";
 
 
