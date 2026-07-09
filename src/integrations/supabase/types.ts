@@ -2288,6 +2288,53 @@ export type Database = {
           },
         ]
       }
+      message_events: {
+        Row: {
+          correlation_id: string | null
+          created_at: string
+          customer_id: string | null
+          detail: Json | null
+          id: string
+          message_id: string | null
+          owner_id: string | null
+          stage: string
+          status: string | null
+          sub_company_id: string | null
+        }
+        Insert: {
+          correlation_id?: string | null
+          created_at?: string
+          customer_id?: string | null
+          detail?: Json | null
+          id?: string
+          message_id?: string | null
+          owner_id?: string | null
+          stage: string
+          status?: string | null
+          sub_company_id?: string | null
+        }
+        Update: {
+          correlation_id?: string | null
+          created_at?: string
+          customer_id?: string | null
+          detail?: Json | null
+          id?: string
+          message_id?: string | null
+          owner_id?: string | null
+          stage?: string
+          status?: string | null
+          sub_company_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_events_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       note_mentions: {
         Row: {
           created_at: string
@@ -5153,6 +5200,17 @@ export type Database = {
         }
         Relationships: []
       }
+      v_account_access_health: {
+        Row: {
+          category: string | null
+          message: string | null
+          owner_id: string | null
+          ref_id: string | null
+          sub_company_id: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       admin_find_auth_user_by_email: {
@@ -5201,6 +5259,17 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      get_access_health: {
+        Args: never
+        Returns: {
+          category: string
+          message: string
+          owner_id: string
+          ref_id: string
+          sub_company_id: string
+          user_id: string
+        }[]
       }
       get_idempotency_expiration_report: {
         Args: { p_webhook_id: string }
