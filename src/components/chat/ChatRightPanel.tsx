@@ -12,6 +12,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MentionTextarea } from './MentionTextarea';
 import { AssignmentTimeline } from './AssignmentTimeline';
+import { CustomerServiceHistory } from './CustomerServiceHistory';
 import { Customer360Timeline } from './Customer360Timeline';
 import { AIInsightsPanel } from './AIInsightsPanel';
 import { Sparkles } from 'lucide-react';
