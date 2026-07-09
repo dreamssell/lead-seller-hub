@@ -443,6 +443,7 @@ function RulesTab({ sub }: { sub: SubCompany }) {
   const [action, setAction] = useState(sub.auto_action);
   const [allowCustom, setAllowCustom] = useState(sub.allow_custom_logic);
   const [landingBuilder, setLandingBuilder] = useState(!!sub.feature_landing_builder);
+  const [recording, setRecording] = useState(!!(sub as any).recording_enabled);
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
@@ -453,6 +454,7 @@ function RulesTab({ sub }: { sub: SubCompany }) {
         auto_action: action,
         allow_custom_logic: allowCustom,
         feature_landing_builder: landingBuilder,
+        recording_enabled: recording,
       } as any).eq('id', sub.id);
     setSaving(false);
     if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
