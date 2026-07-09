@@ -874,7 +874,8 @@ export default function ChatPage() {
         content,
         channel: activeChannel,
         connection_id: activeWhatsAppConn?.id ?? null,
-        metadata: { status: 'sending' },
+        correlation_id: id,
+        metadata: { status: 'sending', correlation_id: id },
       });
     } catch {}
     return id;
