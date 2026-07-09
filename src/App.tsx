@@ -124,6 +124,7 @@ const App = () => (
               <Route path="/bot-flows" element={<ProtectedRoute><BotFlowsPage /></ProtectedRoute>} />
               <Route path="/owner" element={<ProtectedRoute ownerOnly><OwnerDashboardPage /></ProtectedRoute>} />
               <Route path="/owner/access-health" element={<ProtectedRoute ownerOnly><AccessHealthPage /></ProtectedRoute>} />
+              <Route path="/owner/audit-trail" element={<ProtectedRoute ownerOnly><AuditTrailPage /></ProtectedRoute>} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>
