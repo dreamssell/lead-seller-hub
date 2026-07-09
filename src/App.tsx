@@ -53,6 +53,7 @@ import BotFlowsPage from "./pages/BotFlowsPage";
 import OwnerDashboardPage from "./pages/OwnerDashboardPage";
 import AccessHealthPage from "./pages/owner/AccessHealthPage";
 import AuditTrailPage from "./pages/owner/AuditTrailPage";
+import PlatformHealthPage from "./pages/owner/PlatformHealthPage";
 import { CookieConsentBanner } from "./components/CookieConsentBanner";
 
 
