@@ -815,7 +815,8 @@ export default function ChatPage() {
         content: currentText,
         channel: activeChannel,
         connection_id: activeWhatsAppConn?.id ?? null,
-        metadata: { status: 'sending' },
+        correlation_id: clientMsgId,
+        metadata: { status: 'sending', correlation_id: clientMsgId },
       });
     } catch (e) { /* persistence is best-effort */ }
 
@@ -873,7 +874,8 @@ export default function ChatPage() {
         content,
         channel: activeChannel,
         connection_id: activeWhatsAppConn?.id ?? null,
-        metadata: { status: 'sending' },
+        correlation_id: id,
+        metadata: { status: 'sending', correlation_id: id },
       });
     } catch {}
     return id;

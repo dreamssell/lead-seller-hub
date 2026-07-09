@@ -1,104 +1,80 @@
-# Plano — Integração WAHA (estilo ChatWoot App) em 3 Etapas
+# Onda 2 — Isolamento multi-tenant, rastreabilidade e saúde de acessos
 
-O objetivo é transformar a integração WAHA atual (apenas envio HTTP) em uma integração completa e "pronta para produção", replicando o modelo do app oficial ChatWoot da WAHA: painel de configuração com todos os campos, webhook inbound gerando conversas/mensagens no Lead Seller, e envio/ACKs bidirecionais — tudo isolado dos providers UAZ, Evolution e Wavoip.
+Foco: fechar brechas de RLS entre empresas/sub-empresas, dar rastreabilidade fim-a-fim ao ciclo de mensagens do WhatsApp e detectar contas com `user_account_access` inconsistente antes que virem ticket de suporte.
 
----
+## 1. RLS e isolamento multi-tenant (crítico)
 
-## Etapa 1 — Painel de Configuração WAHA (UI + Persistência)
+**Migração SQL corrigindo as tabelas apontadas na auditoria:**
 
-**Entrega:** Formulário completo na página `WhatsAppPage` (e/ou card em `ConnectionsTab`) para criar/editar uma conexão WAHA com todos os campos que a VPS WAHA exige, salvos com segurança em `whatsapp_connections.metadata`.
+- `customer_notes`, `company_settings`, `video_error_logs` — revisar policies e substituir qualquer `USING (true)` por escopo com `owner_id` + `user_account_access` (mesmo padrão de `customers`).
+- Reforçar `chat_messages` / `customers`: garantir que INSERT/UPDATE também validem `sub_company_id` (não só `owner_id`), evitando que um usuário de outra sub-empresa da mesma matriz enxergue conversas.
+- Criar índices compostos `(owner_id, sub_company_id, created_at DESC)` nas tabelas quentes (`chat_messages`, `customers`, `leads`, `call_history`) para manter performance com o filtro mais estrito.
 
-Campos do formulário (obrigatórios marcados *):
-- **WAHA Base URL** * (ex.: `https://waha.meudominio.com`)
-- **WAHA API Key / Token** * (mascarado)
-- **Session name** * (default `default`)
-- **App ID WAHA** (ex.: `app_7efff04b58ce44ff9c2eb034a571d0df`)
-- **Chatwoot-compat block** (mantidos por paridade com a UI da WAHA):
-  - Chatwoot URL (default `https://app.chatwoot.com` — usaremos como "target URL" ou deixamos vazio se apontar para o Lead Seller)
-  - Account ID *
-  - Account Token * (mascarado)
-  - Inbox ID *
-  - Inbox Identifier * (mascarado)
-- **Conversation behavior**: `create_new` | `reuse_open` | `reuse_last`
-- **Mark as read on WhatsApp ack** (toggle)
-- **Message link preview** (toggle)
-- **Templates com nome do agente** (toggle)
-- **Language** (pt-BR default) + textarea de "Language Overrides" (YAML/Mustache livre)
+**Gate de CI para RLS** (`.github/workflows/rls-guard.yml` + script Node):
 
-Extras técnicos:
-- Botão **"Copiar Webhook URL"** exibindo `${SUPABASE_FUNCTIONS_URL}/waha-inbound?connection=<id>` — a URL que o usuário cola no painel WAHA/Chatwoot App.
-- Botão **"Testar conexão"** que chama `whatsapp-status` (já existe) e mostra `status` + `me.id`.
-- Validação Zod no client antes de salvar; segredos nunca vão para logs/telemetria.
-- Componente novo `WahaConfigDialog.tsx` — isolado, não toca em componentes de UAZ/Evolution/Wavoip.
+- Varre `supabase/migrations/*.sql` e falha o pipeline se detectar:
+  - `USING (true)` ou `WITH CHECK (true)` em tabela pública.
+  - `CREATE POLICY ... FOR (INSERT|UPDATE|DELETE)` sem `WITH CHECK` ou sem referência a `auth.uid()` / `has_role` / `user_account_access`.
+  - `CREATE TABLE public.*` sem `GRANT` na mesma migração.
+- Roda também `src/lib/serverAccess.migrations.test.ts` e o novo teste de tenant.
 
-Testes desta etapa:
-- Unit test do schema Zod da config (campos obrigatórios, formato URL, mínimo tokens).
-- Snapshot do dialog para garantir que nenhum campo desaparece em refactors.
+**Testes de integração multi-tenant** (`src/__tests__/tenantIsolation.integration.test.ts`):
 
----
+- Cria 2 owners + 1 sub-empresa cada via service role.
+- Para cada tabela crítica (`customers`, `chat_messages`, `customer_notes`, `leads`, `call_history`, `company_settings`, `video_error_logs`) tenta ler/escrever cruzado usando a chave anon com JWT do owner B — assert 0 linhas / erro RLS.
 
-## Etapa 2 — Webhook Inbound WAHA → Lead Seller
+## 2. correlationId fim-a-fim no WhatsApp
 
-**Entrega:** Nova edge function `waha-inbound` que recebe eventos WAHA (`message`, `message.ack`, `session.status`) e persiste no schema existente (`customers`, `chat_messages`), sem tocar no `handle-inbound-webhook` genérico (isolamento).
+Reaproveita `src/lib/correlationId.ts` (já existe).
 
-Passos:
-1. Criar `supabase/functions/waha-inbound/index.ts`:
-   - CORS + `verify_jwt = false` (WAHA não manda JWT).
-   - Valida `?connection=<uuid>` → carrega `whatsapp_connections` e confirma `provider = 'waha'`.
-   - Autentica o webhook via header `X-Api-Key` comparado com o token salvo (defesa contra spoof).
-   - Parseia payload WAHA com Zod (`event`, `session`, `payload.from`, `payload.body`, `payload.hasMedia`, `payload.ack`, etc.).
-   - Roteia por `event`:
-     - `message` / `message.any` → upsert `customer` por telefone (normalizado), insert `chat_messages` com `sender_type='customer'`, `channel='whatsapp'`, `provider_message_id`.
-     - `message.ack` → update `chat_messages.status` (`sent` → `delivered` → `read`) via `provider_message_id`.
-     - `session.status` → atualiza `whatsapp_connections.status` (connected/disconnected).
-   - Idempotência: usa `webhook_idempotency_keys` com chave `waha:<connection_id>:<payload.id>`.
-2. Registrar em `supabase/config.toml` apenas se precisar de override; caso contrário, deploy padrão já resolve.
+- **Composer → envio**: `ChatPage` gera `cid` antes do `insert` em `chat_messages` e grava em nova coluna `correlation_id text` (migração + índice).
+- **Adapter WAHA** (`src/components/whatsapp/wahaAdapter.ts`): propaga `cid` no header `X-Correlation-Id` da chamada à edge function.
+- **Edge `waha-send` / `uaz-send-message` / `waha-inbound`**: loga `cid` estruturado e escreve em `webhook_logs.correlation_id`.
+- **ACK/inbound**: quando o webhook casa `provider_message_id`, atualiza a mesma linha e emite evento realtime.
 
-Testes desta etapa:
-- Deno integration test (`waha-inbound/index_test.ts`) com:
-  - payload de mensagem de texto → cria customer + message
-  - payload de ACK → atualiza status
-  - payload duplicado (mesma `id`) → segunda chamada é no-op
-  - header `X-Api-Key` inválido → 401
-  - `connection` inexistente ou provider ≠ waha → 404
-- Teste que confirma que a função **não** chama `handle-inbound-webhook`, `uaz-*`, `evolution-*` nem `wavoip-*`.
+**Timeline por mensagem**: nova tabela `message_events(id, message_id, correlation_id, stage, status, detail jsonb, created_at)` com stages `composed | queued | provider_sent | provider_ack | delivered | read | failed`. Popular via triggers no `chat_messages` + inserts explícitos no edge.
 
----
+**UI**: popover no balão do chat listando os eventos ordenados (usa a tabela nova). Sem mudar layout — apenas ação "Ver rota da mensagem".
 
-## Etapa 3 — Envio Bidirecional, ACKs no Chat e Mapeamento de Templates
+## 3. Detecção de acessos órfãos
 
-**Entrega:** Fechar o loop: mensagens enviadas pelo Lead Seller vão via `wahaAdapter` já existente, mas agora com metadados do painel (session, overrides, templates), e ACKs recebidos na Etapa 2 atualizam a UI do chat.
+**View + função**: `public.v_account_access_health` cobrindo:
 
-Escopo:
-1. **`wahaAdapter.sendMessage/sendMedia/sendAudio`** passa a:
-   - Ler `session` da nova config (fallback `default`).
-   - Aplicar `chatwoot.to.whatsapp.message.text` como template Mustache no `content` quando `templates_com_nome_agente` estiver ligado (prefixa `*Nome*:` no texto).
-   - Registrar `provider_message_id` retornado pela WAHA no `chat_messages` correspondente (para casar ACKs da Etapa 2).
-2. **UI de chat** (`WhatsAppConnectionCard` + componente de mensagem):
-   - Consumir os ACKs (`delivered`/`read`) e atualizar o ícone (✓ / ✓✓ / ✓✓ azul) apenas para mensagens WAHA — sem afetar renderização das mensagens UAZ/Evolution/Wavoip.
-   - Banner de status já existente ganha estados: `sending`, `sent`, `delivered`, `read`, `failed`, `disconnected`.
-3. **Fallback**: se `whatsapp-status` reportar WAHA desconectado por >30s, botão de envio desabilita com tooltip "WAHA desconectado — reconecte na configuração. UAZ/Wavoip/Evolution não afetados".
-4. **Rate limit + retry** já cobertos pelo `wahaFetch`; adicionar métrica simples em `telemetry_logs` (`event='waha_send'`, sucesso/falha/duração).
+- `client_companies` cujo `auth_user_id` não tem linha em `user_account_access` nem role admin.
+- `user_account_access.owner_id` que não existe mais em `client_companies`.
+- `sub_companies` sem nenhum usuário admin ativo.
+- Usuários com `role_label` NULL/`Colaborador` em contas titulares (bug do backfill).
 
-Testes desta etapa:
-- Unit: template Mustache produz o texto esperado com/sem `sender.name`.
-- Unit: ACK recebido atualiza `chat_messages.status` correto (mock do subscribe realtime).
-- E2E (Playwright, adicionar a `e2e/whatsapp-send-recovery.spec.ts` ou novo `waha-flow.spec.ts`):
-  1. Cria conexão WAHA fake apontando para um servidor local mock.
-  2. Envia mensagem pela UI → verifica POST em `/api/sendText`.
-  3. Dispara webhook `message.ack` no `waha-inbound` mockado → UI mostra ✓✓.
-  4. Confirma que nenhuma request foi feita para endpoints UAZ/Evolution/Wavoip.
+**Tela admin `/owner/access-health`** (só para dono da plataforma via `usePlatformOwner`):
 
----
+- Lista os problemas categorizados, com botão "Corrigir" que chama uma edge function `access-health-fix` (idempotente, service role).
+- Envia notificação para admins quando novos itens aparecerem (reaproveita `notifications` + `notify_admins_on_error` como padrão).
 
-## Detalhes Técnicos Transversais
+**Job diário**: cron da Supabase chama a edge `access-health-scan` uma vez ao dia e insere `notifications` para o dono se `count > 0`.
 
-- **Isolamento**: nenhum arquivo novo importa de `uaz*`, `evolution*` ou `wavoip*`. Toda lógica WAHA vive em `src/components/whatsapp/waha*`, `supabase/functions/waha-inbound/` e no card dedicado em `ConnectionsTab`.
-- **Segurança**: `Account Token`, `Inbox Identifier` e `WAHA token` sempre mascarados na UI; nunca logados; validação server-side do `X-Api-Key` no webhook.
-- **Schema DB**: não requer novas tabelas — usamos `whatsapp_connections.metadata` (JSONB) para toda a config, `chat_messages.provider_message_id` (já existe) para ACKs, e `webhook_idempotency_keys` para deduplicação.
-- **Migrations**: nenhuma nova migration necessária (enum `waha` já existe).
-- **Rollback**: cada etapa é independente; remover o card WAHA + a edge function `waha-inbound` desativa a integração sem afetar os demais providers.
+## 4. Entregáveis / arquivos
 
----
+```text
+supabase/migrations/<ts>_wave2_rls_hardening.sql
+supabase/migrations/<ts>_wave2_correlation_and_events.sql
+supabase/migrations/<ts>_wave2_access_health.sql
+supabase/functions/access-health-scan/index.ts
+supabase/functions/access-health-fix/index.ts
+scripts/rls-guard.mjs
+.github/workflows/rls-guard.yml
+src/pages/owner/AccessHealthPage.tsx
+src/components/chat/MessageRoutePopover.tsx
+src/__tests__/tenantIsolation.integration.test.ts
+```
 
-Aprove esta divisão e eu inicio pela **Etapa 1** (painel de configuração + persistência), depois Etapa 2 (webhook), depois Etapa 3 (bidirecional + ACKs).
+Ajustes menores em: `ChatPage.tsx`, `wahaAdapter.ts`, `waha-inbound/index.ts`, `send-outbound-webhook/index.ts`, `App.tsx` (rota nova).
+
+## 5. Ordem de execução
+
+1. Migração RLS + índices (aprovação sua) → regenera tipos.
+2. Testes de tenant + gate de CI (falha se regredir).
+3. Migração `correlation_id` + `message_events` + wiring composer/adapter/edge.
+4. Popover de timeline no chat.
+5. Migração/view de access health + edges + página do dono + cron.
+
+Se aprovar, executo tudo em sequência e paro só nas aprovações de migração.

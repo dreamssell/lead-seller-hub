@@ -1,7 +1,8 @@
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, Building, Users, MessagesSquare, TrendingUp, DollarSign, ShieldCheck, Ban, Crown } from 'lucide-react';
+import { Building2, Building, Users, MessagesSquare, TrendingUp, DollarSign, ShieldCheck, Ban, Crown, HeartPulse } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { useOwnerPlatformMetrics } from '@/hooks/useOwnerPlatformMetrics';
 import { OwnerMetricCard } from '@/components/owner-dashboard/OwnerMetricCard';
@@ -32,9 +33,14 @@ export default function OwnerDashboardPage() {
       subtitle="Visão exclusiva de desempenho da plataforma, empresas e sub-empresas"
     >
       <div className="space-y-6">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Crown className="w-3.5 h-3.5 text-warning" />
-          Área restrita — apenas o dono da plataforma tem acesso a estas informações.
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Crown className="w-3.5 h-3.5 text-warning" />
+            Área restrita — apenas o dono da plataforma tem acesso a estas informações.
+          </div>
+          <Button asChild variant="outline" size="sm" className="gap-2">
+            <Link to="/owner/access-health"><HeartPulse className="w-4 h-4" /> Saúde de acessos</Link>
+          </Button>
         </div>
 
         {m.loading ? (
