@@ -5323,6 +5323,7 @@ export type Database = {
         Args: { p_sub_company_id: string }
         Returns: Database["public"]["Enums"]["signature_role"]
       }
+      get_platform_health: { Args: never; Returns: Json }
       get_recording_enabled: {
         Args: { p_owner_id: string; p_sub_company_id?: string }
         Returns: boolean
