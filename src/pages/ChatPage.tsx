@@ -195,6 +195,11 @@ const getMessageErrorInfo = (message: any): NormalizedChatError | null => {
 };
 
 const extractProviderMessageId = (data: any) => (
+  data?.message_id ||
+  data?.raw?.id?._serialized ||
+  data?.raw?.id ||
+  data?.raw?.data?.key?.id ||
+  data?.raw?.key?.id ||
   data?.data?.key?.id ||
   data?.key?.id ||
   data?.message?.key?.id ||
@@ -822,7 +827,7 @@ export default function ChatPage() {
         const t0 = Date.now();
         const data = await adapter.sendMessage(activeWhatsAppConn, selectedConvId, currentText);
         const latency = Date.now() - t0;
-        const evoId = data?.data?.key?.id || data?.key?.id;
+        const evoId = extractProviderMessageId(data);
         setMessages(prev => prev.map(m => 
           m.id === clientMsgId ? { ...m, status: 'sent', uaz_msg_id: evoId, _latency: latency } : m
         ));
