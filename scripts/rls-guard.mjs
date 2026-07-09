@@ -15,13 +15,27 @@ import { join } from 'node:path';
 const MIG_DIR = 'supabase/migrations';
 const errors = [];
 
-const files = (() => {
-  try { return readdirSync(MIG_DIR).filter((f) => f.endsWith('.sql')); }
-  catch { return []; }
-})();
+import { execSync } from 'node:child_process';
 
-const CHANGED = process.env.CI_CHANGED_FILES?.split(/\s+/).filter(Boolean);
-const target = CHANGED?.length ? CHANGED.filter((f) => f.startsWith(MIG_DIR)) : files.map((f) => join(MIG_DIR, f));
+const MIG_DIR = 'supabase/migrations';
+const errors = [];
+
+// Só analisamos migrações NOVAS/MODIFICADAS na PR — legado passa como está.
+function changedMigrations() {
+  const base = process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : 'HEAD~1';
+  try {
+    const out = execSync(`git diff --name-only --diff-filter=AM ${base}...HEAD -- ${MIG_DIR}`, { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString().trim();
+    return out ? out.split('\n').filter(Boolean) : [];
+  } catch { return []; }
+}
+
+const target = (process.env.CI_CHANGED_FILES?.split(/\s+/).filter((f) => f?.startsWith(MIG_DIR))) ?? changedMigrations();
+
+if (!target.length) {
+  console.log('✅ RLS Guard: nenhuma migração nova para analisar.');
+  process.exit(0);
+}
 
 for (const path of target) {
   let sql;
