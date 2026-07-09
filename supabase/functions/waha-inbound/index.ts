@@ -270,7 +270,16 @@ Deno.serve(async (req) => {
     customerId = created.id;
   }
 
-  const content = payload.body ?? (payload.hasMedia ? '[mídia]' : '');
+  const msgWrap = (payload as any)?._data?.Message || {};
+  const extractedBody =
+    payload.body ||
+    msgWrap.conversation ||
+    msgWrap.extendedTextMessage?.text ||
+    msgWrap.imageMessage?.caption ||
+    msgWrap.videoMessage?.caption ||
+    msgWrap.documentMessage?.caption ||
+    '';
+  const content = extractedBody || (payload.hasMedia ? '[mídia]' : '');
   const { error: msgErr } = await supabase.from('chat_messages').insert({
     customer_id: customerId,
     sender_type: 'customer',
