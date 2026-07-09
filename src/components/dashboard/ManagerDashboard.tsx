@@ -48,6 +48,14 @@ export function ManagerDashboard() {
         </div>
       </div>
 
+      <div className="mb-8">
+        <CallHistoryTable
+          title="Chamadas recentes da equipe"
+          description="Histórico consolidado — VoIP e Wavoip"
+          filter={{ limit: 50 }}
+        />
+      </div>
+
       <div>
         <h3 className="text-sm font-semibold text-foreground mb-4">Serviços & Módulos</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
