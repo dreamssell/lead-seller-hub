@@ -188,6 +188,17 @@ Deno.serve(async (req) => {
   }
 
   // Default: inbound message.
+  // Ignore WhatsApp status broadcasts (contacts posting stories) — they arrive
+  // as `status@broadcast` and would otherwise create phantom "customer" rows.
+  if (typeof payload.from === 'string' && payload.from.includes('status@broadcast')) {
+    return json({ ok: true, skipped: 'status_broadcast' });
+  }
+  // Ignore messages sent by our own instance (`fromMe=true`) — the outbound
+  // adapter already persisted them; re-inserting would create a duplicate
+  // "customer"-side row and confuse the conversation.
+  if (payload.fromMe === true) {
+    return json({ ok: true, skipped: 'from_me' });
+  }
   const phone = normalizePhone(payload.from);
   if (!phone) return json({ ok: true, skipped: 'no_individual_sender' });
 
