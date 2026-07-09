@@ -1562,7 +1562,12 @@ export default function ChatPage() {
                             });
                             return;
                           }
-                          wavoip.callWhatsApp(selectedConv.phone);
+                          wavoip.callWhatsApp(selectedConv.phone, undefined, {
+                            customerId: selectedConv.id,
+                            contactName: selectedConv.name,
+                            ownerId: (selectedConv as any)?.owner_id ?? activeWhatsAppConn?.owner_id ?? null,
+                            subCompanyId: (selectedConv as any)?.sub_company_id ?? activeWhatsAppConn?.sub_company_id ?? null,
+                          });
                         }}
                         className="gap-2"
                       >
