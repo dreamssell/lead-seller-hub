@@ -1,7 +1,7 @@
 import { Link, Navigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, Building, Users, MessagesSquare, TrendingUp, DollarSign, ShieldCheck, Ban, Crown, HeartPulse, ScrollText } from 'lucide-react';
+import { Building2, Building, Users, MessagesSquare, TrendingUp, DollarSign, ShieldCheck, Ban, Crown, HeartPulse, ScrollText, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { useOwnerPlatformMetrics } from '@/hooks/useOwnerPlatformMetrics';
