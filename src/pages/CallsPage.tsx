@@ -298,6 +298,21 @@ export default function CallsPage() {
       toast({ title: 'Digite um número', variant: 'destructive' });
       return;
     }
+    // Registra no histórico
+    const { data: authData } = await supabase.auth.getUser();
+    const uid = authData.user?.id || null;
+    const { startCallLog, uploadCallRecording, endCallLog, markCallAnswered } = await import('@/lib/callHistory');
+    const callId = uid ? await startCallLog({
+      phone: number,
+      ownerId: uid,
+      userId: uid,
+      channel: 'wavoip',
+      direction: 'outbound',
+      connectionLabel: sipConfig.displayName || sipConfig.server || 'Wavoip',
+      metadata: { server: sipConfig.server, transport: sipConfig.transport },
+    }) : null;
+    activeCallRef.current = { id: callId, startedAt: Date.now(), recorder: null, chunks: [], ownerId: uid, stream: null };
+
     // Se o UA SIP estiver registrado, coloca a chamada real via Wavoip
     const ua = sipRef.current;
     if (ua && sipStatus === 'connected') {
@@ -310,12 +325,24 @@ export default function CallsPage() {
         session?.connection?.addEventListener?.('addstream', (e: any) => {
           const audio = document.getElementById('sip-remote-audio') as HTMLAudioElement | null;
           if (audio) { audio.srcObject = e.stream; audio.play().catch(() => {}); }
+          // Inicia gravação da chamada
+          try {
+            const rec = new MediaRecorder(e.stream, { mimeType: 'audio/webm' });
+            activeCallRef.current.recorder = rec;
+            activeCallRef.current.stream = e.stream;
+            rec.ondataavailable = (ev) => { if (ev.data.size > 0) activeCallRef.current.chunks.push(ev.data); };
+            rec.start(1000);
+          } catch (recErr) { console.warn('[calls] recorder failed', recErr); }
         });
+        session?.on?.('confirmed', () => { if (callId) markCallAnswered(callId); });
+        session?.on?.('ended', () => handleHangup('ended'));
+        session?.on?.('failed', () => handleHangup('failed'));
         setInCall(true);
         toast({ title: 'Chamando via Wavoip...', description: number });
         return;
       } catch (e: any) {
         toast({ title: 'Falha ao iniciar chamada', description: String(e?.message || e), variant: 'destructive' });
+        if (callId) endCallLog(callId, { status: 'failed', startedAt: activeCallRef.current.startedAt });
         return;
       }
     }
@@ -323,11 +350,28 @@ export default function CallsPage() {
     toast({ title: 'Chamando...', description: number });
   };
 
-  const handleHangup = () => {
+  const handleHangup = async (finalStatus: 'ended' | 'failed' | 'missed' | 'rejected' = 'ended') => {
     try { sipRef.current?.terminateSessions?.(); } catch {}
     setInCall(false);
     setMuted(false);
     setOnHold(false);
+
+    const ctx = activeCallRef.current;
+    if (ctx.id) {
+      const { endCallLog, uploadCallRecording } = await import('@/lib/callHistory');
+      let recordingPath: string | null = null;
+      const rec = ctx.recorder;
+      if (rec && rec.state !== 'inactive') {
+        await new Promise<void>((resolve) => { rec.onstop = () => resolve(); rec.stop(); });
+        try { ctx.stream?.getTracks().forEach((t) => t.stop()); } catch {}
+        const blob = new Blob(ctx.chunks, { type: 'audio/webm' });
+        if (blob.size > 1024 && ctx.ownerId) {
+          recordingPath = await uploadCallRecording(ctx.id, ctx.ownerId, blob);
+        }
+      }
+      await endCallLog(ctx.id, { status: finalStatus, startedAt: ctx.startedAt, recordingPath });
+    }
+    activeCallRef.current = { id: null, startedAt: 0, recorder: null, chunks: [], ownerId: null, stream: null };
     toast({ title: 'Chamada encerrada' });
   };
 
