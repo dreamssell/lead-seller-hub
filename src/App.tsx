@@ -50,6 +50,7 @@ import PublicLandingPage from "./pages/PublicLandingPage";
 import InternalTelemetryPage from "./pages/InternalTelemetryPage";
 import RoleLabelAuditPage from "./pages/RoleLabelAuditPage";
 import BotFlowsPage from "./pages/BotFlowsPage";
+import OwnerDashboardPage from "./pages/OwnerDashboardPage";
 import { CookieConsentBanner } from "./components/CookieConsentBanner";
 
 
@@ -119,6 +120,7 @@ const App = () => (
               <Route path="/internal/telemetry" element={<ProtectedRoute ownerOnly><InternalTelemetryPage /></ProtectedRoute>} />
               <Route path="/internal/role-label-audit" element={<ProtectedRoute ownerOnly><RoleLabelAuditPage /></ProtectedRoute>} />
               <Route path="/bot-flows" element={<ProtectedRoute><BotFlowsPage /></ProtectedRoute>} />
+              <Route path="/owner" element={<ProtectedRoute ownerOnly><OwnerDashboardPage /></ProtectedRoute>} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>

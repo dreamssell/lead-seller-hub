@@ -59,6 +59,7 @@ export const navSections: { label: string; items: SidebarNavItem[] }[] = [
     label: 'Principal',
     items: [
       { key: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', path: '/', desc: 'Visão geral personalizada por perfil' },
+      { key: 'dashboard', icon: Crown, label: 'Central do Dono', path: '/owner', desc: 'Painel exclusivo do dono da plataforma', ownerOnly: true },
       { key: 'tools', icon: Sparkles, label: 'Ferramentas', path: '/ferramentas', desc: 'Todos os módulos e serviços' },
       { key: 'chat', icon: MessageSquare, label: 'Chat Omnichannel', path: '/chat', desc: 'Conversas e atendimento por canais' },
       { key: 'calls', icon: Phone, label: 'VoIP & Chamadas', path: '/calls', desc: 'Ligações, filas e telefonia' },
