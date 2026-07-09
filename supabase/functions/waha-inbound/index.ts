@@ -5,45 +5,24 @@
 // Contract:
 //   POST /waha-inbound?connection=<uuid>
 //   Headers:  X-Api-Key: <token stored in whatsapp_connections.metadata.token>
-//   Body:     WAHA webhook payload (event, session, payload)
+//   Body:     WAHA webhook payload — supports BOTH engines:
+//               * WEBJS classic: { event: 'message', payload: { id, from, body, ... } }
+//               * GOWS/Baileys:  { event: 'gows.MessageEventData', data: { Info, Message, ... } }
 //
-// Supported events:
-//   * message / message.any  → upsert customer by phone, insert chat_messages
-//   * message.ack            → update `whatsapp_connections.metadata.last_acks`
-//                              and (best-effort) chat_messages.metadata.status
-//   * session.status         → update whatsapp_connections.status
-//
-// Idempotency: keyed by (webhook_id=<connection_id>, key=<payload.id>).
+// Supported logical events:
+//   * inbound message  → upsert customer by phone, insert chat_messages
+//   * message ack      → update `whatsapp_connections.metadata.last_ack`
+//                        and chat_messages.metadata.status (best-effort)
+//   * session status   → update whatsapp_connections.status
 
 import { createClient } from 'npm:@supabase/supabase-js@2.49.4';
-import { z } from 'npm:zod@3.23.8';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-api-key',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
-
-const PayloadSchema = z.object({
-  event: z.string().optional(),
-  session: z.string().optional(),
-  payload: z
-    .object({
-      id: z.union([z.string(), z.object({ _serialized: z.string() })]).optional(),
-      from: z.string().optional(),
-      to: z.string().optional(),
-      body: z.string().optional(),
-      fromMe: z.boolean().optional(),
-      timestamp: z.number().optional(),
-      hasMedia: z.boolean().optional(),
-      ack: z.number().optional(),
-      status: z.string().optional(),
-      mediaUrl: z.string().optional(),
-      _data: z.any().optional(),
-    })
-    .passthrough()
-    .optional(),
-});
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -59,12 +38,35 @@ function extractId(id: any): string | null {
   return null;
 }
 
-function normalizePhone(from?: string): string | null {
-  if (!from) return null;
-  // WAHA uses "5511999999999@c.us" for individuals, "…@g.us" for groups.
-  if (from.endsWith('@g.us')) return null; // ignore groups for now
+// WhatsApp JIDs come in several flavours:
+//   5511999999999@c.us              (WEBJS classic)
+//   5511999999999@s.whatsapp.net    (GOWS/Baileys individual)
+//   16433216020536@lid              (Baileys "linked id" — NOT a real phone)
+//   5511999999999-123@g.us          (group)
+// For @lid we must fall back to SenderAlt, which holds the real phone JID.
+function normalizePhone(from?: string | null): string | null {
+  if (!from || typeof from !== 'string') return null;
+  if (from.endsWith('@g.us')) return null; // ignore groups
+  if (from.endsWith('@lid')) return null;  // caller must retry with SenderAlt
   const digits = from.replace(/\D/g, '');
-  return digits || null;
+  if (!digits) return null;
+  // Baileys sometimes appends ":<device>" — split() above strips it already.
+  return digits;
+}
+
+// Classifies the incoming event into one of our three logical buckets, using
+// both the top-level `event` string and the shape of the payload so we work
+// with WEBJS ("message") and GOWS ("gows.MessageEventData") equally well.
+function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'ignore' {
+  const e = event.toLowerCase();
+  if (e === 'session.status' || e === 'status.instance') return 'session';
+  if (e === 'message.ack' || e === 'ack' || e.endsWith('.receipteventdata')) return 'ack';
+  if (e === 'message' || e === 'message.any') return 'message';
+  // GOWS engine emits gows.MessageEventData with body.data.Info / body.data.Message
+  if (e.includes('messageeventdata') || e.includes('gows.message')) return 'message';
+  // Some payloads omit `event`; infer from shape.
+  if (!event && body?.data?.Info && body?.data?.Message) return 'message';
+  return 'ignore';
 }
 
 Deno.serve(async (req) => {
@@ -81,7 +83,6 @@ Deno.serve(async (req) => {
     { auth: { persistSession: false } },
   );
 
-  // Load connection and enforce provider + token match (defence in depth).
   const { data: conn, error: connErr } = await supabase
     .from('whatsapp_connections')
     .select('id, provider, owner_id, sub_company_id, metadata, status')
@@ -90,74 +91,68 @@ Deno.serve(async (req) => {
   if (connErr) return json({ error: 'db_error', detail: connErr.message }, 500);
   if (!conn || conn.provider !== 'waha') return json({ error: 'connection_not_found' }, 404);
 
-  const expectedToken = conn.metadata?.token || '';
+  const expectedToken = (conn.metadata as any)?.token || '';
   const providedToken = req.headers.get('x-api-key') || req.headers.get('X-Api-Key') || '';
   if (expectedToken && providedToken && providedToken !== expectedToken) {
     return json({ error: 'unauthorized' }, 401);
   }
 
   let body: any;
-  try {
-    body = await req.json();
-  } catch {
-    return json({ error: 'invalid_json' }, 400);
-  }
+  try { body = await req.json(); } catch { return json({ error: 'invalid_json' }, 400); }
 
-  const parsed = PayloadSchema.safeParse(body);
-  if (!parsed.success) {
-    return json({ error: 'invalid_payload', issues: parsed.error.issues }, 400);
-  }
-  const { event = 'message', payload = {} } = parsed.data;
-  const providerMsgId = extractId(payload.id);
-  const isTest = (payload as any)?._test === true;
+  const event: string = String(body?.event || '');
+  const session: string | null = body?.session ?? null;
+  // GOWS delivers real data at body.data (Info/Message). WEBJS uses body.payload.
+  const gowsData = body?.data ?? null;
+  const webPayload = body?.payload ?? {};
+  const info = gowsData?.Info ?? gowsData?.Message?.Info ?? null;
+  const msgWrap = gowsData?.Message ?? webPayload?._data?.Message ?? {};
 
-  // Observability: log every event into connection_events so the UI can render
-  // a real-time feed (Realtime is enabled on this table). Best-effort — a
-  // logging failure must not break inbound.
+  const providerMsgId =
+    extractId(webPayload?.id) ||
+    info?.ID ||
+    gowsData?.Message?.ID ||
+    gowsData?.ID ||
+    null;
+
+  const isTest = webPayload?._test === true || gowsData?._test === true;
+  const bucket = classify(event, body);
+
+  // Observability log — always insert (best-effort), regardless of routing.
   try {
     const statusForLog =
-      event === 'session.status'
-        ? String((payload as any)?.status || 'unknown').toLowerCase()
-        : event === 'message.ack' || event === 'ack'
-        ? `ack:${(payload as any)?.ack ?? '?'}`
+      bucket === 'session'
+        ? String(webPayload?.status || gowsData?.status || 'unknown').toLowerCase()
+        : bucket === 'ack'
+        ? `ack:${webPayload?.ack ?? gowsData?.Receipt?.Type ?? '?'}`
+        : bucket === 'message'
+        ? (info?.IsFromMe ? 'outbound' : 'inbound')
         : isTest ? 'test' : 'received';
     await supabase.from('connection_events').insert({
       connection_id: connectionId,
-      event_type: `waha.${event}`,
+      event_type: `waha.${event || 'unknown'}`,
       status: statusForLog,
-      status_detail: (payload as any)?.status ?? null,
-      payload: payload as any,
+      status_detail: webPayload?.status ?? gowsData?.status ?? null,
+      payload: (gowsData ?? webPayload) as any,
       metadata_json: {
         source: 'waha-inbound',
-        session: parsed.data.session ?? null,
+        session,
         connection_param: connectionId,
         provider_msg_id: providerMsgId,
+        bucket,
+        raw_event: event,
         is_test: isTest,
       },
       test_event_id: isTest ? providerMsgId : null,
     });
   } catch (_) { /* swallow */ }
 
-  // Test events short-circuit: they exist only to prove the webhook wiring.
   if (isTest) return json({ ok: true, test: true, id: providerMsgId });
+  if (bucket === 'ignore') return json({ ok: true, ignored: event });
 
-  // Whitelist events we actually persist. With 25+ WAHA events enabled we get
-  // presence/chat/label/etc noise — those are already captured into
-  // connection_events for observability, so returning early here prevents
-  // phantom customer rows and spurious errors.
-  const isMessageEvent = event === 'message';
-  const isAckEvent = event === 'message.ack' || event === 'ack';
-  const isSessionEvent = event === 'session.status';
-  if (!isMessageEvent && !isAckEvent && !isSessionEvent) {
-    return json({ ok: true, ignored: event });
-  }
-
-  // Idempotency: same message id from same connection = no-op, regardless of
-  // which WAHA event variant delivered it. WAHA fires both `message` and
-  // `message.any` for the same payload, so keying on the event name lets
-  // duplicates through and produces double chat rows.
-  if (providerMsgId && (isMessageEvent || isAckEvent)) {
-    const idemKey = isAckEvent ? `waha:ack:${providerMsgId}` : `waha:msg:${providerMsgId}`;
+  // Idempotency — key on message id only (event name variants collapse).
+  if (providerMsgId && (bucket === 'message' || bucket === 'ack')) {
+    const idemKey = bucket === 'ack' ? `waha:ack:${providerMsgId}` : `waha:msg:${providerMsgId}`;
     const { data: existing } = await supabase
       .from('webhook_idempotency_keys')
       .select('id')
@@ -171,9 +166,9 @@ Deno.serve(async (req) => {
     });
   }
 
-  // ── Route by event ─────────────────────────────────────────────────────
-  if (isSessionEvent) {
-    const status = String(payload.status || '').toLowerCase();
+  // ── SESSION STATUS ───────────────────────────────────────────────────────
+  if (bucket === 'session') {
+    const status = String(webPayload?.status || gowsData?.status || '').toLowerCase();
     const mapped =
       /working|connected|open|running/.test(status) ? 'connected'
       : /starting|scan|qr|pairing/.test(status) ? 'connecting'
@@ -186,20 +181,20 @@ Deno.serve(async (req) => {
     return json({ ok: true, status: mapped });
   }
 
-  if (isAckEvent) {
+  // ── ACK ──────────────────────────────────────────────────────────────────
+  if (bucket === 'ack') {
+    const ackNum = webPayload?.ack ?? gowsData?.Receipt?.Ack ?? 0;
     const mapAck: Record<number, string> = { 1: 'sent', 2: 'delivered', 3: 'read', 4: 'played' };
-    const ackLabel = mapAck[payload.ack ?? 0] || String(payload.status || 'unknown');
+    const ackLabel = mapAck[ackNum as number] || String(webPayload?.status || gowsData?.Receipt?.Type || 'unknown');
     await supabase
       .from('whatsapp_connections')
       .update({
         metadata: {
-          ...(conn.metadata ?? {}),
+          ...((conn.metadata as any) ?? {}),
           last_ack: { id: providerMsgId, status: ackLabel, at: new Date().toISOString() },
         },
       })
       .eq('id', connectionId);
-    // Best-effort: reflect delivery status on the persisted message row so the
-    // composer stops showing "enviando pelo servidor".
     if (providerMsgId) {
       const { data: msgRow } = await supabase
         .from('chat_messages')
@@ -223,31 +218,44 @@ Deno.serve(async (req) => {
     return json({ ok: true, ack: ackLabel, id: providerMsgId });
   }
 
-  // Inbound message: WAHA "message" event.
-  // WAHA/Baileys sometimes wrap everything inside payload._data — fall back to
-  // those fields so we still capture sender/body correctly.
-  const info = (payload as any)?._data?.Info || {};
-  const fromRaw: string | undefined =
-    payload.from ||
-    (typeof info.Chat === 'string' ? info.Chat : undefined) ||
-    (typeof info.Sender === 'string' ? info.Sender : undefined);
-  const fromMeFlag = payload.fromMe === true || info.IsFromMe === true;
-  const isGroup = info.IsGroup === true || (typeof fromRaw === 'string' && fromRaw.endsWith('@g.us'));
+  // ── INBOUND MESSAGE ──────────────────────────────────────────────────────
+  // Prefer GOWS Info; fall back to WEBJS payload and Baileys _data wrapper.
+  const fromMeFlag =
+    webPayload?.fromMe === true ||
+    info?.IsFromMe === true ||
+    webPayload?._data?.Info?.IsFromMe === true;
 
-  if (typeof fromRaw === 'string' && fromRaw.includes('status@broadcast')) {
+  const rawFrom: string | undefined =
+    webPayload?.from ||
+    info?.Chat ||
+    info?.Sender ||
+    webPayload?._data?.Info?.Chat;
+
+  const senderAlt: string | undefined =
+    info?.SenderAlt ||
+    webPayload?._data?.Info?.SenderAlt;
+
+  const isGroup =
+    info?.IsGroup === true ||
+    (typeof rawFrom === 'string' && rawFrom.endsWith('@g.us'));
+
+  if (typeof rawFrom === 'string' && rawFrom.includes('status@broadcast')) {
     return json({ ok: true, skipped: 'status_broadcast' });
   }
   if (fromMeFlag) return json({ ok: true, skipped: 'from_me' });
-  if (isGroup) return json({ ok: true, skipped: 'group_message' });
+  if (isGroup)   return json({ ok: true, skipped: 'group_message' });
 
-  const phone = normalizePhone(fromRaw);
-  if (!phone) return json({ ok: true, skipped: 'no_individual_sender' });
+  // If Sender is a @lid (Baileys "linked id"), phone must come from SenderAlt.
+  const phone = normalizePhone(rawFrom) || normalizePhone(senderAlt);
+  if (!phone) return json({ ok: true, skipped: 'no_individual_sender', rawFrom, senderAlt });
 
+  const pushName: string | null =
+    info?.PushName || webPayload?._data?.Info?.PushName || webPayload?.notifyName || null;
 
   // Upsert customer by phone under this owner.
   const { data: existingCustomer } = await supabase
     .from('customers')
-    .select('id')
+    .select('id, name')
     .eq('phone', phone)
     .eq('owner_id', conn.owner_id)
     .maybeSingle();
@@ -257,7 +265,7 @@ Deno.serve(async (req) => {
     const { data: created, error: createErr } = await supabase
       .from('customers')
       .insert({
-        name: phone,
+        name: pushName || phone,
         phone,
         channel: 'whatsapp',
         owner_id: conn.owner_id,
@@ -268,18 +276,27 @@ Deno.serve(async (req) => {
       .single();
     if (createErr) return json({ error: 'customer_insert_failed', detail: createErr.message }, 500);
     customerId = created.id;
+  } else if (pushName && (!existingCustomer?.name || existingCustomer.name === phone)) {
+    // Enrich name if we only had the phone number stored.
+    await supabase.from('customers').update({ name: pushName }).eq('id', customerId);
   }
 
-  const msgWrap = (payload as any)?._data?.Message || {};
   const extractedBody =
-    payload.body ||
-    msgWrap.conversation ||
-    msgWrap.extendedTextMessage?.text ||
-    msgWrap.imageMessage?.caption ||
-    msgWrap.videoMessage?.caption ||
-    msgWrap.documentMessage?.caption ||
+    webPayload?.body ||
+    msgWrap?.conversation ||
+    msgWrap?.extendedTextMessage?.text ||
+    msgWrap?.imageMessage?.caption ||
+    msgWrap?.videoMessage?.caption ||
+    msgWrap?.documentMessage?.caption ||
     '';
-  const content = extractedBody || (payload.hasMedia ? '[mídia]' : '');
+  const hasMedia =
+    webPayload?.hasMedia === true ||
+    !!msgWrap?.imageMessage ||
+    !!msgWrap?.videoMessage ||
+    !!msgWrap?.audioMessage ||
+    !!msgWrap?.documentMessage;
+  const content = extractedBody || (hasMedia ? '[mídia]' : '');
+
   const { error: msgErr } = await supabase.from('chat_messages').insert({
     customer_id: customerId,
     sender_type: 'customer',
@@ -287,10 +304,18 @@ Deno.serve(async (req) => {
     content,
     connection_id: conn.id,
     sub_company_id: conn.sub_company_id,
-    uaz_msg_id: providerMsgId, // shared column name; we reuse it for waha ids.
-    metadata: { provider: 'waha', raw: payload, event },
+    uaz_msg_id: providerMsgId,
+    metadata: {
+      provider: 'waha',
+      engine: gowsData ? 'gows' : 'webjs',
+      event,
+      push_name: pushName,
+      sender_jid: rawFrom,
+      sender_alt: senderAlt,
+      raw: gowsData ?? webPayload,
+    },
   });
   if (msgErr) return json({ error: 'message_insert_failed', detail: msgErr.message }, 500);
 
-  return json({ ok: true, customer_id: customerId, message_id: providerMsgId });
+  return json({ ok: true, customer_id: customerId, message_id: providerMsgId, phone });
 });
