@@ -74,7 +74,7 @@ interface Ctx {
   setEnabled: (enabled: boolean) => void;
   reload: () => Promise<void>;
   openDialer: () => void;
-  callWhatsApp: (phone: string, deviceId?: string) => Promise<boolean>;
+  callWhatsApp: (phone: string, deviceId?: string, meta?: WavoipCallMeta) => Promise<boolean>;
   validateConnection: () => Promise<ValidationResult>;
   isValidating: boolean;
   lastValidation: ValidationResult | null;
