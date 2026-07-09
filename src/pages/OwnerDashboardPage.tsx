@@ -38,9 +38,14 @@ export default function OwnerDashboardPage() {
             <Crown className="w-3.5 h-3.5 text-warning" />
             Área restrita — apenas o dono da plataforma tem acesso a estas informações.
           </div>
-          <Button asChild variant="outline" size="sm" className="gap-2">
-            <Link to="/owner/access-health"><HeartPulse className="w-4 h-4" /> Saúde de acessos</Link>
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button asChild variant="outline" size="sm" className="gap-2">
+              <Link to="/owner/access-health"><HeartPulse className="w-4 h-4" /> Saúde de acessos</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="gap-2">
+              <Link to="/owner/audit-trail"><ScrollText className="w-4 h-4" /> Histórico de auditoria</Link>
+            </Button>
+          </div>
         </div>
 
         {m.loading ? (
