@@ -50,6 +50,7 @@ import PublicLandingPage from "./pages/PublicLandingPage";
 import InternalTelemetryPage from "./pages/InternalTelemetryPage";
 import RoleLabelAuditPage from "./pages/RoleLabelAuditPage";
 import BotFlowsPage from "./pages/BotFlowsPage";
+import OwnerDashboardPage from "./pages/OwnerDashboardPage";
 import { CookieConsentBanner } from "./components/CookieConsentBanner";
 
 
