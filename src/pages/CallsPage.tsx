@@ -459,6 +459,8 @@ export default function CallsPage() {
 
   return (
     <AppLayout title="VoIP & Chamadas" subtitle="Central de chamadas com gravação automática">
+      {/* Áudio remoto da chamada SIP (Wavoip) */}
+      <audio id="sip-remote-audio" autoPlay playsInline className="hidden" />
       {/* Status SIP + Quick Action */}
       <motion.div
         className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6"
