@@ -176,6 +176,12 @@ export default function CallsPerformancePage() {
           </CardContent>
         </Card>
 
+        <CallHistoryTable
+          title={channel === 'wavoip' ? 'Histórico Wavoip' : channel === 'voip' ? 'Histórico VoIP' : 'Histórico de chamadas'}
+          description="Ligações registradas com contato, número, duração, usuário, conexão e gravação"
+          filter={{ channel: channel === 'all' ? 'all' : channel, subCompanyId: filters.subCompanyId === 'all' ? null : filters.subCompanyId, userId: filters.collaboratorId === 'all' ? null : filters.collaboratorId }}
+        />
+
         <TopRanking title="Top 3 colaboradores em ligações" description="Ranqueado por volume e taxa de atendimento" items={ranking} />
       </div>
     </AppLayout>
