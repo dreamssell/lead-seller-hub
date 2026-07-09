@@ -10,11 +10,6 @@
  *  - CREATE TABLE public.<x> sem GRANT correspondente na mesma migração.
  */
 import { readFileSync } from 'node:fs';
-
-
-const MIG_DIR = 'supabase/migrations';
-const errors = [];
-
 import { execSync } from 'node:child_process';
 
 const MIG_DIR = 'supabase/migrations';
