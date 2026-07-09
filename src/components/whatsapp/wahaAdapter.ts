@@ -237,8 +237,11 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
     const data = await wahaFetch(url, token, '/api/sendText', {
       method: 'POST',
       body: parsed.data,
-      timeoutMs: opts.timeoutMs ?? 15_000,
-      retries: opts.retries ?? 2,
+      // Snappier defaults: WAHA usually responds in <1s. Waiting 15s with 2
+      // retries makes the UI sit on "enviando pelo servidor" forever whenever
+      // WAHA is momentarily slow.
+      timeoutMs: opts.timeoutMs ?? 8_000,
+      retries: opts.retries ?? 1,
       signal: opts.signal,
     });
     return { ok: true, provider: 'waha', message_id: data?.id?._serialized || data?.id || null, raw: data };
