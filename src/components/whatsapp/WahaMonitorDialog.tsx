@@ -17,9 +17,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import {
   Activity, Loader2, Send, RadioTower, Timer, CheckCircle2, XCircle,
-  QrCode, PlugZap, Trash2, RefreshCw,
+  QrCode, PlugZap, Trash2, RefreshCw, Stethoscope,
 } from 'lucide-react';
 import type { WhatsAppConnection } from './types';
+import { WahaDiagnosticsPanel } from './WahaDiagnosticsPanel';
 
 interface Props {
   open: boolean;
