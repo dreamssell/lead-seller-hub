@@ -1005,6 +1005,25 @@ function UsersTab() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar usuário' : 'Novo usuário'}</DialogTitle>
+            {!editing && (
+              <div
+                data-testid="cadastros-dialog-seat-badge"
+                className={`mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium w-fit ${badgeTone}`}
+              >
+                {seatUsageBadge({ planName, used: totalUsers, max: maxUsers })}
+              </div>
+            )}
+            {!editing && limitReached && (
+              <p className="text-xs text-destructive mt-2">
+                {seatLimitDescription({ planName, used: totalUsers, max: maxUsers })}{' '}
+                <a
+                  href={SEAT_UPSELL_MAILTO(planName, totalUsers, maxUsers)}
+                  className="font-semibold underline underline-offset-2"
+                >
+                  Falar com o comercial
+                </a>
+              </p>
+            )}
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
