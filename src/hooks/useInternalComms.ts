@@ -127,7 +127,7 @@ export function useInternalComms() {
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user?.id, activePeerId]);
+  }, [user?.id, activePeerId, ownerId, subCompanyId]);
 
   const sendMessage = useCallback(async (content: string) => {
     const text = content.trim();
