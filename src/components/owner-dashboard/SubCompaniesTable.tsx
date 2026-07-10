@@ -84,11 +84,12 @@ export function SubCompaniesTable({ subCompanies, companies, onRefresh }: Props)
               <TableHead className="text-right">Ganhos</TableHead>
               <TableHead className="text-right">Crédito</TableHead>
               <TableHead className="text-right">Receita</TableHead>
+              <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 && (
-              <TableRow><TableCell colSpan={10} className="text-center text-sm text-muted-foreground py-8">Nenhuma sub-empresa encontrada.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center text-sm text-muted-foreground py-8">Nenhuma sub-empresa encontrada.</TableCell></TableRow>
             )}
             {filtered.map((s) => (
               <TableRow key={s.id}>
@@ -104,6 +105,13 @@ export function SubCompaniesTable({ subCompanies, companies, onRefresh }: Props)
                   {s.credit_limit != null ? `${brl(Number(s.credit_balance || 0))} / ${brl(Number(s.credit_limit))}` : '—'}
                 </TableCell>
                 <TableCell className="text-right font-semibold">{brl(s.revenue)}</TableCell>
+                <TableCell>
+                  <Button asChild variant="ghost" size="icon" className="h-8 w-8" title="Abrir Central Executiva">
+                    <Link to={`/owner/company/${s.id}?kind=sub_company`}>
+                      <BarChart3 className="w-4 h-4" />
+                    </Link>
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
