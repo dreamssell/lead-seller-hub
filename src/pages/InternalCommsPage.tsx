@@ -63,15 +63,15 @@ export default function InternalCommsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     const result = validateInternalAttachment({ filename: file.name, mime: file.type, size: file.size });
-    if (!result.ok) {
-      setPendingFile(null);
-      setAttachmentError(result.message);
-      toast.error(result.message);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+    if (result.ok) {
+      setAttachmentError(null);
+      setPendingFile(file);
       return;
     }
-    setAttachmentError(null);
-    setPendingFile(file);
+    setPendingFile(null);
+    setAttachmentError(result.message);
+    toast.error(result.message);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSend = async () => {
