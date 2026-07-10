@@ -92,7 +92,7 @@ export default function InternalCommsPage() {
                   <li key={m.user_id}>
                     <button
                       type="button"
-                      onClick={() => setActivePeerId(m.user_id)}
+                      onClick={() => openConversation(m.user_id)}
                       className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-left ${
                         activePeerId === m.user_id ? 'bg-primary/10 text-foreground' : 'hover:bg-muted/60'
                       }`}
@@ -105,6 +105,11 @@ export default function InternalCommsPage() {
                         <p className="text-sm font-medium truncate">{m.display_name}</p>
                         {m.email && <p className="text-xs text-muted-foreground truncate">{m.email}</p>}
                       </div>
+                      {countByPeer[m.user_id] > 0 && (
+                        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold flex items-center justify-center">
+                          {countByPeer[m.user_id] > 99 ? '99+' : countByPeer[m.user_id]}
+                        </span>
+                      )}
                     </button>
                   </li>
                 ))}
