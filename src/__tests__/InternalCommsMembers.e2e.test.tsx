@@ -28,7 +28,11 @@ vi.mock('@/components/layout/AppLayout', () => ({
 }));
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
-const rpcMock = vi.fn((_name: string) => Promise.resolve({ data: [], error: null }));
+let memberPayload: any[] = [];
+const rpcMock = vi.fn((name: string) => {
+  if (name === 'list_internal_comms_members') return Promise.resolve({ data: memberPayload, error: null });
+  return Promise.resolve({ data: [], error: null });
+});
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     rpc: (name: string) => rpcMock(name),
