@@ -843,6 +843,15 @@ function UsersTab() {
       await logAudit({ table: 'profiles', recordId: editing.user_id, action: 'update', label: form.display_name, after: payload });
       toast({ title: 'Usuário atualizado' });
     } else {
+      if (limitReached && !unlimited) {
+        setSaving(false);
+        toast({
+          title: SEAT_LIMIT_TITLE,
+          description: seatLimitDescription({ planName, used: totalUsers, max: maxUsers }),
+          variant: 'destructive',
+        });
+        return;
+      }
       if (!form.email || !form.password || form.password.length < 6) {
         setSaving(false);
         toast({ title: 'Email e senha (mín. 6) obrigatórios', variant: 'destructive' });
@@ -862,7 +871,24 @@ function UsersTab() {
       setSaving(false);
       const surfaced = await extractManageUserError(data, error);
       if (surfaced) {
-        toast({ title: 'Erro ao criar', description: surfaced.message, variant: 'destructive' });
+        const isSeatErr = /plan_seat_limit_reached|limite/i.test(surfaced.message);
+        const isManualBlock = /seat_additions_blocked/i.test(surfaced.message);
+        if (isManualBlock) {
+          toast({
+            title: 'Inclusões pausadas',
+            description: `O administrador pausou temporariamente novos cadastros nesta conta. Fale com o comercial em ${SEAT_UPSELL_EMAIL} para liberar.`,
+            variant: 'destructive',
+          });
+        } else if (isSeatErr) {
+          toast({
+            title: SEAT_LIMIT_TITLE,
+            description: seatLimitDescription({ planName, used: totalUsers, max: maxUsers }),
+            variant: 'destructive',
+          });
+          loadPlanLimit();
+        } else {
+          toast({ title: 'Erro ao criar', description: surfaced.message, variant: 'destructive' });
+        }
         return;
       }
       await logAudit({ table: 'profiles', recordId: (data as any)?.user_id, action: 'create', label: form.display_name, after: payload });
@@ -870,6 +896,7 @@ function UsersTab() {
     }
     setOpen(false);
     load();
+    loadPlanLimit();
   };
 
   const confirmDelete = async () => {
