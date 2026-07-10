@@ -103,8 +103,13 @@ export function useInternalComms() {
         filter: `recipient_id=eq.${user.id}`,
       }, (payload) => {
         const msg = payload.new as InternalMessage;
+        // Hardening cross-tenant: descarta qualquer payload que não pertença
+        // ao owner/sub-empresa do usuário atual (defesa em profundidade contra
+        // eventos forjados via canal público do Realtime).
+        if (msg.owner_id !== ownerId) return;
+        if ((msg.sub_company_id ?? null) !== (subCompanyId ?? null)) return;
         if (activePeerId && msg.sender_id === activePeerId) {
-          setMessages((prev) => [...prev, msg]);
+          setMessages((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
         }
       })
       .on('postgres_changes', {
@@ -114,13 +119,15 @@ export function useInternalComms() {
         filter: `sender_id=eq.${user.id}`,
       }, (payload) => {
         const msg = payload.new as InternalMessage;
+        if (msg.owner_id !== ownerId) return;
+        if ((msg.sub_company_id ?? null) !== (subCompanyId ?? null)) return;
         if (activePeerId && msg.recipient_id === activePeerId) {
           setMessages((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
         }
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user?.id, activePeerId]);
+  }, [user?.id, activePeerId, ownerId, subCompanyId]);
 
   const sendMessage = useCallback(async (content: string) => {
     const text = content.trim();
