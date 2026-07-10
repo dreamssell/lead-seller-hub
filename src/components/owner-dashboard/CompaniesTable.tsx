@@ -76,6 +76,7 @@ export function CompaniesTable({ companies, subCompanies, onRefresh }: Props) {
               <TableHead className="text-right">Ganhos</TableHead>
               <TableHead className="text-right">Msgs 30d</TableHead>
               <TableHead className="text-right">Receita</TableHead>
+              <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
