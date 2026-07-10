@@ -771,6 +771,24 @@ function UsersTab() {
 
   useEffect(() => { load(); loadPlanLimit(); /* eslint-disable-next-line */ }, [scopeSubId, isOwner, user?.id]);
 
+  // Realtime: sincroniza contagem de assentos e listagem quando qualquer
+  // administrador do escopo cria/remove usuários (sem recarregar a página).
+  useEffect(() => {
+    const ownerId = access?.owner_id ?? user?.id ?? null;
+    if (!ownerId) return;
+    const channel = supabase
+      .channel(`seat-sync-${ownerId}-${scopeSubId ?? 'root'}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'user_account_access', filter: `owner_id=eq.${ownerId}` },
+        () => { load(); loadPlanLimit(); })
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'client_companies', filter: `owner_id=eq.${ownerId}` },
+        () => { loadPlanLimit(); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line
+  }, [scopeSubId, access?.owner_id, user?.id]);
+
   const openNew = () => {
     if (limitReached) {
       toast({
