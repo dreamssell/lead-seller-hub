@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useInternalComms } from '@/hooks/useInternalComms';
 import { useInternalCommsUnread } from '@/hooks/useInternalCommsUnread';
@@ -6,7 +6,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MessagesSquare, Send, Search, Users } from 'lucide-react';
+import { MessagesSquare, Send, Search, Users, Paperclip, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { validateInternalAttachment, ALLOWED_ATTACHMENT_MIMES, MAX_ATTACHMENT_BYTES } from '@/lib/internalCommsAttachments';
 
 function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join('') || 'U';
@@ -36,6 +38,9 @@ export default function InternalCommsPage() {
   const [draft, setDraft] = useState('');
   const [search, setSearch] = useState('');
   const [sending, setSending] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const filtered = members.filter((m) =>
@@ -48,12 +53,38 @@ export default function InternalCommsPage() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, activePeerId]);
 
+  const clearAttachment = () => {
+    setPendingFile(null);
+    setAttachmentError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const result = validateInternalAttachment({ filename: file.name, mime: file.type, size: file.size });
+    if (result.ok === true) {
+      setAttachmentError(null);
+      setPendingFile(file);
+      return;
+    }
+    const msg = result.message;
+    setPendingFile(null);
+    setAttachmentError(msg);
+    toast.error(msg);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleSend = async () => {
+    if (attachmentError) {
+      toast.error('Corrija o anexo antes de enviar.');
+      return;
+    }
     if (!draft.trim() || sending) return;
     setSending(true);
     const res = await sendMessage(draft);
     setSending(false);
-    if (!res.error) setDraft('');
+    if (!res.error) { setDraft(''); clearAttachment(); }
   };
 
   return (
@@ -169,17 +200,64 @@ export default function InternalCommsPage() {
                 })}
               </div>
 
-              <div className="p-3 border-t border-border flex items-center gap-2">
-                <Input
-                  placeholder="Escreva sua mensagem..."
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                  disabled={sending}
-                />
-                <Button onClick={handleSend} disabled={!draft.trim() || sending} size="icon" aria-label="Enviar">
-                  <Send className="w-4 h-4" />
-                </Button>
+              <div className="border-t border-border">
+                {(pendingFile || attachmentError) && (
+                  <div
+                    role={attachmentError ? 'alert' : undefined}
+                    data-testid={attachmentError ? 'attachment-error' : 'attachment-pending'}
+                    className={`px-3 py-2 text-xs flex items-center justify-between gap-2 ${
+                      attachmentError ? 'bg-destructive/10 text-destructive' : 'bg-muted/40 text-muted-foreground'
+                    }`}
+                  >
+                    <span className="truncate">
+                      {attachmentError ?? `Anexo pronto: ${pendingFile?.name}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={clearAttachment}
+                      className="p-1 rounded hover:bg-background/60"
+                      aria-label="Remover anexo"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+                <div className="p-3 flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept={ALLOWED_ATTACHMENT_MIMES.join(',')}
+                    onChange={handleFileChange}
+                    data-testid="attachment-input"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Anexar arquivo"
+                    title={`Anexos até ${Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))} MB`}
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={sending}
+                  >
+                    <Paperclip className="w-4 h-4" />
+                  </Button>
+                  <Input
+                    placeholder="Escreva sua mensagem..."
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                    disabled={sending}
+                  />
+                  <Button
+                    onClick={handleSend}
+                    disabled={!draft.trim() || sending || !!attachmentError}
+                    size="icon"
+                    aria-label="Enviar"
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             </>
           )}
