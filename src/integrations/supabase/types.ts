@@ -1757,6 +1757,39 @@ export type Database = {
         }
         Relationships: []
       }
+      internal_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          owner_id: string
+          read_at: string | null
+          recipient_id: string
+          sender_id: string
+          sub_company_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          owner_id: string
+          read_at?: string | null
+          recipient_id: string
+          sender_id: string
+          sub_company_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          owner_id?: string
+          read_at?: string | null
+          recipient_id?: string
+          sender_id?: string
+          sub_company_id?: string | null
+        }
+        Relationships: []
+      }
       landing_buttons: {
         Row: {
           action_type: string
@@ -5459,6 +5492,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      internal_comms_share_scope: {
+        Args: { _a: string; _b: string }
         Returns: boolean
       }
       is_signature_leader: {
