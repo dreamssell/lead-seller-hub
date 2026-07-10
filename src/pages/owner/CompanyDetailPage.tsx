@@ -137,14 +137,52 @@ export default function CompanyDetailPage() {
       title="Central Executiva da Conta"
       subtitle="Visão 360° de performance, canais, funis e integridade"
     >
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <Button asChild variant="outline" size="sm">
           <Link to="/owner-dashboard"><ArrowLeft className="w-4 h-4 mr-1" /> Central do Dono</Link>
         </Button>
         <div className="text-xs text-muted-foreground flex items-center gap-1.5">
           <Crown className="w-3.5 h-3.5 text-warning" /> Área restrita ao dono da plataforma
         </div>
+        <div className="ml-auto flex gap-2">
+          {data && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => generateExecutiveReport({
+                accountName: data.company.name,
+                planSlug: data.company.plan_slug,
+                kind,
+                errors: data.errors.recent || [],
+                audit: data.audit_recent || [],
+              })}
+            >
+              <FileDown className="w-4 h-4 mr-1" /> Exportar PDF
+            </Button>
+          )}
+          {data && ['platinum','enterprise'].includes(String(data.company.plan_slug || '').toLowerCase()) && (
+            <Button size="sm" onClick={() => setLicenseOpen(true)}>
+              <KeyRound className="w-4 h-4 mr-1" /> Gerenciar licenças
+            </Button>
+          )}
+        </div>
       </div>
+
+      {data && licenseInfo && (
+        <LicenseManagerDialog
+          open={licenseOpen}
+          onOpenChange={setLicenseOpen}
+          kind={kind}
+          accountId={id!}
+          accountName={data.company.name}
+          planSlug={data.company.plan_slug}
+          currentOverride={licenseInfo.max_users_override}
+          currentBlocked={licenseInfo.seat_additions_blocked}
+          planMax={seat?.max_users ?? null}
+          currentUsers={seatCount}
+          onSaved={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
 
       {loading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
