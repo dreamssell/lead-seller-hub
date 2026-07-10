@@ -921,20 +921,45 @@ function UsersTab() {
     return blob.includes(search.toLowerCase());
   });
 
+  const badgeTone = unlimited
+    ? 'bg-primary/10 text-primary border-primary/30'
+    : limitReached
+    ? 'bg-destructive/10 text-destructive border-destructive/30'
+    : totalUsers >= Math.max(1, Math.ceil((maxUsers ?? 0) * 0.8))
+    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+    : 'bg-primary/10 text-primary border-primary/30';
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input placeholder="Buscar usuário..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            data-testid="cadastros-seat-usage-badge"
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${badgeTone}`}
+          >
+            {seatUsageBadge({ planName, used: totalUsers, max: maxUsers })}
+          </span>
           <p className="text-xs text-muted-foreground hidden md:block">
             {isSubAdmin ? 'Gerenciando colaboradores da sub-empresa' : 'Gerenciando colaboradores do painel'}
           </p>
-          <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" />Novo usuário</Button>
+          {limitReached && (
+            <a
+              href={SEAT_UPSELL_MAILTO(planName, totalUsers, maxUsers)}
+              className="text-xs font-medium text-primary underline underline-offset-2 hover:text-primary/80"
+            >
+              Solicitar mais licenças
+            </a>
+          )}
+          <Button onClick={openNew} disabled={limitReached} title={limitReached ? 'Limite de licenças atingido' : undefined}>
+            <Plus className="w-4 h-4 mr-2" />Novo usuário
+          </Button>
         </div>
       </div>
+
 
       <div className="glass-card overflow-hidden">
         <Table>
