@@ -21,6 +21,12 @@ import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
+// AppLayout puxa TopBar/Sidebar com ThemeProvider/Router — não faz parte do
+// contrato de "carregar colegas". Mocka como passthrough.
+vi.mock('@/components/layout/AppLayout', () => ({
+  AppLayout: ({ children }: any) => <div data-testid="applayout">{children}</div>,
+}));
+
 // ── Mocks ──────────────────────────────────────────────────────────────────
 const rpcMock = vi.fn();
 vi.mock('@/integrations/supabase/client', () => ({
