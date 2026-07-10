@@ -1,5 +1,6 @@
 import { StatCard } from './StatCard';
 import { LineTrend, BarByStage, DonutChannel } from './charts/DashboardCharts';
+import { HighlightServiceCards } from './HighlightServiceCards';
 import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 import { MessageSquare, Phone, Users, TrendingUp } from 'lucide-react';
 
@@ -15,6 +16,8 @@ export function AgentDashboard() {
         <StatCard icon={Users} label="Meus leads no funil" value={m.totals.leadsInFunnel} />
         <StatCard icon={TrendingUp} label="Minha conversão (30d)" value={rate} />
       </div>
+
+      <HighlightServiceCards />
 
       <div>
         <h3 className="text-sm font-semibold text-foreground mb-4">Minha performance</h3>

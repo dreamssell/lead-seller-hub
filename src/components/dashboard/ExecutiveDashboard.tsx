@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StatCard } from './StatCard';
 import { ServiceCard } from './ServiceCard';
+import { HighlightServiceCards } from './HighlightServiceCards';
 import { LineTrend, BarByStage, DonutChannel } from './charts/DashboardCharts';
 import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 import { supabase } from '@/integrations/supabase/client';
@@ -98,6 +99,8 @@ export function ExecutiveDashboard() {
         <StatCard icon={Users} label="Leads no funil" value={m.totals.leadsInFunnel} />
         <StatCard icon={TrendingUp} label="Conversão (30d)" value={rate} />
       </div>
+
+      <HighlightServiceCards />
 
       <div className="mb-8">
         <h3 className="text-sm font-semibold text-foreground mb-4">Visão executiva</h3>
