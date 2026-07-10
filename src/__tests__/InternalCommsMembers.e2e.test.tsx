@@ -105,7 +105,7 @@ function renderPage() {
 describe('/internal-comms · carregamento de colegas por tenant', () => {
   it('Mult Seguros (Empresa) renderiza 14 colegas + o dono via RPC', async () => {
     const members = buildMembers('mult', 14, true); // 14 + owner = 15
-    rpcMock.mockResolvedValueOnce({ data: members, error: null });
+    memberPayload = members;
 
     renderPage();
 
@@ -123,7 +123,7 @@ describe('/internal-comms · carregamento de colegas por tenant', () => {
     authState.user = { id: 'sub-user-1' };
     authState.access = { owner_id: 'owner-acme', sub_company_id: 'sub-1' };
     const members = buildMembers('sub', 5, true); // 5 + owner (admin da sub) = 6
-    rpcMock.mockResolvedValueOnce({ data: members, error: null });
+    memberPayload = members;
 
     renderPage();
 
@@ -135,7 +135,7 @@ describe('/internal-comms · carregamento de colegas por tenant', () => {
   });
 
   it('Zero colegas → exibe mensagem "Nenhum colega encontrado" (nunca quebra)', async () => {
-    rpcMock.mockResolvedValueOnce({ data: [], error: null });
+    memberPayload = [];
     renderPage();
     await waitFor(() => {
       expect(screen.getByText(/Nenhum colega encontrado/i)).toBeInTheDocument();
