@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { LicenseManagerDialog } from '@/components/owner-dashboard/LicenseManagerDialog';
@@ -12,7 +15,7 @@ import { generateExecutiveReport } from '@/lib/executiveReportPdf';
 import {
   ArrowLeft, Users, MessagesSquare, Phone, TrendingUp, DollarSign,
   ShieldCheck, AlertTriangle, Activity, Bot, Building2, Building, CircleCheck, CircleX, Crown,
-  FileDown, KeyRound,
+  FileDown, KeyRound, Search, ArrowRight, Lock, History,
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -25,8 +28,16 @@ const dt = (iso: string) => new Date(iso).toLocaleString('pt-BR');
 
 const PIE_COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--warning))', 'hsl(var(--success))', 'hsl(var(--destructive))', '#6366F1', '#22D3EE', '#F472B6'];
 
+interface SeatAuditRow {
+  id: string; created_at: string; plan_slug?: string; max_users?: number; current_users?: number;
+  reason: string; message?: string; target_name?: string; attempted_by_name?: string;
+}
+interface LicenseAuditRow {
+  id: string; created_at: string; field: string; old_value?: string; new_value?: string; changed_by_name?: string;
+}
 interface Detail {
   generated_at: string;
+  range: { from: string; to: string };
   company: any;
   seat_usage: { plan_slug: string | null; max_users: number | null; current_users: number; remaining: number | null };
   kpis: { leads_30d: number; leads_won: number; leads_lost: number; leads_open: number; revenue: number; conversion_rate: number };
@@ -39,6 +50,8 @@ interface Detail {
   agents: { total: number; active: number };
   errors: { last_24h: number; critical: number; recent: any[] };
   audit_recent: any[];
+  seat_audit: SeatAuditRow[];
+  license_audit: LicenseAuditRow[];
 }
 
 function StatusPill({ ok, label }: { ok: boolean; label: string }) {
@@ -50,7 +63,7 @@ function StatusPill({ ok, label }: { ok: boolean; label: string }) {
   );
 }
 
-function Kpi({ icon: Icon, label, value, hint, tone = 'primary' }: any) {
+function Kpi({ icon: Icon, label, value, hint, tone = 'primary', to }: any) {
   const tones: Record<string, string> = {
     primary: 'text-primary bg-primary/10',
     success: 'text-success bg-success/10',
@@ -58,21 +71,30 @@ function Kpi({ icon: Icon, label, value, hint, tone = 'primary' }: any) {
     destructive: 'text-destructive bg-destructive/10',
     accent: 'text-accent bg-accent/10',
   };
-  return (
-    <Card className="p-4">
+  const body = (
+    <Card className={`p-4 h-full ${to ? 'hover:shadow-md hover:border-primary/40 transition cursor-pointer group' : ''}`}>
       <div className="flex items-start gap-3">
         <div className={`w-10 h-10 rounded-xl grid place-items-center ${tones[tone]}`}>
           <Icon className="w-5 h-5" />
         </div>
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground truncate">{label}</p>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+            {label}
+            {to && <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition" />}
+          </p>
           <p className="text-xl font-bold text-foreground tabular-nums">{value}</p>
           {hint && <p className="text-[11px] text-muted-foreground mt-0.5">{hint}</p>}
         </div>
       </div>
     </Card>
   );
+  return to ? <Link to={to}>{body}</Link> : body;
 }
+
+function toISOStart(d: string) { return d ? new Date(`${d}T00:00:00`).toISOString() : ''; }
+function toISOEnd(d: string) { return d ? new Date(`${d}T23:59:59.999`).toISOString() : ''; }
+function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
+const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export default function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -86,6 +108,20 @@ export default function CompanyDetailPage() {
   const [licenseOpen, setLicenseOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Date range state
+  const [fromDate, setFromDate] = useState<string>(daysAgo(30));
+  const [toDate, setToDate] = useState<string>(todayIso());
+  const [pendingFrom, setPendingFrom] = useState(fromDate);
+  const [pendingTo, setPendingTo] = useState(toDate);
+
+  // Seat audit filters
+  const [seatSearch, setSeatSearch] = useState('');
+  const [seatPlan, setSeatPlan] = useState<string>('all');
+  const [seatRows, setSeatRows] = useState<SeatAuditRow[] | null>(null);
+  const [seatLoading, setSeatLoading] = useState(false);
+
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+
   useEffect(() => {
     let cancel = false;
     (async () => {
@@ -95,20 +131,23 @@ export default function CompanyDetailPage() {
       try {
         let params: any;
         let lic: any = null;
+        let oid: string | null = null;
         if (kind === 'sub_company') {
           const { data: sub } = await supabase.from('sub_companies').select('owner_id, max_users_override, seat_additions_blocked').eq('id', id).maybeSingle();
           if (!sub) throw new Error('Sub-empresa não encontrada.');
-          params = { p_owner_id: sub.owner_id, p_sub_company_id: id };
+          oid = (sub as any).owner_id;
+          params = { p_owner_id: oid, p_sub_company_id: id, p_from: toISOStart(fromDate), p_to: toISOEnd(toDate) };
           lic = { max_users_override: (sub as any).max_users_override ?? null, seat_additions_blocked: !!(sub as any).seat_additions_blocked };
         } else {
           const { data: cc } = await supabase.from('client_companies').select('auth_user_id, max_users_override, seat_additions_blocked').eq('id', id).maybeSingle();
           if (!cc?.auth_user_id) throw new Error('Empresa sem titular vinculado.');
-          params = { p_owner_id: cc.auth_user_id, p_sub_company_id: null };
+          oid = (cc as any).auth_user_id;
+          params = { p_owner_id: oid, p_sub_company_id: null, p_from: toISOStart(fromDate), p_to: toISOEnd(toDate) };
           lic = { max_users_override: (cc as any).max_users_override ?? null, seat_additions_blocked: !!(cc as any).seat_additions_blocked };
         }
         const { data: res, error: rpcErr } = await (supabase as any).rpc('get_owner_company_detail', params);
         if (rpcErr) throw rpcErr;
-        if (!cancel) { setData(res as Detail); setLicenseInfo(lic); }
+        if (!cancel) { setData(res as Detail); setLicenseInfo(lic); setOwnerId(oid); setSeatRows((res as Detail).seat_audit || []); }
       } catch (e: any) {
         if (!cancel) setError(e?.message || 'Falha ao carregar detalhes.');
       } finally {
@@ -116,7 +155,30 @@ export default function CompanyDetailPage() {
       }
     })();
     return () => { cancel = true; };
-  }, [id, kind, refreshKey]);
+  }, [id, kind, refreshKey, fromDate, toDate]);
+
+  const reloadSeatAudit = async () => {
+    if (!ownerId) return;
+    setSeatLoading(true);
+    const { data: rows, error: err } = await (supabase as any).rpc('search_seat_limit_audit', {
+      p_owner: ownerId,
+      p_sub: kind === 'sub_company' ? id : null,
+      p_plan: seatPlan === 'all' ? null : seatPlan,
+      p_from: toISOStart(fromDate),
+      p_to: toISOEnd(toDate),
+      p_search: seatSearch || null,
+      p_limit: 200,
+      p_offset: 0,
+    });
+    setSeatLoading(false);
+    if (!err) setSeatRows((rows as any[]) as SeatAuditRow[]);
+  };
+
+  const applyRange = () => { setFromDate(pendingFrom); setToDate(pendingTo); };
+  const setQuickRange = (days: number) => {
+    const f = daysAgo(days), t = todayIso();
+    setPendingFrom(f); setPendingTo(t); setFromDate(f); setToDate(t);
+  };
 
   if (ownerLoading) return null;
   if (!isOwner) return <Navigate to="/" replace />;
@@ -131,6 +193,14 @@ export default function CompanyDetailPage() {
 
   const waOnline = (data?.whatsapp || []).filter((w) => ['connected', 'online', 'WORKING'].includes(String(w.status))).length;
   const waTotal = data?.whatsapp?.length ?? 0;
+
+  // Drill-down URLs (send owner filter forward to global reports)
+  const auditUrl = ownerId ? `/owner/audit-trail?owner=${ownerId}&from=${fromDate}&to=${toDate}` : '/owner/audit-trail';
+  const healthUrl = '/owner/platform-health';
+
+  const rangeLabel = `${new Date(fromDate).toLocaleDateString('pt-BR')} — ${new Date(toDate).toLocaleDateString('pt-BR')}`;
+
+  const filteredSeat = useMemo(() => seatRows || [], [seatRows]);
 
   return (
     <AppLayout
@@ -153,8 +223,12 @@ export default function CompanyDetailPage() {
                 accountName: data.company.name,
                 planSlug: data.company.plan_slug,
                 kind,
+                from: fromDate,
+                to: toDate,
                 errors: data.errors.recent || [],
                 audit: data.audit_recent || [],
+                seatAudit: (seatRows || data.seat_audit || []) as any,
+                licenseAudit: data.license_audit || [],
               })}
             >
               <FileDown className="w-4 h-4 mr-1" /> Exportar PDF
@@ -167,6 +241,27 @@ export default function CompanyDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Date range control */}
+      <Card className="p-3 mb-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <Label className="text-[11px] text-muted-foreground">De</Label>
+            <Input type="date" value={pendingFrom} onChange={(e) => setPendingFrom(e.target.value)} className="h-9 w-[150px]" />
+          </div>
+          <div>
+            <Label className="text-[11px] text-muted-foreground">Até</Label>
+            <Input type="date" value={pendingTo} onChange={(e) => setPendingTo(e.target.value)} className="h-9 w-[150px]" />
+          </div>
+          <Button size="sm" onClick={applyRange}>Aplicar período</Button>
+          <div className="flex gap-1 ml-auto">
+            <Button size="sm" variant="ghost" onClick={() => setQuickRange(7)}>7d</Button>
+            <Button size="sm" variant="ghost" onClick={() => setQuickRange(30)}>30d</Button>
+            <Button size="sm" variant="ghost" onClick={() => setQuickRange(90)}>90d</Button>
+          </div>
+          <div className="text-xs text-muted-foreground ml-2">Período ativo: <b>{rangeLabel}</b></div>
+        </div>
+      </Card>
 
       {data && licenseInfo && (
         <LicenseManagerDialog
@@ -241,22 +336,32 @@ export default function CompanyDetailPage() {
             </div>
           </Card>
 
-          {/* KPIs */}
+          {/* KPIs (drill-down when relevant) */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Kpi icon={TrendingUp} label="Leads (30d)" value={fmt(data.kpis.leads_30d)} hint={`${fmt(data.kpis.leads_won)} ganhos · ${fmt(data.kpis.leads_open)} em aberto`} tone="primary" />
-            <Kpi icon={ShieldCheck} label="Conversão" value={`${data.kpis.conversion_rate}%`} hint="Ganhos ÷ leads (30d)" tone="success" />
-            <Kpi icon={DollarSign} label="Receita (30d)" value={brl(Number(data.kpis.revenue))} hint="Somatório de leads ganhos" tone="success" />
-            <Kpi icon={MessagesSquare} label="Mensagens (30d)" value={fmt(data.messages.last_30d)} hint={`${fmt(data.messages.delivered)} entregues · ${fmt(data.messages.failed)} falhas`} tone="accent" />
-            <Kpi icon={Phone} label="Chamadas (30d)" value={fmt(data.calls.total_30d)} hint={`${fmt(data.calls.answered)} atendidas · ${fmt(data.calls.missed)} perdidas`} tone="warning" />
-            <Kpi icon={Users} label="Usuários ativos" value={fmt(seatCount)} hint={seatMax != null ? `${seat?.remaining ?? 0} vagas restantes` : 'Sem limite definido'} tone={seatReached ? 'destructive' : 'primary'} />
+            <Kpi icon={TrendingUp} label="Leads no período" value={fmt(data.kpis.leads_30d)} hint={`${fmt(data.kpis.leads_won)} ganhos · ${fmt(data.kpis.leads_open)} em aberto`} tone="primary" />
+            <Kpi icon={ShieldCheck} label="Conversão" value={`${data.kpis.conversion_rate}%`} hint="Ganhos ÷ leads" tone="success" />
+            <Kpi icon={DollarSign} label="Receita" value={brl(Number(data.kpis.revenue))} hint="Somatório de leads ganhos" tone="success" />
+            <Kpi icon={MessagesSquare} label="Mensagens" value={fmt(data.messages.last_30d)} hint={`${fmt(data.messages.delivered)} entregues · ${fmt(data.messages.failed)} falhas`} tone="accent" to="#tab-channels" />
+            <Kpi icon={Phone} label="Chamadas" value={fmt(data.calls.total_30d)} hint={`${fmt(data.calls.answered)} atendidas · ${fmt(data.calls.missed)} perdidas`} tone="warning" />
+            <Kpi icon={Users} label="Usuários ativos" value={fmt(seatCount)} hint={seatMax != null ? `${seat?.remaining ?? 0} vagas restantes` : 'Sem limite definido'} tone={seatReached ? 'destructive' : 'primary'} to="#tab-seat" />
             <Kpi icon={Bot} label="Agentes I.A." value={fmt(data.agents.active)} hint={`${fmt(data.agents.total)} cadastrados`} tone="accent" />
-            <Kpi icon={AlertTriangle} label="Erros (24h)" value={fmt(data.errors.last_24h)} hint={`${fmt(data.errors.critical)} críticos`} tone={data.errors.critical > 0 ? 'destructive' : 'success'} />
+            <Kpi icon={AlertTriangle} label="Erros (24h)" value={fmt(data.errors.last_24h)} hint={`${fmt(data.errors.critical)} críticos · ver detalhes`} tone={data.errors.critical > 0 ? 'destructive' : 'success'} to="#tab-errors" />
+          </div>
+
+          {/* Quick drill-down bar */}
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link to={healthUrl}><Activity className="w-4 h-4 mr-1" /> Saúde global da plataforma</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link to={auditUrl}><History className="w-4 h-4 mr-1" /> Auditoria completa desta conta</Link>
+            </Button>
           </div>
 
           {/* Charts + status */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <Card className="p-4 lg:col-span-2">
-              <h4 className="text-sm font-semibold mb-3">Mensagens · últimos 14 dias</h4>
+              <h4 className="text-sm font-semibold mb-3">Mensagens · últimos 14 dias do período</h4>
               <div className="h-56">
                 <ResponsiveContainer>
                   <LineChart data={data.messages_by_day}>
@@ -274,7 +379,7 @@ export default function CompanyDetailPage() {
               <h4 className="text-sm font-semibold mb-3">Status dos módulos</h4>
               <div className="space-y-2">
                 <StatusPill ok={waTotal > 0 && waOnline > 0} label={`WhatsApp · ${waOnline}/${waTotal} online`} />
-                <StatusPill ok={data.calls.total_30d > 0} label={`Chamadas · ${fmt(data.calls.total_30d)} nos últimos 30d`} />
+                <StatusPill ok={data.calls.total_30d > 0} label={`Chamadas · ${fmt(data.calls.total_30d)} no período`} />
                 <StatusPill ok={data.agents.active > 0} label={`Agentes I.A. · ${fmt(data.agents.active)} ativos`} />
                 <StatusPill ok={data.pipelines.length > 0} label={`Funis · ${fmt(data.pipelines.length)} configurados`} />
                 <StatusPill ok={data.errors.critical === 0} label={`Erros críticos · ${fmt(data.errors.critical)} nas últimas 24h`} />
@@ -300,7 +405,7 @@ export default function CompanyDetailPage() {
             </Card>
 
             <Card className="p-4">
-              <h4 className="text-sm font-semibold mb-3">Funil de mensagens (30d)</h4>
+              <h4 className="text-sm font-semibold mb-3">Funil de mensagens (período)</h4>
               <div className="h-56">
                 <ResponsiveContainer>
                   <PieChart>
@@ -326,10 +431,12 @@ export default function CompanyDetailPage() {
 
           <Tabs defaultValue="channels">
             <TabsList>
-              <TabsTrigger value="channels">Canais WhatsApp</TabsTrigger>
+              <TabsTrigger value="channels" id="tab-channels">Canais WhatsApp</TabsTrigger>
               <TabsTrigger value="funnels">Funis</TabsTrigger>
-              <TabsTrigger value="errors">Erros & falhas</TabsTrigger>
+              <TabsTrigger value="errors" id="tab-errors">Erros & falhas</TabsTrigger>
               <TabsTrigger value="audit">Auditoria</TabsTrigger>
+              <TabsTrigger value="seat" id="tab-seat">Bloqueios de assentos</TabsTrigger>
+              <TabsTrigger value="licenses">Licenças</TabsTrigger>
             </TabsList>
 
             <TabsContent value="channels" className="mt-4">
@@ -398,9 +505,14 @@ export default function CompanyDetailPage() {
             </TabsContent>
 
             <TabsContent value="errors" className="mt-4">
+              <div className="flex justify-end mb-2">
+                <Button asChild variant="link" size="sm">
+                  <Link to={healthUrl}>Abrir Saúde da plataforma <ArrowRight className="w-3 h-3 ml-1" /></Link>
+                </Button>
+              </div>
               <Card className="p-0 overflow-hidden">
                 {data.errors.recent.length === 0 ? (
-                  <p className="p-6 text-sm text-muted-foreground">Nenhum erro reportado nos últimos 7 dias. 🎉</p>
+                  <p className="p-6 text-sm text-muted-foreground">Nenhum erro reportado no período. 🎉</p>
                 ) : (
                   <table className="w-full text-sm">
                     <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
@@ -433,9 +545,14 @@ export default function CompanyDetailPage() {
             </TabsContent>
 
             <TabsContent value="audit" className="mt-4">
+              <div className="flex justify-end mb-2">
+                <Button asChild variant="link" size="sm">
+                  <Link to={auditUrl}>Abrir Auditoria completa <ArrowRight className="w-3 h-3 ml-1" /></Link>
+                </Button>
+              </div>
               <Card className="p-0 overflow-hidden">
                 {data.audit_recent.length === 0 ? (
-                  <p className="p-6 text-sm text-muted-foreground">Sem eventos de auditoria recentes.</p>
+                  <p className="p-6 text-sm text-muted-foreground">Sem eventos de auditoria no período.</p>
                 ) : (
                   <table className="w-full text-sm">
                     <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
@@ -462,10 +579,113 @@ export default function CompanyDetailPage() {
                 )}
               </Card>
             </TabsContent>
+
+            <TabsContent value="seat" className="mt-4 space-y-3">
+              <Card className="p-3">
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="flex-1 min-w-[200px]">
+                    <Label className="text-[11px] text-muted-foreground">Buscar (usuário, e-mail, mensagem)</Label>
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 absolute left-2 top-2.5 text-muted-foreground" />
+                      <Input value={seatSearch} onChange={(e) => setSeatSearch(e.target.value)} placeholder="ex.: joão@…" className="h-9 pl-7" />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">Plano</Label>
+                    <Select value={seatPlan} onValueChange={setSeatPlan}>
+                      <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os planos</SelectItem>
+                        <SelectItem value="start">Start</SelectItem>
+                        <SelectItem value="elite">Elite</SelectItem>
+                        <SelectItem value="platinum">Platinum</SelectItem>
+                        <SelectItem value="enterprise">Enterprise</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button size="sm" onClick={reloadSeatAudit} disabled={seatLoading}>
+                    {seatLoading ? 'Buscando…' : 'Filtrar'}
+                  </Button>
+                  <div className="text-xs text-muted-foreground ml-auto">Período: {rangeLabel} · {filteredSeat.length} registros</div>
+                </div>
+              </Card>
+
+              <Card className="p-0 overflow-hidden">
+                {filteredSeat.length === 0 ? (
+                  <p className="p-6 text-sm text-muted-foreground">Nenhum bloqueio de assento registrado com os filtros atuais.</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                      <tr>
+                        <th className="text-left p-3">Quando</th>
+                        <th className="text-left p-3">Motivo</th>
+                        <th className="text-left p-3">Plano</th>
+                        <th className="text-left p-3">Uso</th>
+                        <th className="text-left p-3">Alvo</th>
+                        <th className="text-left p-3">Solicitante</th>
+                        <th className="text-left p-3">Mensagem</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSeat.map((s) => (
+                        <tr key={s.id} className="border-t border-border">
+                          <td className="p-3 text-xs text-muted-foreground whitespace-nowrap">{dt(s.created_at)}</td>
+                          <td className="p-3">
+                            <Badge variant="outline" className={s.reason === 'manual_block' ? 'bg-warning/10 text-warning border-warning/20' : 'bg-destructive/10 text-destructive border-destructive/20'}>
+                              <Lock className="w-3 h-3 mr-1" />{s.reason === 'manual_block' ? 'Pausa manual' : 'Limite do plano'}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-xs uppercase">{s.plan_slug || '—'}</td>
+                          <td className="p-3 text-xs tabular-nums">{s.current_users ?? '?'} / {s.max_users ?? '?'}</td>
+                          <td className="p-3 text-xs">{s.target_name || '—'}</td>
+                          <td className="p-3 text-xs">{s.attempted_by_name || '—'}</td>
+                          <td className="p-3 text-xs text-muted-foreground truncate max-w-[260px]">{s.message || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="licenses" className="mt-4">
+              <Card className="p-0 overflow-hidden">
+                {(data.license_audit || []).length === 0 ? (
+                  <p className="p-6 text-sm text-muted-foreground">Nenhuma alteração manual de licenças no período.</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                      <tr>
+                        <th className="text-left p-3">Quando</th>
+                        <th className="text-left p-3">Campo</th>
+                        <th className="text-left p-3">De</th>
+                        <th className="text-left p-3">Para</th>
+                        <th className="text-left p-3">Autor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(data.license_audit || []).map((l) => (
+                        <tr key={l.id} className="border-t border-border">
+                          <td className="p-3 text-xs text-muted-foreground whitespace-nowrap">{dt(l.created_at)}</td>
+                          <td className="p-3">
+                            <Badge variant="secondary">
+                              {l.field === 'max_users_override' ? 'Licenças extras' : 'Pausar cadastros'}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-xs">{l.old_value || '—'}</td>
+                          <td className="p-3 text-xs font-semibold">{l.new_value || '—'}</td>
+                          <td className="p-3 text-xs">{l.changed_by_name || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </Card>
+            </TabsContent>
           </Tabs>
 
           <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-            <Activity className="w-3 h-3" /> Dados gerados em {dt(data.generated_at)}
+            <Activity className="w-3 h-3" /> Dados gerados em {dt(data.generated_at)} · Período aplicado: {rangeLabel}
           </p>
         </div>
       )}
