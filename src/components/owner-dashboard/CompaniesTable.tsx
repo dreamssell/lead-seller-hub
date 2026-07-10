@@ -81,7 +81,7 @@ export function CompaniesTable({ companies, subCompanies, onRefresh }: Props) {
           </TableHeader>
           <TableBody>
             {filtered.length === 0 && (
-              <TableRow><TableCell colSpan={10} className="text-center text-sm text-muted-foreground py-8">Nenhuma empresa encontrada.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center text-sm text-muted-foreground py-8">Nenhuma empresa encontrada.</TableCell></TableRow>
             )}
             {filtered.map((c) => {
               const isOpen = expanded === c.id;
@@ -108,10 +108,17 @@ export function CompaniesTable({ companies, subCompanies, onRefresh }: Props) {
                     <TableCell className="text-right text-success">{fmt(c.won_leads)}</TableCell>
                     <TableCell className="text-right">{fmt(c.messages_30d)}</TableCell>
                     <TableCell className="text-right font-semibold">{brl(c.revenue)}</TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Button asChild variant="ghost" size="icon" className="h-8 w-8" title="Abrir Central Executiva">
+                        <Link to={`/owner/company/${c.id}?kind=company`}>
+                          <BarChart3 className="w-4 h-4" />
+                        </Link>
+                      </Button>
+                    </TableCell>
                   </TableRow>
                   {isOpen && (
                     <TableRow key={c.id + '-detail'} className="bg-muted/20">
-                      <TableCell colSpan={10} className="p-0">
+                      <TableCell colSpan={11} className="p-0">
                         <CompanyDetailPanel company={c} subCompanies={subs} />
                       </TableCell>
                     </TableRow>
