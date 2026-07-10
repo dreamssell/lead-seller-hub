@@ -24,6 +24,7 @@ import { logAudit } from '@/lib/audit';
 import { getSelectablePages } from '@/lib/navigation';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { extractManageUserError } from '@/lib/manageAccountUserErrors';
+import { SEAT_LIMIT_TITLE, SEAT_UPSELL_EMAIL, SEAT_UPSELL_MAILTO, seatLimitDescription, seatUsageBadge } from '@/lib/seatLimitCopy';
 
 type Entity = 'leads' | 'customers' | 'products' | 'tasks' | 'users' | 'contacts';
 
