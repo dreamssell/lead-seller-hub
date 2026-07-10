@@ -1107,7 +1107,7 @@ function UsersTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={save} disabled={saving}>{saving ? 'Salvando...' : editing ? 'Salvar' : 'Criar usuário'}</Button>
+            <Button onClick={save} disabled={saving || (!editing && limitReached)}>{saving ? 'Salvando...' : editing ? 'Salvar' : 'Criar usuário'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
