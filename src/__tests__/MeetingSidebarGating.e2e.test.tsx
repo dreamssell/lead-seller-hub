@@ -13,6 +13,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { navSections } from '@/lib/navigation';
 
 const ownerState = { isOwner: false, loading: false };
@@ -47,7 +48,9 @@ beforeEach(() => {
 function renderSidebar(props: { expanded?: boolean; collapsible?: boolean } = {}) {
   return render(
     <MemoryRouter initialEntries={['/']}>
-      <Sidebar expanded={props.expanded ?? true} collapsible={props.collapsible ?? false} />
+      <TooltipProvider>
+        <Sidebar expanded={props.expanded ?? true} collapsible={props.collapsible ?? false} />
+      </TooltipProvider>
     </MemoryRouter>,
   );
 }
