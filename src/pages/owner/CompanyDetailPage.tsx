@@ -7,9 +7,12 @@ import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
+import { LicenseManagerDialog } from '@/components/owner-dashboard/LicenseManagerDialog';
+import { generateExecutiveReport } from '@/lib/executiveReportPdf';
 import {
   ArrowLeft, Users, MessagesSquare, Phone, TrendingUp, DollarSign,
   ShieldCheck, AlertTriangle, Activity, Bot, Building2, Building, CircleCheck, CircleX, Crown,
+  FileDown, KeyRound,
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -79,6 +82,9 @@ export default function CompanyDetailPage() {
   const [data, setData] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [licenseInfo, setLicenseInfo] = useState<{ max_users_override: number | null; seat_additions_blocked: boolean } | null>(null);
+  const [licenseOpen, setLicenseOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancel = false;
@@ -88,18 +94,21 @@ export default function CompanyDetailPage() {
       setError(null);
       try {
         let params: any;
+        let lic: any = null;
         if (kind === 'sub_company') {
-          const { data: sub } = await supabase.from('sub_companies').select('owner_id').eq('id', id).maybeSingle();
+          const { data: sub } = await supabase.from('sub_companies').select('owner_id, max_users_override, seat_additions_blocked').eq('id', id).maybeSingle();
           if (!sub) throw new Error('Sub-empresa não encontrada.');
           params = { p_owner_id: sub.owner_id, p_sub_company_id: id };
+          lic = { max_users_override: (sub as any).max_users_override ?? null, seat_additions_blocked: !!(sub as any).seat_additions_blocked };
         } else {
-          const { data: cc } = await supabase.from('client_companies').select('auth_user_id').eq('id', id).maybeSingle();
+          const { data: cc } = await supabase.from('client_companies').select('auth_user_id, max_users_override, seat_additions_blocked').eq('id', id).maybeSingle();
           if (!cc?.auth_user_id) throw new Error('Empresa sem titular vinculado.');
           params = { p_owner_id: cc.auth_user_id, p_sub_company_id: null };
+          lic = { max_users_override: (cc as any).max_users_override ?? null, seat_additions_blocked: !!(cc as any).seat_additions_blocked };
         }
         const { data: res, error: rpcErr } = await (supabase as any).rpc('get_owner_company_detail', params);
         if (rpcErr) throw rpcErr;
-        if (!cancel) setData(res as Detail);
+        if (!cancel) { setData(res as Detail); setLicenseInfo(lic); }
       } catch (e: any) {
         if (!cancel) setError(e?.message || 'Falha ao carregar detalhes.');
       } finally {
@@ -107,7 +116,7 @@ export default function CompanyDetailPage() {
       }
     })();
     return () => { cancel = true; };
-  }, [id, kind]);
+  }, [id, kind, refreshKey]);
 
   if (ownerLoading) return null;
   if (!isOwner) return <Navigate to="/" replace />;
@@ -128,14 +137,52 @@ export default function CompanyDetailPage() {
       title="Central Executiva da Conta"
       subtitle="Visão 360° de performance, canais, funis e integridade"
     >
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <Button asChild variant="outline" size="sm">
           <Link to="/owner-dashboard"><ArrowLeft className="w-4 h-4 mr-1" /> Central do Dono</Link>
         </Button>
         <div className="text-xs text-muted-foreground flex items-center gap-1.5">
           <Crown className="w-3.5 h-3.5 text-warning" /> Área restrita ao dono da plataforma
         </div>
+        <div className="ml-auto flex gap-2">
+          {data && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => generateExecutiveReport({
+                accountName: data.company.name,
+                planSlug: data.company.plan_slug,
+                kind,
+                errors: data.errors.recent || [],
+                audit: data.audit_recent || [],
+              })}
+            >
+              <FileDown className="w-4 h-4 mr-1" /> Exportar PDF
+            </Button>
+          )}
+          {data && ['platinum','enterprise'].includes(String(data.company.plan_slug || '').toLowerCase()) && (
+            <Button size="sm" onClick={() => setLicenseOpen(true)}>
+              <KeyRound className="w-4 h-4 mr-1" /> Gerenciar licenças
+            </Button>
+          )}
+        </div>
       </div>
+
+      {data && licenseInfo && (
+        <LicenseManagerDialog
+          open={licenseOpen}
+          onOpenChange={setLicenseOpen}
+          kind={kind}
+          accountId={id!}
+          accountName={data.company.name}
+          planSlug={data.company.plan_slug}
+          currentOverride={licenseInfo.max_users_override}
+          currentBlocked={licenseInfo.seat_additions_blocked}
+          planMax={seat?.max_users ?? null}
+          currentUsers={seatCount}
+          onSaved={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
 
       {loading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

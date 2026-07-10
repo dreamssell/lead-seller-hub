@@ -795,6 +795,7 @@ export type Database = {
           phone: string | null
           plan_slug: string | null
           recording_enabled: boolean
+          seat_additions_blocked: boolean
           segment: string | null
           state: string | null
           status: string
@@ -822,6 +823,7 @@ export type Database = {
           phone?: string | null
           plan_slug?: string | null
           recording_enabled?: boolean
+          seat_additions_blocked?: boolean
           segment?: string | null
           state?: string | null
           status?: string
@@ -849,6 +851,7 @@ export type Database = {
           phone?: string | null
           plan_slug?: string | null
           recording_enabled?: boolean
+          seat_additions_blocked?: boolean
           segment?: string | null
           state?: string | null
           status?: string
@@ -3086,6 +3089,48 @@ export type Database = {
         }
         Relationships: []
       }
+      seat_limit_audit: {
+        Row: {
+          attempted_by: string | null
+          created_at: string
+          current_users: number | null
+          id: string
+          max_users: number | null
+          message: string | null
+          owner_id: string | null
+          plan_slug: string | null
+          reason: string
+          sub_company_id: string | null
+          target_user_id: string | null
+        }
+        Insert: {
+          attempted_by?: string | null
+          created_at?: string
+          current_users?: number | null
+          id?: string
+          max_users?: number | null
+          message?: string | null
+          owner_id?: string | null
+          plan_slug?: string | null
+          reason: string
+          sub_company_id?: string | null
+          target_user_id?: string | null
+        }
+        Update: {
+          attempted_by?: string | null
+          created_at?: string
+          current_users?: number | null
+          id?: string
+          max_users?: number | null
+          message?: string | null
+          owner_id?: string | null
+          plan_slug?: string | null
+          reason?: string
+          sub_company_id?: string | null
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
       signature_documents: {
         Row: {
           contact_id: string | null
@@ -3584,6 +3629,7 @@ export type Database = {
           owner_id: string
           plan_slug: string
           recording_enabled: boolean
+          seat_additions_blocked: boolean
           status: string
           updated_at: string
           whatsapp_limit: number
@@ -3613,6 +3659,7 @@ export type Database = {
           owner_id: string
           plan_slug?: string
           recording_enabled?: boolean
+          seat_additions_blocked?: boolean
           status?: string
           updated_at?: string
           whatsapp_limit?: number
@@ -3642,6 +3689,7 @@ export type Database = {
           owner_id?: string
           plan_slug?: string
           recording_enabled?: boolean
+          seat_additions_blocked?: boolean
           status?: string
           updated_at?: string
           whatsapp_limit?: number

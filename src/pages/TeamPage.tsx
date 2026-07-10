@@ -265,12 +265,26 @@ export default function TeamPage() {
         surfaced.code === 'pipeline_required' ||
         /funil|pipeline/i.test(surfaced.message);
       const isSeatErr = /plan_seat_limit_reached|limite/i.test(surfaced.message);
+      const isManualBlock = /seat_additions_blocked/i.test(surfaced.message);
+      const isPlanInvalid = /plan_slug_invalid/i.test(surfaced.message);
       const isOwnerErr = /owner_protected/i.test(surfaced.message);
       if (isPipelineErr) {
         flashPipelineField();
         toast({
           title: '⚠ Selecione pelo menos 1 funil',
           description: `${surfaced.message} O campo "Funis atribuídos" foi destacado abaixo.`,
+          variant: 'destructive',
+        });
+      } else if (isManualBlock) {
+        toast({
+          title: 'Inclusões pausadas',
+          description: 'O administrador pausou temporariamente novos cadastros nesta conta. Solicite a liberação para continuar.',
+          variant: 'destructive',
+        });
+      } else if (isPlanInvalid) {
+        toast({
+          title: 'Plano com configuração inválida',
+          description: 'O plano vinculado a esta conta não existe no catálogo oficial. Solicite ao dono da plataforma para corrigir o plano antes de adicionar usuários.',
           variant: 'destructive',
         });
       } else if (isSeatErr) {
