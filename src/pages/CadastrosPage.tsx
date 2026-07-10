@@ -915,6 +915,7 @@ function UsersTab() {
     }
     setDeleting(null);
     load();
+    loadPlanLimit();
   };
 
   const filtered = rows.filter(r => {
