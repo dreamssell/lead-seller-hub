@@ -62,6 +62,7 @@ const AuditTrailPage = lazy(() => import("./pages/owner/AuditTrailPage"));
 const PlatformHealthPage = lazy(() => import("./pages/owner/PlatformHealthPage"));
 const CompanyDetailPage = lazy(() => import("./pages/owner/CompanyDetailPage"));
 const InternalCommsPage = lazy(() => import("./pages/InternalCommsPage"));
+const InternalCommsAuditPage = lazy(() => import("./pages/owner/InternalCommsAuditPage"));
 
 /**
  * React Query com defaults calibrados para reduzir refetches redundantes.
@@ -129,7 +130,8 @@ const App = () => (
               <Route path="/wavoip" element={<ProtectedRoute pageKey="wavoip"><WavoipPage standalone={true} /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
               <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppPage /></ProtectedRoute>} />
-              <Route path="/video" element={<ProtectedRoute><VideoCallsPage /></ProtectedRoute>} />
+              {/* Meeting é recurso premium — liberado apenas ao dono da plataforma. */}
+              <Route path="/video" element={<ProtectedRoute ownerOnly><VideoCallsPage /></ProtectedRoute>} />
               <Route path="/automations" element={<ProtectedRoute><AutomationsPage /></ProtectedRoute>} />
               <Route path="/3cx" element={<ProtectedRoute><ThreeCxDashboardPage /></ProtectedRoute>} />
               <Route path="/cadastros" element={<ProtectedRoute><CadastrosPage /></ProtectedRoute>} />
@@ -152,6 +154,7 @@ const App = () => (
               <Route path="/owner/platform-health" element={<ProtectedRoute ownerOnly><PlatformHealthPage /></ProtectedRoute>} />
               <Route path="/owner/company/:id" element={<ProtectedRoute ownerOnly><CompanyDetailPage /></ProtectedRoute>} />
               <Route path="/internal-comms" element={<ProtectedRoute><InternalCommsPage /></ProtectedRoute>} />
+              <Route path="/owner/internal-comms-audit" element={<ProtectedRoute ownerOnly><InternalCommsAuditPage /></ProtectedRoute>} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>

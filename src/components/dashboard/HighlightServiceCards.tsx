@@ -3,6 +3,7 @@ import { Video, MessagesSquare, ArrowRight, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
+import { useInternalCommsUnread } from '@/hooks/useInternalCommsUnread';
 
 /**
  * Cards em destaque exibidos em todos os dashboards (Agente / Gestor / Executivo).
@@ -16,6 +17,7 @@ import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 export function HighlightServiceCards() {
   const navigate = useNavigate();
   const { isOwner, loading } = usePlatformOwner();
+  const { total: unreadTotal } = useInternalCommsUnread();
 
   const handleMeeting = () => {
     if (loading) return;
@@ -69,7 +71,7 @@ export function HighlightServiceCards() {
         <motion.button
           type="button"
           onClick={() => navigate('/internal-comms')}
-          className="service-card group text-left w-full"
+          className="service-card group text-left w-full relative"
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.05 }}
@@ -77,12 +79,22 @@ export function HighlightServiceCards() {
           whileTap={{ scale: 0.99 }}
           aria-label="Comunicação Interna — chat entre usuários da empresa"
         >
+          {unreadTotal > 0 && (
+            <span
+              aria-label={`${unreadTotal} mensagens não lidas`}
+              className="absolute top-3 right-3 min-w-[22px] h-[22px] px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold flex items-center justify-center shadow-sm animate-in fade-in zoom-in"
+            >
+              {unreadTotal > 99 ? '99+' : unreadTotal}
+            </span>
+          )}
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4 bg-accent/10 text-accent">
             <MessagesSquare className="w-6 h-6" />
           </div>
           <h3 className="text-sm font-semibold text-foreground mb-1.5">Comunicação Interna</h3>
           <p className="text-xs text-muted-foreground leading-relaxed mb-4">
-            Converse em tempo real com colegas da sua empresa ou sub-empresa. Disponível para todos os planos.
+            {unreadTotal > 0
+              ? `Você tem ${unreadTotal} ${unreadTotal === 1 ? 'nova mensagem' : 'novas mensagens'} de colegas.`
+              : 'Converse em tempo real com colegas da sua empresa ou sub-empresa. Disponível para todos os planos.'}
           </p>
           <div className="flex items-center gap-1 text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity">
             <span>Abrir sala</span>

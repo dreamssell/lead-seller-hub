@@ -1757,6 +1757,42 @@ export type Database = {
         }
         Relationships: []
       }
+      internal_comms_audit: {
+        Row: {
+          action: string
+          actor_id: string
+          created_at: string
+          id: string
+          message_id: string | null
+          metadata: Json
+          owner_id: string
+          sub_company_id: string | null
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          created_at?: string
+          id?: string
+          message_id?: string | null
+          metadata?: Json
+          owner_id: string
+          sub_company_id?: string | null
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          created_at?: string
+          id?: string
+          message_id?: string | null
+          metadata?: Json
+          owner_id?: string
+          sub_company_id?: string | null
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
       internal_messages: {
         Row: {
           content: string
@@ -5497,6 +5533,13 @@ export type Database = {
       internal_comms_share_scope: {
         Args: { _a: string; _b: string }
         Returns: boolean
+      }
+      internal_comms_unread_counts: {
+        Args: never
+        Returns: {
+          peer_id: string
+          unread_count: number
+        }[]
       }
       is_signature_leader: {
         Args: { p_sub_company_id: string }

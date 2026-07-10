@@ -12,7 +12,7 @@ import {
 const managerServices = [
   { icon: Headphones, title: 'Central de Atendimento', description: 'Gerencie todos os atendimentos em tempo real.', color: 'bg-primary/10 text-primary', path: '/tickets' },
   { icon: Phone, title: 'VoIP & Gravação', description: 'Chamadas VoIP com gravação e transcrição.', color: 'bg-warning/10 text-warning', path: '/calls' },
-  { icon: Video, title: 'Videochamadas', description: 'Agende e realize videochamadas.', color: 'bg-primary/10 text-primary', path: '/video' },
+  // Videochamadas ("Meeting") é premium — vive no card em destaque do topo, com upsell para não-donos.
   { icon: BarChart3, title: 'Relatórios & Analytics', description: 'Métricas de performance e exportação em PDF.', color: 'bg-accent/10 text-accent', path: '/reports' },
   { icon: FileText, title: 'Pipeline & Kanban', description: 'Funil de vendas com quadros Kanban.', color: 'bg-primary/10 text-primary', path: '/pipeline' },
   { icon: PenLine, title: 'Assinaturas Eletrônicas', description: 'Envie e acompanhe assinaturas eletrônicas.', color: 'bg-accent/10 text-accent', path: '/signatures' },

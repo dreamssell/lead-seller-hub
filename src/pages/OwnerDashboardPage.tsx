@@ -48,6 +48,9 @@ export default function OwnerDashboardPage() {
             <Button asChild variant="outline" size="sm" className="gap-2">
               <Link to="/owner/audit-trail"><ScrollText className="w-4 h-4" /> Histórico de auditoria</Link>
             </Button>
+            <Button asChild variant="outline" size="sm" className="gap-2">
+              <Link to="/owner/internal-comms-audit"><MessagesSquare className="w-4 h-4" /> Auditoria — Comunicação Interna</Link>
+            </Button>
           </div>
         </div>
 

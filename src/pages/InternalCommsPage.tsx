@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useInternalComms } from '@/hooks/useInternalComms';
+import { useInternalCommsUnread } from '@/hooks/useInternalCommsUnread';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,12 @@ export default function InternalCommsPage() {
     activePeerId, setActivePeerId, activePeer,
     sendMessage, me,
   } = useInternalComms();
+  const { countByPeer, clearPeer } = useInternalCommsUnread();
+
+  const openConversation = (peerId: string) => {
+    setActivePeerId(peerId);
+    clearPeer(peerId);
+  };
 
   const [draft, setDraft] = useState('');
   const [search, setSearch] = useState('');
@@ -85,7 +92,7 @@ export default function InternalCommsPage() {
                   <li key={m.user_id}>
                     <button
                       type="button"
-                      onClick={() => setActivePeerId(m.user_id)}
+                      onClick={() => openConversation(m.user_id)}
                       className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-left ${
                         activePeerId === m.user_id ? 'bg-primary/10 text-foreground' : 'hover:bg-muted/60'
                       }`}
@@ -98,6 +105,11 @@ export default function InternalCommsPage() {
                         <p className="text-sm font-medium truncate">{m.display_name}</p>
                         {m.email && <p className="text-xs text-muted-foreground truncate">{m.email}</p>}
                       </div>
+                      {countByPeer[m.user_id] > 0 && (
+                        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold flex items-center justify-center">
+                          {countByPeer[m.user_id] > 99 ? '99+' : countByPeer[m.user_id]}
+                        </span>
+                      )}
                     </button>
                   </li>
                 ))}

@@ -17,7 +17,7 @@ const services = [
   { icon: Bot, title: 'Agentes de I.A. (SDR)', description: 'Bots e qualificação automática.', color: 'bg-success/10 text-success', path: '/ai-agents' },
   { icon: Phone, title: 'VoIP & Gravação', description: 'Chamadas VoIP com gravação.', color: 'bg-warning/10 text-warning', path: '/calls' },
   { icon: Globe, title: 'WhatsApp Business', description: 'Integração WhatsApp completa.', color: 'bg-success/10 text-success', path: '/whatsapp' },
-  { icon: Video, title: 'Videochamadas', description: 'Vídeo pela plataforma.', color: 'bg-primary/10 text-primary', path: '/video' },
+  // Videochamadas ("Meeting") é premium — vive no card em destaque do topo, com upsell para não-donos.
   { icon: BarChart3, title: 'Relatórios & Analytics', description: 'Métricas e exportação em PDF.', color: 'bg-accent/10 text-accent', path: '/reports' },
   { icon: Zap, title: 'Automações & Integrações', description: 'Fluxos, webhooks e integrações.', color: 'bg-warning/10 text-warning', path: '/automations' },
   { icon: ShieldCheck, title: 'Gestão de Acessos & API', description: 'Permissões e chaves API.', color: 'bg-destructive/10 text-destructive', path: '/api-keys' },
