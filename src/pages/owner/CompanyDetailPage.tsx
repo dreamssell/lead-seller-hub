@@ -82,6 +82,9 @@ export default function CompanyDetailPage() {
   const [data, setData] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [licenseInfo, setLicenseInfo] = useState<{ max_users_override: number | null; seat_additions_blocked: boolean } | null>(null);
+  const [licenseOpen, setLicenseOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancel = false;
@@ -91,18 +94,21 @@ export default function CompanyDetailPage() {
       setError(null);
       try {
         let params: any;
+        let lic: any = null;
         if (kind === 'sub_company') {
-          const { data: sub } = await supabase.from('sub_companies').select('owner_id').eq('id', id).maybeSingle();
+          const { data: sub } = await supabase.from('sub_companies').select('owner_id, max_users_override, seat_additions_blocked').eq('id', id).maybeSingle();
           if (!sub) throw new Error('Sub-empresa não encontrada.');
           params = { p_owner_id: sub.owner_id, p_sub_company_id: id };
+          lic = { max_users_override: (sub as any).max_users_override ?? null, seat_additions_blocked: !!(sub as any).seat_additions_blocked };
         } else {
-          const { data: cc } = await supabase.from('client_companies').select('auth_user_id').eq('id', id).maybeSingle();
+          const { data: cc } = await supabase.from('client_companies').select('auth_user_id, max_users_override, seat_additions_blocked').eq('id', id).maybeSingle();
           if (!cc?.auth_user_id) throw new Error('Empresa sem titular vinculado.');
           params = { p_owner_id: cc.auth_user_id, p_sub_company_id: null };
+          lic = { max_users_override: (cc as any).max_users_override ?? null, seat_additions_blocked: !!(cc as any).seat_additions_blocked };
         }
         const { data: res, error: rpcErr } = await (supabase as any).rpc('get_owner_company_detail', params);
         if (rpcErr) throw rpcErr;
-        if (!cancel) setData(res as Detail);
+        if (!cancel) { setData(res as Detail); setLicenseInfo(lic); }
       } catch (e: any) {
         if (!cancel) setError(e?.message || 'Falha ao carregar detalhes.');
       } finally {
@@ -110,7 +116,7 @@ export default function CompanyDetailPage() {
       }
     })();
     return () => { cancel = true; };
-  }, [id, kind]);
+  }, [id, kind, refreshKey]);
 
   if (ownerLoading) return null;
   if (!isOwner) return <Navigate to="/" replace />;
