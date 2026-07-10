@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useInternalComms } from '@/hooks/useInternalComms';
 import { useInternalCommsUnread } from '@/hooks/useInternalCommsUnread';
@@ -6,7 +6,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MessagesSquare, Send, Search, Users } from 'lucide-react';
+import { MessagesSquare, Send, Search, Users, Paperclip, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { validateInternalAttachment, ALLOWED_ATTACHMENT_MIMES, MAX_ATTACHMENT_BYTES } from '@/lib/internalCommsAttachments';
 
 function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join('') || 'U';
