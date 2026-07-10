@@ -533,6 +533,17 @@ export default function TeamPage() {
                 </div>
               );
             })()}
+            {!editing && limitReached && !unlimited && (
+              <p className="text-xs text-destructive mt-2">
+                {seatLimitDescription({ planName, used: total, max: maxUsers })}{' '}
+                <a
+                  href={SEAT_UPSELL_MAILTO(planName, total, maxUsers)}
+                  className="font-semibold underline underline-offset-2"
+                >
+                  Falar com o comercial
+                </a>
+              </p>
+            )}
           </DialogHeader>
 
           <div className="space-y-3">
