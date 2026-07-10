@@ -61,8 +61,7 @@ describe('Comunicação Interna · validação de anexos (client)', () => {
 
   it('rejeita nome com barra invertida (Windows path)', () => {
     const v = validateInternalAttachment({ filename: 'pasta\\arquivo.pdf', mime: 'application/pdf', size: 10 });
-    expect(v.ok).toBe(false);
-    if (!v.ok) expect(v.code).toBe('invalid_filename');
+    expect(v).toEqual({ ok: false, code: 'invalid_filename', message: expect.any(String) });
   });
 
   it('rejeita nome vazio', () => {
@@ -72,8 +71,7 @@ describe('Comunicação Interna · validação de anexos (client)', () => {
 
   it('rejeita nome com null byte', () => {
     const v = validateInternalAttachment({ filename: 'ok\u0000.pdf', mime: 'application/pdf', size: 10 });
-    expect(v.ok).toBe(false);
-    if (!v.ok) expect(v.code).toBe('invalid_filename');
+    expect(v).toEqual({ ok: false, code: 'invalid_filename', message: expect.any(String) });
   });
 
   it('rejeita nome absurdamente longo (>180 chars)', () => {

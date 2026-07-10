@@ -87,18 +87,20 @@ describe('/internal-comms · reconexão do realtime após fechar/reabrir aba', (
   it('unmount remove o canal e remount cria um NOVO canal ativo', async () => {
     const first = renderHook(() => useInternalComms());
     act(() => { first.result.current.setActivePeerId('peer'); });
-    await waitFor(() => expect(activeHandlers.some((h) => h.channelId === 1)).toBe(true));
+    await waitFor(() => expect(activeHandlers.length).toBeGreaterThan(0));
+    const activeBefore = Math.max(...activeHandlers.map((h) => h.channelId));
 
     // Fecha aba.
     first.unmount();
     expect(removeCalls).toBeGreaterThanOrEqual(1);
-    expect(activeHandlers.some((h) => h.channelId === 1)).toBe(false);
+    expect(activeHandlers.length).toBe(0);
 
-    // Reabre aba (nova instância).
+    // Reabre aba (nova instância) → novo channelSeq maior que o anterior.
     const second = renderHook(() => useInternalComms());
     act(() => { second.result.current.setActivePeerId('peer'); });
-    await waitFor(() => expect(activeHandlers.some((h) => h.channelId > 1)).toBe(true));
-    expect(channelSeq).toBeGreaterThanOrEqual(2);
+    await waitFor(() => expect(activeHandlers.length).toBeGreaterThan(0));
+    const activeAfter = Math.max(...activeHandlers.map((h) => h.channelId));
+    expect(activeAfter).toBeGreaterThan(activeBefore);
   });
 
   it('mensagem que chega APÓS o remount aparece na thread (sem duplicar)', async () => {

@@ -35,7 +35,11 @@ async function get(path: string) {
 }
 
 function assertNoRowsLeaked(status: number, body: any) {
-  expect([200, 401, 403]).toContain(status);
+  // PostgREST devolve 400 quando o filtro é rejeitado por RLS/ACL, 401/403
+  // quando não há sessão, ou 200 com array vazio quando RLS apenas oculta as
+  // linhas. Todos os três são aceitáveis; o que NUNCA pode acontecer é vazar
+  // linhas reais para um requester sem autorização.
+  expect([200, 400, 401, 403]).toContain(status);
   if (status === 200) {
     expect(Array.isArray(body)).toBe(true);
     expect(body.length).toBe(0);
