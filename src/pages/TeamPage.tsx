@@ -181,9 +181,12 @@ export default function TeamPage() {
       return;
     }
     if (limitReached) {
+      const isEnt = /enterprise/i.test(planName);
       toast({
-        title: 'Limite do plano atingido',
-        description: `Seu plano ${planName} permite ${maxUsers} usuários. Faça upgrade para adicionar mais.`,
+        title: 'Limite de licenças atingido',
+        description: isEnt
+          ? `Seu contrato Enterprise contempla ${maxUsers} licenças. Contate seu consultor comercial para adquirir mais assentos.`
+          : `Seu plano ${planName} permite ${maxUsers} usuários. Faça upgrade para adicionar mais.`,
         variant: 'destructive',
       });
       return;
@@ -211,9 +214,12 @@ export default function TeamPage() {
     if (!form.display_name.trim()) { toast({ title: 'Informe o nome', variant: 'destructive' }); return; }
     if (!editing) {
       if (limitReached && !unlimited) {
+        const isEnt = /enterprise/i.test(planName);
         toast({
-          title: 'Limite do plano atingido',
-          description: `Seu plano ${planName} permite ${maxUsers} usuário(s). Remova alguém ou solicite upgrade antes de adicionar.`,
+          title: 'Limite de licenças atingido',
+          description: isEnt
+            ? `Contrato Enterprise: ${maxUsers} licenças em uso. Contate seu consultor comercial para adquirir mais assentos antes de cadastrar novos usuários.`
+            : `Seu plano ${planName} permite ${maxUsers} usuário(s). Remova alguém ou solicite upgrade antes de adicionar.`,
           variant: 'destructive',
         });
         return;
@@ -268,9 +274,12 @@ export default function TeamPage() {
           variant: 'destructive',
         });
       } else if (isSeatErr) {
+        const isEnt = /enterprise/i.test(planName);
         toast({
-          title: 'Limite do plano atingido',
-          description: `Seu plano ${planName || ''} não tem mais assentos disponíveis. Remova um usuário ou solicite upgrade.`,
+          title: 'Limite de licenças atingido',
+          description: isEnt
+            ? `Contrato Enterprise sem assentos disponíveis. Contate seu consultor comercial para adquirir mais licenças.`
+            : `Seu plano ${planName || ''} não tem mais assentos disponíveis. Remova um usuário ou solicite upgrade.`,
           variant: 'destructive',
         });
         loadPlanLimit();

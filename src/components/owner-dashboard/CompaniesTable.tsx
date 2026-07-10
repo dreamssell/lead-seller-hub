@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronRight, Building2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Building2, BarChart3 } from 'lucide-react';
 import { OwnerFilterBar, type OwnerFilters } from './OwnerFilterBar';
 import type { CompanyRow, SubCompanyRow } from '@/hooks/useOwnerPlatformMetrics';
 import { CompanyDetailPanel } from './CompanyDetailPanel';
@@ -75,11 +76,12 @@ export function CompaniesTable({ companies, subCompanies, onRefresh }: Props) {
               <TableHead className="text-right">Ganhos</TableHead>
               <TableHead className="text-right">Msgs 30d</TableHead>
               <TableHead className="text-right">Receita</TableHead>
+              <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 && (
-              <TableRow><TableCell colSpan={10} className="text-center text-sm text-muted-foreground py-8">Nenhuma empresa encontrada.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center text-sm text-muted-foreground py-8">Nenhuma empresa encontrada.</TableCell></TableRow>
             )}
             {filtered.map((c) => {
               const isOpen = expanded === c.id;
@@ -106,10 +108,17 @@ export function CompaniesTable({ companies, subCompanies, onRefresh }: Props) {
                     <TableCell className="text-right text-success">{fmt(c.won_leads)}</TableCell>
                     <TableCell className="text-right">{fmt(c.messages_30d)}</TableCell>
                     <TableCell className="text-right font-semibold">{brl(c.revenue)}</TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Button asChild variant="ghost" size="icon" className="h-8 w-8" title="Abrir Central Executiva">
+                        <Link to={`/owner/company/${c.id}?kind=company`}>
+                          <BarChart3 className="w-4 h-4" />
+                        </Link>
+                      </Button>
+                    </TableCell>
                   </TableRow>
                   {isOpen && (
                     <TableRow key={c.id + '-detail'} className="bg-muted/20">
-                      <TableCell colSpan={10} className="p-0">
+                      <TableCell colSpan={11} className="p-0">
                         <CompanyDetailPanel company={c} subCompanies={subs} />
                       </TableCell>
                     </TableRow>

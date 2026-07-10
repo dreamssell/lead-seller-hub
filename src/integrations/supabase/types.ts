@@ -788,6 +788,7 @@ export type Database = {
           id: string
           login_email: string | null
           logo_url: string | null
+          max_users_override: number | null
           name: string
           notes: string | null
           owner_id: string
@@ -814,6 +815,7 @@ export type Database = {
           id?: string
           login_email?: string | null
           logo_url?: string | null
+          max_users_override?: number | null
           name: string
           notes?: string | null
           owner_id: string
@@ -840,6 +842,7 @@ export type Database = {
           id?: string
           login_email?: string | null
           logo_url?: string | null
+          max_users_override?: number | null
           name?: string
           notes?: string | null
           owner_id?: string
@@ -3575,6 +3578,7 @@ export type Database = {
           inherit_branding: boolean
           last_alert_at: string | null
           last_alert_pct: number | null
+          max_users_override: number | null
           monthly_fee: number
           name: string
           owner_id: string
@@ -3603,6 +3607,7 @@ export type Database = {
           inherit_branding?: boolean
           last_alert_at?: string | null
           last_alert_pct?: number | null
+          max_users_override?: number | null
           monthly_fee?: number
           name: string
           owner_id: string
@@ -3631,6 +3636,7 @@ export type Database = {
           inherit_branding?: boolean
           last_alert_at?: string | null
           last_alert_pct?: number | null
+          max_users_override?: number | null
           monthly_fee?: number
           name?: string
           owner_id?: string
@@ -5322,6 +5328,10 @@ export type Database = {
       get_my_signature_role: {
         Args: { p_sub_company_id: string }
         Returns: Database["public"]["Enums"]["signature_role"]
+      }
+      get_owner_company_detail: {
+        Args: { p_owner_id: string; p_sub_company_id?: string }
+        Returns: Json
       }
       get_platform_health: { Args: never; Returns: Json }
       get_recording_enabled: {
