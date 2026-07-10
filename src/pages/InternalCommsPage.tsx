@@ -38,6 +38,9 @@ export default function InternalCommsPage() {
   const [draft, setDraft] = useState('');
   const [search, setSearch] = useState('');
   const [sending, setSending] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const filtered = members.filter((m) =>
@@ -50,12 +53,37 @@ export default function InternalCommsPage() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, activePeerId]);
 
+  const clearAttachment = () => {
+    setPendingFile(null);
+    setAttachmentError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const result = validateInternalAttachment({ filename: file.name, mime: file.type, size: file.size });
+    if (!result.ok) {
+      setPendingFile(null);
+      setAttachmentError(result.message);
+      toast.error(result.message);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+    setAttachmentError(null);
+    setPendingFile(file);
+  };
+
   const handleSend = async () => {
+    if (attachmentError) {
+      toast.error('Corrija o anexo antes de enviar.');
+      return;
+    }
     if (!draft.trim() || sending) return;
     setSending(true);
     const res = await sendMessage(draft);
     setSending(false);
-    if (!res.error) setDraft('');
+    if (!res.error) { setDraft(''); clearAttachment(); }
   };
 
   return (
