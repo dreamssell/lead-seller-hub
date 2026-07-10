@@ -31,7 +31,7 @@ vi.mock('@/components/layout/AppLayout', () => ({
 const rpcMock = vi.fn((_name: string) => Promise.resolve({ data: [], error: null }));
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
-    rpc: (...args: any[]) => rpcMock(...args),
+    rpc: (name: string) => rpcMock(name),
     from: () => ({
       select: () => ({ or: () => ({ order: () => ({ limit: async () => ({ data: [] }) }) }) }),
       update: () => ({ eq: () => ({ eq: () => ({ is: async () => ({}) }) }) }),
