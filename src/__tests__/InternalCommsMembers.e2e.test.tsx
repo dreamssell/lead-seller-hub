@@ -28,7 +28,10 @@ vi.mock('@/components/layout/AppLayout', () => ({
 }));
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
-const rpcMock = vi.fn();
+const rpcMock = vi.fn((name: string) => {
+  if (name === 'internal_comms_unread_counts') return Promise.resolve({ data: [], error: null });
+  return Promise.resolve({ data: [], error: null });
+});
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     rpc: (...args: any[]) => rpcMock(...args),
