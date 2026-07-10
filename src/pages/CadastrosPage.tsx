@@ -732,9 +732,31 @@ function UsersTab() {
     allowed_pages: selectablePages.map(p => p.key) as string[],
   };
   const [form, setForm] = useState<any>(emptyForm);
+  const [maxUsers, setMaxUsers] = useState<number | null>(null);
+  const [planName, setPlanName] = useState<string>('');
 
   const scopeSubId = access?.sub_company_id || null;
   const isSubAdmin = !!access?.sub_company_id;
+  const unlimited = isOwner || maxUsers == null;
+  const totalUsers = rows.length;
+  const limitReached = !unlimited && totalUsers >= (maxUsers ?? 0);
+
+  const loadPlanLimit = async () => {
+    if (isOwner) { setMaxUsers(null); setPlanName('Ilimitado (Dono)'); return; }
+    const ownerId = access?.owner_id ?? user?.id ?? null;
+    if (!ownerId) { setMaxUsers(null); setPlanName('Ilimitado'); return; }
+    const { data: usage } = await (supabase as any).rpc('get_member_seat_usage', {
+      p_owner_id: ownerId,
+      p_sub_company_id: scopeSubId,
+    });
+    const row = Array.isArray(usage) ? usage[0] : usage;
+    const slug: string | null = row?.plan_slug ?? null;
+    setMaxUsers(row?.max_users ?? null);
+    if (!slug) { setPlanName('Ilimitado'); return; }
+    const { data: plan } = await supabase
+      .from('plan_packages').select('name').eq('slug', slug).maybeSingle();
+    setPlanName(plan?.name ?? slug);
+  };
 
   const load = async () => {
     setLoading(true);
