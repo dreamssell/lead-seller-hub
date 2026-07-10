@@ -7,9 +7,12 @@ import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
+import { LicenseManagerDialog } from '@/components/owner-dashboard/LicenseManagerDialog';
+import { generateExecutiveReport } from '@/lib/executiveReportPdf';
 import {
   ArrowLeft, Users, MessagesSquare, Phone, TrendingUp, DollarSign,
   ShieldCheck, AlertTriangle, Activity, Bot, Building2, Building, CircleCheck, CircleX, Crown,
+  FileDown, KeyRound,
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
