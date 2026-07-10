@@ -200,17 +200,64 @@ export default function InternalCommsPage() {
                 })}
               </div>
 
-              <div className="p-3 border-t border-border flex items-center gap-2">
-                <Input
-                  placeholder="Escreva sua mensagem..."
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                  disabled={sending}
-                />
-                <Button onClick={handleSend} disabled={!draft.trim() || sending} size="icon" aria-label="Enviar">
-                  <Send className="w-4 h-4" />
-                </Button>
+              <div className="border-t border-border">
+                {(pendingFile || attachmentError) && (
+                  <div
+                    role={attachmentError ? 'alert' : undefined}
+                    data-testid={attachmentError ? 'attachment-error' : 'attachment-pending'}
+                    className={`px-3 py-2 text-xs flex items-center justify-between gap-2 ${
+                      attachmentError ? 'bg-destructive/10 text-destructive' : 'bg-muted/40 text-muted-foreground'
+                    }`}
+                  >
+                    <span className="truncate">
+                      {attachmentError ?? `Anexo pronto: ${pendingFile?.name}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={clearAttachment}
+                      className="p-1 rounded hover:bg-background/60"
+                      aria-label="Remover anexo"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+                <div className="p-3 flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept={ALLOWED_ATTACHMENT_MIMES.join(',')}
+                    onChange={handleFileChange}
+                    data-testid="attachment-input"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Anexar arquivo"
+                    title={`Anexos até ${Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))} MB`}
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={sending}
+                  >
+                    <Paperclip className="w-4 h-4" />
+                  </Button>
+                  <Input
+                    placeholder="Escreva sua mensagem..."
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                    disabled={sending}
+                  />
+                  <Button
+                    onClick={handleSend}
+                    disabled={!draft.trim() || sending || !!attachmentError}
+                    size="icon"
+                    aria-label="Enviar"
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             </>
           )}
