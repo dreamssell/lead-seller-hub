@@ -18,6 +18,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { extractManageUserError } from '@/lib/manageAccountUserErrors';
+import { SEAT_LIMIT_TITLE, SEAT_UPSELL_EMAIL, SEAT_UPSELL_MAILTO, seatLimitDescription } from '@/lib/seatLimitCopy';
 
 type AccessLevel = 'atendimento' | 'supervisao' | 'administracao';
 
@@ -181,12 +182,9 @@ export default function TeamPage() {
       return;
     }
     if (limitReached) {
-      const isEnt = /enterprise/i.test(planName);
       toast({
-        title: 'Limite de licenças atingido',
-        description: isEnt
-          ? `Seu contrato Enterprise contempla ${maxUsers} licenças. Contate seu consultor comercial para adquirir mais assentos.`
-          : `Seu plano ${planName} permite ${maxUsers} usuários. Faça upgrade para adicionar mais.`,
+        title: SEAT_LIMIT_TITLE,
+        description: seatLimitDescription({ planName, used: total, max: maxUsers }),
         variant: 'destructive',
       });
       return;
@@ -214,12 +212,9 @@ export default function TeamPage() {
     if (!form.display_name.trim()) { toast({ title: 'Informe o nome', variant: 'destructive' }); return; }
     if (!editing) {
       if (limitReached && !unlimited) {
-        const isEnt = /enterprise/i.test(planName);
         toast({
-          title: 'Limite de licenças atingido',
-          description: isEnt
-            ? `Contrato Enterprise: ${maxUsers} licenças em uso. Contate seu consultor comercial para adquirir mais assentos antes de cadastrar novos usuários.`
-            : `Seu plano ${planName} permite ${maxUsers} usuário(s). Remova alguém ou solicite upgrade antes de adicionar.`,
+          title: SEAT_LIMIT_TITLE,
+          description: seatLimitDescription({ planName, used: total, max: maxUsers }),
           variant: 'destructive',
         });
         return;
@@ -278,22 +273,19 @@ export default function TeamPage() {
       } else if (isManualBlock) {
         toast({
           title: 'Inclusões pausadas',
-          description: 'O administrador pausou temporariamente novos cadastros nesta conta. Solicite a liberação para continuar.',
+          description: `O administrador pausou temporariamente novos cadastros nesta conta. Fale com o comercial em ${SEAT_UPSELL_EMAIL} para liberar.`,
           variant: 'destructive',
         });
       } else if (isPlanInvalid) {
         toast({
           title: 'Plano com configuração inválida',
-          description: 'O plano vinculado a esta conta não existe no catálogo oficial. Solicite ao dono da plataforma para corrigir o plano antes de adicionar usuários.',
+          description: `O plano vinculado a esta conta não existe no catálogo oficial. Fale com o comercial em ${SEAT_UPSELL_EMAIL} para corrigir o plano.`,
           variant: 'destructive',
         });
       } else if (isSeatErr) {
-        const isEnt = /enterprise/i.test(planName);
         toast({
-          title: 'Limite de licenças atingido',
-          description: isEnt
-            ? `Contrato Enterprise sem assentos disponíveis. Contate seu consultor comercial para adquirir mais licenças.`
-            : `Seu plano ${planName || ''} não tem mais assentos disponíveis. Remova um usuário ou solicite upgrade.`,
+          title: SEAT_LIMIT_TITLE,
+          description: seatLimitDescription({ planName, used: total, max: maxUsers }),
           variant: 'destructive',
         });
         loadPlanLimit();
@@ -541,6 +533,17 @@ export default function TeamPage() {
                 </div>
               );
             })()}
+            {!editing && limitReached && !unlimited && (
+              <p className="text-xs text-destructive mt-2">
+                {seatLimitDescription({ planName, used: total, max: maxUsers })}{' '}
+                <a
+                  href={SEAT_UPSELL_MAILTO(planName, total, maxUsers)}
+                  className="font-semibold underline underline-offset-2"
+                >
+                  Falar com o comercial
+                </a>
+              </p>
+            )}
           </DialogHeader>
 
           <div className="space-y-3">

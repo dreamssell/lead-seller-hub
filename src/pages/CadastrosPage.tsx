@@ -24,6 +24,7 @@ import { logAudit } from '@/lib/audit';
 import { getSelectablePages } from '@/lib/navigation';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { extractManageUserError } from '@/lib/manageAccountUserErrors';
+import { SEAT_LIMIT_TITLE, SEAT_UPSELL_EMAIL, SEAT_UPSELL_MAILTO, seatLimitDescription, seatUsageBadge } from '@/lib/seatLimitCopy';
 
 type Entity = 'leads' | 'customers' | 'products' | 'tasks' | 'users' | 'contacts';
 
@@ -731,9 +732,31 @@ function UsersTab() {
     allowed_pages: selectablePages.map(p => p.key) as string[],
   };
   const [form, setForm] = useState<any>(emptyForm);
+  const [maxUsers, setMaxUsers] = useState<number | null>(null);
+  const [planName, setPlanName] = useState<string>('');
 
   const scopeSubId = access?.sub_company_id || null;
   const isSubAdmin = !!access?.sub_company_id;
+  const unlimited = isOwner || maxUsers == null;
+  const totalUsers = rows.length;
+  const limitReached = !unlimited && totalUsers >= (maxUsers ?? 0);
+
+  const loadPlanLimit = async () => {
+    if (isOwner) { setMaxUsers(null); setPlanName('Ilimitado (Dono)'); return; }
+    const ownerId = access?.owner_id ?? user?.id ?? null;
+    if (!ownerId) { setMaxUsers(null); setPlanName('Ilimitado'); return; }
+    const { data: usage } = await (supabase as any).rpc('get_member_seat_usage', {
+      p_owner_id: ownerId,
+      p_sub_company_id: scopeSubId,
+    });
+    const row = Array.isArray(usage) ? usage[0] : usage;
+    const slug: string | null = row?.plan_slug ?? null;
+    setMaxUsers(row?.max_users ?? null);
+    if (!slug) { setPlanName('Ilimitado'); return; }
+    const { data: plan } = await supabase
+      .from('plan_packages').select('name').eq('slug', slug).maybeSingle();
+    setPlanName(plan?.name ?? slug);
+  };
 
   const load = async () => {
     setLoading(true);
@@ -746,9 +769,17 @@ function UsersTab() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [scopeSubId]);
+  useEffect(() => { load(); loadPlanLimit(); /* eslint-disable-next-line */ }, [scopeSubId, isOwner, user?.id]);
 
   const openNew = () => {
+    if (limitReached) {
+      toast({
+        title: SEAT_LIMIT_TITLE,
+        description: seatLimitDescription({ planName, used: totalUsers, max: maxUsers }),
+        variant: 'destructive',
+      });
+      return;
+    }
     setEditing(null);
     setForm(emptyForm);
     setOpen(true);
@@ -812,6 +843,15 @@ function UsersTab() {
       await logAudit({ table: 'profiles', recordId: editing.user_id, action: 'update', label: form.display_name, after: payload });
       toast({ title: 'Usuário atualizado' });
     } else {
+      if (limitReached && !unlimited) {
+        setSaving(false);
+        toast({
+          title: SEAT_LIMIT_TITLE,
+          description: seatLimitDescription({ planName, used: totalUsers, max: maxUsers }),
+          variant: 'destructive',
+        });
+        return;
+      }
       if (!form.email || !form.password || form.password.length < 6) {
         setSaving(false);
         toast({ title: 'Email e senha (mín. 6) obrigatórios', variant: 'destructive' });
@@ -831,7 +871,24 @@ function UsersTab() {
       setSaving(false);
       const surfaced = await extractManageUserError(data, error);
       if (surfaced) {
-        toast({ title: 'Erro ao criar', description: surfaced.message, variant: 'destructive' });
+        const isSeatErr = /plan_seat_limit_reached|limite/i.test(surfaced.message);
+        const isManualBlock = /seat_additions_blocked/i.test(surfaced.message);
+        if (isManualBlock) {
+          toast({
+            title: 'Inclusões pausadas',
+            description: `O administrador pausou temporariamente novos cadastros nesta conta. Fale com o comercial em ${SEAT_UPSELL_EMAIL} para liberar.`,
+            variant: 'destructive',
+          });
+        } else if (isSeatErr) {
+          toast({
+            title: SEAT_LIMIT_TITLE,
+            description: seatLimitDescription({ planName, used: totalUsers, max: maxUsers }),
+            variant: 'destructive',
+          });
+          loadPlanLimit();
+        } else {
+          toast({ title: 'Erro ao criar', description: surfaced.message, variant: 'destructive' });
+        }
         return;
       }
       await logAudit({ table: 'profiles', recordId: (data as any)?.user_id, action: 'create', label: form.display_name, after: payload });
@@ -839,6 +896,7 @@ function UsersTab() {
     }
     setOpen(false);
     load();
+    loadPlanLimit();
   };
 
   const confirmDelete = async () => {
@@ -863,20 +921,45 @@ function UsersTab() {
     return blob.includes(search.toLowerCase());
   });
 
+  const badgeTone = unlimited
+    ? 'bg-primary/10 text-primary border-primary/30'
+    : limitReached
+    ? 'bg-destructive/10 text-destructive border-destructive/30'
+    : totalUsers >= Math.max(1, Math.ceil((maxUsers ?? 0) * 0.8))
+    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+    : 'bg-primary/10 text-primary border-primary/30';
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input placeholder="Buscar usuário..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            data-testid="cadastros-seat-usage-badge"
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${badgeTone}`}
+          >
+            {seatUsageBadge({ planName, used: totalUsers, max: maxUsers })}
+          </span>
           <p className="text-xs text-muted-foreground hidden md:block">
             {isSubAdmin ? 'Gerenciando colaboradores da sub-empresa' : 'Gerenciando colaboradores do painel'}
           </p>
-          <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" />Novo usuário</Button>
+          {limitReached && (
+            <a
+              href={SEAT_UPSELL_MAILTO(planName, totalUsers, maxUsers)}
+              className="text-xs font-medium text-primary underline underline-offset-2 hover:text-primary/80"
+            >
+              Solicitar mais licenças
+            </a>
+          )}
+          <Button onClick={openNew} disabled={limitReached} title={limitReached ? 'Limite de licenças atingido' : undefined}>
+            <Plus className="w-4 h-4 mr-2" />Novo usuário
+          </Button>
         </div>
       </div>
+
 
       <div className="glass-card overflow-hidden">
         <Table>
@@ -922,6 +1005,25 @@ function UsersTab() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar usuário' : 'Novo usuário'}</DialogTitle>
+            {!editing && (
+              <div
+                data-testid="cadastros-dialog-seat-badge"
+                className={`mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium w-fit ${badgeTone}`}
+              >
+                {seatUsageBadge({ planName, used: totalUsers, max: maxUsers })}
+              </div>
+            )}
+            {!editing && limitReached && (
+              <p className="text-xs text-destructive mt-2">
+                {seatLimitDescription({ planName, used: totalUsers, max: maxUsers })}{' '}
+                <a
+                  href={SEAT_UPSELL_MAILTO(planName, totalUsers, maxUsers)}
+                  className="font-semibold underline underline-offset-2"
+                >
+                  Falar com o comercial
+                </a>
+              </p>
+            )}
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
@@ -1005,7 +1107,7 @@ function UsersTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={save} disabled={saving}>{saving ? 'Salvando...' : editing ? 'Salvar' : 'Criar usuário'}</Button>
+            <Button onClick={save} disabled={saving || (!editing && limitReached)}>{saving ? 'Salvando...' : editing ? 'Salvar' : 'Criar usuário'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
