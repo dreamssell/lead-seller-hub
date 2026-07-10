@@ -39,35 +39,25 @@ export function useInternalComms() {
   const ownerId = access?.owner_id || null;
   const subCompanyId = (access as any)?.sub_company_id ?? null;
 
-  // Load members in the same scope
+  // Load members in the same scope via SECURITY DEFINER RPC (contorna RLS restritiva de user_account_access).
+  // Vale para toda Empresa e Sub-empresa — inclui o dono da conta automaticamente.
   useEffect(() => {
     let cancelled = false;
     if (!user || !ownerId) { setMembers([]); setLoadingMembers(false); return; }
     setLoadingMembers(true);
     (async () => {
-      let query = supabase
-        .from('user_account_access')
-        .select('user_id, is_account_admin, sub_company_id')
-        .eq('owner_id', ownerId);
-      query = subCompanyId
-        ? query.eq('sub_company_id', subCompanyId)
-        : query.is('sub_company_id', null);
-      const { data: rows } = await query;
+      const { data, error } = await supabase.rpc('list_internal_comms_members' as any);
       if (cancelled) return;
-      const ids = Array.from(new Set((rows || []).map((r: any) => r.user_id))).filter((id) => id !== user.id);
-      if (ids.length === 0) { setMembers([]); setLoadingMembers(false); return; }
-      const { data: profs } = await supabase
-        .from('profiles')
-        .select('user_id, display_name, email, avatar_url')
-        .in('user_id', ids);
-      if (cancelled) return;
-      const adminMap = new Map<string, boolean>((rows || []).map((r: any) => [r.user_id, !!r.is_account_admin]));
-      const list: InternalMember[] = (profs || []).map((p: any) => ({
-        user_id: p.user_id,
-        display_name: p.display_name || p.email || 'Usuário',
-        email: p.email,
-        avatar_url: p.avatar_url,
-        is_account_admin: adminMap.get(p.user_id) || false,
+      if (error) {
+        console.error('[internal-comms] falha ao listar colegas', error);
+        setMembers([]); setLoadingMembers(false); return;
+      }
+      const list: InternalMember[] = ((data as any[]) || []).map((r) => ({
+        user_id: r.user_id,
+        display_name: r.display_name || r.email || 'Usuário',
+        email: r.email,
+        avatar_url: r.avatar_url,
+        is_account_admin: !!r.is_account_admin,
       })).sort((a, b) => a.display_name.localeCompare(b.display_name, 'pt-BR'));
       setMembers(list);
       setLoadingMembers(false);
