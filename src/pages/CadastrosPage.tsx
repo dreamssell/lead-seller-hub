@@ -769,9 +769,17 @@ function UsersTab() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [scopeSubId]);
+  useEffect(() => { load(); loadPlanLimit(); /* eslint-disable-next-line */ }, [scopeSubId, isOwner, user?.id]);
 
   const openNew = () => {
+    if (limitReached) {
+      toast({
+        title: SEAT_LIMIT_TITLE,
+        description: seatLimitDescription({ planName, used: totalUsers, max: maxUsers }),
+        variant: 'destructive',
+      });
+      return;
+    }
     setEditing(null);
     setForm(emptyForm);
     setOpen(true);
