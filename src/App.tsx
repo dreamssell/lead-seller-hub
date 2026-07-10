@@ -129,7 +129,8 @@ const App = () => (
               <Route path="/wavoip" element={<ProtectedRoute pageKey="wavoip"><WavoipPage standalone={true} /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
               <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppPage /></ProtectedRoute>} />
-              <Route path="/video" element={<ProtectedRoute><VideoCallsPage /></ProtectedRoute>} />
+              {/* Meeting é recurso premium — liberado apenas ao dono da plataforma. */}
+              <Route path="/video" element={<ProtectedRoute ownerOnly><VideoCallsPage /></ProtectedRoute>} />
               <Route path="/automations" element={<ProtectedRoute><AutomationsPage /></ProtectedRoute>} />
               <Route path="/3cx" element={<ProtectedRoute><ThreeCxDashboardPage /></ProtectedRoute>} />
               <Route path="/cadastros" element={<ProtectedRoute><CadastrosPage /></ProtectedRoute>} />
