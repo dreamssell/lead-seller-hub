@@ -69,7 +69,7 @@ function renderRoute(path: string) {
         <Route
           path="/video"
           element={
-            <ProtectedRoute pageKey="video" ownerOnly>
+            <ProtectedRoute ownerOnly>
               <div data-testid="video-page">SALA DE VIDEO REAL</div>
             </ProtectedRoute>
           }
