@@ -1,5 +1,6 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ServiceCard } from '@/components/dashboard/ServiceCard';
+import { HighlightServiceCards } from '@/components/dashboard/HighlightServiceCards';
 import {
   Headphones, Bot, Phone, Globe, BarChart3, Zap, ShieldCheck, FileText, PenLine, Crown,
 } from 'lucide-react';
@@ -12,7 +13,8 @@ const allServices = [
   { key: 'ai-agents', icon: Bot, title: 'Agentes de I.A. (SDR)', description: 'Bots e qualificação automática.', color: 'bg-success/10 text-success', path: '/ai-agents' },
   { key: 'calls', icon: Phone, title: 'VoIP & Gravação', description: 'Chamadas VoIP com gravação.', color: 'bg-warning/10 text-warning', path: '/calls' },
   { key: 'chat', icon: Globe, title: 'WhatsApp Business', description: 'Integração WhatsApp completa.', color: 'bg-success/10 text-success', path: '/whatsapp' },
-  // Meeting (Videochamadas) é premium — exibido apenas via card em destaque do Dashboard com upsell para não-donos.
+  // Meeting (Videochamadas) e Comunicação Interna aparecem como cards em destaque acima
+  // via <HighlightServiceCards />, respeitando o gating de premium/tenant.
   { key: 'reports', icon: BarChart3, title: 'Relatórios & Analytics', description: 'Métricas e exportação em PDF.', color: 'bg-accent/10 text-accent', path: '/reports' },
   { key: 'settings', icon: Zap, title: 'Automações & Integrações', description: 'Fluxos, webhooks e integrações.', color: 'bg-warning/10 text-warning', path: '/automations' },
   { key: 'api-keys', icon: ShieldCheck, title: 'Gestão de Acessos & API', description: 'Permissões e chaves API.', color: 'bg-destructive/10 text-destructive', path: '/api-keys' },
@@ -33,9 +35,11 @@ export default function ToolsPage() {
 
   return (
     <AppLayout title="Ferramentas" subtitle="Todos os módulos e serviços disponíveis">
+      <HighlightServiceCards />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {visible.map((s, i) => <ServiceCard key={s.title} {...s} delay={i * 0.04} />)}
       </div>
     </AppLayout>
   );
 }
+
