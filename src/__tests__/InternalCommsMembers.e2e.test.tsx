@@ -88,7 +88,8 @@ function buildMembers(prefix: string, n: number, withOwner = true) {
 }
 
 beforeEach(() => {
-  rpcMock.mockReset();
+  rpcMock.mockClear();
+  memberPayload = [];
   authState.user = { id: 'me' };
   authState.access = { owner_id: 'owner-mult', sub_company_id: null };
 });
