@@ -771,6 +771,24 @@ function UsersTab() {
 
   useEffect(() => { load(); loadPlanLimit(); /* eslint-disable-next-line */ }, [scopeSubId, isOwner, user?.id]);
 
+  // Realtime: sincroniza contagem de assentos e listagem quando qualquer
+  // administrador do escopo cria/remove usuários (sem recarregar a página).
+  useEffect(() => {
+    const ownerId = access?.owner_id ?? user?.id ?? null;
+    if (!ownerId) return;
+    const channel = supabase
+      .channel(`seat-sync-${ownerId}-${scopeSubId ?? 'root'}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'user_account_access', filter: `owner_id=eq.${ownerId}` },
+        () => { load(); loadPlanLimit(); })
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'client_companies', filter: `owner_id=eq.${ownerId}` },
+        () => { loadPlanLimit(); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line
+  }, [scopeSubId, access?.owner_id, user?.id]);
+
   const openNew = () => {
     if (limitReached) {
       toast({
@@ -871,14 +889,16 @@ function UsersTab() {
       setSaving(false);
       const surfaced = await extractManageUserError(data, error);
       if (surfaced) {
-        const isSeatErr = /plan_seat_limit_reached|limite/i.test(surfaced.message);
-        const isManualBlock = /seat_additions_blocked/i.test(surfaced.message);
+        const code = surfaced.code;
+        const isSeatErr = code === 'plan_seat_limit_reached' || /plan_seat_limit_reached|limite/i.test(surfaced.message);
+        const isManualBlock = code === 'seat_additions_blocked' || /seat_additions_blocked/i.test(surfaced.message);
         if (isManualBlock) {
           toast({
             title: 'Inclusões pausadas',
             description: `O administrador pausou temporariamente novos cadastros nesta conta. Fale com o comercial em ${SEAT_UPSELL_EMAIL} para liberar.`,
             variant: 'destructive',
           });
+          loadPlanLimit();
         } else if (isSeatErr) {
           toast({
             title: SEAT_LIMIT_TITLE,
@@ -913,6 +933,7 @@ function UsersTab() {
     }
     setDeleting(null);
     load();
+    loadPlanLimit();
   };
 
   const filtered = rows.filter(r => {

@@ -26,6 +26,9 @@ export const MANAGE_USER_ERROR_MESSAGES: Record<string, string> = {
   invalid_email: 'E-mail inválido. Verifique o formato e tente novamente.',
   pipeline_required: 'Selecione ao menos 1 funil para membros de Atendimento.',
   pipeline_assign_error: 'Não foi possível atribuir os funis selecionados. Verifique se pertencem ao escopo atual.',
+  plan_seat_limit_reached: 'Limite de licenças do plano atingido. Fale com comercial@leadseller.com.br para liberar mais assentos.',
+  seat_additions_blocked: 'Novos cadastros estão pausados nesta conta. Fale com comercial@leadseller.com.br para liberar.',
+  plan_slug_invalid: 'O plano vinculado a esta conta não existe no catálogo oficial. Fale com comercial@leadseller.com.br.',
   internal_error: 'Erro interno inesperado. Tente novamente em instantes.',
 };
 

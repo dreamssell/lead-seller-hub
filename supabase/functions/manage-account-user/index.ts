@@ -486,6 +486,43 @@ Deno.serve(async (req) => {
         );
       }
 
+      // ─── Server-side seat limit enforcement ─────────────────────────────
+      // Prevents any bypass via direct edge-function calls; mirrors the DB
+      // trigger `enforce_member_seat_limit` and returns canonical codes so
+      // the UI copy stays consistent.
+      try {
+        const { data: usageRow } = await adminClient.rpc("get_member_seat_usage", {
+          p_owner_id: scope.owner_id,
+          p_sub_company_id: scope.sub_company_id,
+        });
+        const usage: any = Array.isArray(usageRow) ? usageRow[0] : usageRow;
+        const maxUsers: number | null = usage?.max_users ?? null;
+        const currentUsers: number = Number(usage?.current_users ?? usage?.used ?? 0);
+        const blocked: boolean = !!usage?.seat_additions_blocked;
+        const planSlug: string | null = usage?.plan_slug ?? null;
+        if (blocked) {
+          return userError(
+            "Novos cadastros estão pausados manualmente para esta conta. Fale com comercial@leadseller.com.br.",
+            409,
+            "seat_additions_blocked",
+          );
+        }
+        if (maxUsers != null && currentUsers >= maxUsers) {
+          return json({
+            error: `Limite do plano ${planSlug || ""} atingido (${currentUsers}/${maxUsers}). Fale com comercial@leadseller.com.br para liberar mais licenças.`,
+            code: "plan_seat_limit_reached",
+            plan_slug: planSlug,
+            max_users: maxUsers,
+            current_users: currentUsers,
+          }, 409);
+        }
+      } catch (seatErr) {
+        console.warn("[manage-account-user] seat_usage_check_failed", errorMessage(seatErr));
+        // fall through — DB trigger is the final gate
+      }
+
+
+
       let userResult = existing
         ? await adminClient.auth.admin.updateUserById(existing.id, {
           password,
@@ -569,12 +606,31 @@ Deno.serve(async (req) => {
           existingAccess?.id,
         );
       } catch (accessError) {
-        return userError(
-          errorMessage(accessError, "Falha ao salvar permissões do membro"),
-          400,
-          "access_save_error",
-        );
+        const raw = errorMessage(accessError, "Falha ao salvar permissões do membro");
+        if (/plan_seat_limit_reached/i.test(raw)) {
+          return userError(
+            "Limite de licenças do plano atingido. Fale com comercial@leadseller.com.br para liberar mais assentos.",
+            409,
+            "plan_seat_limit_reached",
+          );
+        }
+        if (/seat_additions_blocked/i.test(raw)) {
+          return userError(
+            "Novos cadastros estão pausados manualmente para esta conta. Fale com comercial@leadseller.com.br.",
+            409,
+            "seat_additions_blocked",
+          );
+        }
+        if (/plan_slug_invalid/i.test(raw)) {
+          return userError(
+            "O plano vinculado a esta conta não existe no catálogo oficial. Fale com comercial@leadseller.com.br.",
+            400,
+            "plan_slug_invalid",
+          );
+        }
+        return userError(raw, 400, "access_save_error");
       }
+
 
       await applyAccessLevel(adminClient, newUser.id, scope, level);
 
