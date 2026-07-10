@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronRight, Building2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Building2, BarChart3 } from 'lucide-react';
 import { OwnerFilterBar, type OwnerFilters } from './OwnerFilterBar';
 import type { CompanyRow, SubCompanyRow } from '@/hooks/useOwnerPlatformMetrics';
 import { CompanyDetailPanel } from './CompanyDetailPanel';
