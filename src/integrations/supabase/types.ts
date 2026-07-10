@@ -5552,6 +5552,17 @@ export type Database = {
           user_id: string
         }[]
       }
+      list_internal_comms_members: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          display_name: string
+          email: string
+          is_account_admin: boolean
+          is_owner: boolean
+          user_id: string
+        }[]
+      }
       log_video_action: {
         Args: {
           p_action: string
