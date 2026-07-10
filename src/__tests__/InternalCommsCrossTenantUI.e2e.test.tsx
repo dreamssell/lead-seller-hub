@@ -131,7 +131,7 @@ describe('E2E · /internal-comms isolamento cross-tenant (usuário autenticado)'
       expect(m.owner_id).toBe('owner-A');
       expect(m.content).not.toContain('segredo');
       expect(m.content).not.toContain('sabotagem');
-      expect((m as any).attachment_url).not.toMatch(/tenant-b/);
+      if ((m as any).attachment_url) expect((m as any).attachment_url).not.toMatch(/tenant-b/);
     }
   });
 
