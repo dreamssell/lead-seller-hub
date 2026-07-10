@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useInternalComms } from '@/hooks/useInternalComms';
+import { useInternalCommsUnread } from '@/hooks/useInternalCommsUnread';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,12 @@ export default function InternalCommsPage() {
     activePeerId, setActivePeerId, activePeer,
     sendMessage, me,
   } = useInternalComms();
+  const { countByPeer, clearPeer } = useInternalCommsUnread();
+
+  const openConversation = (peerId: string) => {
+    setActivePeerId(peerId);
+    clearPeer(peerId);
+  };
 
   const [draft, setDraft] = useState('');
   const [search, setSearch] = useState('');
