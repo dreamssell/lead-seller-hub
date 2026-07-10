@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Building } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Building, BarChart3 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { OwnerFilterBar, type OwnerFilters } from './OwnerFilterBar';
 import type { CompanyRow, SubCompanyRow } from '@/hooks/useOwnerPlatformMetrics';
