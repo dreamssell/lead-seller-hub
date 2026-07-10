@@ -1,7 +1,7 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ServiceCard } from '@/components/dashboard/ServiceCard';
 import {
-  Headphones, Bot, Phone, Globe, Video, BarChart3, Zap, ShieldCheck, FileText, PenLine, Crown,
+  Headphones, Bot, Phone, Globe, BarChart3, Zap, ShieldCheck, FileText, PenLine, Crown,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfileLevel } from '@/hooks/useUserProfileLevel';
@@ -12,7 +12,7 @@ const allServices = [
   { key: 'ai-agents', icon: Bot, title: 'Agentes de I.A. (SDR)', description: 'Bots e qualificação automática.', color: 'bg-success/10 text-success', path: '/ai-agents' },
   { key: 'calls', icon: Phone, title: 'VoIP & Gravação', description: 'Chamadas VoIP com gravação.', color: 'bg-warning/10 text-warning', path: '/calls' },
   { key: 'chat', icon: Globe, title: 'WhatsApp Business', description: 'Integração WhatsApp completa.', color: 'bg-success/10 text-success', path: '/whatsapp' },
-  { key: 'chat', icon: Video, title: 'Videochamadas', description: 'Vídeo pela plataforma.', color: 'bg-primary/10 text-primary', path: '/video' },
+  // Meeting (Videochamadas) é premium — exibido apenas via card em destaque do Dashboard com upsell para não-donos.
   { key: 'reports', icon: BarChart3, title: 'Relatórios & Analytics', description: 'Métricas e exportação em PDF.', color: 'bg-accent/10 text-accent', path: '/reports' },
   { key: 'settings', icon: Zap, title: 'Automações & Integrações', description: 'Fluxos, webhooks e integrações.', color: 'bg-warning/10 text-warning', path: '/automations' },
   { key: 'api-keys', icon: ShieldCheck, title: 'Gestão de Acessos & API', description: 'Permissões e chaves API.', color: 'bg-destructive/10 text-destructive', path: '/api-keys' },
