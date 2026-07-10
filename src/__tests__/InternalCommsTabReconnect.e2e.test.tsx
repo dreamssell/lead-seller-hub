@@ -109,8 +109,10 @@ describe('E2E · fechar/reabrir aba com concorrência entre offline gap e broadc
     // Reabre a aba.
     const s2 = renderHook(() => useInternalComms());
     act(() => { s2.result.current.setActivePeerId('peer'); });
+    // Aguarda o refetch inicial trazer o histórico (h1, h2, off1..off3).
+    await waitFor(() => expect(s2.result.current.messages.length).toBe(5));
 
-    // Em paralelo à recuperação inicial, chega um broadcast novinho.
+    // Depois disso, chega um broadcast novinho via canal ativo.
     const live = mk('live1', '2024-01-01T00:05:00Z');
     dataset.push(live);
     await act(async () => { emitInsert(live); await new Promise((r) => setTimeout(r, 0)); });
