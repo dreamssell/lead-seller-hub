@@ -212,12 +212,9 @@ export default function TeamPage() {
     if (!form.display_name.trim()) { toast({ title: 'Informe o nome', variant: 'destructive' }); return; }
     if (!editing) {
       if (limitReached && !unlimited) {
-        const isEnt = /enterprise/i.test(planName);
         toast({
-          title: 'Limite de licenças atingido',
-          description: isEnt
-            ? `Contrato Enterprise: ${maxUsers} licenças em uso. Contate seu consultor comercial para adquirir mais assentos antes de cadastrar novos usuários.`
-            : `Seu plano ${planName} permite ${maxUsers} usuário(s). Remova alguém ou solicite upgrade antes de adicionar.`,
+          title: SEAT_LIMIT_TITLE,
+          description: seatLimitDescription({ planName, used: total, max: maxUsers }),
           variant: 'destructive',
         });
         return;
