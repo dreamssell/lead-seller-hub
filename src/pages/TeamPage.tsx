@@ -18,6 +18,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { extractManageUserError } from '@/lib/manageAccountUserErrors';
+import { SEAT_LIMIT_TITLE, SEAT_UPSELL_EMAIL, SEAT_UPSELL_MAILTO, seatLimitDescription } from '@/lib/seatLimitCopy';
 
 type AccessLevel = 'atendimento' | 'supervisao' | 'administracao';
 
