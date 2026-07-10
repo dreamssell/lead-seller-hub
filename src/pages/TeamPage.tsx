@@ -273,22 +273,19 @@ export default function TeamPage() {
       } else if (isManualBlock) {
         toast({
           title: 'Inclusões pausadas',
-          description: 'O administrador pausou temporariamente novos cadastros nesta conta. Solicite a liberação para continuar.',
+          description: `O administrador pausou temporariamente novos cadastros nesta conta. Fale com o comercial em ${SEAT_UPSELL_EMAIL} para liberar.`,
           variant: 'destructive',
         });
       } else if (isPlanInvalid) {
         toast({
           title: 'Plano com configuração inválida',
-          description: 'O plano vinculado a esta conta não existe no catálogo oficial. Solicite ao dono da plataforma para corrigir o plano antes de adicionar usuários.',
+          description: `O plano vinculado a esta conta não existe no catálogo oficial. Fale com o comercial em ${SEAT_UPSELL_EMAIL} para corrigir o plano.`,
           variant: 'destructive',
         });
       } else if (isSeatErr) {
-        const isEnt = /enterprise/i.test(planName);
         toast({
-          title: 'Limite de licenças atingido',
-          description: isEnt
-            ? `Contrato Enterprise sem assentos disponíveis. Contate seu consultor comercial para adquirir mais licenças.`
-            : `Seu plano ${planName || ''} não tem mais assentos disponíveis. Remova um usuário ou solicite upgrade.`,
+          title: SEAT_LIMIT_TITLE,
+          description: seatLimitDescription({ planName, used: total, max: maxUsers }),
           variant: 'destructive',
         });
         loadPlanLimit();
