@@ -61,6 +61,7 @@ const AccessHealthPage = lazy(() => import("./pages/owner/AccessHealthPage"));
 const AuditTrailPage = lazy(() => import("./pages/owner/AuditTrailPage"));
 const PlatformHealthPage = lazy(() => import("./pages/owner/PlatformHealthPage"));
 const CompanyDetailPage = lazy(() => import("./pages/owner/CompanyDetailPage"));
+const InternalCommsPage = lazy(() => import("./pages/InternalCommsPage"));
 
 /**
  * React Query com defaults calibrados para reduzir refetches redundantes.
@@ -150,6 +151,7 @@ const App = () => (
               <Route path="/owner/audit-trail" element={<ProtectedRoute ownerOnly><AuditTrailPage /></ProtectedRoute>} />
               <Route path="/owner/platform-health" element={<ProtectedRoute ownerOnly><PlatformHealthPage /></ProtectedRoute>} />
               <Route path="/owner/company/:id" element={<ProtectedRoute ownerOnly><CompanyDetailPage /></ProtectedRoute>} />
+              <Route path="/internal-comms" element={<ProtectedRoute><InternalCommsPage /></ProtectedRoute>} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>
