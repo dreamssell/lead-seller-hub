@@ -871,14 +871,16 @@ function UsersTab() {
       setSaving(false);
       const surfaced = await extractManageUserError(data, error);
       if (surfaced) {
-        const isSeatErr = /plan_seat_limit_reached|limite/i.test(surfaced.message);
-        const isManualBlock = /seat_additions_blocked/i.test(surfaced.message);
+        const code = surfaced.code;
+        const isSeatErr = code === 'plan_seat_limit_reached' || /plan_seat_limit_reached|limite/i.test(surfaced.message);
+        const isManualBlock = code === 'seat_additions_blocked' || /seat_additions_blocked/i.test(surfaced.message);
         if (isManualBlock) {
           toast({
             title: 'Inclusões pausadas',
             description: `O administrador pausou temporariamente novos cadastros nesta conta. Fale com o comercial em ${SEAT_UPSELL_EMAIL} para liberar.`,
             variant: 'destructive',
           });
+          loadPlanLimit();
         } else if (isSeatErr) {
           toast({
             title: SEAT_LIMIT_TITLE,
