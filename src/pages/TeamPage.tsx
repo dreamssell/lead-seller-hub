@@ -182,12 +182,9 @@ export default function TeamPage() {
       return;
     }
     if (limitReached) {
-      const isEnt = /enterprise/i.test(planName);
       toast({
-        title: 'Limite de licenças atingido',
-        description: isEnt
-          ? `Seu contrato Enterprise contempla ${maxUsers} licenças. Contate seu consultor comercial para adquirir mais assentos.`
-          : `Seu plano ${planName} permite ${maxUsers} usuários. Faça upgrade para adicionar mais.`,
+        title: SEAT_LIMIT_TITLE,
+        description: seatLimitDescription({ planName, used: total, max: maxUsers }),
         variant: 'destructive',
       });
       return;
