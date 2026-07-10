@@ -176,6 +176,23 @@ export default function TeamPage() {
   useEffect(() => { loadMembers(); loadPlanLimit(); loadPipelines(); /* eslint-disable-next-line */ }, [scopeSubId, isOwner, user?.id]);
   useEffect(() => { if (auditOpen) loadAudit(); /* eslint-disable-next-line */ }, [auditOpen, members.length]);
 
+  // Realtime: mantém a contagem de assentos sincronizada entre abas/administradores.
+  useEffect(() => {
+    const ownerId = access?.owner_id ?? user?.id ?? null;
+    if (!ownerId) return;
+    const channel = supabase
+      .channel(`team-seat-sync-${ownerId}-${scopeSubId ?? 'root'}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'user_account_access', filter: `owner_id=eq.${ownerId}` },
+        () => { loadMembers(); loadPlanLimit(); })
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'client_companies', filter: `owner_id=eq.${ownerId}` },
+        () => { loadPlanLimit(); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line
+  }, [scopeSubId, access?.owner_id, user?.id]);
+
   const openNew = () => {
     if (!canManage) {
       toast({ title: 'Permissão negada', description: 'Apenas administradores podem adicionar membros.', variant: 'destructive' });
