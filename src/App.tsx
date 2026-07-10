@@ -62,6 +62,7 @@ const AuditTrailPage = lazy(() => import("./pages/owner/AuditTrailPage"));
 const PlatformHealthPage = lazy(() => import("./pages/owner/PlatformHealthPage"));
 const CompanyDetailPage = lazy(() => import("./pages/owner/CompanyDetailPage"));
 const InternalCommsPage = lazy(() => import("./pages/InternalCommsPage"));
+const InternalCommsAuditPage = lazy(() => import("./pages/owner/InternalCommsAuditPage"));
 
 /**
  * React Query com defaults calibrados para reduzir refetches redundantes.
