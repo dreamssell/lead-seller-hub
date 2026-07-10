@@ -2117,6 +2117,54 @@ export type Database = {
           },
         ]
       }
+      license_change_audit: {
+        Row: {
+          account_kind: string
+          account_name: string | null
+          account_ref_id: string
+          changed_by: string | null
+          changed_by_name: string | null
+          created_at: string
+          field: string
+          id: string
+          new_value: string | null
+          old_value: string | null
+          owner_id: string | null
+          plan_slug: string | null
+          sub_company_id: string | null
+        }
+        Insert: {
+          account_kind: string
+          account_name?: string | null
+          account_ref_id: string
+          changed_by?: string | null
+          changed_by_name?: string | null
+          created_at?: string
+          field: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          owner_id?: string | null
+          plan_slug?: string | null
+          sub_company_id?: string | null
+        }
+        Update: {
+          account_kind?: string
+          account_name?: string | null
+          account_ref_id?: string
+          changed_by?: string | null
+          changed_by_name?: string | null
+          created_at?: string
+          field?: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          owner_id?: string | null
+          plan_slug?: string | null
+          sub_company_id?: string | null
+        }
+        Relationships: []
+      }
       log_cleanup_history: {
         Row: {
           connection_id: string | null
@@ -5377,10 +5425,20 @@ export type Database = {
         Args: { p_sub_company_id: string }
         Returns: Database["public"]["Enums"]["signature_role"]
       }
-      get_owner_company_detail: {
-        Args: { p_owner_id: string; p_sub_company_id?: string }
-        Returns: Json
-      }
+      get_owner_company_detail:
+        | {
+            Args: { p_owner_id: string; p_sub_company_id?: string }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_from?: string
+              p_owner_id: string
+              p_sub_company_id?: string
+              p_to?: string
+            }
+            Returns: Json
+          }
       get_platform_health: { Args: never; Returns: Json }
       get_recording_enabled: {
         Args: { p_owner_id: string; p_sub_company_id?: string }
@@ -5486,6 +5544,34 @@ export type Database = {
           id: string
           rank: number
           sender_type: string
+        }[]
+      }
+      search_seat_limit_audit: {
+        Args: {
+          p_from?: string
+          p_limit?: number
+          p_offset?: number
+          p_owner?: string
+          p_plan?: string
+          p_search?: string
+          p_sub?: string
+          p_to?: string
+        }
+        Returns: {
+          attempted_by: string
+          attempted_by_name: string
+          created_at: string
+          current_users: number
+          id: string
+          max_users: number
+          message: string
+          owner_id: string
+          plan_slug: string
+          reason: string
+          sub_company_id: string
+          target_name: string
+          target_user_id: string
+          total_count: number
         }[]
       }
       try_acquire_provision_lock: {
