@@ -154,6 +154,7 @@ const App = () => (
               <Route path="/owner/platform-health" element={<ProtectedRoute ownerOnly><PlatformHealthPage /></ProtectedRoute>} />
               <Route path="/owner/company/:id" element={<ProtectedRoute ownerOnly><CompanyDetailPage /></ProtectedRoute>} />
               <Route path="/internal-comms" element={<ProtectedRoute><InternalCommsPage /></ProtectedRoute>} />
+              <Route path="/owner/internal-comms-audit" element={<ProtectedRoute ownerOnly><InternalCommsAuditPage /></ProtectedRoute>} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>
