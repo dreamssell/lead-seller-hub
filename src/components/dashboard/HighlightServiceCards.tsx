@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { useInternalCommsUnread } from '@/hooks/useInternalCommsUnread';
+import { MEETING_UPSELL_TITLE, MEETING_UPSELL_DESCRIPTION } from '@/lib/meetingUpsell';
 
 /**
  * Cards em destaque exibidos em todos os dashboards (Agente / Gestor / Executivo).
@@ -26,8 +27,8 @@ export function HighlightServiceCards() {
       return;
     }
     toast({
-      title: 'Meeting — recurso premium',
-      description: 'Contrate esse serviço agora! Fale com o seu consultor para liberar videochamadas e videoconferências.',
+      title: MEETING_UPSELL_TITLE,
+      description: MEETING_UPSELL_DESCRIPTION,
     });
   };
 
