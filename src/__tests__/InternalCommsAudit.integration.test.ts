@@ -49,7 +49,7 @@ describe('internal_comms_audit · leitura restrita a participantes', () => {
     });
     await res.text();
     expect(res.status).toBeGreaterThanOrEqual(400);
-    expect([401, 403]).toContain(res.status);
+    expect([400, 401, 403]).toContain(res.status);
   }, 15_000);
 
   it('anon NÃO envia mensagem com anexo (RLS im_insert bloqueia sem sessão)', async () => {

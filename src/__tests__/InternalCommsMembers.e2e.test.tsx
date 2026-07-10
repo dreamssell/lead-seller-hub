@@ -19,6 +19,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
 const rpcMock = vi.fn();
@@ -83,7 +84,11 @@ beforeEach(() => {
 });
 
 function renderPage() {
-  return render(<MemoryRouter><InternalCommsPage /></MemoryRouter>);
+  return render(
+    <MemoryRouter>
+      <TooltipProvider><InternalCommsPage /></TooltipProvider>
+    </MemoryRouter>
+  );
 }
 
 describe('/internal-comms · carregamento de colegas por tenant', () => {
