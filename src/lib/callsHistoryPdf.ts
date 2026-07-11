@@ -36,9 +36,18 @@ interface Options {
   filterSummary?: string;
 }
 
-const fmtDt = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('pt-BR') : '—');
-const fmtTime = (iso?: string | null) =>
-  iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+// Timezone padronizada com o dashboard (America/Sao_Paulo) para auditabilidade.
+const fmtDt = (iso?: string | null) => formatCallDateTime(iso);
+const fmtTime = (iso?: string | null) => formatCallTime(iso);
+const fmtDuration = (row: CallHistoryPdfRow) => {
+  const d = getCallDurationDetails({ ...row });
+  if (d.seconds !== null) return formatDuration(d.seconds);
+  return CALL_DURATION_FALLBACK_LABEL[d.reason || 'invalid'];
+};
+const fmtDurationSource = (row: CallHistoryPdfRow) => {
+  const d = getCallDurationDetails({ ...row });
+  return d.source === 'official' ? 'Oficial' : d.source === 'derived' ? 'Derivado' : '—';
+};
 
 const directionLabel = (d: string) => (d === 'inbound' ? 'Recebida' : 'Efetuada');
 const statusLabel = (s: string, d: string) => {
