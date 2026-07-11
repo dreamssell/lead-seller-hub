@@ -95,7 +95,6 @@ beforeEach(() => {
   uploadCalls.length = 0;
   upsertCalls.length = 0;
   uploadResolvers = [];
-  userQueue.length = 0;
 });
 
 describe('Upload concorrente de avatar', () => {
@@ -105,11 +104,15 @@ describe('Upload concorrente de avatar', () => {
       id: `user-${i}`,
       email: `user${i}@empresa.com`,
     }));
-    userQueue.push(...users);
 
     // Render N ProfileTab instances, cada um com container isolado.
     const instances = users.map((u) => {
-      const { container } = render(<ProfileTab />, { container: document.body.appendChild(document.createElement('div')) });
+      const { container } = render(
+        <TestUserCtx.Provider value={u}>
+          <ProfileTab />
+        </TestUserCtx.Provider>,
+        { container: document.body.appendChild(document.createElement('div')) },
+      );
       return { user: u, container };
     });
 
