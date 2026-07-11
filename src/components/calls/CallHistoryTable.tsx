@@ -9,9 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Play, Pause, Download, Cloud, Search, RefreshCw, PhoneCall } from 'lucide-react';
+import { Loader2, Play, Pause, Download, Cloud, Search, RefreshCw, PhoneCall, FileText } from 'lucide-react';
 import { formatDuration, getRecordingSignedUrl, type CallChannel } from '@/lib/callHistory';
 import { downloadCsv } from '@/lib/ceoExport';
+import { exportCallHistoryPdf } from '@/lib/callsHistoryPdf';
 import { toast } from '@/hooks/use-toast';
 
 export interface CallHistoryFilter {
