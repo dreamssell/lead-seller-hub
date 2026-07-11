@@ -81,7 +81,7 @@ export default function InternalMessageDetailPage() {
   }, [id, user, navigate]);
 
   return (
-    <AppLayout>
+    <AppLayout title="Mensagem interna" subtitle="Detalhes e histórico">
       <div className="max-w-3xl mx-auto p-6 space-y-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate('/internal-comms')}>
