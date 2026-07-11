@@ -4,7 +4,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import logoUrl from '@/assets/logo.png';
-import { formatDuration } from './callHistory';
+import { formatCallDuration, formatDuration, getReliableCallDurationSeconds } from './callHistory';
 
 const PRIMARY: [number, number, number] = [59, 130, 246]; // #3B82F6
 const ACCENT: [number, number, number] = [16, 185, 129]; // emerald
@@ -224,8 +224,11 @@ export async function exportCallHistoryPdf(rows: CallHistoryPdfRow[], opts: Opti
   const missed = rows.filter((r) => /missed|fail|rejected/i.test(r.status)).length;
   const inbound = rows.filter((r) => r.direction === 'inbound').length;
   const outbound = rows.filter((r) => r.direction === 'outbound').length;
-  const totalDur = rows.reduce((s, r) => s + (r.duration_seconds || 0), 0);
-  const avgDur = answered ? Math.round(totalDur / answered) : 0;
+  const reliableDurations = rows
+    .map((r) => getReliableCallDurationSeconds(r))
+    .filter((v): v is number => v !== null);
+  const totalDur = reliableDurations.reduce((s, v) => s + v, 0);
+  const avgDur = reliableDurations.length ? Math.round(totalDur / reliableDurations.length) : 0;
   const answerRate = total ? Math.round((answered / total) * 100) : 0;
 
   const afterKpis = drawKpiCards(doc, 52, [
@@ -260,7 +263,7 @@ export async function exportCallHistoryPdf(rows: CallHistoryPdfRow[], opts: Opti
       directionLabel(r.direction),
       statusLabel(r.status, r.direction),
       fmtTime(r.answered_at),
-      formatDuration(r.duration_seconds || 0),
+      formatCallDuration(r),
       r.connection_label || r.channel || '—',
       r.user_name || '—',
     ]),

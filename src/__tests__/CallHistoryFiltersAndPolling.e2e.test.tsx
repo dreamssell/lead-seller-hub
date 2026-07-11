@@ -48,6 +48,13 @@ const initialRows: any[] = [
     metadata: { wavoip_call_id: 'WAV-XYZ' }, // aguardando polling
     user_id: 'u1', sub_company_id: null,
   },
+  {
+    id: 'c4', contact_name: 'Diego Antigo', phone_number: '+55 41 98888-2222',
+    channel: 'wavoip', connection_label: 'linha-3', direction: 'outbound',
+    status: 'initiated', duration_seconds: 0,
+    started_at: iso(48 * 60), answered_at: null, ended_at: null,
+    recording_path: null, recording_url: null, metadata: {}, user_id: 'u1', sub_company_id: null,
+  },
 ];
 
 // Estado mutável para simular UPDATE via polling
@@ -117,6 +124,15 @@ describe('CallHistoryTable — filtros, busca, duração e polling', () => {
     // Coluna answered_at deve ter pelo menos um horário (hh:mm:ss) para c1 e c3
     const timeCells = screen.getAllByText(/^\d{2}:\d{2}:\d{2}$/);
     expect(timeCells.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('não calcula duração artificial para chamada antiga sem encerramento', async () => {
+    render(<CallHistoryTable filter={{ ownerId: 'o1' }} />);
+    await waitFor(() => expect(screen.getByText('Diego Antigo')).toBeInTheDocument());
+    const rows = screen.getAllByRole('row');
+    const diegoRow = rows.find((r) => within(r).queryByText('Diego Antigo'))!;
+    expect(within(diegoRow).getAllByText('—').length).toBeGreaterThan(0);
+    expect(within(diegoRow).queryByText(/\d+:\d{2}:\d{2}/)).not.toBeInTheDocument();
   });
 
   it('busca por número (parcial, apenas dígitos) filtra instantaneamente', async () => {

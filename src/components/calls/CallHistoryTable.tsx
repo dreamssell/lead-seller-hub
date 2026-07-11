@@ -14,7 +14,7 @@ import {
   Loader2, Play, Pause, Download, Cloud, Search, RefreshCw, PhoneCall, FileText,
   ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, PhoneIncoming, PhoneOutgoing,
 } from 'lucide-react';
-import { formatDuration, getRecordingSignedUrl, type CallChannel } from '@/lib/callHistory';
+import { formatCallDuration, getRecordingSignedUrl, getReliableCallDurationSeconds, type CallChannel } from '@/lib/callHistory';
 import { downloadCsv } from '@/lib/ceoExport';
 import { exportCallHistoryPdf } from '@/lib/callsHistoryPdf';
 import { toast } from '@/hooks/use-toast';
@@ -203,9 +203,20 @@ export function CallHistoryTable({
         const q = search.toLowerCase().trim();
         const digits = q.replace(/\D+/g, '');
         const phoneDigits = r.phone_number.replace(/\D+/g, '');
+        const metadataPhones = [
+          (r.metadata as any)?.caller,
+          (r.metadata as any)?.callee,
+          (r.metadata as any)?.receiver,
+          (r.metadata as any)?.from,
+          (r.metadata as any)?.to,
+        ].map((v) => String(v || ''));
         const matchContact = (r.contact_name || '').toLowerCase().includes(q);
         const matchPhone = r.phone_number.toLowerCase().includes(q)
-          || (digits.length > 0 && phoneDigits.includes(digits));
+          || metadataPhones.some((v) => v.toLowerCase().includes(q))
+          || (digits.length > 0 && (
+            phoneDigits.includes(digits)
+            || metadataPhones.some((v) => v.replace(/\D+/g, '').includes(digits))
+          ));
         if (!matchContact && !matchPhone) return false;
       }
       return true;
@@ -224,7 +235,9 @@ export function CallHistoryTable({
         return (at - bt) * dir;
       }
       if (sortKey === 'duration_seconds') {
-        return ((av || 0) - (bv || 0)) * dir;
+        const ad = getReliableCallDurationSeconds(a) ?? -1;
+        const bd = getReliableCallDurationSeconds(b) ?? -1;
+        return (ad - bd) * dir;
       }
       return String(av || '').localeCompare(String(bv || '')) * dir;
     });
@@ -291,11 +304,7 @@ export function CallHistoryTable({
   };
 
   const durationDisplay = (r: Row): string => {
-    if (r.duration_seconds && r.duration_seconds > 0) return formatDuration(r.duration_seconds);
-    const end = r.ended_at ? new Date(r.ended_at).getTime() : Date.now();
-    const start = r.answered_at ? new Date(r.answered_at).getTime() : new Date(r.started_at).getTime();
-    const s = Math.max(0, Math.round((end - start) / 1000));
-    return s > 0 ? formatDuration(s) : '—';
+    return formatCallDuration(r);
   };
 
   const exportCsv = () => {
@@ -308,7 +317,7 @@ export function CallHistoryTable({
       direcao: directionLabel(r.direction),
       status: statusLabelPt(r.status, r.direction),
       atendida_em: r.answered_at ? new Date(r.answered_at).toLocaleString('pt-BR') : '—',
-      duracao: formatDuration(r.duration_seconds),
+      duracao: durationDisplay(r),
       usuario: profiles[r.user_id || ''] || '—',
       sub_empresa: subs[r.sub_company_id || ''] || '—',
     })));
@@ -326,7 +335,7 @@ export function CallHistoryTable({
         started_at: r.started_at,
         answered_at: r.answered_at,
         ended_at: r.ended_at,
-        duration_seconds: r.duration_seconds,
+        duration_seconds: getReliableCallDurationSeconds(r) ?? 0,
         contact_name: r.contact_name,
         phone_number: r.phone_number,
         direction: r.direction,

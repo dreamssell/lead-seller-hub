@@ -68,6 +68,7 @@ export async function endCallLog(
     status?: CallStatus;
     startedAt?: number;
     answeredAt?: number | null;
+    durationSeconds?: number | null;
     recordingPath?: string | null;
     recordingUrl?: string | null;
     wavoipCallId?: string | null;
@@ -79,7 +80,13 @@ export async function endCallLog(
   // Duração = tempo falado (a partir do atendimento) quando disponível,
   // caso contrário usa o dial time como fallback.
   const baseline = opts.answeredAt ?? opts.startedAt;
-  const duration = baseline ? Math.max(0, Math.round((Date.now() - baseline) / 1000)) : undefined;
+  const hasExplicitDuration = typeof opts.durationSeconds === 'number' && Number.isFinite(opts.durationSeconds);
+  const explicitDuration = hasExplicitDuration ? opts.durationSeconds : undefined;
+  const duration = explicitDuration !== undefined && explicitDuration >= 0
+    ? Math.round(explicitDuration)
+    : baseline
+      ? Math.max(0, Math.round((Date.now() - baseline) / 1000))
+      : undefined;
   const patch: Record<string, any> = {
     status: opts.status ?? 'ended',
     ended_at: ended.toISOString(),
@@ -158,4 +165,37 @@ export function formatDuration(seconds: number): string {
   const sec = s % 60;
   const pad = (n: number) => n.toString().padStart(2, '0');
   return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
+}
+
+export interface CallTimingFields {
+  status?: string | null;
+  duration_seconds?: number | null;
+  started_at?: string | null;
+  answered_at?: string | null;
+  ended_at?: string | null;
+}
+
+export function parseCallTimestampMs(value?: string | null): number | null {
+  if (!value) return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+export function getReliableCallDurationSeconds(call: CallTimingFields): number | null {
+  const stored = Number(call.duration_seconds);
+  if (Number.isFinite(stored) && stored > 0) return Math.max(0, Math.round(stored));
+
+  const endedMs = parseCallTimestampMs(call.ended_at);
+  if (!endedMs) return null;
+
+  const startMs = parseCallTimestampMs(call.answered_at) ?? parseCallTimestampMs(call.started_at);
+  if (!startMs || endedMs < startMs) return null;
+
+  const seconds = Math.max(0, Math.round((endedMs - startMs) / 1000));
+  return seconds > 0 ? seconds : null;
+}
+
+export function formatCallDuration(call: CallTimingFields, fallback = '—'): string {
+  const seconds = getReliableCallDurationSeconds(call);
+  return seconds === null ? fallback : formatDuration(seconds);
 }
