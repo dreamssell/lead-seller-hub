@@ -9,9 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Play, Pause, Download, Cloud, Search, RefreshCw, PhoneCall } from 'lucide-react';
+import { Loader2, Play, Pause, Download, Cloud, Search, RefreshCw, PhoneCall, FileText } from 'lucide-react';
 import { formatDuration, getRecordingSignedUrl, type CallChannel } from '@/lib/callHistory';
 import { downloadCsv } from '@/lib/ceoExport';
+import { exportCallHistoryPdf } from '@/lib/callsHistoryPdf';
 import { toast } from '@/hooks/use-toast';
 
 export interface CallHistoryFilter {
@@ -179,11 +180,13 @@ export function CallHistoryTable({
         if (bucket !== statusFilter) return false;
       }
       if (search) {
-        const q = search.toLowerCase();
-        if (
-          !(r.contact_name || '').toLowerCase().includes(q) &&
-          !r.phone_number.toLowerCase().includes(q)
-        ) return false;
+        const q = search.toLowerCase().trim();
+        const digits = q.replace(/\D+/g, '');
+        const phoneDigits = r.phone_number.replace(/\D+/g, '');
+        const matchContact = (r.contact_name || '').toLowerCase().includes(q);
+        const matchPhone = r.phone_number.toLowerCase().includes(q)
+          || (digits.length > 0 && phoneDigits.includes(digits));
+        if (!matchContact && !matchPhone) return false;
       }
       return true;
     });
@@ -264,11 +267,38 @@ export function CallHistoryTable({
       conexao: r.connection_label || '—',
       direcao: directionLabel(r.direction),
       status: statusLabelPt(r.status, r.direction),
+      atendida_em: r.answered_at ? new Date(r.answered_at).toLocaleString('pt-BR') : '—',
       duracao: formatDuration(r.duration_seconds),
       usuario: profiles[r.user_id || ''] || '—',
       sub_empresa: subs[r.sub_company_id || ''] || '—',
     })));
   };
+
+  const exportPdf = async () => {
+    const filterSummary = [
+      period !== 'all' ? { today: 'Hoje', '7d': 'Últimos 7 dias', '30d': 'Últimos 30 dias', '90d': 'Últimos 90 dias' }[period] : 'Todo período',
+      directionFilter !== 'all' ? `Direção: ${directionLabel(directionFilter)}` : null,
+      statusFilter !== 'all' ? `Status: ${statusLabelPt(statusFilter, 'outbound')}` : null,
+      search ? `Busca: "${search}"` : null,
+    ].filter(Boolean).join(' · ');
+    await exportCallHistoryPdf(
+      filtered.map((r) => ({
+        started_at: r.started_at,
+        answered_at: r.answered_at,
+        ended_at: r.ended_at,
+        duration_seconds: r.duration_seconds,
+        contact_name: r.contact_name,
+        phone_number: r.phone_number,
+        direction: r.direction,
+        status: r.status,
+        channel: r.channel,
+        connection_label: r.connection_label,
+        user_name: profiles[r.user_id || ''] || null,
+      })),
+      { title, subtitle: `${filtered.length} chamada(s) · ${filterSummary}`, filterSummary },
+    );
+  };
+
 
   const directionLabel = (d: string) => d === 'inbound' ? 'Recebida' : 'Efetuada';
 
@@ -308,6 +338,7 @@ export function CallHistoryTable({
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={load}><RefreshCw className="w-4 h-4" /></Button>
           <Button variant="outline" size="sm" onClick={exportCsv}><Download className="w-4 h-4 mr-1" />CSV</Button>
+          <Button variant="outline" size="sm" onClick={exportPdf}><FileText className="w-4 h-4 mr-1" />PDF</Button>
         </div>
       </CardHeader>
       <CardContent>
@@ -315,8 +346,10 @@ export function CallHistoryTable({
           <div className="flex flex-wrap gap-2 mb-3">
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-2 top-2.5 text-muted-foreground" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar contato ou número"
-                className="h-8 pl-7 w-56 text-xs" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por contato ou número (origem/destino)"
+                aria-label="Buscar histórico de chamadas"
+                className="h-8 pl-7 w-72 text-xs" />
             </div>
             <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
               <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
