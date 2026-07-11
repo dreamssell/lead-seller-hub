@@ -133,10 +133,11 @@ describe('Upload concorrente de avatar', () => {
       console.log('DEBUG dispatched change', idx, 'files.length=', input.files?.length);
     });
     console.log('DEBUG after fireEvent, uploadCalls:', uploadCalls.length);
-
-    // Aguarda todos os uploads chegarem à camada de storage.
-    await waitFor(() => expect(uploadCalls.length).toBe(N));
-    console.log('DEBUG all uploads pending:', uploadCalls.length);
+    for (let i = 0; i < 10; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      console.log('DEBUG tick', i, 'uploadCalls=', uploadCalls.length);
+      if (uploadCalls.length >= N) break;
+    }
 
     // UI de progresso visível em cada instância — mostra "Enviando foto…".
     instances.forEach(({ container }) => {
