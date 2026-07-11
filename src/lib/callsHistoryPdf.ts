@@ -4,7 +4,10 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import logoUrl from '@/assets/logo.png';
-import { formatCallDuration, formatDuration, getReliableCallDurationSeconds } from './callHistory';
+import {
+  formatDuration, getCallDurationDetails, getReliableCallDurationSeconds,
+  formatCallDateTime, formatCallTime, CALL_DURATION_FALLBACK_LABEL, DISPLAY_TIMEZONE,
+} from './callHistory';
 
 const PRIMARY: [number, number, number] = [59, 130, 246]; // #3B82F6
 const ACCENT: [number, number, number] = [16, 185, 129]; // emerald
