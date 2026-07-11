@@ -103,6 +103,26 @@ Deno.serve(async (req) => {
   }
   if (!body?.action) return json({ error: "missing_action" }, 400);
 
+  // Guard: biometria só é permitida em dispositivos mobile. Registra e recusa desktops.
+  if (MOBILE_ONLY_ACTIONS.has(body.action) && !isMobileRequest(req)) {
+    console.warn(
+      JSON.stringify({
+        event: "webauthn_desktop_blocked",
+        action: body.action,
+        user_agent: req.headers.get("user-agent"),
+        sec_ch_ua_mobile: req.headers.get("sec-ch-ua-mobile"),
+        ip: req.headers.get("x-forwarded-for") ?? req.headers.get("cf-connecting-ip"),
+      }),
+    );
+    return json(
+      {
+        error: "mobile_only",
+        hint: "A biometria só pode ser usada em dispositivos móveis (iOS/Android). Use senha no desktop.",
+      },
+      403,
+    );
+  }
+
   const rpId = body.rp_id ?? "auth.leadseller.com.br";
   const rpName = body.rp_name ?? "Lead Seller";
 
