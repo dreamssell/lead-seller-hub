@@ -483,16 +483,39 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
         ?? payload?.call_id
         ?? '',
       ) || null;
-      const capturePayload = (payload: any) => {
+      const persistWavoipIdOnRow = async (id: string) => {
+        if (!callLogId || !id) return;
+        try {
+          // Grava o wavoip_call_id na metadata da linha ORIGINAL para que
+          // eventos do webhook (answered/ended) atualizem a linha correta
+          // preservando user_id, contact_name etc. — em vez de criar um stub.
+          await (supabase as any)
+            .from('call_history')
+            .update({ metadata: { device_id: device.id, recording_enabled: recordingEnabled, wavoip_call_id: id } })
+            .eq('id', callLogId);
+        } catch (e) { console.warn('[Wavoip] persist wavoip_call_id falhou', e); }
+      };
+      const capturePayload = (payload: any, opts?: { isFinal?: boolean }) => {
         const id = payloadCallId(payload);
-        if (id && (!wavoipCallId || id === wavoipCallId)) wavoipCallId = id;
-        const duration = Number(payload?.duration ?? payload?.call?.duration ?? payload?.metadata?.duration);
-        if (Number.isFinite(duration) && duration >= 0) officialDurationSeconds = Math.round(duration);
+        if (id && (!wavoipCallId || id === wavoipCallId)) {
+          const wasEmpty = !wavoipCallId;
+          wavoipCallId = id;
+          if (wasEmpty) persistWavoipIdOnRow(id);
+        }
+        // IMPORTANTE: só aceitamos duration em eventos FINAIS (end/hangup).
+        // Eventos intermediários (ringing/answered) trazem duração parcial
+        // e antes sobrescreviam o valor real, gerando registros como 00:13
+        // para uma ligação de 2min.
+        if (opts?.isFinal) {
+          const duration = Number(payload?.duration ?? payload?.call?.duration ?? payload?.metadata?.duration);
+          if (Number.isFinite(duration) && duration > 0) officialDurationSeconds = Math.round(duration);
+        }
       };
 
       // Captura o ID Wavoip da chamada (necessário para acessar a gravação).
       wavoipCallId = String(call?.whatsapp_call_id ?? call?.whatsappCallId ?? call?.id ?? call?.callId ?? call?.call_id ?? '') || null;
-      capturePayload(call);
+      if (wavoipCallId) persistWavoipIdOnRow(wavoipCallId);
+
 
       // Bindings redundantes — o SDK varia os nomes dos eventos entre versões.
       const onAnswered = async () => {
@@ -527,20 +550,21 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
         return null;
       };
       const handleWavoipLifecyclePayload = (payload: any) => {
-        capturePayload(payload);
+        const sdkStatus = payload?.status ?? payload?.call?.status;
+        const finalStatus = mapWavoipFinalStatus(sdkStatus);
+        capturePayload(payload, { isFinal: !!finalStatus });
         const id = payloadCallId(payload);
         if (id && wavoipCallId && id !== wavoipCallId) return;
-        const sdkStatus = payload?.status ?? payload?.call?.status;
         if (/ACTIVE/i.test(String(sdkStatus || ''))) onAnswered();
-        const finalStatus = mapWavoipFinalStatus(sdkStatus);
         if (finalStatus) finish(finalStatus);
       };
       const endHandler = (finalStatus: 'ended' | 'failed' | 'missed') => (payload?: any) => {
-        capturePayload(payload);
+        capturePayload(payload, { isFinal: true });
         const id = payloadCallId(payload);
         if (id && wavoipCallId && id !== wavoipCallId) return;
         finish(finalStatus);
       };
+
       [
         ['end', 'ended'], ['ended', 'ended'], ['terminate', 'ended'], ['terminated', 'ended'],
         ['hangup', 'ended'], ['bye', 'ended'], ['call.end', 'ended'], ['call:end', 'ended'],

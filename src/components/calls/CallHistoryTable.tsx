@@ -434,9 +434,10 @@ export function CallHistoryTable({
       missed: direction === 'inbound' ? 'Perdida' : 'Não atendida',
       failed: 'Falhou',
       rejected: 'Rejeitada',
-      initiated: 'Iniciando',
-      ringing: 'Chamando',
+      initiated: 'Em ligação',
+      ringing: 'Em ligação',
     };
+
     return ptMap[s] || s;
   };
 
@@ -526,8 +527,9 @@ export function CallHistoryTable({
                 <SelectItem value="missed">Perdida / Não atendida</SelectItem>
                 <SelectItem value="rejected">Rejeitada</SelectItem>
                 <SelectItem value="failed">Falhou</SelectItem>
-                <SelectItem value="initiated">Iniciando</SelectItem>
-                <SelectItem value="ringing">Chamando</SelectItem>
+                <SelectItem value="initiated">Em ligação</SelectItem>
+                <SelectItem value="ringing">Em ligação (chamando)</SelectItem>
+
               </SelectContent>
             </Select>
             <Select value={userFilter} onValueChange={setUserFilter}>
