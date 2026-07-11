@@ -177,7 +177,7 @@ describe('NotificationsBell · filtros, paginação, mute e cross-tab', () => {
     messages = [makeMsg(1), makeMsg(2)];
 
     renderBell();
-    const user = await openBell();
+    await openBell();
 
     await waitFor(() => {
       expect(screen.getByText(/Todas \(5\)/)).toBeInTheDocument();
