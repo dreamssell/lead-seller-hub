@@ -99,22 +99,26 @@ beforeEach(() => {
 
 describe('Upload concorrente de avatar', () => {
   it('N usuários fazem upload em paralelo — cada um com seu próprio path e UI de progresso', async () => {
+    console.log('DEBUG start');
     const N = 5;
     const users = Array.from({ length: N }, (_, i) => ({
       id: `user-${i}`,
       email: `user${i}@empresa.com`,
     }));
 
-    // Render N ProfileTab instances, cada um com container isolado.
-    const instances = users.map((u) => {
+    console.log('DEBUG before render');
+    const instances = users.map((u, i) => {
+      console.log('DEBUG rendering', i);
       const { container } = render(
         <TestUserCtx.Provider value={u}>
           <ProfileTab />
         </TestUserCtx.Provider>,
         { container: document.body.appendChild(document.createElement('div')) },
       );
+      console.log('DEBUG rendered', i);
       return { user: u, container };
     });
+    console.log('DEBUG all rendered');
 
     // Aguarda o load inicial de cada instância (loading -> idle).
     try {
