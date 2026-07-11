@@ -228,13 +228,13 @@ describe('NotificationsBell · filtros, paginação, mute e cross-tab', () => {
 
   it('silenciar por tipo suprime o toast mas mantém o item no sino', async () => {
     renderBell();
-    const user = await openBell();
+    await openBell();
 
     // Abre popover de preferências e ativa mute para "internas".
     const prefBtn = screen.getByTitle('Preferências');
-    await user.click(prefBtn);
+    fireEvent.click(prefBtn);
     const muteInternal = await screen.findByLabelText('Mensagens internas');
-    await user.click(muteInternal);
+    fireEvent.click(muteInternal);
 
     // Emite INSERT de mensagem interna via realtime.
     await act(async () => {
