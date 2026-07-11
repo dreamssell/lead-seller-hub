@@ -310,7 +310,7 @@ export function CallHistoryTable({
                     </TableCell>
                     {!compact && <TableCell className="text-xs">{profiles[r.user_id || ''] || '—'}</TableCell>}
                     <TableCell className="font-mono text-xs">{formatDuration(r.duration_seconds)}</TableCell>
-                    <TableCell>{statusBadge(r.status)}</TableCell>
+                    <TableCell>{statusBadge(r.status, r.direction)}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(r.started_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </TableCell>
