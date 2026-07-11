@@ -88,7 +88,7 @@ export default function BiometricCredentialsCard() {
 
   return (
     <motion.div
-      className="glass-card p-6 space-y-4"
+      className="glass-card p-4 sm:p-6 space-y-4 w-full max-w-full overflow-hidden"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.15 }}
@@ -132,19 +132,19 @@ export default function BiometricCredentialsCard() {
 
       {supported && (
         <div className="space-y-3">
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <input
               type="text"
               value={friendly}
               onChange={(e) => setFriendly(e.target.value)}
-              placeholder="Apelido (ex.: iPhone do João, Notebook do trabalho)"
-              className="flex-1 bg-secondary rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="Apelido (ex.: iPhone do João)"
+              className="flex-1 min-w-0 bg-secondary rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30"
               maxLength={80}
             />
             <button
               onClick={handleRegister}
               disabled={registering}
-              className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+              className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 shrink-0"
             >
               {registering ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
