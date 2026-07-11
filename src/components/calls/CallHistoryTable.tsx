@@ -321,10 +321,32 @@ export function CallHistoryTable({
             <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
               <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="today">Hoje</SelectItem>
                 <SelectItem value="7d">Últimos 7 dias</SelectItem>
                 <SelectItem value="30d">Últimos 30 dias</SelectItem>
                 <SelectItem value="90d">Últimos 90 dias</SelectItem>
                 <SelectItem value="all">Todo período</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={directionFilter} onValueChange={setDirectionFilter}>
+              <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="Direção" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas direções</SelectItem>
+                <SelectItem value="outbound">Efetuadas</SelectItem>
+                <SelectItem value="inbound">Recebidas</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos status</SelectItem>
+                <SelectItem value="answered">Atendida</SelectItem>
+                <SelectItem value="ended">Encerrada</SelectItem>
+                <SelectItem value="missed">Perdida / Não atendida</SelectItem>
+                <SelectItem value="rejected">Rejeitada</SelectItem>
+                <SelectItem value="failed">Falhou</SelectItem>
+                <SelectItem value="initiated">Iniciando</SelectItem>
+                <SelectItem value="ringing">Chamando</SelectItem>
               </SelectContent>
             </Select>
             <Select value={userFilter} onValueChange={setUserFilter}>
@@ -341,6 +363,7 @@ export function CallHistoryTable({
                 {uniqueConns.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
+
           </div>
         )}
         {loading ? (
