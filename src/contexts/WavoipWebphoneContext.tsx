@@ -92,7 +92,7 @@ function loadScriptOnce(src: string): Promise<any> {
 export function WavoipWebphoneProvider({ children }: { children: React.ReactNode }) {
   const { access, user } = useAuth();
   const sub_company_id = access?.sub_company_id || null;
-  const owner_id = (user?.id as string | undefined) || null;
+  const owner_id = access?.owner_id || (user?.id as string | undefined) || null;
 
   const [config, setConfig] = useState<WavoipWebphoneConfig>(defaultConfig);
   const [status, setStatus] = useState<Status>('idle');
@@ -386,6 +386,7 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
     // ---- Registro no histórico de chamadas ------------------------------
     const effectiveOwner = meta?.ownerId ?? owner_id;
     const effectiveSub = meta?.subCompanyId ?? sub_company_id;
+    const effectiveUserId = meta?.userId ?? user?.id ?? null;
     let callLogId: string | null = null;
     let recorder: MediaRecorder | null = null;
     let chunks: Blob[] = [];
@@ -406,11 +407,11 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
         leadId: meta?.leadId ?? null,
         ownerId: effectiveOwner,
         subCompanyId: effectiveSub,
-        userId: meta?.userId ?? user?.id ?? null,
+        userId: effectiveUserId,
         channel: 'wavoip',
         direction: 'outbound',
         connectionLabel: device.label,
-        metadata: { device_id: device.id, recording_enabled: recordingEnabled },
+        metadata: { device_id: device.id, recording_enabled: recordingEnabled, initiated_by_user_id: effectiveUserId },
       });
     }
 
@@ -456,7 +457,7 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
         recordingPath,
         recordingUrl,
         wavoipCallId,
-        metadata: { device_id: device.id, recording_enabled: recordingEnabled },
+        metadata: { device_id: device.id, recording_enabled: recordingEnabled, initiated_by_user_id: effectiveUserId },
       });
     };
 
@@ -491,7 +492,16 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
           // preservando user_id, contact_name etc. — em vez de criar um stub.
           await (supabase as any)
             .from('call_history')
-            .update({ metadata: { device_id: device.id, recording_enabled: recordingEnabled, wavoip_call_id: id } })
+            .update({
+              user_id: effectiveUserId,
+              metadata: {
+                device_id: device.id,
+                recording_enabled: recordingEnabled,
+                wavoip_call_id: id,
+                call_id: id,
+                initiated_by_user_id: effectiveUserId,
+              },
+            })
             .eq('id', callLogId);
         } catch (e) { console.warn('[Wavoip] persist wavoip_call_id falhou', e); }
       };

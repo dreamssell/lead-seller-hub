@@ -4,6 +4,7 @@ import { CallsPageTabsList } from '@/components/calls/CallsPageTabsList';
 import { useSipStoragePurge } from '@/hooks/useSipStoragePurge';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
+import { useAuth } from '@/contexts/AuthContext';
 
 import {
   Phone,
@@ -151,9 +152,10 @@ const dialPad = [
 
 export default function CallsPage() {
   const { isOwner } = usePlatformOwner();
+  const { access, user } = useAuth();
   useSipStoragePurge();
   const [dialerOpen, setDialerOpen] = useState(false);
-  const activeCallRef = useRef<{ id: string | null; startedAt: number; recorder: MediaRecorder | null; chunks: Blob[]; ownerId: string | null; stream: MediaStream | null }>({ id: null, startedAt: 0, recorder: null, chunks: [], ownerId: null, stream: null });
+  const activeCallRef = useRef<{ id: string | null; startedAt: number; answeredAt: number | null; recorder: MediaRecorder | null; chunks: Blob[]; ownerId: string | null; stream: MediaStream | null }>({ id: null, startedAt: 0, answeredAt: null, recorder: null, chunks: [], ownerId: null, stream: null });
 
   const [number, setNumber] = useState('');
   const [inCall, setInCall] = useState(false);
@@ -300,19 +302,21 @@ export default function CallsPage() {
       return;
     }
     // Registra no histórico
-    const { data: authData } = await supabase.auth.getUser();
-    const uid = authData.user?.id || null;
+    const uid = user?.id || (await supabase.auth.getUser()).data.user?.id || null;
+    const callOwnerId = access?.owner_id || uid;
+    const callSubCompanyId = access?.sub_company_id || null;
     const { startCallLog, uploadCallRecording, endCallLog, markCallAnswered } = await import('@/lib/callHistory');
-    const callId = uid ? await startCallLog({
+    const callId = uid && callOwnerId ? await startCallLog({
       phone: number,
-      ownerId: uid,
+      ownerId: callOwnerId,
+      subCompanyId: callSubCompanyId,
       userId: uid,
       channel: 'wavoip',
       direction: 'outbound',
       connectionLabel: sipConfig.displayName || sipConfig.server || 'Wavoip',
       metadata: { server: sipConfig.server, transport: sipConfig.transport },
     }) : null;
-    activeCallRef.current = { id: callId, startedAt: Date.now(), recorder: null, chunks: [], ownerId: uid, stream: null };
+    activeCallRef.current = { id: callId, startedAt: Date.now(), answeredAt: null, recorder: null, chunks: [], ownerId: callOwnerId, stream: null };
 
     // Se o UA SIP estiver registrado, coloca a chamada real via Wavoip
     const ua = sipRef.current;
@@ -335,7 +339,10 @@ export default function CallsPage() {
             rec.start(1000);
           } catch (recErr) { console.warn('[calls] recorder failed', recErr); }
         });
-        session?.on?.('confirmed', () => { if (callId) markCallAnswered(callId); });
+        session?.on?.('confirmed', () => {
+          activeCallRef.current.answeredAt = Date.now();
+          if (callId) markCallAnswered(callId);
+        });
         session?.on?.('ended', () => handleHangup('ended'));
         session?.on?.('failed', () => handleHangup('failed'));
         setInCall(true);
@@ -370,9 +377,9 @@ export default function CallsPage() {
           recordingPath = await uploadCallRecording(ctx.id, ctx.ownerId, blob);
         }
       }
-      await endCallLog(ctx.id, { status: finalStatus, startedAt: ctx.startedAt, recordingPath });
+      await endCallLog(ctx.id, { status: finalStatus, startedAt: ctx.startedAt, answeredAt: ctx.answeredAt, recordingPath });
     }
-    activeCallRef.current = { id: null, startedAt: 0, recorder: null, chunks: [], ownerId: null, stream: null };
+    activeCallRef.current = { id: null, startedAt: 0, answeredAt: null, recorder: null, chunks: [], ownerId: null, stream: null };
     toast({ title: 'Chamada encerrada' });
   };
 

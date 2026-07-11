@@ -77,16 +77,18 @@ export async function endCallLog(
 ) {
   if (!id) return;
   const ended = new Date();
-  // Duração = tempo falado (a partir do atendimento) quando disponível,
-  // caso contrário usa o dial time como fallback.
-  const baseline = opts.answeredAt ?? opts.startedAt;
+  // Duração = tempo falado real (answeredAt → endedAt). Nunca usa tempo de
+  // discagem como duração de conversa, para evitar parciais como “00:13”.
   const hasExplicitDuration = typeof opts.durationSeconds === 'number' && Number.isFinite(opts.durationSeconds);
-  const explicitDuration = hasExplicitDuration ? opts.durationSeconds : undefined;
-  const duration = explicitDuration !== undefined && explicitDuration >= 0
-    ? Math.round(explicitDuration)
-    : baseline
-      ? Math.max(0, Math.round((Date.now() - baseline) / 1000))
-      : undefined;
+  const explicitDuration = hasExplicitDuration && opts.durationSeconds! > 0 ? Math.round(opts.durationSeconds!) : undefined;
+  const derivedDuration = opts.answeredAt
+    ? Math.max(0, Math.round((ended.getTime() - opts.answeredAt) / 1000))
+    : undefined;
+  const duration = explicitDuration !== undefined
+    ? (derivedDuration !== undefined && derivedDuration > 0 && durationConflict(explicitDuration, derivedDuration)
+      ? derivedDuration
+      : explicitDuration)
+    : derivedDuration;
   const patch: Record<string, any> = {
     status: opts.status ?? 'ended',
     ended_at: ended.toISOString(),
@@ -97,6 +99,11 @@ export async function endCallLog(
   if (opts.wavoipCallId || opts.metadata) {
     const meta: Record<string, any> = { ...(opts.metadata || {}) };
     if (opts.wavoipCallId) meta.wavoip_call_id = opts.wavoipCallId;
+    if (duration !== undefined) {
+      meta.duration_source = explicitDuration !== undefined && duration === explicitDuration ? 'official' : 'derived_answered_to_ended';
+      if (explicitDuration !== undefined) meta.official_duration_seconds = explicitDuration;
+      if (derivedDuration !== undefined) meta.derived_duration_seconds = derivedDuration;
+    }
     patch.metadata = meta;
   }
   await (supabase as any).from('call_history').update(patch).eq('id', id);
@@ -193,9 +200,28 @@ export interface CallDurationDetails {
   reason?: 'in_progress' | 'no_end' | 'invalid';
 }
 
+function derivedTalkSeconds(answeredAt?: string | null, endedAt?: string | null): number | null {
+  const answerMs = parseCallTimestampMs(answeredAt);
+  const endMs = parseCallTimestampMs(endedAt);
+  if (!answerMs || !endMs || endMs < answerMs) return null;
+  const seconds = Math.max(0, Math.round((endMs - answerMs) / 1000));
+  return seconds > 0 ? seconds : null;
+}
+
+function durationConflict(stored: number, derived: number): boolean {
+  const tolerance = Math.max(5, Math.round(derived * 0.15));
+  return Math.abs(stored - derived) > tolerance;
+}
+
 export function getCallDurationDetails(call: CallTimingFields): CallDurationDetails {
   const stored = Number(call.duration_seconds);
+  const derived = derivedTalkSeconds(call.answered_at, call.ended_at);
   if (Number.isFinite(stored) && stored > 0) {
+    // Se o SDK/webhook persistiu duração parcial (evento fora de ordem),
+    // priorizamos o tempo falado auditável answered_at → ended_at.
+    if (derived !== null && durationConflict(Math.round(stored), derived)) {
+      return { seconds: derived, source: 'derived' };
+    }
     return { seconds: Math.max(0, Math.round(stored)), source: 'official' };
   }
   const endedMs = parseCallTimestampMs(call.ended_at);
@@ -204,11 +230,8 @@ export function getCallDurationDetails(call: CallTimingFields): CallDurationDeta
     const inProgress = status === 'initiated' || status === 'ringing' || status === 'answered';
     return { seconds: null, source: null, reason: inProgress ? 'in_progress' : 'no_end' };
   }
-  const startMs = parseCallTimestampMs(call.answered_at) ?? parseCallTimestampMs(call.started_at);
-  if (!startMs || endedMs < startMs) return { seconds: null, source: null, reason: 'invalid' };
-  const seconds = Math.max(0, Math.round((endedMs - startMs) / 1000));
-  if (seconds <= 0) return { seconds: null, source: null, reason: 'invalid' };
-  return { seconds, source: 'derived' };
+  if (derived === null) return { seconds: null, source: null, reason: 'invalid' };
+  return { seconds: derived, source: 'derived' };
 }
 
 export function getReliableCallDurationSeconds(call: CallTimingFields): number | null {

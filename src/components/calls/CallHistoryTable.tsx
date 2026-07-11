@@ -230,7 +230,7 @@ export function CallHistoryTable({
       if (connFilter !== 'all' && (r.connection_label || '') !== connFilter) return false;
       if (directionFilter !== 'all' && r.direction !== directionFilter) return false;
       if (statusFilter !== 'all') {
-        const bucket = r.status === 'ended' && r.answered_at ? 'answered' : r.status;
+        const bucket = isInProgress(r) ? 'initiated' : (r.status === 'ended' && r.answered_at ? 'answered' : r.status);
         if (bucket !== statusFilter) return false;
       }
       if (search) {
@@ -389,7 +389,7 @@ export function CallHistoryTable({
         canal: r.channel,
         conexao: r.connection_label || '—',
         direcao: directionLabel(r.direction),
-        status: statusLabelPt(r.status, r.direction),
+        status: statusLabelPt(r),
         duracao_hms: d.seconds !== null ? formatDuration(d.seconds) : (CALL_DURATION_FALLBACK_LABEL[d.reason || 'invalid']),
         duracao_segundos: d.seconds ?? '',
         origem_duracao: d.source ?? 'indisponivel',
@@ -403,7 +403,7 @@ export function CallHistoryTable({
     const filterSummary = [
       period !== 'all' ? { today: 'Hoje', '7d': 'Últimos 7 dias', '30d': 'Últimos 30 dias', '90d': 'Últimos 90 dias' }[period] : 'Todo período',
       directionFilter !== 'all' ? `Direção: ${directionLabel(directionFilter)}` : null,
-      statusFilter !== 'all' ? `Status: ${statusLabelPt(statusFilter, 'outbound')}` : null,
+      statusFilter !== 'all' ? `Status: ${statusFilter === 'initiated' ? 'Em ligação' : statusLabelPt({ status: statusFilter, direction: 'outbound', ended_at: null } as Row)}` : null,
       search ? `Busca: "${search}"` : null,
       `Fuso: ${DISPLAY_TIMEZONE}`,
     ].filter(Boolean).join(' · ');
@@ -427,21 +427,24 @@ export function CallHistoryTable({
 
   const directionLabel = (d: string) => d === 'inbound' ? 'Recebida' : 'Efetuada';
 
-  const statusLabelPt = (s: string, direction: string) => {
+  const isInProgress = (r: Pick<Row, 'status' | 'ended_at'>) => ['initiated', 'ringing', 'answered'].includes(r.status) && !r.ended_at;
+
+  const statusLabelPt = (r: Pick<Row, 'status' | 'direction' | 'ended_at'>) => {
+    if (isInProgress(r)) return 'Em ligação';
     const ptMap: Record<string, string> = {
       answered: 'Atendida',
-      ended: direction === 'inbound' ? 'Recebida' : 'Efetuada',
-      missed: direction === 'inbound' ? 'Perdida' : 'Não atendida',
+      ended: r.direction === 'inbound' ? 'Recebida' : 'Efetuada',
+      missed: r.direction === 'inbound' ? 'Perdida' : 'Não atendida',
       failed: 'Falhou',
       rejected: 'Rejeitada',
       initiated: 'Em ligação',
       ringing: 'Em ligação',
     };
 
-    return ptMap[s] || s;
+    return ptMap[r.status] || r.status;
   };
 
-  const statusBadge = (s: string, direction: string) => {
+  const statusBadge = (r: Pick<Row, 'status' | 'direction' | 'ended_at'>) => {
     const map: Record<string, string> = {
       answered: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30',
       ended: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30',
@@ -451,7 +454,8 @@ export function CallHistoryTable({
       initiated: 'bg-primary/10 text-primary border-primary/30',
       ringing: 'bg-primary/10 text-primary border-primary/30',
     };
-    return <Badge variant="outline" className={map[s] || ''}>{statusLabelPt(s, direction)}</Badge>;
+    const badgeClass = isInProgress(r) ? map.initiated : map[r.status];
+    return <Badge variant="outline" className={badgeClass || ''}>{statusLabelPt(r)}</Badge>;
   };
 
   const toggleSort = (key: SortKey) => {
@@ -585,7 +589,7 @@ export function CallHistoryTable({
                     <TableCell className="text-xs">{directionLabel(r.direction)}</TableCell>
                     <TableCell className="font-mono text-xs"><DurationCell call={r} /></TableCell>
                     <TableCell className="text-xs text-muted-foreground">{formatCallTime(r.answered_at)}</TableCell>
-                    <TableCell>{statusBadge(r.status, r.direction)}</TableCell>
+                    <TableCell>{statusBadge(r)}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{formatCallShort(r.started_at)}</TableCell>
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       {(r.recording_url || r.recording_path || (r.metadata as any)?.wavoip_call_id) ? (
@@ -670,7 +674,7 @@ export function CallHistoryTable({
                   <Field label={detail.direction === 'inbound' ? 'Origem (caller)' : 'Destino (callee)'} value={detail.phone_number} mono />
                   <Field label="Contato" value={detail.contact_name || '—'} />
                   <Field label="Direção" value={directionLabel(detail.direction)} />
-                  <Field label="Status">{statusBadge(detail.status, detail.direction)}</Field>
+                  <Field label="Status">{statusBadge(detail)}</Field>
                   <Field label="Duração"><DurationCell call={detail} /></Field>
                   <Field label="Conexão" value={detail.connection_label || detail.channel} />
                   <Field label="Atendida em" value={formatCallDateTime(detail.answered_at)} />

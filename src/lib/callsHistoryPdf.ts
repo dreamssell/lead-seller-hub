@@ -50,7 +50,8 @@ const fmtDurationSource = (row: CallHistoryPdfRow) => {
 };
 
 const directionLabel = (d: string) => (d === 'inbound' ? 'Recebida' : 'Efetuada');
-const statusLabel = (s: string, d: string) => {
+const statusLabel = (s: string, d: string, endedAt?: string | null) => {
+  if (['initiated', 'ringing', 'answered'].includes(s) && !endedAt) return 'Em ligação';
   const map: Record<string, string> = {
     answered: 'Atendida',
     ended: d === 'inbound' ? 'Recebida' : 'Efetuada',
@@ -274,7 +275,7 @@ export async function exportCallHistoryPdf(rows: CallHistoryPdfRow[], opts: Opti
       r.contact_name || '—',
       r.phone_number,
       directionLabel(r.direction),
-      statusLabel(r.status, r.direction),
+    statusLabel(r.status, r.direction, r.ended_at),
       fmtTime(r.answered_at),
       fmtDuration(r),
       fmtDurationSource(r),
