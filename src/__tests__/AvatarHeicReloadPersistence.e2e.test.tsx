@@ -22,13 +22,13 @@ vi.mock('framer-motion', () => ({
 
 // heic2any é carregado dinamicamente pelo ProfileTab — retornamos um Blob JPEG "convertido".
 const heic2anyCalls: Array<{ toType: string }> = [];
-vi.mock('heic2any', () => ({
-  default: async ({ toType }: { blob: Blob; toType: string }) => {
-    heic2anyCalls.push({ toType });
-    // Simula um JPEG resultante da conversão (bytes arbitrários, MIME image/jpeg).
-    return new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10])], { type: 'image/jpeg' });
-  },
-}));
+const heic2anyMock = async ({ toType }: { blob: Blob; toType: string }) => {
+  heic2anyCalls.push({ toType });
+  return new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10])], { type: 'image/jpeg' });
+};
+vi.mock('heic2any', () => ({ default: heic2anyMock, __esModule: true }));
+// Força a resolução do módulo mockado (garante hoisting e intercepta o import() dinâmico).
+await import('heic2any');
 
 const TestUserCtx = createContext<{ id: string; email: string } | null>(null);
 const userCache = new WeakMap<object, any>();
