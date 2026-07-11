@@ -106,45 +106,35 @@ beforeEach(() => {
 
 describe('Upload concorrente de avatar', () => {
   it('N usuários fazem upload em paralelo — cada um com seu próprio path e UI de progresso', async () => {
-    console.log('DEBUG start');
     const N = 5;
     const users = Array.from({ length: N }, (_, i) => ({
       id: `user-${i}`,
       email: `user${i}@empresa.com`,
     }));
 
-    console.log('DEBUG before render');
-    const instances = users.map((u, i) => {
-      console.log('DEBUG rendering', i);
+    const instances = users.map((u) => {
       const { container } = render(
         <TestUserCtx.Provider value={u}>
           <ProfileTab />
         </TestUserCtx.Provider>,
         { container: document.body.appendChild(document.createElement('div')) },
       );
-      console.log('DEBUG rendered', i);
       return { user: u, container };
     });
-    console.log('DEBUG all rendered');
 
-    // Aguarda o load inicial de cada instância.
+    // Aguarda o load inicial de cada instância (useEffect → setState).
     await new Promise((r) => setTimeout(r, 200));
-    console.log('DEBUG has file input:', !!(instances[0].container as HTMLElement).querySelector('input[type="file"]'));
 
     // Dispara upload em todas simultaneamente.
-    instances.forEach(({ container }, idx) => {
+    instances.forEach(({ container }) => {
       const input = (container as HTMLElement).querySelector('input[type="file"]') as HTMLInputElement;
       const file = new File([new Uint8Array(1024)], 'avatar.jpg', { type: 'image/jpeg' });
       Object.defineProperty(input, 'files', { value: [file], configurable: true });
       fireEvent.change(input);
-      console.log('DEBUG dispatched change', idx, 'files.length=', input.files?.length);
     });
-    console.log('DEBUG after fireEvent, uploadCalls:', uploadCalls.length);
-    for (let i = 0; i < 10; i++) {
-      await new Promise((r) => setTimeout(r, 100));
-      console.log('DEBUG tick', i, 'uploadCalls=', uploadCalls.length);
-      if (uploadCalls.length >= N) break;
-    }
+
+    // Aguarda todos os uploads chegarem à camada de storage.
+    await waitFor(() => expect(uploadCalls.length).toBe(N));
 
     // UI de progresso visível em cada instância — mostra "Enviando foto…".
     instances.forEach(({ container }) => {
