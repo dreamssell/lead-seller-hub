@@ -265,11 +265,38 @@ export function CallHistoryTable({
       conexao: r.connection_label || '—',
       direcao: directionLabel(r.direction),
       status: statusLabelPt(r.status, r.direction),
+      atendida_em: r.answered_at ? new Date(r.answered_at).toLocaleString('pt-BR') : '—',
       duracao: formatDuration(r.duration_seconds),
       usuario: profiles[r.user_id || ''] || '—',
       sub_empresa: subs[r.sub_company_id || ''] || '—',
     })));
   };
+
+  const exportPdf = async () => {
+    const filterSummary = [
+      period !== 'all' ? { today: 'Hoje', '7d': 'Últimos 7 dias', '30d': 'Últimos 30 dias', '90d': 'Últimos 90 dias' }[period] : 'Todo período',
+      directionFilter !== 'all' ? `Direção: ${directionLabel(directionFilter)}` : null,
+      statusFilter !== 'all' ? `Status: ${statusLabelPt(statusFilter, 'outbound')}` : null,
+      search ? `Busca: "${search}"` : null,
+    ].filter(Boolean).join(' · ');
+    await exportCallHistoryPdf(
+      filtered.map((r) => ({
+        started_at: r.started_at,
+        answered_at: r.answered_at,
+        ended_at: r.ended_at,
+        duration_seconds: r.duration_seconds,
+        contact_name: r.contact_name,
+        phone_number: r.phone_number,
+        direction: r.direction,
+        status: r.status,
+        channel: r.channel,
+        connection_label: r.connection_label,
+        user_name: profiles[r.user_id || ''] || null,
+      })),
+      { title, subtitle: `${filtered.length} chamada(s) · ${filterSummary}`, filterSummary },
+    );
+  };
+
 
   const directionLabel = (d: string) => d === 'inbound' ? 'Recebida' : 'Efetuada';
 
