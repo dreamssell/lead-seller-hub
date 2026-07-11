@@ -14,7 +14,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Copy, RefreshCw, PlayCircle, ShieldAlert, CheckCircle2, Loader2, Search } from 'lucide-react';
-import AppLayout from '@/components/AppLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 
 type EventRow = {
   id: string;
