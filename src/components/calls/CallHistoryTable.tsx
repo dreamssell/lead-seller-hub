@@ -79,20 +79,47 @@ export function CallHistoryTable({
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [subs, setSubs] = useState<Record<string, string>>({});
-  const [period, setPeriod] = useState<'today' | '7d' | '30d' | '90d' | 'all'>('30d');
-  const [userFilter, setUserFilter] = useState<string>('all');
-  const [connFilter, setConnFilter] = useState<string>(filter?.connectionLabel ?? 'all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [directionFilter, setDirectionFilter] = useState<string>('all');
-  const [search, setSearch] = useState('');
+  // URL persistence (search/filters/sort/page compartilháveis)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const scope = `ch_${filter?.subCompanyId ?? filter?.ownerId ?? customerId ?? 'g'}`;
+  const p = (k: string) => `${scope}.${k}`;
+  const gp = (k: string, dflt = '') => searchParams.get(p(k)) ?? dflt;
+  const setUrl = (patch: Record<string, string | number | null>) => {
+    const next = new URLSearchParams(searchParams);
+    Object.entries(patch).forEach(([k, v]) => {
+      const key = p(k);
+      if (v === null || v === '' || v === 'all' || v === undefined) next.delete(key);
+      else next.set(key, String(v));
+    });
+    setSearchParams(next, { replace: true });
+  };
+
+  const [period, setPeriod] = useState<'today' | '7d' | '30d' | '90d' | 'all'>((gp('period', '30d') as any) || '30d');
+  const [userFilter, setUserFilter] = useState<string>(gp('user', 'all'));
+  const [connFilter, setConnFilter] = useState<string>(gp('conn', filter?.connectionLabel ?? 'all'));
+  const [statusFilter, setStatusFilter] = useState<string>(gp('status', 'all'));
+  const [directionFilter, setDirectionFilter] = useState<string>(gp('dir', 'all'));
+  const [search, setSearch] = useState(gp('q', ''));
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>('started_at');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const [page, setPage] = useState(0);
+  const [audioLoading, setAudioLoading] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [audioErrors, setAudioErrors] = useState<Record<string, string>>({});
+  const [sortKey, setSortKey] = useState<SortKey>((gp('sk', 'started_at') as SortKey));
+  const [sortDir, setSortDir] = useState<SortDir>((gp('sd', 'desc') as SortDir));
+  const [page, setPage] = useState(Math.max(0, parseInt(gp('pg', '0'), 10) || 0));
   const [detail, setDetail] = useState<Row | null>(null);
   const rowsRef = useRef<Row[]>([]);
   rowsRef.current = rows;
+
+  // Sincroniza estado -> URL (debounced para busca via effect padrão do React)
+  useEffect(() => {
+    setUrl({
+      period, user: userFilter, conn: connFilter, status: statusFilter,
+      dir: directionFilter, q: search, sk: sortKey, sd: sortDir, pg: page || null,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, userFilter, connFilter, statusFilter, directionFilter, search, sortKey, sortDir, page]);
 
   const enrich = async (list: Row[]) => {
     const uids = Array.from(new Set(list.map((r) => r.user_id).filter(Boolean))) as string[];
