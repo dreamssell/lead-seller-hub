@@ -4,7 +4,10 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import logoUrl from '@/assets/logo.png';
-import { formatCallDuration, formatDuration, getReliableCallDurationSeconds } from './callHistory';
+import {
+  formatDuration, getCallDurationDetails, getReliableCallDurationSeconds,
+  formatCallDateTime, formatCallTime, CALL_DURATION_FALLBACK_LABEL, DISPLAY_TIMEZONE,
+} from './callHistory';
 
 const PRIMARY: [number, number, number] = [59, 130, 246]; // #3B82F6
 const ACCENT: [number, number, number] = [16, 185, 129]; // emerald
@@ -33,9 +36,18 @@ interface Options {
   filterSummary?: string;
 }
 
-const fmtDt = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('pt-BR') : '—');
-const fmtTime = (iso?: string | null) =>
-  iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+// Timezone padronizada com o dashboard (America/Sao_Paulo) para auditabilidade.
+const fmtDt = (iso?: string | null) => formatCallDateTime(iso);
+const fmtTime = (iso?: string | null) => formatCallTime(iso);
+const fmtDuration = (row: CallHistoryPdfRow) => {
+  const d = getCallDurationDetails({ ...row });
+  if (d.seconds !== null) return formatDuration(d.seconds);
+  return CALL_DURATION_FALLBACK_LABEL[d.reason || 'invalid'];
+};
+const fmtDurationSource = (row: CallHistoryPdfRow) => {
+  const d = getCallDurationDetails({ ...row });
+  return d.source === 'official' ? 'Oficial' : d.source === 'derived' ? 'Derivado' : '—';
+};
 
 const directionLabel = (d: string) => (d === 'inbound' ? 'Recebida' : 'Efetuada');
 const statusLabel = (s: string, d: string) => {
@@ -255,7 +267,7 @@ export async function exportCallHistoryPdf(rows: CallHistoryPdfRow[], opts: Opti
   // Tabela detalhada
   autoTable(doc, {
     startY: afterChart + 8,
-    head: [['Data', 'Contato', 'Número', 'Direção', 'Status', 'Atendida em', 'Duração', 'Canal/Conexão', 'Usuário']],
+    head: [['Data', 'Contato', 'Número', 'Direção', 'Status', 'Atendida em', 'Duração', 'Origem', 'Canal/Conexão', 'Usuário']],
     body: rows.map((r) => [
       fmtDt(r.started_at),
       r.contact_name || '—',
@@ -263,7 +275,8 @@ export async function exportCallHistoryPdf(rows: CallHistoryPdfRow[], opts: Opti
       directionLabel(r.direction),
       statusLabel(r.status, r.direction),
       fmtTime(r.answered_at),
-      formatCallDuration(r),
+      fmtDuration(r),
+      fmtDurationSource(r),
       r.connection_label || r.channel || '—',
       r.user_name || '—',
     ]),

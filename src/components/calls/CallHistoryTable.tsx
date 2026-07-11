@@ -2,6 +2,7 @@
 // paginação, modal de detalhes e assinatura em tempo real do Supabase para
 // atualização automática das gravações Wavoip.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,11 +11,17 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Loader2, Play, Pause, Download, Cloud, Search, RefreshCw, PhoneCall, FileText,
   ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, PhoneIncoming, PhoneOutgoing,
+  ShieldCheck, Sigma, Clock,
 } from 'lucide-react';
-import { formatCallDuration, getRecordingSignedUrl, getReliableCallDurationSeconds, type CallChannel } from '@/lib/callHistory';
+import {
+  formatDuration, getRecordingSignedUrl, getCallDurationDetails, getReliableCallDurationSeconds,
+  formatCallDateTime, formatCallTime, formatCallShort, DISPLAY_TIMEZONE,
+  CALL_DURATION_FALLBACK_LABEL, type CallChannel, type CallDurationDetails,
+} from '@/lib/callHistory';
 import { downloadCsv } from '@/lib/ceoExport';
 import { exportCallHistoryPdf } from '@/lib/callsHistoryPdf';
 import { toast } from '@/hooks/use-toast';
@@ -72,20 +79,47 @@ export function CallHistoryTable({
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [subs, setSubs] = useState<Record<string, string>>({});
-  const [period, setPeriod] = useState<'today' | '7d' | '30d' | '90d' | 'all'>('30d');
-  const [userFilter, setUserFilter] = useState<string>('all');
-  const [connFilter, setConnFilter] = useState<string>(filter?.connectionLabel ?? 'all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [directionFilter, setDirectionFilter] = useState<string>('all');
-  const [search, setSearch] = useState('');
+  // URL persistence (search/filters/sort/page compartilháveis)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const scope = `ch_${filter?.subCompanyId ?? filter?.ownerId ?? customerId ?? 'g'}`;
+  const p = (k: string) => `${scope}.${k}`;
+  const gp = (k: string, dflt = '') => searchParams.get(p(k)) ?? dflt;
+  const setUrl = (patch: Record<string, string | number | null>) => {
+    const next = new URLSearchParams(searchParams);
+    Object.entries(patch).forEach(([k, v]) => {
+      const key = p(k);
+      if (v === null || v === '' || v === 'all' || v === undefined) next.delete(key);
+      else next.set(key, String(v));
+    });
+    setSearchParams(next, { replace: true });
+  };
+
+  const [period, setPeriod] = useState<'today' | '7d' | '30d' | '90d' | 'all'>((gp('period', '30d') as any) || '30d');
+  const [userFilter, setUserFilter] = useState<string>(gp('user', 'all'));
+  const [connFilter, setConnFilter] = useState<string>(gp('conn', filter?.connectionLabel ?? 'all'));
+  const [statusFilter, setStatusFilter] = useState<string>(gp('status', 'all'));
+  const [directionFilter, setDirectionFilter] = useState<string>(gp('dir', 'all'));
+  const [search, setSearch] = useState(gp('q', ''));
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>('started_at');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const [page, setPage] = useState(0);
+  const [audioLoading, setAudioLoading] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [audioErrors, setAudioErrors] = useState<Record<string, string>>({});
+  const [sortKey, setSortKey] = useState<SortKey>((gp('sk', 'started_at') as SortKey));
+  const [sortDir, setSortDir] = useState<SortDir>((gp('sd', 'desc') as SortDir));
+  const [page, setPage] = useState(Math.max(0, parseInt(gp('pg', '0'), 10) || 0));
   const [detail, setDetail] = useState<Row | null>(null);
   const rowsRef = useRef<Row[]>([]);
   rowsRef.current = rows;
+
+  // Sincroniza estado -> URL (debounced para busca via effect padrão do React)
+  useEffect(() => {
+    setUrl({
+      period, user: userFilter, conn: connFilter, status: statusFilter,
+      dir: directionFilter, q: search, sk: sortKey, sd: sortDir, pg: page || null,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, userFilter, connFilter, statusFilter, directionFilter, search, sortKey, sortDir, page]);
 
   const enrich = async (list: Row[]) => {
     const uids = Array.from(new Set(list.map((r) => r.user_id).filter(Boolean))) as string[];
@@ -273,22 +307,53 @@ export function CallHistoryTable({
     return null;
   };
 
+  const setError = (id: string, msg: string | null) =>
+    setAudioErrors((prev) => {
+      const next = { ...prev };
+      if (msg) next[id] = msg; else delete next[id];
+      return next;
+    });
+
   const handlePlay = async (r: Row) => {
-    const url = await resolveRecordingUrl(r);
-    if (!url) { toast({ title: 'Gravação indisponível', description: 'A Wavoip pode levar alguns minutos para publicar o áudio após o fim da chamada.', variant: 'destructive' }); return; }
     if (playingId === r.id && audioEl) { audioEl.pause(); setPlayingId(null); return; }
-    if (audioEl) audioEl.pause();
-    const a = new Audio(url);
-    a.play().catch(() => toast({ title: 'Não foi possível reproduzir', description: 'A gravação pode ainda não estar disponível.', variant: 'destructive' }));
-    a.onended = () => setPlayingId(null);
-    setAudioEl(a);
-    setPlayingId(r.id);
+    setError(r.id, null);
+    setAudioLoading(r.id);
+    try {
+      const url = await resolveRecordingUrl(r);
+      if (!url) {
+        setError(r.id, 'Gravação ainda não publicada pela Wavoip.');
+        toast({ title: 'Gravação indisponível', description: 'Pode levar alguns minutos após o fim da chamada.', variant: 'destructive' });
+        return;
+      }
+      if (audioEl) audioEl.pause();
+      const a = new Audio(url);
+      a.onended = () => setPlayingId(null);
+      a.onerror = () => {
+        setError(r.id, 'Falha ao carregar áudio.');
+        setPlayingId(null);
+        toast({ title: 'Falha ao reproduzir', description: 'Não foi possível carregar a gravação.', variant: 'destructive' });
+      };
+      await a.play();
+      setAudioEl(a);
+      setPlayingId(r.id);
+    } catch (err: any) {
+      setError(r.id, err?.message || 'Erro ao reproduzir.');
+      toast({ title: 'Falha ao reproduzir', description: String(err?.message || err), variant: 'destructive' });
+    } finally {
+      setAudioLoading(null);
+    }
   };
 
   const handleDownload = async (r: Row) => {
-    const url = await resolveRecordingUrl(r);
-    if (!url) { toast({ title: 'Gravação indisponível', description: 'A Wavoip pode levar alguns minutos para publicar o áudio.', variant: 'destructive' }); return; }
+    setError(r.id, null);
+    setDownloadingId(r.id);
     try {
+      const url = await resolveRecordingUrl(r);
+      if (!url) {
+        setError(r.id, 'Gravação ainda não publicada.');
+        toast({ title: 'Gravação indisponível', description: 'Aguarde a Wavoip publicar o áudio.', variant: 'destructive' });
+        return;
+      }
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
@@ -298,29 +363,40 @@ export function CallHistoryTable({
       a.download = `chamada-${r.id}.${blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'mp3'}`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
-    } catch {
-      window.open(url, '_blank', 'noopener');
+    } catch (err: any) {
+      setError(r.id, err?.message || 'Falha no download.');
+      toast({ title: 'Falha ao baixar', description: 'Abrindo em nova aba como alternativa.', variant: 'destructive' });
+      const url = await resolveRecordingUrl(r);
+      if (url) window.open(url, '_blank', 'noopener');
+    } finally {
+      setDownloadingId(null);
     }
   };
 
-  const durationDisplay = (r: Row): string => {
-    return formatCallDuration(r);
-  };
-
   const exportCsv = () => {
-    downloadCsv(`historico-chamadas-${Date.now()}.csv`, sorted.map((r) => ({
-      data: new Date(r.started_at).toLocaleString('pt-BR'),
-      contato: r.contact_name || '—',
-      numero: r.phone_number,
-      canal: r.channel,
-      conexao: r.connection_label || '—',
-      direcao: directionLabel(r.direction),
-      status: statusLabelPt(r.status, r.direction),
-      atendida_em: r.answered_at ? new Date(r.answered_at).toLocaleString('pt-BR') : '—',
-      duracao: durationDisplay(r),
-      usuario: profiles[r.user_id || ''] || '—',
-      sub_empresa: subs[r.sub_company_id || ''] || '—',
-    })));
+    downloadCsv(`historico-chamadas-${Date.now()}.csv`, sorted.map((r) => {
+      const d = getCallDurationDetails(r);
+      return {
+        iniciada_em: formatCallDateTime(r.started_at),
+        atendida_em: formatCallDateTime(r.answered_at),
+        encerrada_em: formatCallDateTime(r.ended_at),
+        iniciada_em_iso: r.started_at || '',
+        atendida_em_iso: r.answered_at || '',
+        encerrada_em_iso: r.ended_at || '',
+        timezone: DISPLAY_TIMEZONE,
+        contato: r.contact_name || '—',
+        numero: r.phone_number,
+        canal: r.channel,
+        conexao: r.connection_label || '—',
+        direcao: directionLabel(r.direction),
+        status: statusLabelPt(r.status, r.direction),
+        duracao_hms: d.seconds !== null ? formatDuration(d.seconds) : (CALL_DURATION_FALLBACK_LABEL[d.reason || 'invalid']),
+        duracao_segundos: d.seconds ?? '',
+        origem_duracao: d.source ?? 'indisponivel',
+        usuario: profiles[r.user_id || ''] || '—',
+        sub_empresa: subs[r.sub_company_id || ''] || '—',
+      };
+    }));
   };
 
   const exportPdf = async () => {
@@ -329,6 +405,7 @@ export function CallHistoryTable({
       directionFilter !== 'all' ? `Direção: ${directionLabel(directionFilter)}` : null,
       statusFilter !== 'all' ? `Status: ${statusLabelPt(statusFilter, 'outbound')}` : null,
       search ? `Busca: "${search}"` : null,
+      `Fuso: ${DISPLAY_TIMEZONE}`,
     ].filter(Boolean).join(' · ');
     await exportCallHistoryPdf(
       sorted.map((r) => ({
@@ -504,32 +581,43 @@ export function CallHistoryTable({
                     </TableCell>
                     {!compact && <TableCell className="text-xs">{profiles[r.user_id || ''] || '—'}</TableCell>}
                     <TableCell className="text-xs">{directionLabel(r.direction)}</TableCell>
-                    <TableCell className="font-mono text-xs">{durationDisplay(r)}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {r.answered_at
-                        ? new Date(r.answered_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-                        : '—'}
-                    </TableCell>
+                    <TableCell className="font-mono text-xs"><DurationCell call={r} /></TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{formatCallTime(r.answered_at)}</TableCell>
                     <TableCell>{statusBadge(r.status, r.direction)}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {new Date(r.started_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{formatCallShort(r.started_at)}</TableCell>
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       {(r.recording_url || r.recording_path || (r.metadata as any)?.wavoip_call_id) ? (
-                        <div className="flex items-center gap-1 justify-end">
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handlePlay(r)} title="Ouvir">
-                            {playingId === r.id ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleDownload(r)} title="Baixar">
-                            <Download className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7"
-                            onClick={() => toast({ title: 'Google Drive em breve', description: 'A integração será configurada em uma próxima etapa.' })}
-                            title="Enviar ao Google Drive">
-                            <Cloud className="w-3.5 h-3.5" />
-                          </Button>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <div className="flex items-center gap-1 justify-end">
+                            <Button size="icon" variant="ghost" className="h-7 w-7"
+                              disabled={audioLoading === r.id}
+                              onClick={() => handlePlay(r)} title="Ouvir">
+                              {audioLoading === r.id
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                : playingId === r.id ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7"
+                              disabled={downloadingId === r.id}
+                              onClick={() => handleDownload(r)} title="Baixar">
+                              {downloadingId === r.id
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                : <Download className="w-3.5 h-3.5" />}
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7"
+                              onClick={() => toast({ title: 'Google Drive em breve', description: 'A integração será configurada em uma próxima etapa.' })}
+                              title="Enviar ao Google Drive">
+                              <Cloud className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                          {audioErrors[r.id] && (
+                            <span className="text-[10px] text-destructive">{audioErrors[r.id]}</span>
+                          )}
                         </div>
-                      ) : <span className="text-xs text-muted-foreground italic">sem áudio</span>}
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground border-dashed">
+                          Aguardando gravação
+                        </Badge>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -581,26 +669,33 @@ export function CallHistoryTable({
                   <Field label="Contato" value={detail.contact_name || '—'} />
                   <Field label="Direção" value={directionLabel(detail.direction)} />
                   <Field label="Status">{statusBadge(detail.status, detail.direction)}</Field>
-                  <Field label="Duração" value={durationDisplay(detail)} mono />
+                  <Field label="Duração"><DurationCell call={detail} /></Field>
                   <Field label="Conexão" value={detail.connection_label || detail.channel} />
-                  <Field label="Atendida em"
-                    value={detail.answered_at ? new Date(detail.answered_at).toLocaleString('pt-BR') : '—'} />
-                  <Field label="Encerrada em"
-                    value={detail.ended_at ? new Date(detail.ended_at).toLocaleString('pt-BR') : '—'} />
-                  <Field label="Iniciada em"
-                    value={new Date(detail.started_at).toLocaleString('pt-BR')} />
+                  <Field label="Atendida em" value={formatCallDateTime(detail.answered_at)} />
+                  <Field label="Encerrada em" value={formatCallDateTime(detail.ended_at)} />
+                  <Field label="Iniciada em" value={formatCallDateTime(detail.started_at)} />
                   <Field label="Usuário" value={profiles[detail.user_id || ''] || '—'} />
                 </div>
-                <div className="pt-2 border-t flex items-center gap-2">
+                <div className="pt-2 border-t flex flex-col gap-2">
                   {(detail.recording_url || detail.recording_path || (detail.metadata as any)?.wavoip_call_id) ? (
                     <>
-                      <Button size="sm" variant="outline" onClick={() => handlePlay(detail)}>
-                        {playingId === detail.id ? <Pause className="w-4 h-4 mr-1" /> : <Play className="w-4 h-4 mr-1" />}
-                        {playingId === detail.id ? 'Pausar' : 'Ouvir'}
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleDownload(detail)}>
-                        <Download className="w-4 h-4 mr-1" /> Baixar
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" disabled={audioLoading === detail.id} onClick={() => handlePlay(detail)}>
+                          {audioLoading === detail.id
+                            ? <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            : playingId === detail.id ? <Pause className="w-4 h-4 mr-1" /> : <Play className="w-4 h-4 mr-1" />}
+                          {audioLoading === detail.id ? 'Carregando…' : playingId === detail.id ? 'Pausar' : 'Ouvir'}
+                        </Button>
+                        <Button size="sm" variant="outline" disabled={downloadingId === detail.id} onClick={() => handleDownload(detail)}>
+                          {downloadingId === detail.id
+                            ? <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            : <Download className="w-4 h-4 mr-1" />}
+                          {downloadingId === detail.id ? 'Baixando…' : 'Baixar'}
+                        </Button>
+                      </div>
+                      {audioErrors[detail.id] && (
+                        <p className="text-xs text-destructive">{audioErrors[detail.id]}</p>
+                      )}
                     </>
                   ) : (
                     <p className="text-xs text-muted-foreground italic">
@@ -623,5 +718,48 @@ function Field({ label, value, children, mono }: { label: string; value?: string
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</p>
       {children ?? <p className={mono ? 'font-mono text-xs' : 'text-sm'}>{value}</p>}
     </div>
+  );
+}
+
+// Célula profissional de duração: exibe hh:mm:ss quando há duração confiável,
+// e um badge indicando o motivo (Em andamento / Sem encerramento) caso contrário.
+// Ocultamos cálculos aproximados — só mostramos tempos com marco terminal real.
+function DurationCell({ call }: { call: Parameters<typeof getCallDurationDetails>[0] }) {
+  const d = getCallDurationDetails(call);
+  if (d.seconds === null) {
+    const label = CALL_DURATION_FALLBACK_LABEL[d.reason || 'invalid'];
+    return (
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground border-dashed gap-1">
+              <Clock className="w-3 h-3" />{label}
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            Sem marco de encerramento — duração não é calculada até haver ended_at oficial.
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+  const icon = d.source === 'official'
+    ? <ShieldCheck className="w-3 h-3 text-emerald-500" />
+    : <Sigma className="w-3 h-3 text-muted-foreground" />;
+  const tip = d.source === 'official'
+    ? 'Duração oficial reportada pelo Wavoip.'
+    : 'Duração derivada de answered_at → ended_at (auditável).';
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center gap-1">
+            {icon}
+            <span className="font-mono">{formatDuration(d.seconds)}</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">{tip}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
