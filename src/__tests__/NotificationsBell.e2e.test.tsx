@@ -190,14 +190,14 @@ describe('NotificationsBell · filtros, paginação, mute e cross-tab', () => {
     expect(screen.getByText(/Nova mensagem interna/)).toBeInTheDocument();
 
     // Plataforma: só notificações padrão
-    await user.click(screen.getByText(/Plataforma \(3\)/));
+    fireEvent.click(screen.getByText(/Plataforma \(3\)/));
     await waitFor(() => {
       expect(screen.queryByText(/Nova mensagem interna/)).not.toBeInTheDocument();
       expect(screen.getByText('Notificação #1')).toBeInTheDocument();
     });
 
     // Internas: só mensagens
-    await user.click(screen.getByText(/Internas \(2\)/));
+    fireEvent.click(screen.getByText(/Internas \(2\)/));
     await waitFor(() => {
       expect(screen.queryByText('Notificação #1')).not.toBeInTheDocument();
       expect(screen.getAllByText(/Nova mensagem interna/).length).toBeGreaterThan(0);
