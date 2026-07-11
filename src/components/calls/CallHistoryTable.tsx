@@ -1,7 +1,7 @@
-// Tabela reutilizável de histórico de chamadas com filtros
-// (período, usuário, conexão), player de áudio, download e export CSV.
-// Também mostra placeholder para "Enviar ao Google Drive" (a configurar).
-import { useEffect, useMemo, useState } from 'react';
+// Tabela reutilizável de histórico de chamadas com filtros, busca, ordenação,
+// paginação, modal de detalhes e assinatura em tempo real do Supabase para
+// atualização automática das gravações Wavoip.
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Play, Pause, Download, Cloud, Search, RefreshCw, PhoneCall, FileText } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Loader2, Play, Pause, Download, Cloud, Search, RefreshCw, PhoneCall, FileText,
+  ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, PhoneIncoming, PhoneOutgoing,
+} from 'lucide-react';
 import { formatDuration, getRecordingSignedUrl, type CallChannel } from '@/lib/callHistory';
 import { downloadCsv } from '@/lib/ceoExport';
 import { exportCallHistoryPdf } from '@/lib/callsHistoryPdf';
@@ -52,6 +56,9 @@ interface Row {
   sub_company_id: string | null;
 }
 
+type SortKey = 'status' | 'direction' | 'duration_seconds' | 'answered_at' | 'started_at';
+type SortDir = 'asc' | 'desc';
+
 export function CallHistoryTable({
   filter,
   title = 'Histórico de chamadas',
@@ -60,11 +67,9 @@ export function CallHistoryTable({
   customerId,
   showFilters = true,
 }: Props) {
-  const pageSize = filter?.limit ?? 50;
+  const pageSize = filter?.limit ?? 25;
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [subs, setSubs] = useState<Record<string, string>>({});
   const [period, setPeriod] = useState<'today' | '7d' | '30d' | '90d' | 'all'>('30d');
@@ -75,19 +80,12 @@ export function CallHistoryTable({
   const [search, setSearch] = useState('');
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
-
-
-  const buildQuery = (from: number, to: number) => {
-    let q: any = (supabase as any).from('call_history').select('*')
-      .order('started_at', { ascending: false })
-      .range(from, to);
-    if (filter?.ownerId) q = q.eq('owner_id', filter.ownerId);
-    if (filter?.subCompanyId) q = q.eq('sub_company_id', filter.subCompanyId);
-    if (filter?.userId) q = q.eq('user_id', filter.userId);
-    if (filter?.channel && filter.channel !== 'all') q = q.eq('channel', filter.channel);
-    if (customerId) q = q.eq('customer_id', customerId);
-    return q;
-  };
+  const [sortKey, setSortKey] = useState<SortKey>('started_at');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [page, setPage] = useState(0);
+  const [detail, setDetail] = useState<Row | null>(null);
+  const rowsRef = useRef<Row[]>([]);
+  rowsRef.current = rows;
 
   const enrich = async (list: Row[]) => {
     const uids = Array.from(new Set(list.map((r) => r.user_id).filter(Boolean))) as string[];
@@ -112,56 +110,79 @@ export function CallHistoryTable({
 
   const load = async () => {
     setLoading(true);
-    const { data, error } = await buildQuery(0, pageSize - 1);
+    let q: any = (supabase as any).from('call_history').select('*')
+      .order('started_at', { ascending: false })
+      .range(0, 999);
+    if (filter?.ownerId) q = q.eq('owner_id', filter.ownerId);
+    if (filter?.subCompanyId) q = q.eq('sub_company_id', filter.subCompanyId);
+    if (filter?.userId) q = q.eq('user_id', filter.userId);
+    if (filter?.channel && filter.channel !== 'all') q = q.eq('channel', filter.channel);
+    if (customerId) q = q.eq('customer_id', customerId);
+    const { data, error } = await q;
     if (error) console.warn('[CallHistoryTable]', error);
     const list = (data as Row[]) || [];
     setRows(list);
-    setHasMore(list.length === pageSize);
     await enrich(list);
     setLoading(false);
-  };
-
-  const loadMore = async () => {
-    setLoadingMore(true);
-    const { data, error } = await buildQuery(rows.length, rows.length + pageSize - 1);
-    if (error) console.warn('[CallHistoryTable]', error);
-    const list = (data as Row[]) || [];
-    setRows((prev) => [...prev, ...list]);
-    setHasMore(list.length === pageSize);
-    await enrich(list);
-    setLoadingMore(false);
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [
     filter?.ownerId, filter?.subCompanyId, filter?.userId, filter?.channel, customerId,
   ]);
 
-  // Polling: verifica se gravações da Wavoip já foram publicadas e atualiza a linha.
-  // Wavoip publica em https://storage.wavoip.com/{callId} alguns minutos após o fim.
+  // Assinatura em tempo real: reflete UPDATE/INSERT/DELETE em call_history na UI
+  // (substitui o polling anterior — a página não precisa mais ser recarregada).
   useEffect(() => {
-    const pending = rows.filter(
-      (r) => !r.recording_url && !r.recording_path && (r.metadata as any)?.wavoip_call_id,
-    );
-    if (pending.length === 0) return;
-    let cancelled = false;
+    const channel = supabase
+      .channel(`call_history_${filter?.ownerId ?? 'all'}_${filter?.subCompanyId ?? 'all'}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'call_history' }, (payload: any) => {
+        const nrow = payload.new as Row | null;
+        const orow = payload.old as Row | null;
+        // filtro no cliente para respeitar o escopo do componente
+        const scoped = (r: Row | null) => {
+          if (!r) return false;
+          if (filter?.ownerId && (r as any).owner_id !== filter.ownerId) return false;
+          if (filter?.subCompanyId && r.sub_company_id !== filter.subCompanyId) return false;
+          if (filter?.userId && r.user_id !== filter.userId) return false;
+          if (customerId && (r as any).customer_id !== customerId) return false;
+          return true;
+        };
+        if (payload.eventType === 'INSERT' && scoped(nrow)) {
+          setRows((prev) => (prev.some((x) => x.id === nrow!.id) ? prev : [nrow as Row, ...prev]));
+          enrich([nrow as Row]);
+        } else if (payload.eventType === 'UPDATE' && scoped(nrow)) {
+          setRows((prev) => prev.map((x) => (x.id === nrow!.id ? { ...x, ...(nrow as Row) } : x)));
+        } else if (payload.eventType === 'DELETE' && orow) {
+          setRows((prev) => prev.filter((x) => x.id !== orow.id));
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter?.ownerId, filter?.subCompanyId, filter?.userId, customerId]);
+
+  // Sonda leve para detectar quando a Wavoip publica a gravação e persistir no
+  // banco. A UI é atualizada via Realtime (canal acima) sem setRows local.
+  useEffect(() => {
     const check = async () => {
+      const pending = rowsRef.current.filter(
+        (r) => !r.recording_url && !r.recording_path && (r.metadata as any)?.wavoip_call_id,
+      );
       for (const r of pending) {
-        if (cancelled) return;
         const id = (r.metadata as any).wavoip_call_id as string;
         const url = `https://storage.wavoip.com/${id}`;
         try {
           const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
           if (res.ok) {
             await (supabase as any).from('call_history').update({ recording_url: url }).eq('id', r.id);
-            if (!cancelled) setRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, recording_url: url } : x)));
           }
-        } catch { /* CORS/404 → ainda não disponível */ }
+        } catch { /* ainda não disponível */ }
       }
     };
     const t = setInterval(check, 30000);
     check();
-    return () => { cancelled = true; clearInterval(t); };
-  }, [rows]);
+    return () => clearInterval(t);
+  }, []);
 
   const filtered = useMemo(() => {
     const now = Date.now();
@@ -175,7 +196,6 @@ export function CallHistoryTable({
       if (connFilter !== 'all' && (r.connection_label || '') !== connFilter) return false;
       if (directionFilter !== 'all' && r.direction !== directionFilter) return false;
       if (statusFilter !== 'all') {
-        // agrupa answered/ended como "atendida"
         const bucket = r.status === 'ended' && r.answered_at ? 'answered' : r.status;
         if (bucket !== statusFilter) return false;
       }
@@ -192,6 +212,33 @@ export function CallHistoryTable({
     });
   }, [rows, period, userFilter, connFilter, statusFilter, directionFilter, search]);
 
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    const dir = sortDir === 'asc' ? 1 : -1;
+    arr.sort((a, b) => {
+      const av: any = (a as any)[sortKey];
+      const bv: any = (b as any)[sortKey];
+      if (sortKey === 'answered_at' || sortKey === 'started_at') {
+        const at = av ? new Date(av).getTime() : 0;
+        const bt = bv ? new Date(bv).getTime() : 0;
+        return (at - bt) * dir;
+      }
+      if (sortKey === 'duration_seconds') {
+        return ((av || 0) - (bv || 0)) * dir;
+      }
+      return String(av || '').localeCompare(String(bv || '')) * dir;
+    });
+    return arr;
+  }, [filtered, sortKey, sortDir]);
+
+  // Reset página ao mudar filtros/ordenação
+  useEffect(() => { setPage(0); }, [period, userFilter, connFilter, statusFilter, directionFilter, search, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const pageRows = useMemo(
+    () => sorted.slice(page * pageSize, page * pageSize + pageSize),
+    [sorted, page, pageSize],
+  );
 
   const uniqueUsers = useMemo(() => {
     const s = new Set<string>();
@@ -206,12 +253,9 @@ export function CallHistoryTable({
   }, [rows]);
 
   const resolveRecordingUrl = async (r: Row): Promise<string | null> => {
-    // 1) URL direta (Wavoip storage.wavoip.com ou externo)
     if (r.recording_url) return r.recording_url;
-    // 2) ID Wavoip salvo em metadata → monta a URL oficial
     const wavoipId = (r.metadata as any)?.wavoip_call_id;
     if (wavoipId) return `https://storage.wavoip.com/${wavoipId}`;
-    // 3) Fallback: arquivo em bucket privado
     if (r.recording_path) return await getRecordingSignedUrl(r.recording_path);
     return null;
   };
@@ -229,9 +273,8 @@ export function CallHistoryTable({
   };
 
   const handleDownload = async (r: Row) => {
-    let url = await resolveRecordingUrl(r);
+    const url = await resolveRecordingUrl(r);
     if (!url) { toast({ title: 'Gravação indisponível', description: 'A Wavoip pode levar alguns minutos para publicar o áudio.', variant: 'destructive' }); return; }
-    // Para arquivos privados no bucket, resolveRecordingUrl já devolve signed URL.
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -242,24 +285,21 @@ export function CallHistoryTable({
       a.download = `chamada-${r.id}.${blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'mp3'}`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
-    } catch (e: any) {
-      // Fallback: abre em nova aba (CORS-safe)
+    } catch {
       window.open(url, '_blank', 'noopener');
     }
   };
 
   const durationDisplay = (r: Row): string => {
     if (r.duration_seconds && r.duration_seconds > 0) return formatDuration(r.duration_seconds);
-    // Fallback: se não temos duração salva, calcula pelo dial time até now/ended_at.
     const end = r.ended_at ? new Date(r.ended_at).getTime() : Date.now();
     const start = r.answered_at ? new Date(r.answered_at).getTime() : new Date(r.started_at).getTime();
     const s = Math.max(0, Math.round((end - start) / 1000));
     return s > 0 ? formatDuration(s) : '—';
   };
 
-
   const exportCsv = () => {
-    downloadCsv(`historico-chamadas-${Date.now()}.csv`, filtered.map((r) => ({
+    downloadCsv(`historico-chamadas-${Date.now()}.csv`, sorted.map((r) => ({
       data: new Date(r.started_at).toLocaleString('pt-BR'),
       contato: r.contact_name || '—',
       numero: r.phone_number,
@@ -282,7 +322,7 @@ export function CallHistoryTable({
       search ? `Busca: "${search}"` : null,
     ].filter(Boolean).join(' · ');
     await exportCallHistoryPdf(
-      filtered.map((r) => ({
+      sorted.map((r) => ({
         started_at: r.started_at,
         answered_at: r.answered_at,
         ended_at: r.ended_at,
@@ -295,10 +335,9 @@ export function CallHistoryTable({
         connection_label: r.connection_label,
         user_name: profiles[r.user_id || ''] || null,
       })),
-      { title, subtitle: `${filtered.length} chamada(s) · ${filterSummary}`, filterSummary },
+      { title, subtitle: `${sorted.length} chamada(s) · ${filterSummary}`, filterSummary },
     );
   };
-
 
   const directionLabel = (d: string) => d === 'inbound' ? 'Recebida' : 'Efetuada';
 
@@ -327,6 +366,29 @@ export function CallHistoryTable({
     };
     return <Badge variant="outline" className={map[s] || ''}>{statusLabelPt(s, direction)}</Badge>;
   };
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortKey(key); setSortDir('desc'); }
+  };
+
+  const SortIcon = ({ col }: { col: SortKey }) => {
+    if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 opacity-40" />;
+    return sortDir === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />;
+  };
+
+  const SortableHead = ({ col, children }: { col: SortKey; children: React.ReactNode }) => (
+    <TableHead>
+      <button
+        type="button"
+        onClick={() => toggleSort(col)}
+        className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+        aria-label={`Ordenar por ${children}`}
+      >
+        {children} <SortIcon col={col} />
+      </button>
+    </TableHead>
+  );
 
   return (
     <Card className="glass-card">
@@ -396,12 +458,11 @@ export function CallHistoryTable({
                 {uniqueConns.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
-
           </div>
         )}
         {loading ? (
           <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-        ) : filtered.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Sem chamadas no filtro atual.</p>
         ) : (
           <div className="overflow-x-auto">
@@ -412,17 +473,21 @@ export function CallHistoryTable({
                   <TableHead>Número</TableHead>
                   <TableHead>Conexão</TableHead>
                   {!compact && <TableHead>Usuário</TableHead>}
-                  <TableHead>Direção</TableHead>
-                  <TableHead>Duração</TableHead>
-                  <TableHead>Atendida em</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Data</TableHead>
+                  <SortableHead col="direction">Direção</SortableHead>
+                  <SortableHead col="duration_seconds">Duração</SortableHead>
+                  <SortableHead col="answered_at">Atendida em</SortableHead>
+                  <SortableHead col="status">Status</SortableHead>
+                  <SortableHead col="started_at">Data</SortableHead>
                   <TableHead className="text-right">Gravação</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((r) => (
-                  <TableRow key={r.id}>
+                {pageRows.map((r) => (
+                  <TableRow
+                    key={r.id}
+                    className="cursor-pointer hover:bg-muted/40"
+                    onClick={() => setDetail(r)}
+                  >
                     <TableCell className="font-medium">{r.contact_name || '—'}</TableCell>
                     <TableCell className="font-mono text-xs">{r.phone_number}</TableCell>
                     <TableCell>
@@ -440,8 +505,7 @@ export function CallHistoryTable({
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(r.started_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </TableCell>
-
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       {(r.recording_url || r.recording_path || (r.metadata as any)?.wavoip_call_id) ? (
                         <div className="flex items-center gap-1 justify-end">
                           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handlePlay(r)} title="Ouvir">
@@ -462,17 +526,93 @@ export function CallHistoryTable({
                 ))}
               </TableBody>
             </Table>
-            {hasMore && (
-              <div className="flex justify-center pt-3">
-                <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
-                  {loadingMore ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
-                  Carregar mais
-                </Button>
+
+            {/* Paginação */}
+            <div className="flex items-center justify-between pt-3 text-xs text-muted-foreground">
+              <div>
+                Mostrando {page * pageSize + 1}–{Math.min((page + 1) * pageSize, sorted.length)} de {sorted.length}
               </div>
-            )}
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" className="h-7"
+                  onClick={() => setPage(0)} disabled={page === 0}>«</Button>
+                <Button variant="outline" size="sm" className="h-7"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </Button>
+                <span className="px-2">Página {page + 1} / {totalPages}</span>
+                <Button variant="outline" size="sm" className="h-7"
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </Button>
+                <Button variant="outline" size="sm" className="h-7"
+                  onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1}>»</Button>
+              </div>
+            </div>
           </div>
         )}
       </CardContent>
+
+      {/* Modal de detalhes da chamada */}
+      <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
+        <DialogContent className="max-w-lg">
+          {detail && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  {detail.direction === 'inbound'
+                    ? <PhoneIncoming className="w-4 h-4 text-emerald-500" />
+                    : <PhoneOutgoing className="w-4 h-4 text-sky-500" />}
+                  {detail.contact_name || detail.phone_number}
+                </DialogTitle>
+                <DialogDescription>Detalhes da chamada</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label={detail.direction === 'inbound' ? 'Origem (caller)' : 'Destino (callee)'} value={detail.phone_number} mono />
+                  <Field label="Contato" value={detail.contact_name || '—'} />
+                  <Field label="Direção" value={directionLabel(detail.direction)} />
+                  <Field label="Status">{statusBadge(detail.status, detail.direction)}</Field>
+                  <Field label="Duração" value={durationDisplay(detail)} mono />
+                  <Field label="Conexão" value={detail.connection_label || detail.channel} />
+                  <Field label="Atendida em"
+                    value={detail.answered_at ? new Date(detail.answered_at).toLocaleString('pt-BR') : '—'} />
+                  <Field label="Encerrada em"
+                    value={detail.ended_at ? new Date(detail.ended_at).toLocaleString('pt-BR') : '—'} />
+                  <Field label="Iniciada em"
+                    value={new Date(detail.started_at).toLocaleString('pt-BR')} />
+                  <Field label="Usuário" value={profiles[detail.user_id || ''] || '—'} />
+                </div>
+                <div className="pt-2 border-t flex items-center gap-2">
+                  {(detail.recording_url || detail.recording_path || (detail.metadata as any)?.wavoip_call_id) ? (
+                    <>
+                      <Button size="sm" variant="outline" onClick={() => handlePlay(detail)}>
+                        {playingId === detail.id ? <Pause className="w-4 h-4 mr-1" /> : <Play className="w-4 h-4 mr-1" />}
+                        {playingId === detail.id ? 'Pausar' : 'Ouvir'}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => handleDownload(detail)}>
+                        <Download className="w-4 h-4 mr-1" /> Baixar
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">
+                      Gravação ainda não publicada. A tabela atualiza automaticamente quando ficar disponível.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
+  );
+}
+
+function Field({ label, value, children, mono }: { label: string; value?: string; children?: React.ReactNode; mono?: boolean }) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</p>
+      {children ?? <p className={mono ? 'font-mono text-xs' : 'text-sm'}>{value}</p>}
+    </div>
   );
 }
