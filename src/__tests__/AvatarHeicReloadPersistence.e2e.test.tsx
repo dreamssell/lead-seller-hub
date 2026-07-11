@@ -150,16 +150,18 @@ describe('Persistência do avatar HEIC convertido após reload', () => {
 
     await new Promise((r) => setTimeout(r, 200));
 
-    first.forEach(({ utils }) => {
+    // Dispara os uploads sequencialmente — o `import('heic2any')` dinâmico no
+    // ProfileTab tem uma janela de race entre chamadas paralelas (a primeira
+    // instala o mock no cache do módulo, as demais podem resolver antes).
+    for (const { user, utils } of first) {
       const input = utils.container.querySelector('input[type="file"]') as HTMLInputElement;
-      // iPhone envia HEIC — tipo real image/heic e extensão .HEIC (case-insensitive).
       const file = new File([new Uint8Array(4096)], 'IMG_1234.HEIC', { type: 'image/heic' });
       Object.defineProperty(input, 'files', { value: [file], configurable: true });
       fireEvent.change(input);
-    });
+      await waitFor(() => expect(avatarByUser.has(user.id)).toBe(true), { timeout: 3000 });
+    }
 
-    // Aguarda todos os uploads terminarem de converter, subir e persistir.
-    await waitFor(() => expect(avatarByUser.size).toBe(N), { timeout: 3000 });
+    expect(avatarByUser.size).toBe(N);
 
     // heic2any foi chamado uma vez por usuário, convertendo para JPEG.
     expect(heic2anyCalls).toHaveLength(N);
