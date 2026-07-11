@@ -124,17 +124,17 @@ describe('Upload concorrente de avatar', () => {
     await new Promise((r) => setTimeout(r, 200));
     console.log('DEBUG after sleep, html:', (instances[0].container as HTMLElement).innerHTML.slice(0, 400));
 
-    // Dispara upload em todas simultaneamente.
-    await act(async () => {
-      instances.forEach(({ container }) => {
-        const input = (container as HTMLElement).querySelector('input[type="file"]') as HTMLInputElement;
-        const file = new File([new Uint8Array(1024)], 'avatar.jpg', { type: 'image/jpeg' });
-        fireEvent.change(input, { target: { files: [file] } });
-      });
+    // Dispara upload em todas simultaneamente (sem act — as promises de upload ficam pendentes propositalmente).
+    instances.forEach(({ container }) => {
+      const input = (container as HTMLElement).querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File([new Uint8Array(1024)], 'avatar.jpg', { type: 'image/jpeg' });
+      fireEvent.change(input, { target: { files: [file] } });
     });
     console.log('DEBUG after fireEvent, uploadCalls:', uploadCalls.length);
-    await new Promise((r) => setTimeout(r, 300));
-    console.log('DEBUG after wait, uploadCalls:', uploadCalls.length);
+
+    // Aguarda todos os uploads chegarem à camada de storage.
+    await waitFor(() => expect(uploadCalls.length).toBe(N));
+    console.log('DEBUG all uploads pending:', uploadCalls.length);
 
     // UI de progresso visível em cada instância — mostra "Enviando foto…".
     instances.forEach(({ container }) => {
