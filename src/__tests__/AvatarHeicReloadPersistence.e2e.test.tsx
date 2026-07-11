@@ -140,7 +140,8 @@ import ProfileTab from '@/components/settings/ProfileTab';
 
 beforeEach(() => {
   avatarByUser.clear();
-  uploadedTypeByUser.clear();
+  storageObjectsByPath.clear();
+  storageObjectsByUser.clear();
   heic2anyCalls.length = 0;
 });
 
