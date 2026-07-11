@@ -669,26 +669,33 @@ export function CallHistoryTable({
                   <Field label="Contato" value={detail.contact_name || '—'} />
                   <Field label="Direção" value={directionLabel(detail.direction)} />
                   <Field label="Status">{statusBadge(detail.status, detail.direction)}</Field>
-                  <Field label="Duração" value={durationDisplay(detail)} mono />
+                  <Field label="Duração"><DurationCell call={detail} /></Field>
                   <Field label="Conexão" value={detail.connection_label || detail.channel} />
-                  <Field label="Atendida em"
-                    value={detail.answered_at ? new Date(detail.answered_at).toLocaleString('pt-BR') : '—'} />
-                  <Field label="Encerrada em"
-                    value={detail.ended_at ? new Date(detail.ended_at).toLocaleString('pt-BR') : '—'} />
-                  <Field label="Iniciada em"
-                    value={new Date(detail.started_at).toLocaleString('pt-BR')} />
+                  <Field label="Atendida em" value={formatCallDateTime(detail.answered_at)} />
+                  <Field label="Encerrada em" value={formatCallDateTime(detail.ended_at)} />
+                  <Field label="Iniciada em" value={formatCallDateTime(detail.started_at)} />
                   <Field label="Usuário" value={profiles[detail.user_id || ''] || '—'} />
                 </div>
-                <div className="pt-2 border-t flex items-center gap-2">
+                <div className="pt-2 border-t flex flex-col gap-2">
                   {(detail.recording_url || detail.recording_path || (detail.metadata as any)?.wavoip_call_id) ? (
                     <>
-                      <Button size="sm" variant="outline" onClick={() => handlePlay(detail)}>
-                        {playingId === detail.id ? <Pause className="w-4 h-4 mr-1" /> : <Play className="w-4 h-4 mr-1" />}
-                        {playingId === detail.id ? 'Pausar' : 'Ouvir'}
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleDownload(detail)}>
-                        <Download className="w-4 h-4 mr-1" /> Baixar
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" disabled={audioLoading === detail.id} onClick={() => handlePlay(detail)}>
+                          {audioLoading === detail.id
+                            ? <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            : playingId === detail.id ? <Pause className="w-4 h-4 mr-1" /> : <Play className="w-4 h-4 mr-1" />}
+                          {audioLoading === detail.id ? 'Carregando…' : playingId === detail.id ? 'Pausar' : 'Ouvir'}
+                        </Button>
+                        <Button size="sm" variant="outline" disabled={downloadingId === detail.id} onClick={() => handleDownload(detail)}>
+                          {downloadingId === detail.id
+                            ? <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            : <Download className="w-4 h-4 mr-1" />}
+                          {downloadingId === detail.id ? 'Baixando…' : 'Baixar'}
+                        </Button>
+                      </div>
+                      {audioErrors[detail.id] && (
+                        <p className="text-xs text-destructive">{audioErrors[detail.id]}</p>
+                      )}
                     </>
                   ) : (
                     <p className="text-xs text-muted-foreground italic">
