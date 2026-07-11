@@ -64,6 +64,7 @@ const CompanyDetailPage = lazy(() => import("./pages/owner/CompanyDetailPage"));
 const InternalCommsPage = lazy(() => import("./pages/InternalCommsPage"));
 const InternalMessageDetailPage = lazy(() => import("./pages/InternalMessageDetailPage"));
 const InternalCommsAuditPage = lazy(() => import("./pages/owner/InternalCommsAuditPage"));
+const WavoipWebhookAdminPage = lazy(() => import("./pages/owner/WavoipWebhookAdminPage"));
 
 /**
  * React Query com defaults calibrados para reduzir refetches redundantes.
@@ -157,6 +158,7 @@ const App = () => (
               <Route path="/internal-comms" element={<ProtectedRoute><InternalCommsPage /></ProtectedRoute>} />
               <Route path="/internal-comms/message/:id" element={<ProtectedRoute><InternalMessageDetailPage /></ProtectedRoute>} />
               <Route path="/owner/internal-comms-audit" element={<ProtectedRoute ownerOnly><InternalCommsAuditPage /></ProtectedRoute>} />
+              <Route path="/owner/wavoip-webhook" element={<ProtectedRoute ownerOnly><WavoipWebhookAdminPage /></ProtectedRoute>} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>
