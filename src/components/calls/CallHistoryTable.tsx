@@ -2,6 +2,7 @@
 // paginação, modal de detalhes e assinatura em tempo real do Supabase para
 // atualização automática das gravações Wavoip.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,11 +11,17 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Loader2, Play, Pause, Download, Cloud, Search, RefreshCw, PhoneCall, FileText,
   ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, PhoneIncoming, PhoneOutgoing,
+  ShieldCheck, Sigma, Clock,
 } from 'lucide-react';
-import { formatCallDuration, getRecordingSignedUrl, getReliableCallDurationSeconds, type CallChannel } from '@/lib/callHistory';
+import {
+  formatDuration, getRecordingSignedUrl, getCallDurationDetails, getReliableCallDurationSeconds,
+  formatCallDateTime, formatCallTime, formatCallShort, DISPLAY_TIMEZONE,
+  CALL_DURATION_FALLBACK_LABEL, type CallChannel, type CallDurationDetails,
+} from '@/lib/callHistory';
 import { downloadCsv } from '@/lib/ceoExport';
 import { exportCallHistoryPdf } from '@/lib/callsHistoryPdf';
 import { toast } from '@/hooks/use-toast';
