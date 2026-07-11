@@ -8,9 +8,14 @@ import { sanitizeFilename } from '@/lib/sanitizeFilename';
 
 const MAX_AVATAR_MB = 5;
 const MAX_AVATAR_BYTES = MAX_AVATAR_MB * 1024 * 1024;
+const ALLOWED_MIME = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']);
+const ALLOWED_EXT = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif']);
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+function extOf(name: string): string {
+  const i = name.lastIndexOf('.');
+  return i < 0 ? '' : name.slice(i + 1).toLowerCase();
+}
+
 
 type UploadPhase = 'idle' | 'converting' | 'validating' | 'uploading' | 'saving' | 'done' | 'error';
 
