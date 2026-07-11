@@ -4945,6 +4945,7 @@ export type Database = {
       wavoip_webhook_events: {
         Row: {
           call_history_id: string | null
+          call_id: string | null
           error_message: string | null
           event: string | null
           http_status: number | null
@@ -4961,6 +4962,7 @@ export type Database = {
         }
         Insert: {
           call_history_id?: string | null
+          call_id?: string | null
           error_message?: string | null
           event?: string | null
           http_status?: number | null
@@ -4977,6 +4979,7 @@ export type Database = {
         }
         Update: {
           call_history_id?: string | null
+          call_id?: string | null
           error_message?: string | null
           event?: string | null
           http_status?: number | null
