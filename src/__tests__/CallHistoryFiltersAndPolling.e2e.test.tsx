@@ -54,14 +54,16 @@ const initialRows: any[] = [
 const dbRows: Record<string, any> = Object.fromEntries(initialRows.map((r) => [r.id, { ...r }]));
 
 vi.mock('@/integrations/supabase/client', () => {
-  const buildSelectChain = (table: string) => {
-    const state: any = { table, filters: [] };
+  const buildSelectChain = () => {
+    const result = { data: Object.values(dbRows), error: null };
     const chain: any = {
       select: () => chain,
       order: () => chain,
-      range: async () => ({ data: Object.values(dbRows), error: null }),
+      range: () => chain,
       eq: () => chain,
-      in: async () => ({ data: [], error: null }),
+      in: () => Promise.resolve({ data: [], error: null }),
+      then: (onFulfilled: any, onRejected?: any) =>
+        Promise.resolve({ data: Object.values(dbRows), error: null }).then(onFulfilled, onRejected),
       update: (patch: any) => ({
         eq: async (_col: string, id: string) => {
           if (dbRows[id]) Object.assign(dbRows[id], patch);
@@ -73,7 +75,7 @@ vi.mock('@/integrations/supabase/client', () => {
   };
   return {
     supabase: {
-      from: (table: string) => buildSelectChain(table),
+      from: () => buildSelectChain(),
       storage: { from: () => ({ createSignedUrl: async () => ({ data: null, error: null }) }) },
     },
   };
