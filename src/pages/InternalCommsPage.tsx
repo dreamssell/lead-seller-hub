@@ -80,7 +80,7 @@ export default function InternalCommsPage() {
       toast.error('Corrija o anexo antes de enviar.');
       return;
     }
-    if (!draft.trim() || sending) return;
+    if ((!draft.trim() && !pendingFile) || sending) return;
     setSending(true);
     const res = await sendMessage(draft);
     setSending(false);
