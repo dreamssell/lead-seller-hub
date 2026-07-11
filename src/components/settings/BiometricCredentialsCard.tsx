@@ -88,7 +88,7 @@ export default function BiometricCredentialsCard() {
 
   return (
     <motion.div
-      className="glass-card p-6 space-y-4"
+      className="glass-card p-4 sm:p-6 space-y-4 w-full max-w-full overflow-hidden"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.15 }}
