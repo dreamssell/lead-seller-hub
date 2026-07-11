@@ -185,22 +185,24 @@ Deno.serve(async (req) => {
         matchedId = rows?.[0]?.id ?? null;
         if (updated === 0) {
           if (status === 'ended' || status === 'answered') {
+            const insertRow: Record<string, any> = {
+              owner_id: ownerId,
+              sub_company_id: subCompanyId,
+              channel: 'wavoip',
+              direction: direction === 'inbound' || direction === 'in' ? 'inbound' : 'outbound',
+              phone_number: phone ?? 'unknown',
+              status: status ?? 'ended',
+              started_at: startedAt ?? new Date().toISOString(),
+              answered_at: answeredAt,
+              ended_at: endedAt,
+              recording_url: recordingUrl ?? null,
+              metadata: { wavoip_call_id: wavoipCallId, source: 'webhook' },
+            };
+            // duration_seconds é NOT NULL DEFAULT 0 — só envia se houver valor real
+            if (duration && duration > 0) insertRow.duration_seconds = Math.round(duration);
             const { data: ins, error: insErr } = await admin
               .from('call_history')
-              .insert({
-                owner_id: ownerId,
-                sub_company_id: subCompanyId,
-                channel: 'wavoip',
-                direction: direction === 'inbound' || direction === 'in' ? 'inbound' : 'outbound',
-                phone_number: phone ?? 'unknown',
-                status: status ?? 'ended',
-                started_at: startedAt ?? new Date().toISOString(),
-                answered_at: answeredAt,
-                ended_at: endedAt,
-                duration_seconds: duration && duration > 0 ? Math.round(duration) : null,
-                recording_url: recordingUrl ?? null,
-                metadata: { wavoip_call_id: wavoipCallId, source: 'webhook' },
-              })
+              .insert(insertRow)
               .select('id')
               .single();
             if (insErr) {
