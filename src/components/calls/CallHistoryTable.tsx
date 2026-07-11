@@ -379,7 +379,9 @@ export function CallHistoryTable({
                   <TableHead>Número</TableHead>
                   <TableHead>Conexão</TableHead>
                   {!compact && <TableHead>Usuário</TableHead>}
+                  <TableHead>Direção</TableHead>
                   <TableHead>Duração</TableHead>
+                  <TableHead>Atendida em</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Data</TableHead>
                   <TableHead className="text-right">Gravação</TableHead>
@@ -394,11 +396,18 @@ export function CallHistoryTable({
                       <Badge variant="secondary" className="text-[10px]">{r.connection_label || r.channel}</Badge>
                     </TableCell>
                     {!compact && <TableCell className="text-xs">{profiles[r.user_id || ''] || '—'}</TableCell>}
-                    <TableCell className="font-mono text-xs">{formatDuration(r.duration_seconds)}</TableCell>
+                    <TableCell className="text-xs">{directionLabel(r.direction)}</TableCell>
+                    <TableCell className="font-mono text-xs">{durationDisplay(r)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {r.answered_at
+                        ? new Date(r.answered_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                        : '—'}
+                    </TableCell>
                     <TableCell>{statusBadge(r.status, r.direction)}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(r.started_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </TableCell>
+
                     <TableCell className="text-right">
                       {(r.recording_url || r.recording_path || (r.metadata as any)?.wavoip_call_id) ? (
                         <div className="flex items-center gap-1 justify-end">
