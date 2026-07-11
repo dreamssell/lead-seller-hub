@@ -197,7 +197,7 @@ describe('NotificationsBell · filtros, paginação, mute e cross-tab', () => {
 
     // Todas: mistura plataforma + internas
     expect(screen.getByText('Notificação #3')).toBeInTheDocument();
-    expect(screen.getByText(/Nova mensagem interna/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Nova mensagem interna/).length).toBe(2);
 
     // Plataforma: só notificações padrão
     fireEvent.click(screen.getByText(/Plataforma \(3\)/));
