@@ -226,12 +226,34 @@ export function CallHistoryTable({
   };
 
   const handleDownload = async (r: Row) => {
-    const url = await resolveRecordingUrl(r);
-    if (!url) { toast({ title: 'Gravação indisponível', variant: 'destructive' }); return; }
-    const a = document.createElement('a');
-    a.href = url; a.download = `chamada-${r.id}.mp3`; a.target = '_blank';
-    document.body.appendChild(a); a.click(); a.remove();
+    let url = await resolveRecordingUrl(r);
+    if (!url) { toast({ title: 'Gravação indisponível', description: 'A Wavoip pode levar alguns minutos para publicar o áudio.', variant: 'destructive' }); return; }
+    // Para arquivos privados no bucket, resolveRecordingUrl já devolve signed URL.
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = `chamada-${r.id}.${blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'mp3'}`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
+    } catch (e: any) {
+      // Fallback: abre em nova aba (CORS-safe)
+      window.open(url, '_blank', 'noopener');
+    }
   };
+
+  const durationDisplay = (r: Row): string => {
+    if (r.duration_seconds && r.duration_seconds > 0) return formatDuration(r.duration_seconds);
+    // Fallback: se não temos duração salva, calcula pelo dial time até now/ended_at.
+    const end = r.ended_at ? new Date(r.ended_at).getTime() : Date.now();
+    const start = r.answered_at ? new Date(r.answered_at).getTime() : new Date(r.started_at).getTime();
+    const s = Math.max(0, Math.round((end - start) / 1000));
+    return s > 0 ? formatDuration(s) : '—';
+  };
+
 
   const exportCsv = () => {
     downloadCsv(`historico-chamadas-${Date.now()}.csv`, filtered.map((r) => ({
