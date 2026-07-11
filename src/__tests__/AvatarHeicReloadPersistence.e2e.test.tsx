@@ -191,7 +191,7 @@ describe('Persistência do avatar HEIC convertido após reload', () => {
       expect(url).toMatch(new RegExp(`avatars/${u.id}/`));
       expect(url.toLowerCase()).toContain('.jpg');
       expect(url.toLowerCase()).not.toContain('.heic');
-      expect(uploadedTypeByUser.get(u.id)).toBe('image/jpeg');
+      expect(storageObjectsByUser.get(u.id)?.contentType).toBe('image/jpeg');
     });
 
     // 2) Simula reload: desmonta e remonta cada instância.
