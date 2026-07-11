@@ -42,7 +42,10 @@ interface Row {
   status: string;
   duration_seconds: number;
   started_at: string;
+  answered_at: string | null;
   recording_path: string | null;
+  recording_url: string | null;
+  metadata: Record<string, any> | null;
   user_id: string | null;
   sub_company_id: string | null;
 }
