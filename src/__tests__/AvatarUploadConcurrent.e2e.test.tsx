@@ -25,18 +25,21 @@ vi.mock('framer-motion', () => ({
   motion: new Proxy({}, { get: () => (props: any) => <div {...props} /> }),
 }));
 
-// ---- Auth mock: fila de usuários (um por render) ----
-const userQueue: Array<{ id: string; email: string }> = [];
-vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => {
-    // cada render consome o próximo usuário; se acabar, repete o último.
-    const u = userQueue.shift() ?? { id: 'fallback', email: 'fallback@x.com' };
-    return {
-      user: { ...u, user_metadata: { display_name: u.email.split('@')[0] } },
-      signOut: vi.fn(),
-    };
-  },
-}));
+// ---- Auth mock: contexto de teste para injetar user por instância ----
+import { createContext, useContext } from 'react';
+const TestUserCtx = createContext<{ id: string; email: string } | null>(null);
+vi.mock('@/contexts/AuthContext', async () => {
+  const React = await import('react');
+  return {
+    useAuth: () => {
+      const u = React.useContext(TestUserCtx);
+      return {
+        user: u ? { ...u, user_metadata: { display_name: u.email.split('@')[0] } } : null,
+        signOut: vi.fn(),
+      };
+    },
+  };
+});
 
 // ---- Supabase mock ----
 type UploadCall = { bucket: string; path: string; size: number };
