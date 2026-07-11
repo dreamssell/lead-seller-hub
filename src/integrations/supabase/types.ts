@@ -4942,6 +4942,48 @@ export type Database = {
         }
         Relationships: []
       }
+      wavoip_webhook_events: {
+        Row: {
+          call_history_id: string | null
+          error_message: string | null
+          event: string | null
+          http_status: number | null
+          id: string
+          payload: Json | null
+          phone_number: string | null
+          received_at: string
+          source_ip: string | null
+          status: string
+          wavoip_call_id: string | null
+        }
+        Insert: {
+          call_history_id?: string | null
+          error_message?: string | null
+          event?: string | null
+          http_status?: number | null
+          id?: string
+          payload?: Json | null
+          phone_number?: string | null
+          received_at?: string
+          source_ip?: string | null
+          status?: string
+          wavoip_call_id?: string | null
+        }
+        Update: {
+          call_history_id?: string | null
+          error_message?: string | null
+          event?: string | null
+          http_status?: number | null
+          id?: string
+          payload?: Json | null
+          phone_number?: string | null
+          received_at?: string
+          source_ip?: string | null
+          status?: string
+          wavoip_call_id?: string | null
+        }
+        Relationships: []
+      }
       webauthn_challenges: {
         Row: {
           challenge: string
