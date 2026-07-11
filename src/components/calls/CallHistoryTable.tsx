@@ -43,6 +43,7 @@ interface Row {
   duration_seconds: number;
   started_at: string;
   answered_at: string | null;
+  ended_at?: string | null;
   recording_path: string | null;
   recording_url: string | null;
   metadata: Record<string, any> | null;
@@ -65,12 +66,15 @@ export function CallHistoryTable({
   const [hasMore, setHasMore] = useState(false);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [subs, setSubs] = useState<Record<string, string>>({});
-  const [period, setPeriod] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
+  const [period, setPeriod] = useState<'today' | '7d' | '30d' | '90d' | 'all'>('30d');
   const [userFilter, setUserFilter] = useState<string>('all');
   const [connFilter, setConnFilter] = useState<string>(filter?.connectionLabel ?? 'all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [directionFilter, setDirectionFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
+
 
   const buildQuery = (from: number, to: number) => {
     let q: any = (supabase as any).from('call_history').select('*')
@@ -131,14 +135,49 @@ export function CallHistoryTable({
     filter?.ownerId, filter?.subCompanyId, filter?.userId, filter?.channel, customerId,
   ]);
 
+  // Polling: verifica se gravações da Wavoip já foram publicadas e atualiza a linha.
+  // Wavoip publica em https://storage.wavoip.com/{callId} alguns minutos após o fim.
+  useEffect(() => {
+    const pending = rows.filter(
+      (r) => !r.recording_url && !r.recording_path && (r.metadata as any)?.wavoip_call_id,
+    );
+    if (pending.length === 0) return;
+    let cancelled = false;
+    const check = async () => {
+      for (const r of pending) {
+        if (cancelled) return;
+        const id = (r.metadata as any).wavoip_call_id as string;
+        const url = `https://storage.wavoip.com/${id}`;
+        try {
+          const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+          if (res.ok) {
+            await (supabase as any).from('call_history').update({ recording_url: url }).eq('id', r.id);
+            if (!cancelled) setRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, recording_url: url } : x)));
+          }
+        } catch { /* CORS/404 → ainda não disponível */ }
+      }
+    };
+    const t = setInterval(check, 30000);
+    check();
+    return () => { cancelled = true; clearInterval(t); };
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const now = Date.now();
-    const cutoffDays: Record<string, number | null> = { '7d': 7, '30d': 30, '90d': 90, all: null };
-    const days = cutoffDays[period];
+    const cutoffMs: Record<string, number | null> = {
+      today: 86400_000, '7d': 7 * 86400_000, '30d': 30 * 86400_000, '90d': 90 * 86400_000, all: null,
+    };
+    const win = cutoffMs[period];
     return rows.filter((r) => {
-      if (days && now - new Date(r.started_at).getTime() > days * 86400_000) return false;
+      if (win && now - new Date(r.started_at).getTime() > win) return false;
       if (userFilter !== 'all' && r.user_id !== userFilter) return false;
       if (connFilter !== 'all' && (r.connection_label || '') !== connFilter) return false;
+      if (directionFilter !== 'all' && r.direction !== directionFilter) return false;
+      if (statusFilter !== 'all') {
+        // agrupa answered/ended como "atendida"
+        const bucket = r.status === 'ended' && r.answered_at ? 'answered' : r.status;
+        if (bucket !== statusFilter) return false;
+      }
       if (search) {
         const q = search.toLowerCase();
         if (
@@ -148,7 +187,8 @@ export function CallHistoryTable({
       }
       return true;
     });
-  }, [rows, period, userFilter, connFilter, search]);
+  }, [rows, period, userFilter, connFilter, statusFilter, directionFilter, search]);
+
 
   const uniqueUsers = useMemo(() => {
     const s = new Set<string>();
@@ -186,12 +226,34 @@ export function CallHistoryTable({
   };
 
   const handleDownload = async (r: Row) => {
-    const url = await resolveRecordingUrl(r);
-    if (!url) { toast({ title: 'Gravação indisponível', variant: 'destructive' }); return; }
-    const a = document.createElement('a');
-    a.href = url; a.download = `chamada-${r.id}.mp3`; a.target = '_blank';
-    document.body.appendChild(a); a.click(); a.remove();
+    let url = await resolveRecordingUrl(r);
+    if (!url) { toast({ title: 'Gravação indisponível', description: 'A Wavoip pode levar alguns minutos para publicar o áudio.', variant: 'destructive' }); return; }
+    // Para arquivos privados no bucket, resolveRecordingUrl já devolve signed URL.
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = `chamada-${r.id}.${blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'mp3'}`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
+    } catch (e: any) {
+      // Fallback: abre em nova aba (CORS-safe)
+      window.open(url, '_blank', 'noopener');
+    }
   };
+
+  const durationDisplay = (r: Row): string => {
+    if (r.duration_seconds && r.duration_seconds > 0) return formatDuration(r.duration_seconds);
+    // Fallback: se não temos duração salva, calcula pelo dial time até now/ended_at.
+    const end = r.ended_at ? new Date(r.ended_at).getTime() : Date.now();
+    const start = r.answered_at ? new Date(r.answered_at).getTime() : new Date(r.started_at).getTime();
+    const s = Math.max(0, Math.round((end - start) / 1000));
+    return s > 0 ? formatDuration(s) : '—';
+  };
+
 
   const exportCsv = () => {
     downloadCsv(`historico-chamadas-${Date.now()}.csv`, filtered.map((r) => ({
@@ -259,10 +321,32 @@ export function CallHistoryTable({
             <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
               <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="today">Hoje</SelectItem>
                 <SelectItem value="7d">Últimos 7 dias</SelectItem>
                 <SelectItem value="30d">Últimos 30 dias</SelectItem>
                 <SelectItem value="90d">Últimos 90 dias</SelectItem>
                 <SelectItem value="all">Todo período</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={directionFilter} onValueChange={setDirectionFilter}>
+              <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="Direção" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas direções</SelectItem>
+                <SelectItem value="outbound">Efetuadas</SelectItem>
+                <SelectItem value="inbound">Recebidas</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos status</SelectItem>
+                <SelectItem value="answered">Atendida</SelectItem>
+                <SelectItem value="ended">Encerrada</SelectItem>
+                <SelectItem value="missed">Perdida / Não atendida</SelectItem>
+                <SelectItem value="rejected">Rejeitada</SelectItem>
+                <SelectItem value="failed">Falhou</SelectItem>
+                <SelectItem value="initiated">Iniciando</SelectItem>
+                <SelectItem value="ringing">Chamando</SelectItem>
               </SelectContent>
             </Select>
             <Select value={userFilter} onValueChange={setUserFilter}>
@@ -279,6 +363,7 @@ export function CallHistoryTable({
                 {uniqueConns.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
+
           </div>
         )}
         {loading ? (
@@ -294,7 +379,9 @@ export function CallHistoryTable({
                   <TableHead>Número</TableHead>
                   <TableHead>Conexão</TableHead>
                   {!compact && <TableHead>Usuário</TableHead>}
+                  <TableHead>Direção</TableHead>
                   <TableHead>Duração</TableHead>
+                  <TableHead>Atendida em</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Data</TableHead>
                   <TableHead className="text-right">Gravação</TableHead>
@@ -309,11 +396,18 @@ export function CallHistoryTable({
                       <Badge variant="secondary" className="text-[10px]">{r.connection_label || r.channel}</Badge>
                     </TableCell>
                     {!compact && <TableCell className="text-xs">{profiles[r.user_id || ''] || '—'}</TableCell>}
-                    <TableCell className="font-mono text-xs">{formatDuration(r.duration_seconds)}</TableCell>
+                    <TableCell className="text-xs">{directionLabel(r.direction)}</TableCell>
+                    <TableCell className="font-mono text-xs">{durationDisplay(r)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {r.answered_at
+                        ? new Date(r.answered_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                        : '—'}
+                    </TableCell>
                     <TableCell>{statusBadge(r.status, r.direction)}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(r.started_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </TableCell>
+
                     <TableCell className="text-right">
                       {(r.recording_url || r.recording_path || (r.metadata as any)?.wavoip_call_id) ? (
                         <div className="flex items-center gap-1 justify-end">

@@ -417,7 +417,17 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
     const startedAt = Date.now();
     let answeredAt: number | null = null;
     let wavoipCallId: string | null = null;
-    const finish = async (status: 'ended' | 'failed' | 'missed' | 'rejected' = 'ended') => {
+    let finished = false;
+    let watchdog: ReturnType<typeof setInterval> | null = null;
+    let hardTimeout: ReturnType<typeof setTimeout> | null = null;
+    const clearWatchers = () => {
+      if (watchdog) { clearInterval(watchdog); watchdog = null; }
+      if (hardTimeout) { clearTimeout(hardTimeout); hardTimeout = null; }
+    };
+    const finish = async (finalStatus: 'ended' | 'failed' | 'missed' | 'rejected' = 'ended') => {
+      if (finished) return;
+      finished = true;
+      clearWatchers();
       if (!callLogId || !effectiveOwner) return;
       let recordingPath: string | null = null;
       if (recorder && recorder.state !== 'inactive') {
@@ -430,13 +440,15 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
           }
         } catch (e) { console.warn('[Wavoip] recorder stop/upload falhou', e); }
       }
+      // Se não houve atendimento e o status é 'ended', ajusta para 'missed'/'failed'.
+      let effectiveStatus = finalStatus;
+      if (finalStatus === 'ended' && !answeredAt) effectiveStatus = 'missed';
       // Preferência: gravação oficial da Wavoip (storage.wavoip.com/{callId}).
-      // MediaRecorder fica como fallback caso a chamada não tenha ID Wavoip.
-      const recordingUrl = wavoipCallId
+      const recordingUrl = wavoipCallId && answeredAt
         ? `https://storage.wavoip.com/${wavoipCallId}`
         : null;
       await endCallLog(callLogId, {
-        status,
+        status: effectiveStatus,
         startedAt,
         answeredAt,
         recordingPath,
@@ -462,21 +474,59 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
       // Captura o ID Wavoip da chamada (necessário para acessar a gravação).
       wavoipCallId = call?.id || call?.callId || call?.call_id || null;
 
-      // Best-effort: assinar eventos do objeto call devolvido pelo SDK.
-      const bindEnd = (event: string, status: 'ended' | 'failed' | 'missed') => {
-        try { call?.on?.(event, () => { finish(status); }); } catch { /* noop */ }
-      };
-      bindEnd('end', 'ended');
-      bindEnd('ended', 'ended');
-      bindEnd('terminate', 'ended');
-      bindEnd('cancel', 'missed');
-      bindEnd('failed', 'failed');
+      // Bindings redundantes — o SDK varia os nomes dos eventos entre versões.
       const onAnswered = async () => {
+        if (answeredAt) return;
         answeredAt = Date.now();
         if (callLogId) await markCallAnswered(callLogId);
       };
-      try { call?.on?.('accept', onAnswered); } catch { /* noop */ }
-      try { call?.on?.('answered', onAnswered); } catch { /* noop */ }
+      const bindOn = (target: any, event: string, handler: (...a: any[]) => void) => {
+        try { target?.on?.(event, handler); } catch { /* noop */ }
+        try { target?.addEventListener?.(event, handler); } catch { /* noop */ }
+      };
+      ['accept', 'answered', 'answer', 'accepted', 'call.accept', 'call:accept'].forEach((ev) => {
+        bindOn(call, ev, onAnswered);
+        bindOn(api?.call, ev, (payload: any) => {
+          const id = payload?.id || payload?.callId || payload?.call_id;
+          if (!id || id === wavoipCallId) onAnswered();
+        });
+      });
+      const endHandler = (finalStatus: 'ended' | 'failed' | 'missed') => (payload?: any) => {
+        const id = payload?.id || payload?.callId || payload?.call_id;
+        if (id && wavoipCallId && id !== wavoipCallId) return;
+        finish(finalStatus);
+      };
+      [
+        ['end', 'ended'], ['ended', 'ended'], ['terminate', 'ended'], ['terminated', 'ended'],
+        ['hangup', 'ended'], ['bye', 'ended'], ['call.end', 'ended'], ['call:end', 'ended'],
+        ['cancel', 'missed'], ['cancelled', 'missed'], ['no-answer', 'missed'],
+        ['failed', 'failed'], ['error', 'failed'], ['reject', 'failed'], ['rejected', 'failed'],
+      ].forEach(([ev, st]) => {
+        bindOn(call, ev, endHandler(st as any));
+        bindOn(api?.call, ev, endHandler(st as any));
+        bindOn(api?.event, ev, endHandler(st as any));
+      });
+
+      // Watchdog: consulta periodicamente se a call ainda existe no SDK.
+      // Se sumir da lista ativa, marcamos como encerrada.
+      const isCallActive = (): boolean => {
+        try {
+          const list = api?.call?.list?.() || api?.call?.get?.() || [];
+          const arr = Array.isArray(list) ? list : [list];
+          if (!wavoipCallId) return arr.length > 0;
+          return arr.some((c: any) => (c?.id || c?.callId || c?.call_id) === wavoipCallId);
+        } catch { return true; }
+      };
+      let gracePolls = 3; // evita falso-positivo antes da call aparecer no state
+      watchdog = setInterval(() => {
+        if (finished) { clearWatchers(); return; }
+        if (isCallActive()) { gracePolls = 3; return; }
+        if (--gracePolls <= 0) finish('ended');
+      }, 3000);
+      // Hard cap: 2h para não deixar registros pendurados
+      hardTimeout = setTimeout(() => finish('ended'), 2 * 60 * 60 * 1000);
+      // Ao fechar a aba, tenta encerrar
+      window.addEventListener('beforeunload', () => { finish('ended'); }, { once: true });
 
       // Recording (opt-in) — tenta obter o stream remoto exposto pelo SDK.
       if (recordingEnabled) {
@@ -503,6 +553,7 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
       return false;
     }
   }, [config, status, bootSdk, openDialer, owner_id, sub_company_id, user?.id]);
+
 
 
   return (
