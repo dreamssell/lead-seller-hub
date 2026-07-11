@@ -336,6 +336,7 @@ export function CallHistoryTable({
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={load}><RefreshCw className="w-4 h-4" /></Button>
           <Button variant="outline" size="sm" onClick={exportCsv}><Download className="w-4 h-4 mr-1" />CSV</Button>
+          <Button variant="outline" size="sm" onClick={exportPdf}><FileText className="w-4 h-4 mr-1" />PDF</Button>
         </div>
       </CardHeader>
       <CardContent>
