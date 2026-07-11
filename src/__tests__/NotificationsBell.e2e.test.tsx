@@ -164,7 +164,7 @@ beforeEach(() => {
   notifications = [];
   messages = [];
   rtHandlers.length = 0;
-  toastFn.mockClear();
+  (toastFn as unknown as ReturnType<typeof vi.fn>).mockClear();
   localStorage.clear();
 });
 
