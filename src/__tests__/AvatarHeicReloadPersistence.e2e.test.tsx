@@ -57,22 +57,37 @@ vi.mock('@/contexts/AuthContext', async () => {
   };
 });
 
-// Banco simulado: por usuário, guarda a avatar_url e o tipo do último blob carregado.
+// Banco simulado: por usuário, guarda a avatar_url e metadados do objeto no storage.
 const avatarByUser = new Map<string, string | null>();
-const uploadedTypeByUser = new Map<string, string>();
+type StoredObject = { path: string; contentType: string; size: number };
+const storageObjectsByPath = new Map<string, StoredObject>();
+const storageObjectsByUser = new Map<string, StoredObject>();
 
 vi.mock('@/integrations/supabase/client', () => {
   const storage = {
     from: (bucket: string) => ({
-      upload: async (path: string, file: File) => {
-        // Extrai o user_id do primeiro segmento do path para registrar o tipo carregado.
+      upload: async (path: string, file: File, opts?: { contentType?: string }) => {
         const uid = path.split('/')[0];
-        uploadedTypeByUser.set(uid, file.type);
+        const obj: StoredObject = {
+          path,
+          contentType: opts?.contentType || file.type || 'application/octet-stream',
+          size: file.size,
+        };
+        storageObjectsByPath.set(path, obj);
+        storageObjectsByUser.set(uid, obj);
         return { error: null, data: { path } };
       },
       getPublicUrl: (path: string) => ({
         data: { publicUrl: `https://cdn.test/${bucket}/${path}` },
       }),
+      // Simula supabase.storage.from(b).info(path) — usado abaixo para reafirmar
+      // que o contentType persistido continua image/jpeg após o reload.
+      info: async (path: string) => {
+        const obj = storageObjectsByPath.get(path);
+        return obj
+          ? { data: { contentType: obj.contentType, size: obj.size }, error: null }
+          : { data: null, error: new Error('not found') };
+      },
     }),
   };
   const from = (_table: string) => {
@@ -125,7 +140,8 @@ import ProfileTab from '@/components/settings/ProfileTab';
 
 beforeEach(() => {
   avatarByUser.clear();
-  uploadedTypeByUser.clear();
+  storageObjectsByPath.clear();
+  storageObjectsByUser.clear();
   heic2anyCalls.length = 0;
 });
 
@@ -175,7 +191,7 @@ describe('Persistência do avatar HEIC convertido após reload', () => {
       expect(url).toMatch(new RegExp(`avatars/${u.id}/`));
       expect(url.toLowerCase()).toContain('.jpg');
       expect(url.toLowerCase()).not.toContain('.heic');
-      expect(uploadedTypeByUser.get(u.id)).toBe('image/jpeg');
+      expect(storageObjectsByUser.get(u.id)?.contentType).toBe('image/jpeg');
     });
 
     // 2) Simula reload: desmonta e remonta cada instância.
@@ -208,5 +224,22 @@ describe('Persistência do avatar HEIC convertido após reload', () => {
         .filter((o) => o.id !== user.id)
         .forEach((other) => expect(img.src).not.toContain(`avatars/${other.id}/`));
     });
+
+    // 4) Após o reload, o objeto no storage continua servido como image/jpeg —
+    // valida via storage.info(path) que o contentType persistido não regrediu
+    // para image/heic nem virou octet-stream em nenhuma sessão remontada.
+    const { supabase } = await import('@/integrations/supabase/client');
+    for (const { user, utils } of reloaded) {
+      const img = utils.container.querySelector('img[alt="Avatar"]') as HTMLImageElement;
+      // Reconstrói o path a partir da URL pública (…/avatars/<user>/<file>?v=…)
+      const path = img.src
+        .replace(/^https?:\/\/[^/]+\/avatars\//, '')
+        .replace(/\?.*$/, '');
+      const info = await (supabase.storage.from('avatars') as any).info(path);
+      expect(info.error).toBeNull();
+      expect(info.data?.contentType).toBe('image/jpeg');
+      // Sanity: o objeto pertence ao próprio usuário.
+      expect(path.startsWith(`${user.id}/`)).toBe(true);
+    }
   });
 });
