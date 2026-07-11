@@ -180,11 +180,13 @@ export function CallHistoryTable({
         if (bucket !== statusFilter) return false;
       }
       if (search) {
-        const q = search.toLowerCase();
-        if (
-          !(r.contact_name || '').toLowerCase().includes(q) &&
-          !r.phone_number.toLowerCase().includes(q)
-        ) return false;
+        const q = search.toLowerCase().trim();
+        const digits = q.replace(/\D+/g, '');
+        const phoneDigits = r.phone_number.replace(/\D+/g, '');
+        const matchContact = (r.contact_name || '').toLowerCase().includes(q);
+        const matchPhone = r.phone_number.toLowerCase().includes(q)
+          || (digits.length > 0 && phoneDigits.includes(digits));
+        if (!matchContact && !matchPhone) return false;
       }
       return true;
     });
