@@ -550,20 +550,21 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
         return null;
       };
       const handleWavoipLifecyclePayload = (payload: any) => {
-        capturePayload(payload);
+        const sdkStatus = payload?.status ?? payload?.call?.status;
+        const finalStatus = mapWavoipFinalStatus(sdkStatus);
+        capturePayload(payload, { isFinal: !!finalStatus });
         const id = payloadCallId(payload);
         if (id && wavoipCallId && id !== wavoipCallId) return;
-        const sdkStatus = payload?.status ?? payload?.call?.status;
         if (/ACTIVE/i.test(String(sdkStatus || ''))) onAnswered();
-        const finalStatus = mapWavoipFinalStatus(sdkStatus);
         if (finalStatus) finish(finalStatus);
       };
       const endHandler = (finalStatus: 'ended' | 'failed' | 'missed') => (payload?: any) => {
-        capturePayload(payload);
+        capturePayload(payload, { isFinal: true });
         const id = payloadCallId(payload);
         if (id && wavoipCallId && id !== wavoipCallId) return;
         finish(finalStatus);
       };
+
       [
         ['end', 'ended'], ['ended', 'ended'], ['terminate', 'ended'], ['terminated', 'ended'],
         ['hangup', 'ended'], ['bye', 'ended'], ['call.end', 'ended'], ['call:end', 'ended'],
