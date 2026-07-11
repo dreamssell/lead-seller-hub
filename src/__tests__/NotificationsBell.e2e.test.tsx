@@ -104,16 +104,25 @@ vi.mock('@/integrations/supabase/client', () => {
     supabase: {
       from: (t: string) => selectHandler(t),
       channel: (_name: string) => {
+        const local: any[] = [];
         const obj: any = {
           on(_type: string, cfg: any, cb: any) {
-            rtHandlers.push({ table: cfg.table, event: cfg.event, filter: cfg.filter, cb });
+            const h = { table: cfg.table, event: cfg.event, filter: cfg.filter, cb };
+            rtHandlers.push(h);
+            local.push(h);
             return obj;
           },
           subscribe() { return obj; },
+          __handlers: local,
         };
         return obj;
       },
-      removeChannel: vi.fn(),
+      removeChannel: (ch: any) => {
+        (ch?.__handlers || []).forEach((h: any) => {
+          const i = rtHandlers.indexOf(h);
+          if (i >= 0) rtHandlers.splice(i, 1);
+        });
+      },
     },
   };
 });
