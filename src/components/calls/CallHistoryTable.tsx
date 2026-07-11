@@ -135,14 +135,49 @@ export function CallHistoryTable({
     filter?.ownerId, filter?.subCompanyId, filter?.userId, filter?.channel, customerId,
   ]);
 
+  // Polling: verifica se gravações da Wavoip já foram publicadas e atualiza a linha.
+  // Wavoip publica em https://storage.wavoip.com/{callId} alguns minutos após o fim.
+  useEffect(() => {
+    const pending = rows.filter(
+      (r) => !r.recording_url && !r.recording_path && (r.metadata as any)?.wavoip_call_id,
+    );
+    if (pending.length === 0) return;
+    let cancelled = false;
+    const check = async () => {
+      for (const r of pending) {
+        if (cancelled) return;
+        const id = (r.metadata as any).wavoip_call_id as string;
+        const url = `https://storage.wavoip.com/${id}`;
+        try {
+          const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+          if (res.ok) {
+            await (supabase as any).from('call_history').update({ recording_url: url }).eq('id', r.id);
+            if (!cancelled) setRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, recording_url: url } : x)));
+          }
+        } catch { /* CORS/404 → ainda não disponível */ }
+      }
+    };
+    const t = setInterval(check, 30000);
+    check();
+    return () => { cancelled = true; clearInterval(t); };
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const now = Date.now();
-    const cutoffDays: Record<string, number | null> = { '7d': 7, '30d': 30, '90d': 90, all: null };
-    const days = cutoffDays[period];
+    const cutoffMs: Record<string, number | null> = {
+      today: 86400_000, '7d': 7 * 86400_000, '30d': 30 * 86400_000, '90d': 90 * 86400_000, all: null,
+    };
+    const win = cutoffMs[period];
     return rows.filter((r) => {
-      if (days && now - new Date(r.started_at).getTime() > days * 86400_000) return false;
+      if (win && now - new Date(r.started_at).getTime() > win) return false;
       if (userFilter !== 'all' && r.user_id !== userFilter) return false;
       if (connFilter !== 'all' && (r.connection_label || '') !== connFilter) return false;
+      if (directionFilter !== 'all' && r.direction !== directionFilter) return false;
+      if (statusFilter !== 'all') {
+        // agrupa answered/ended como "atendida"
+        const bucket = r.status === 'ended' && r.answered_at ? 'answered' : r.status;
+        if (bucket !== statusFilter) return false;
+      }
       if (search) {
         const q = search.toLowerCase();
         if (
@@ -152,7 +187,8 @@ export function CallHistoryTable({
       }
       return true;
     });
-  }, [rows, period, userFilter, connFilter, search]);
+  }, [rows, period, userFilter, connFilter, statusFilter, directionFilter, search]);
+
 
   const uniqueUsers = useMemo(() => {
     const s = new Set<string>();
