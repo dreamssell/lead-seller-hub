@@ -267,7 +267,7 @@ export async function exportCallHistoryPdf(rows: CallHistoryPdfRow[], opts: Opti
   // Tabela detalhada
   autoTable(doc, {
     startY: afterChart + 8,
-    head: [['Data', 'Contato', 'Número', 'Direção', 'Status', 'Atendida em', 'Duração', 'Canal/Conexão', 'Usuário']],
+    head: [['Data', 'Contato', 'Número', 'Direção', 'Status', 'Atendida em', 'Duração', 'Origem', 'Canal/Conexão', 'Usuário']],
     body: rows.map((r) => [
       fmtDt(r.started_at),
       r.contact_name || '—',
@@ -275,7 +275,8 @@ export async function exportCallHistoryPdf(rows: CallHistoryPdfRow[], opts: Opti
       directionLabel(r.direction),
       statusLabel(r.status, r.direction),
       fmtTime(r.answered_at),
-      formatCallDuration(r),
+      fmtDuration(r),
+      fmtDurationSource(r),
       r.connection_label || r.channel || '—',
       r.user_name || '—',
     ]),
