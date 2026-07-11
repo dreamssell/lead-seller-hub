@@ -146,7 +146,7 @@ export default function WavoipWebhookAdminPage() {
   };
 
   return (
-    <AppLayout>
+    <AppLayout title="Webhook Wavoip" subtitle="Configuração, testes e histórico de eventos">
       <div className="p-6 space-y-6 max-w-6xl mx-auto">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Webhook Wavoip</h1>
