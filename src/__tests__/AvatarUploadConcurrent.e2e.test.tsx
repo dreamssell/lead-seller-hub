@@ -28,15 +28,22 @@ vi.mock('framer-motion', () => ({
 // ---- Auth mock: contexto de teste para injetar user por instância ----
 import { createContext, useContext } from 'react';
 const TestUserCtx = createContext<{ id: string; email: string } | null>(null);
+const userCache = new WeakMap<object, any>();
 vi.mock('@/contexts/AuthContext', async () => {
   const React = await import('react');
   return {
     useAuth: () => {
       const u = React.useContext(TestUserCtx);
-      return {
-        user: u ? { ...u, user_metadata: { display_name: u.email.split('@')[0] } } : null,
-        signOut: vi.fn(),
-      };
+      if (!u) return { user: null, signOut: () => {} };
+      let cached = userCache.get(u);
+      if (!cached) {
+        cached = {
+          user: { ...u, user_metadata: { display_name: u.email.split('@')[0] } },
+          signOut: () => {},
+        };
+        userCache.set(u, cached);
+      }
+      return cached;
     },
   };
 });
