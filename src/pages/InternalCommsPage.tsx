@@ -251,7 +251,7 @@ export default function InternalCommsPage() {
                   />
                   <Button
                     onClick={handleSend}
-                    disabled={!draft.trim() || sending || !!attachmentError}
+                    disabled={(!draft.trim() && !pendingFile) || sending || !!attachmentError}
                     size="icon"
                     aria-label="Enviar"
                   >
