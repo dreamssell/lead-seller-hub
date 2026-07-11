@@ -417,6 +417,7 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
     const startedAt = Date.now();
     let answeredAt: number | null = null;
     let wavoipCallId: string | null = null;
+    let officialDurationSeconds: number | null = null;
     let finished = false;
     let watchdog: ReturnType<typeof setInterval> | null = null;
     let hardTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -451,6 +452,7 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
         status: effectiveStatus,
         startedAt,
         answeredAt,
+        durationSeconds: officialDurationSeconds,
         recordingPath,
         recordingUrl,
         wavoipCallId,
@@ -471,8 +473,26 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
         return false;
       }
 
+      const payloadCallId = (payload: any) => String(
+        payload?.whatsapp_call_id
+        ?? payload?.whatsappCallId
+        ?? payload?.call?.whatsapp_call_id
+        ?? payload?.call?.id
+        ?? payload?.id
+        ?? payload?.callId
+        ?? payload?.call_id
+        ?? '',
+      ) || null;
+      const capturePayload = (payload: any) => {
+        const id = payloadCallId(payload);
+        if (id && (!wavoipCallId || id === wavoipCallId)) wavoipCallId = id;
+        const duration = Number(payload?.duration ?? payload?.call?.duration ?? payload?.metadata?.duration);
+        if (Number.isFinite(duration) && duration >= 0) officialDurationSeconds = Math.round(duration);
+      };
+
       // Captura o ID Wavoip da chamada (necessário para acessar a gravação).
-      wavoipCallId = call?.id || call?.callId || call?.call_id || null;
+      wavoipCallId = String(call?.whatsapp_call_id ?? call?.whatsappCallId ?? call?.id ?? call?.callId ?? call?.call_id ?? '') || null;
+      capturePayload(call);
 
       // Bindings redundantes — o SDK varia os nomes dos eventos entre versões.
       const onAnswered = async () => {
@@ -487,12 +507,37 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
       ['accept', 'answered', 'answer', 'accepted', 'call.accept', 'call:accept'].forEach((ev) => {
         bindOn(call, ev, onAnswered);
         bindOn(api?.call, ev, (payload: any) => {
-          const id = payload?.id || payload?.callId || payload?.call_id;
+          capturePayload(payload);
+          const id = payloadCallId(payload);
+          if (!id || id === wavoipCallId) onAnswered();
+        });
+        bindOn(api, ev, (payload: any) => {
+          capturePayload(payload);
+          const id = payloadCallId(payload);
           if (!id || id === wavoipCallId) onAnswered();
         });
       });
+      const mapWavoipFinalStatus = (status: unknown): 'ended' | 'failed' | 'missed' | 'rejected' | null => {
+        const s = String(status || '').toUpperCase();
+        if (!s) return null;
+        if (s === 'ENDED' || s === 'HANDLED_REMOTELY') return 'ended';
+        if (s === 'FAILED' || s === 'CONNECTION_LOST') return 'failed';
+        if (s === 'REJECTED' || s === 'REMOTE_CALL_IN_PROGRESS') return 'rejected';
+        if (s === 'NOT_ANSWERED') return 'missed';
+        return null;
+      };
+      const handleWavoipLifecyclePayload = (payload: any) => {
+        capturePayload(payload);
+        const id = payloadCallId(payload);
+        if (id && wavoipCallId && id !== wavoipCallId) return;
+        const sdkStatus = payload?.status ?? payload?.call?.status;
+        if (/ACTIVE/i.test(String(sdkStatus || ''))) onAnswered();
+        const finalStatus = mapWavoipFinalStatus(sdkStatus);
+        if (finalStatus) finish(finalStatus);
+      };
       const endHandler = (finalStatus: 'ended' | 'failed' | 'missed') => (payload?: any) => {
-        const id = payload?.id || payload?.callId || payload?.call_id;
+        capturePayload(payload);
+        const id = payloadCallId(payload);
         if (id && wavoipCallId && id !== wavoipCallId) return;
         finish(finalStatus);
       };
@@ -504,7 +549,17 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
       ].forEach(([ev, st]) => {
         bindOn(call, ev, endHandler(st as any));
         bindOn(api?.call, ev, endHandler(st as any));
+        bindOn(api, ev, endHandler(st as any));
         bindOn(api?.event, ev, endHandler(st as any));
+      });
+      [
+        'call:update', 'call:updated', 'call:status', 'call:ended', 'call:answer', 'call:answered',
+        'CALL', 'RECORD', 'UPDATE',
+      ].forEach((ev) => {
+        bindOn(call, ev, handleWavoipLifecyclePayload);
+        bindOn(api?.call, ev, handleWavoipLifecyclePayload);
+        bindOn(api, ev, handleWavoipLifecyclePayload);
+        bindOn(api?.event, ev, handleWavoipLifecyclePayload);
       });
 
       // Watchdog: consulta periodicamente se a call ainda existe no SDK.
