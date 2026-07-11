@@ -220,9 +220,9 @@ describe('NotificationsBell · filtros, paginação, mute e cross-tab', () => {
     await openBell();
 
     await waitFor(() => expect(screen.getByText(/Notificação #54/)).toBeInTheDocument());
-    // Inicialmente 20 visíveis (PAGE_SIZE).
-    expect(screen.queryByText('Notificação #34')).toBeInTheDocument(); // 55 - 20 → começa em #54..#35
-    expect(screen.queryByText('Notificação #30')).not.toBeInTheDocument();
+    // Inicialmente 20 visíveis (PAGE_SIZE) — mais recentes: #54..#35.
+    expect(screen.queryByText('Notificação #35')).toBeInTheDocument();
+    expect(screen.queryByText('Notificação #34')).not.toBeInTheDocument();
     expect(screen.getByText(/Mostrando 20 de 55/)).toBeInTheDocument();
 
     // Rola até o fim para disparar o próximo bloco.
