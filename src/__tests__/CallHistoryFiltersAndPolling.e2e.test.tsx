@@ -99,6 +99,9 @@ const originalFetch = globalThis.fetch;
 
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
+  window.history.replaceState(null, '', '/');
+  Object.keys(dbRows).forEach((key) => delete dbRows[key]);
+  initialRows.forEach((row) => { dbRows[row.id] = { ...row }; });
 });
 afterEach(() => {
   vi.useRealTimers();
