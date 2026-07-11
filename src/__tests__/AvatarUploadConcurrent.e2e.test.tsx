@@ -124,11 +124,13 @@ describe('Upload concorrente de avatar', () => {
     await new Promise((r) => setTimeout(r, 200));
     console.log('DEBUG has file input:', !!(instances[0].container as HTMLElement).querySelector('input[type="file"]'));
 
-    // Dispara upload em todas simultaneamente (sem act — as promises de upload ficam pendentes propositalmente).
-    instances.forEach(({ container }) => {
+    // Dispara upload em todas simultaneamente.
+    instances.forEach(({ container }, idx) => {
       const input = (container as HTMLElement).querySelector('input[type="file"]') as HTMLInputElement;
       const file = new File([new Uint8Array(1024)], 'avatar.jpg', { type: 'image/jpeg' });
-      fireEvent.change(input, { target: { files: [file] } });
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      fireEvent.change(input);
+      console.log('DEBUG dispatched change', idx, 'files.length=', input.files?.length);
     });
     console.log('DEBUG after fireEvent, uploadCalls:', uploadCalls.length);
 
