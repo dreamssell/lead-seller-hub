@@ -57,8 +57,9 @@ const statusLabel = (s: string, d: string) => {
     missed: d === 'inbound' ? 'Perdida' : 'Não atendida',
     failed: 'Falhou',
     rejected: 'Rejeitada',
-    initiated: 'Iniciando',
-    ringing: 'Chamando',
+    initiated: 'Em ligação',
+    ringing: 'Em ligação',
+
   };
   return map[s] || s;
 };
