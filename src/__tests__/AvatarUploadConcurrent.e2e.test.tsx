@@ -122,7 +122,7 @@ describe('Upload concorrente de avatar', () => {
 
     // Aguarda o load inicial de cada instância.
     await new Promise((r) => setTimeout(r, 200));
-    console.log('DEBUG after sleep, html:', (instances[0].container as HTMLElement).innerHTML.slice(0, 400));
+    console.log('DEBUG has file input:', !!(instances[0].container as HTMLElement).querySelector('input[type="file"]'));
 
     // Dispara upload em todas simultaneamente (sem act — as promises de upload ficam pendentes propositalmente).
     instances.forEach(({ container }) => {
