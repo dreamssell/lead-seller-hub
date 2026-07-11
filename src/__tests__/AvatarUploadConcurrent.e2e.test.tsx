@@ -117,11 +117,17 @@ describe('Upload concorrente de avatar', () => {
     });
 
     // Aguarda o load inicial de cada instância (loading -> idle).
-    await waitFor(() => {
-      instances.forEach(({ container }) => {
-        expect(within(container as HTMLElement).getByLabelText('Alterar foto')).not.toBeDisabled();
-      });
-    });
+    try {
+      await waitFor(() => {
+        instances.forEach(({ container }) => {
+          expect(within(container as HTMLElement).getByLabelText('Alterar foto')).not.toBeDisabled();
+        });
+      }, { timeout: 3000 });
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.log('DEBUG first container html:', (instances[0].container as HTMLElement).innerHTML.slice(0, 800));
+      throw e;
+    }
 
     // Dispara upload em todas simultaneamente.
     await act(async () => {
