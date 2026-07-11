@@ -23,7 +23,7 @@ vi.mock('framer-motion', () => ({
 // heic2any é carregado dinamicamente pelo ProfileTab — retornamos um Blob JPEG "convertido".
 const heicHoisted = vi.hoisted(() => {
   const calls: Array<{ toType: string }> = [];
-  const fn = async ({ toType }: { blob: Blob; toType: string }) => {
+  const fn = async (arg: any) => { console.log('!!! HEIC MOCK CALLED'); return new Blob(['x'], { type: 'image/jpeg' }); }; const _unused = async ({ toType }: { blob: Blob; toType: string }) => {
     calls.push({ toType });
     return new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10])], { type: 'image/jpeg' });
   };
