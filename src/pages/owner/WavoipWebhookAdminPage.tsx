@@ -413,9 +413,13 @@ export default function WavoipWebhookAdminPage() {
                 <Select value={createScope} onValueChange={setCreateScope}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="company">Empresa inteira (todas as sub-empresas)</SelectItem>
+                    <SelectItem value="company">
+                      {subCompanies.length > 0
+                        ? 'Toda a minha conta (inclui minhas sub-empresas)'
+                        : 'Toda a minha conta'}
+                    </SelectItem>
                     {subCompanies.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>Sub-empresa: {s.name}</SelectItem>
+                      <SelectItem key={s.id} value={s.id}>Somente a sub-empresa: {s.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
