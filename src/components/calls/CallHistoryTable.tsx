@@ -434,9 +434,10 @@ export function CallHistoryTable({
       missed: direction === 'inbound' ? 'Perdida' : 'Não atendida',
       failed: 'Falhou',
       rejected: 'Rejeitada',
-      initiated: 'Iniciando',
-      ringing: 'Chamando',
+      initiated: 'Em ligação',
+      ringing: 'Em ligação',
     };
+
     return ptMap[s] || s;
   };
 
