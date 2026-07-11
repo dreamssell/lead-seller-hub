@@ -154,10 +154,13 @@ function renderBell() {
 }
 
 async function openBell() {
-  const user = userEvent.setup();
   const trigger = document.querySelector('button[aria-haspopup="menu"]') as HTMLElement;
-  await user.click(trigger);
-  return user;
+  // Radix DropdownMenu abre em pointerdown; fireEvent evita as animações lentas do userEvent.
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+  fireEvent.click(trigger);
+  await waitFor(() => {
+    expect(document.querySelector('[role="menu"]')).toBeTruthy();
+  });
 }
 
 beforeEach(() => {
