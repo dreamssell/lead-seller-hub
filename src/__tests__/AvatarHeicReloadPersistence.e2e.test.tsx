@@ -224,5 +224,22 @@ describe('Persistência do avatar HEIC convertido após reload', () => {
         .filter((o) => o.id !== user.id)
         .forEach((other) => expect(img.src).not.toContain(`avatars/${other.id}/`));
     });
+
+    // 4) Após o reload, o objeto no storage continua servido como image/jpeg —
+    // valida via storage.info(path) que o contentType persistido não regrediu
+    // para image/heic nem virou octet-stream em nenhuma sessão remontada.
+    const { supabase } = await import('@/integrations/supabase/client');
+    for (const { user, utils } of reloaded) {
+      const img = utils.container.querySelector('img[alt="Avatar"]') as HTMLImageElement;
+      // Reconstrói o path a partir da URL pública (…/avatars/<user>/<file>?v=…)
+      const path = img.src
+        .replace(/^https?:\/\/[^/]+\/avatars\//, '')
+        .replace(/\?.*$/, '');
+      const info = await (supabase.storage.from('avatars') as any).info(path);
+      expect(info.error).toBeNull();
+      expect(info.data?.contentType).toBe('image/jpeg');
+      // Sanity: o objeto pertence ao próprio usuário.
+      expect(path.startsWith(`${user.id}/`)).toBe(true);
+    }
   });
 });
