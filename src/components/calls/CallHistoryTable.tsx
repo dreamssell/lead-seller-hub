@@ -307,22 +307,53 @@ export function CallHistoryTable({
     return null;
   };
 
+  const setError = (id: string, msg: string | null) =>
+    setAudioErrors((prev) => {
+      const next = { ...prev };
+      if (msg) next[id] = msg; else delete next[id];
+      return next;
+    });
+
   const handlePlay = async (r: Row) => {
-    const url = await resolveRecordingUrl(r);
-    if (!url) { toast({ title: 'Gravação indisponível', description: 'A Wavoip pode levar alguns minutos para publicar o áudio após o fim da chamada.', variant: 'destructive' }); return; }
     if (playingId === r.id && audioEl) { audioEl.pause(); setPlayingId(null); return; }
-    if (audioEl) audioEl.pause();
-    const a = new Audio(url);
-    a.play().catch(() => toast({ title: 'Não foi possível reproduzir', description: 'A gravação pode ainda não estar disponível.', variant: 'destructive' }));
-    a.onended = () => setPlayingId(null);
-    setAudioEl(a);
-    setPlayingId(r.id);
+    setError(r.id, null);
+    setAudioLoading(r.id);
+    try {
+      const url = await resolveRecordingUrl(r);
+      if (!url) {
+        setError(r.id, 'Gravação ainda não publicada pela Wavoip.');
+        toast({ title: 'Gravação indisponível', description: 'Pode levar alguns minutos após o fim da chamada.', variant: 'destructive' });
+        return;
+      }
+      if (audioEl) audioEl.pause();
+      const a = new Audio(url);
+      a.onended = () => setPlayingId(null);
+      a.onerror = () => {
+        setError(r.id, 'Falha ao carregar áudio.');
+        setPlayingId(null);
+        toast({ title: 'Falha ao reproduzir', description: 'Não foi possível carregar a gravação.', variant: 'destructive' });
+      };
+      await a.play();
+      setAudioEl(a);
+      setPlayingId(r.id);
+    } catch (err: any) {
+      setError(r.id, err?.message || 'Erro ao reproduzir.');
+      toast({ title: 'Falha ao reproduzir', description: String(err?.message || err), variant: 'destructive' });
+    } finally {
+      setAudioLoading(null);
+    }
   };
 
   const handleDownload = async (r: Row) => {
-    const url = await resolveRecordingUrl(r);
-    if (!url) { toast({ title: 'Gravação indisponível', description: 'A Wavoip pode levar alguns minutos para publicar o áudio.', variant: 'destructive' }); return; }
+    setError(r.id, null);
+    setDownloadingId(r.id);
     try {
+      const url = await resolveRecordingUrl(r);
+      if (!url) {
+        setError(r.id, 'Gravação ainda não publicada.');
+        toast({ title: 'Gravação indisponível', description: 'Aguarde a Wavoip publicar o áudio.', variant: 'destructive' });
+        return;
+      }
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
@@ -332,29 +363,40 @@ export function CallHistoryTable({
       a.download = `chamada-${r.id}.${blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'mp3'}`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
-    } catch {
-      window.open(url, '_blank', 'noopener');
+    } catch (err: any) {
+      setError(r.id, err?.message || 'Falha no download.');
+      toast({ title: 'Falha ao baixar', description: 'Abrindo em nova aba como alternativa.', variant: 'destructive' });
+      const url = await resolveRecordingUrl(r);
+      if (url) window.open(url, '_blank', 'noopener');
+    } finally {
+      setDownloadingId(null);
     }
   };
 
-  const durationDisplay = (r: Row): string => {
-    return formatCallDuration(r);
-  };
-
   const exportCsv = () => {
-    downloadCsv(`historico-chamadas-${Date.now()}.csv`, sorted.map((r) => ({
-      data: new Date(r.started_at).toLocaleString('pt-BR'),
-      contato: r.contact_name || '—',
-      numero: r.phone_number,
-      canal: r.channel,
-      conexao: r.connection_label || '—',
-      direcao: directionLabel(r.direction),
-      status: statusLabelPt(r.status, r.direction),
-      atendida_em: r.answered_at ? new Date(r.answered_at).toLocaleString('pt-BR') : '—',
-      duracao: durationDisplay(r),
-      usuario: profiles[r.user_id || ''] || '—',
-      sub_empresa: subs[r.sub_company_id || ''] || '—',
-    })));
+    downloadCsv(`historico-chamadas-${Date.now()}.csv`, sorted.map((r) => {
+      const d = getCallDurationDetails(r);
+      return {
+        iniciada_em: formatCallDateTime(r.started_at),
+        atendida_em: formatCallDateTime(r.answered_at),
+        encerrada_em: formatCallDateTime(r.ended_at),
+        iniciada_em_iso: r.started_at || '',
+        atendida_em_iso: r.answered_at || '',
+        encerrada_em_iso: r.ended_at || '',
+        timezone: DISPLAY_TIMEZONE,
+        contato: r.contact_name || '—',
+        numero: r.phone_number,
+        canal: r.channel,
+        conexao: r.connection_label || '—',
+        direcao: directionLabel(r.direction),
+        status: statusLabelPt(r.status, r.direction),
+        duracao_hms: d.seconds !== null ? formatDuration(d.seconds) : (CALL_DURATION_FALLBACK_LABEL[d.reason || 'invalid']),
+        duracao_segundos: d.seconds ?? '',
+        origem_duracao: d.source ?? 'indisponivel',
+        usuario: profiles[r.user_id || ''] || '—',
+        sub_empresa: subs[r.sub_company_id || ''] || '—',
+      };
+    }));
   };
 
   const exportPdf = async () => {
@@ -363,6 +405,7 @@ export function CallHistoryTable({
       directionFilter !== 'all' ? `Direção: ${directionLabel(directionFilter)}` : null,
       statusFilter !== 'all' ? `Status: ${statusLabelPt(statusFilter, 'outbound')}` : null,
       search ? `Busca: "${search}"` : null,
+      `Fuso: ${DISPLAY_TIMEZONE}`,
     ].filter(Boolean).join(' · ');
     await exportCallHistoryPdf(
       sorted.map((r) => ({
