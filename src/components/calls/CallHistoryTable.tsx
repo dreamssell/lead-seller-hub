@@ -218,6 +218,8 @@ export function CallHistoryTable({
     return () => clearInterval(t);
   }, []);
 
+  const isInProgress = (r: Pick<Row, 'status' | 'ended_at'>) => ['initiated', 'ringing', 'answered'].includes(r.status) && !r.ended_at;
+
   const filtered = useMemo(() => {
     const now = Date.now();
     const cutoffMs: Record<string, number | null> = {
@@ -426,8 +428,6 @@ export function CallHistoryTable({
   };
 
   const directionLabel = (d: string) => d === 'inbound' ? 'Recebida' : 'Efetuada';
-
-  const isInProgress = (r: Pick<Row, 'status' | 'ended_at'>) => ['initiated', 'ringing', 'answered'].includes(r.status) && !r.ended_at;
 
   const statusLabelPt = (r: Pick<Row, 'status' | 'direction' | 'ended_at'>) => {
     if (isInProgress(r)) return 'Em ligação';
