@@ -140,25 +140,25 @@ describe('CallHistoryTable — filtros, busca, duração e polling', () => {
     render(<CallHistoryTable filter={{ ownerId: 'o1' }} />);
     await waitFor(() => expect(screen.getByText('Carla Souza')).toBeInTheDocument());
 
-    // Ainda sem gravação publicada
+    // Botões Ouvir/Baixar aparecem quando há wavoip_call_id (mesmo aguardando publicação)
     const rows = screen.getAllByRole('row');
-    const carlaRow = rows.find((r) => within(r).queryByText('Carla Souza'));
-    expect(carlaRow).toBeTruthy();
-    expect(within(carlaRow!).getByText(/sem áudio/i)).toBeInTheDocument();
+    const carlaRow = rows.find((r) => within(r).queryByText('Carla Souza'))!;
+    expect(within(carlaRow).getByTitle('Ouvir')).toBeInTheDocument();
+    expect(within(carlaRow).getByTitle('Baixar')).toBeInTheDocument();
+
+    // Antes do polling, recording_url ainda é null no banco
+    expect(dbRows.c3.recording_url).toBeNull();
 
     // Publica no "storage" e avança o intervalo (30s)
     ready = true;
     await act(async () => {
       vi.advanceTimersByTime(31_000);
       await Promise.resolve();
+      await Promise.resolve();
     });
 
     await waitFor(() => {
-      const updated = screen.getAllByRole('row').find((r) => within(r).queryByText('Carla Souza'))!;
-      expect(within(updated).queryByText(/sem áudio/i)).not.toBeInTheDocument();
-      expect(within(updated).getByTitle('Ouvir')).toBeInTheDocument();
-      expect(within(updated).getByTitle('Baixar')).toBeInTheDocument();
+      expect(dbRows.c3.recording_url).toBe('https://storage.wavoip.com/WAV-XYZ');
     });
-    expect(dbRows.c3.recording_url).toBe('https://storage.wavoip.com/WAV-XYZ');
   });
 });
