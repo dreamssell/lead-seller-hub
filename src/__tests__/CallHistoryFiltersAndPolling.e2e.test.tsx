@@ -77,6 +77,11 @@ vi.mock('@/integrations/supabase/client', () => {
     supabase: {
       from: () => buildSelectChain(),
       storage: { from: () => ({ createSignedUrl: async () => ({ data: null, error: null }) }) },
+      channel: () => ({
+        on: function () { return this; },
+        subscribe: function () { return this; },
+      }),
+      removeChannel: () => {},
     },
   };
 });
