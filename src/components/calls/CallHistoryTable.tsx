@@ -581,32 +581,43 @@ export function CallHistoryTable({
                     </TableCell>
                     {!compact && <TableCell className="text-xs">{profiles[r.user_id || ''] || '—'}</TableCell>}
                     <TableCell className="text-xs">{directionLabel(r.direction)}</TableCell>
-                    <TableCell className="font-mono text-xs">{durationDisplay(r)}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {r.answered_at
-                        ? new Date(r.answered_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-                        : '—'}
-                    </TableCell>
+                    <TableCell className="font-mono text-xs"><DurationCell call={r} /></TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{formatCallTime(r.answered_at)}</TableCell>
                     <TableCell>{statusBadge(r.status, r.direction)}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {new Date(r.started_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{formatCallShort(r.started_at)}</TableCell>
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       {(r.recording_url || r.recording_path || (r.metadata as any)?.wavoip_call_id) ? (
-                        <div className="flex items-center gap-1 justify-end">
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handlePlay(r)} title="Ouvir">
-                            {playingId === r.id ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleDownload(r)} title="Baixar">
-                            <Download className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7"
-                            onClick={() => toast({ title: 'Google Drive em breve', description: 'A integração será configurada em uma próxima etapa.' })}
-                            title="Enviar ao Google Drive">
-                            <Cloud className="w-3.5 h-3.5" />
-                          </Button>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <div className="flex items-center gap-1 justify-end">
+                            <Button size="icon" variant="ghost" className="h-7 w-7"
+                              disabled={audioLoading === r.id}
+                              onClick={() => handlePlay(r)} title="Ouvir">
+                              {audioLoading === r.id
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                : playingId === r.id ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7"
+                              disabled={downloadingId === r.id}
+                              onClick={() => handleDownload(r)} title="Baixar">
+                              {downloadingId === r.id
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                : <Download className="w-3.5 h-3.5" />}
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7"
+                              onClick={() => toast({ title: 'Google Drive em breve', description: 'A integração será configurada em uma próxima etapa.' })}
+                              title="Enviar ao Google Drive">
+                              <Cloud className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                          {audioErrors[r.id] && (
+                            <span className="text-[10px] text-destructive">{audioErrors[r.id]}</span>
+                          )}
                         </div>
-                      ) : <span className="text-xs text-muted-foreground italic">sem áudio</span>}
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground border-dashed">
+                          Aguardando gravação
+                        </Badge>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
