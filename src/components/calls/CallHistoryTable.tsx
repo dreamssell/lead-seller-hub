@@ -315,7 +315,7 @@ export function CallHistoryTable({
                       {new Date(r.started_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </TableCell>
                     <TableCell className="text-right">
-                      {r.recording_path ? (
+                      {(r.recording_url || r.recording_path || (r.metadata as any)?.wavoip_call_id) ? (
                         <div className="flex items-center gap-1 justify-end">
                           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handlePlay(r)} title="Ouvir">
                             {playingId === r.id ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
