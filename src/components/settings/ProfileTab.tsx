@@ -138,15 +138,39 @@ export default function ProfileTab() {
       // 3. Refresh session and upload via supabase-js (handles auth + upsert)
       setPhase('uploading');
       setProgress(20);
-      const { data: sess, error: sessErr } = await supabase.auth.getSession();
+      let { data: sess, error: sessErr } = await supabase.auth.getSession();
       if (sessErr || !sess?.session?.access_token) {
         throw new Error('Sessão expirada. Faça login novamente.');
+      }
+
+      // Se o `sub` do JWT não bater com o user.id do contexto, força refresh —
+      // isto acontece após rotação de chaves ou troca de tenant e é a causa
+      // mais comum do 403 "row-level security" no upload.
+      const jwtSub = (() => {
+        try {
+          const payload = JSON.parse(atob(sess.session.access_token.split('.')[1]));
+          return payload?.sub as string | undefined;
+        } catch {
+          return undefined;
+        }
+      })();
+      if (jwtSub && jwtSub !== user.id) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        if (refreshed?.session?.access_token) {
+          sess = { session: refreshed.session } as any;
+        }
       }
 
       const safeName = sanitizeFilename(file.name || 'avatar.jpg');
       const path = `${user.id}/${Date.now()}_${safeName}`;
 
-      setProgress(50);
+      // Animação de progresso enquanto o storage não expõe onProgress nativo:
+      // sobe suavemente até 85% durante o upload, e salta para 100% ao concluir.
+      setProgress(35);
+      const progressTimer = window.setInterval(() => {
+        setProgress((p) => (p < 85 ? p + 3 : p));
+      }, 180);
+
       const { error: upErr } = await supabase.storage
         .from('avatars')
         .upload(path, file, {
@@ -154,17 +178,21 @@ export default function ProfileTab() {
           upsert: true,
           contentType: file.type || 'image/jpeg',
         });
+      window.clearInterval(progressTimer);
 
       if (upErr) {
-        console.error('[avatar] storage upload error', upErr);
+        const status = (upErr as any)?.statusCode ?? (upErr as any)?.status ?? '';
+        console.error('[avatar] storage upload error', { status, upErr, path, userId: user.id });
         const raw = (upErr as any)?.message || '';
-        if (/row-level security|permission|unauthorized|403/i.test(raw)) {
-          throw new Error('Sem permissão para enviar a foto. Faça login novamente e tente outra vez.');
+        if (/row-level security|permission|unauthorized|403|401/i.test(raw) || status === 401 || status === 403) {
+          throw new Error(
+            'Sem permissão para enviar a foto. Sua sessão pode ter expirado — saia e entre novamente e tente outra vez.',
+          );
         }
-        if (/payload too large|413/i.test(raw)) {
+        if (/payload too large|413/i.test(raw) || status === 413) {
           throw new Error(`A foto excede o limite de ${MAX_AVATAR_MB} MB.`);
         }
-        throw new Error(raw || 'Falha no upload da foto.');
+        throw new Error(raw || `Falha no upload da foto${status ? ` (código ${status})` : ''}.`);
       }
 
       // 4. Persist URL in profile
