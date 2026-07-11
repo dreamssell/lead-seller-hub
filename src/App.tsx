@@ -62,6 +62,7 @@ const AuditTrailPage = lazy(() => import("./pages/owner/AuditTrailPage"));
 const PlatformHealthPage = lazy(() => import("./pages/owner/PlatformHealthPage"));
 const CompanyDetailPage = lazy(() => import("./pages/owner/CompanyDetailPage"));
 const InternalCommsPage = lazy(() => import("./pages/InternalCommsPage"));
+const InternalMessageDetailPage = lazy(() => import("./pages/InternalMessageDetailPage"));
 const InternalCommsAuditPage = lazy(() => import("./pages/owner/InternalCommsAuditPage"));
 
 /**
@@ -154,6 +155,7 @@ const App = () => (
               <Route path="/owner/platform-health" element={<ProtectedRoute ownerOnly><PlatformHealthPage /></ProtectedRoute>} />
               <Route path="/owner/company/:id" element={<ProtectedRoute ownerOnly><CompanyDetailPage /></ProtectedRoute>} />
               <Route path="/internal-comms" element={<ProtectedRoute><InternalCommsPage /></ProtectedRoute>} />
+              <Route path="/internal-comms/message/:id" element={<ProtectedRoute><InternalMessageDetailPage /></ProtectedRoute>} />
               <Route path="/owner/internal-comms-audit" element={<ProtectedRoute ownerOnly><InternalCommsAuditPage /></ProtectedRoute>} />
 
               <Route path="*" element={<NotFound />} />
