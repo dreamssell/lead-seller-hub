@@ -34,8 +34,9 @@ vi.mock('sonner', () => {
 // eslint-disable-next-line import/first
 import { toast as toastFn } from 'sonner';
 
+const STABLE_USER = { id: 'me' };
 vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'me' } }),
+  useAuth: () => ({ user: STABLE_USER }),
 }));
 
 vi.mock('@/integrations/supabase/client', () => {
