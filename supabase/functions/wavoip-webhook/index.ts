@@ -1,14 +1,15 @@
-// Wavoip webhook receiver
-// Endpoint público chamado pela Wavoip a cada evento de ligação.
-// Segurança: token compartilhado via query string (?token=...) OU header
-// `X-Webhook-Token`, comparado contra a variável WAVOIP_WEBHOOK_SECRET.
+// Wavoip webhook receiver — MULTI-TENANT (LGPD)
+// Cada Empresa/Sub-empresa possui o próprio token em `wavoip_webhook_tokens`.
+// O endpoint valida o token via query string (?token=...) ou header
+// `X-Webhook-Token`, resolve o tenant (owner_id + sub_company_id) e escopa
+// TODAS as gravações em `call_history` e `wavoip_webhook_events` a esse tenant.
+// Não existe segredo global compartilhado entre clientes.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const SECRET = Deno.env.get('WAVOIP_WEBHOOK_SECRET') ?? '';
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -61,6 +62,9 @@ async function logEvent(row: {
   error_message?: string | null;
   payload: any;
   source_ip?: string | null;
+  owner_id?: string | null;
+  sub_company_id?: string | null;
+  token_id?: string | null;
 }) {
   try {
     await admin.from('wavoip_webhook_events').insert(row);
@@ -79,12 +83,30 @@ Deno.serve(async (req) => {
     null;
   const token = url.searchParams.get('token') || req.headers.get('x-webhook-token') || '';
 
-  if (!SECRET || token !== SECRET) {
+  // Resolve tenant a partir do token
+  let tokenRow: {
+    id: string;
+    owner_id: string;
+    sub_company_id: string | null;
+    is_active: boolean;
+    revoked_at: string | null;
+  } | null = null;
+
+  if (token) {
+    const { data } = await admin
+      .from('wavoip_webhook_tokens')
+      .select('id, owner_id, sub_company_id, is_active, revoked_at')
+      .eq('token', token)
+      .maybeSingle();
+    tokenRow = data ?? null;
+  }
+
+  if (!tokenRow || !tokenRow.is_active || tokenRow.revoked_at) {
     await logEvent({
       status: 'unauthorized',
       http_status: 401,
-      error_message: !SECRET ? 'WAVOIP_WEBHOOK_SECRET not configured' : 'invalid token',
-      payload: { url: url.pathname, has_token: !!token },
+      error_message: !token ? 'missing token' : (!tokenRow ? 'unknown token' : 'token revoked'),
+      payload: { path: url.pathname, has_token: !!token },
       source_ip: ip,
     });
     return new Response(JSON.stringify({ error: 'unauthorized' }), {
@@ -92,6 +114,9 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
+
+  const ownerId = tokenRow.owner_id;
+  const subCompanyId = tokenRow.sub_company_id;
 
   let payload: any = {};
   try {
@@ -103,6 +128,9 @@ Deno.serve(async (req) => {
       error_message: 'Invalid JSON body',
       payload: {},
       source_ip: ip,
+      owner_id: ownerId,
+      sub_company_id: subCompanyId,
+      token_id: tokenRow.id,
     });
     return new Response(JSON.stringify({ error: 'invalid json' }), {
       status: 400,
@@ -139,11 +167,15 @@ Deno.serve(async (req) => {
     if (recordingUrl) patch.recording_url = recordingUrl;
 
     if (Object.keys(patch).length > 0) {
-      const { data: rows, error } = await admin
+      // ESCOPO LGPD: só atualiza registros do MESMO tenant do token
+      let q = admin
         .from('call_history')
         .update(patch)
         .filter('metadata->>wavoip_call_id', 'eq', wavoipCallId)
-        .select('id');
+        .eq('owner_id', ownerId);
+      q = subCompanyId ? q.eq('sub_company_id', subCompanyId) : q.is('sub_company_id', null);
+      const { data: rows, error } = await q.select('id');
+
       if (error) {
         updateError = error.message;
         outcome = 'update_error';
@@ -152,11 +184,12 @@ Deno.serve(async (req) => {
         updated = rows?.length ?? 0;
         matchedId = rows?.[0]?.id ?? null;
         if (updated === 0) {
-          // Cria stub se possível (chamada iniciada fora do webphone)
           if (status === 'ended' || status === 'answered') {
             const { data: ins, error: insErr } = await admin
               .from('call_history')
               .insert({
+                owner_id: ownerId,
+                sub_company_id: subCompanyId,
                 channel: 'wavoip',
                 direction: direction === 'inbound' || direction === 'in' ? 'inbound' : 'outbound',
                 phone_number: phone ?? 'unknown',
@@ -189,6 +222,11 @@ Deno.serve(async (req) => {
     updateError = 'missing wavoip_call_id in payload';
   }
 
+  await admin
+    .from('wavoip_webhook_tokens')
+    .update({ last_used_at: new Date().toISOString() })
+    .eq('id', tokenRow.id);
+
   await logEvent({
     event: event || null,
     status: outcome,
@@ -199,6 +237,9 @@ Deno.serve(async (req) => {
     error_message: updateError,
     payload,
     source_ip: ip,
+    owner_id: ownerId,
+    sub_company_id: subCompanyId,
+    token_id: tokenRow.id,
   });
 
   return new Response(
