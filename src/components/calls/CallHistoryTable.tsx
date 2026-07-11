@@ -2,7 +2,6 @@
 // paginação, modal de detalhes e assinatura em tempo real do Supabase para
 // atualização automática das gravações Wavoip.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -79,19 +78,22 @@ export function CallHistoryTable({
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [subs, setSubs] = useState<Record<string, string>>({});
-  // URL persistence (search/filters/sort/page compartilháveis)
-  const [searchParams, setSearchParams] = useSearchParams();
+  // URL persistence (search/filters/sort/page compartilháveis) sem depender
+  // de Router, para funcionar também em testes isolados do componente.
+  const [searchParamsSnapshot, setSearchParamsSnapshot] = useState(() => new URLSearchParams(window.location.search));
   const scope = `ch_${filter?.subCompanyId ?? filter?.ownerId ?? customerId ?? 'g'}`;
   const p = (k: string) => `${scope}.${k}`;
-  const gp = (k: string, dflt = '') => searchParams.get(p(k)) ?? dflt;
+  const gp = (k: string, dflt = '') => searchParamsSnapshot.get(p(k)) ?? dflt;
   const setUrl = (patch: Record<string, string | number | null>) => {
-    const next = new URLSearchParams(searchParams);
+    const next = new URLSearchParams(window.location.search);
     Object.entries(patch).forEach(([k, v]) => {
       const key = p(k);
       if (v === null || v === '' || v === 'all' || v === undefined) next.delete(key);
       else next.set(key, String(v));
     });
-    setSearchParams(next, { replace: true });
+    const query = next.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+    setSearchParamsSnapshot(next);
   };
 
   const [period, setPeriod] = useState<'today' | '7d' | '30d' | '90d' | 'all'>((gp('period', '30d') as any) || '30d');
