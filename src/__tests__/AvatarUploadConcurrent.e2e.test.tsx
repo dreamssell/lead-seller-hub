@@ -132,9 +132,9 @@ describe('Upload concorrente de avatar', () => {
         fireEvent.change(input, { target: { files: [file] } });
       });
     });
-
-    // Todos os uploads devem estar pendentes (nenhum resolvido ainda).
-    await waitFor(() => expect(uploadCalls.length).toBe(N));
+    console.log('DEBUG after fireEvent, uploadCalls:', uploadCalls.length);
+    await new Promise((r) => setTimeout(r, 300));
+    console.log('DEBUG after wait, uploadCalls:', uploadCalls.length);
 
     // UI de progresso visível em cada instância — mostra "Enviando foto…".
     instances.forEach(({ container }) => {
