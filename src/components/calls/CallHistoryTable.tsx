@@ -720,3 +720,46 @@ function Field({ label, value, children, mono }: { label: string; value?: string
     </div>
   );
 }
+
+// Célula profissional de duração: exibe hh:mm:ss quando há duração confiável,
+// e um badge indicando o motivo (Em andamento / Sem encerramento) caso contrário.
+// Ocultamos cálculos aproximados — só mostramos tempos com marco terminal real.
+function DurationCell({ call }: { call: Parameters<typeof getCallDurationDetails>[0] }) {
+  const d = getCallDurationDetails(call);
+  if (d.seconds === null) {
+    const label = CALL_DURATION_FALLBACK_LABEL[d.reason || 'invalid'];
+    return (
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground border-dashed gap-1">
+              <Clock className="w-3 h-3" />{label}
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            Sem marco de encerramento — duração não é calculada até haver ended_at oficial.
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+  const icon = d.source === 'official'
+    ? <ShieldCheck className="w-3 h-3 text-emerald-500" />
+    : <Sigma className="w-3 h-3 text-muted-foreground" />;
+  const tip = d.source === 'official'
+    ? 'Duração oficial reportada pelo Wavoip.'
+    : 'Duração derivada de answered_at → ended_at (auditável).';
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center gap-1">
+            {icon}
+            <span className="font-mono">{formatDuration(d.seconds)}</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">{tip}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
