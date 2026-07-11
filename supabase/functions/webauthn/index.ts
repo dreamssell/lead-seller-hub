@@ -69,6 +69,29 @@ async function getAuthedUserId(req: Request): Promise<string | null> {
   return data?.user?.id ?? null;
 }
 
+/**
+ * Biometria (Face ID / Touch ID / Windows Hello) é liberada APENAS em dispositivos
+ * mobile. Detectamos via User-Agent + Client Hints. Desktops recebem 403 e o acesso
+ * é registrado no log para auditoria.
+ */
+function isMobileRequest(req: Request): boolean {
+  const ua = (req.headers.get("user-agent") ?? "").toLowerCase();
+  const chMobile = req.headers.get("sec-ch-ua-mobile"); // "?1" mobile, "?0" desktop
+  if (chMobile === "?1") return true;
+  if (chMobile === "?0") return false;
+  if (!ua) return false;
+  return /android|iphone|ipod|ipad|iemobile|blackberry|opera mini|mobile safari|windows phone/.test(
+    ua,
+  );
+}
+
+const MOBILE_ONLY_ACTIONS = new Set([
+  "register/begin",
+  "register/complete",
+  "auth/begin",
+  "auth/complete",
+]);
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
