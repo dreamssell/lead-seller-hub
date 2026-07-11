@@ -452,7 +452,7 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
         status: effectiveStatus,
         startedAt,
         answeredAt,
-        durationSeconds: officialDurationSeconds,
+        durationSeconds: officialDurationSeconds ?? undefined,
         recordingPath,
         recordingUrl,
         wavoipCallId,

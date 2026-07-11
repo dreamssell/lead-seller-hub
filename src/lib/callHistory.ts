@@ -80,8 +80,9 @@ export async function endCallLog(
   // Duração = tempo falado (a partir do atendimento) quando disponível,
   // caso contrário usa o dial time como fallback.
   const baseline = opts.answeredAt ?? opts.startedAt;
-  const explicitDuration = Number(opts.durationSeconds);
-  const duration = Number.isFinite(explicitDuration) && explicitDuration >= 0
+  const hasExplicitDuration = typeof opts.durationSeconds === 'number' && Number.isFinite(opts.durationSeconds);
+  const explicitDuration = hasExplicitDuration ? opts.durationSeconds : undefined;
+  const duration = explicitDuration !== undefined && explicitDuration >= 0
     ? Math.round(explicitDuration)
     : baseline
       ? Math.max(0, Math.round((Date.now() - baseline) / 1000))
