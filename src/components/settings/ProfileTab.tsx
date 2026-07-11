@@ -8,9 +8,14 @@ import { sanitizeFilename } from '@/lib/sanitizeFilename';
 
 const MAX_AVATAR_MB = 5;
 const MAX_AVATAR_BYTES = MAX_AVATAR_MB * 1024 * 1024;
+const ALLOWED_MIME = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']);
+const ALLOWED_EXT = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif']);
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+function extOf(name: string): string {
+  const i = name.lastIndexOf('.');
+  return i < 0 ? '' : name.slice(i + 1).toLowerCase();
+}
+
 
 type UploadPhase = 'idle' | 'converting' | 'validating' | 'uploading' | 'saving' | 'done' | 'error';
 
@@ -90,49 +95,6 @@ export default function ProfileTab() {
     resetUpload();
   };
 
-  const uploadViaXhr = (path: string, file: File, token: string) =>
-    new Promise<void>((resolve, reject) => {
-      const url = `${SUPABASE_URL}/storage/v1/object/avatars/${path}`;
-      const xhr = new XMLHttpRequest();
-      xhrRef.current = xhr;
-      xhr.open('POST', url, true);
-      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      xhr.setRequestHeader('apikey', SUPABASE_PUBLISHABLE_KEY);
-      xhr.setRequestHeader('x-upsert', 'true');
-      xhr.setRequestHeader('cache-control', '3600');
-      xhr.setRequestHeader('Content-Type', file.type || 'image/jpeg');
-
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const pct = Math.round((e.loaded / e.total) * 90); // reserve 10% for "saving"
-          setProgress(pct);
-        }
-      };
-      xhr.onload = () => {
-        xhrRef.current = null;
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve();
-        } else {
-          let msg = `Falha no upload (HTTP ${xhr.status})`;
-          try {
-            const body = JSON.parse(xhr.responseText);
-            if (body?.message) msg = body.message;
-            else if (body?.error) msg = body.error;
-          } catch {}
-          reject(new Error(msg));
-        }
-      };
-      xhr.onerror = () => {
-        xhrRef.current = null;
-        reject(new Error('Falha de conexão durante o envio. Verifique sua internet.'));
-      };
-      xhr.onabort = () => {
-        xhrRef.current = null;
-        reject(new Error('Upload cancelado.'));
-      };
-      xhr.send(file);
-    });
-
   const runUpload = async (rawFile: File) => {
     if (!user) {
       toast({ title: 'Sessão expirada', description: 'Faça login novamente.', variant: 'destructive' });
@@ -158,39 +120,56 @@ export default function ProfileTab() {
         }
       }
 
-      // 2. Local size check (fast fail before hitting the backend)
+      // 2. Client-side validation (fast fail, no server round-trip)
+      setPhase('validating');
+      setProgress(5);
       if (file.size > MAX_AVATAR_BYTES) {
         throw new Error(
           `A foto tem ${(file.size / 1024 / 1024).toFixed(1)} MB. O limite é ${MAX_AVATAR_MB} MB.`,
         );
       }
-
-      // 3. Server-side validation (single source of truth for rules)
-      setPhase('validating');
-      const { data: v, error: vErr } = await supabase.functions.invoke('validate-avatar', {
-        body: { filename: file.name, mimeType: file.type, size: file.size },
-      });
-      if (vErr) {
-        console.error('[avatar] validate-avatar error', vErr);
-        throw new Error(vErr.message || 'Falha ao validar o arquivo com o servidor.');
-      }
-      if (!v?.ok) {
-        throw new Error(v?.message || 'Arquivo rejeitado pelo servidor.');
+      const mime = (file.type || '').toLowerCase();
+      const ext = extOf(file.name);
+      const typeOk = mime ? ALLOWED_MIME.has(mime) : ALLOWED_EXT.has(ext);
+      if (!typeOk) {
+        throw new Error('Formato não suportado. Envie uma imagem JPG, PNG, WEBP ou GIF.');
       }
 
-      // 4. Upload with real progress
+      // 3. Refresh session and upload via supabase-js (handles auth + upsert)
       setPhase('uploading');
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess?.session?.access_token;
-      if (!token) throw new Error('Sessão expirada. Faça login novamente.');
+      setProgress(20);
+      const { data: sess, error: sessErr } = await supabase.auth.getSession();
+      if (sessErr || !sess?.session?.access_token) {
+        throw new Error('Sessão expirada. Faça login novamente.');
+      }
 
       const safeName = sanitizeFilename(file.name || 'avatar.jpg');
       const path = `${user.id}/${Date.now()}_${safeName}`;
-      await uploadViaXhr(path, file, token);
 
-      // 5. Persist URL in profile
+      setProgress(50);
+      const { error: upErr } = await supabase.storage
+        .from('avatars')
+        .upload(path, file, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: file.type || 'image/jpeg',
+        });
+
+      if (upErr) {
+        console.error('[avatar] storage upload error', upErr);
+        const raw = (upErr as any)?.message || '';
+        if (/row-level security|permission|unauthorized|403/i.test(raw)) {
+          throw new Error('Sem permissão para enviar a foto. Faça login novamente e tente outra vez.');
+        }
+        if (/payload too large|413/i.test(raw)) {
+          throw new Error(`A foto excede o limite de ${MAX_AVATAR_MB} MB.`);
+        }
+        throw new Error(raw || 'Falha no upload da foto.');
+      }
+
+      // 4. Persist URL in profile
       setPhase('saving');
-      setProgress(95);
+      setProgress(90);
       const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
       const url = `${pub.publicUrl}?v=${Date.now()}`;
       const { error: updErr } = await supabase
@@ -203,6 +182,8 @@ export default function ProfileTab() {
         console.error('[avatar] profile upsert error', updErr);
         throw new Error(updErr.message || 'Falha ao salvar a foto no perfil.');
       }
+
+
 
       setProgress(100);
       setPhase('done');
