@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,10 +12,28 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Copy, RefreshCw, PlayCircle, ShieldAlert, CheckCircle2, Loader2, Search } from 'lucide-react';
+import {
+  Copy, RefreshCw, PlayCircle, ShieldAlert, Loader2, Search, Plus, Trash2, ShieldCheck,
+} from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
+
+type TokenRow = {
+  id: string;
+  owner_id: string;
+  sub_company_id: string | null;
+  token: string;
+  label: string | null;
+  is_active: boolean;
+  revoked_at: string | null;
+  last_used_at: string | null;
+  created_at: string;
+};
+
+type SubCompany = { id: string; name: string };
 
 type EventRow = {
   id: string;
@@ -28,6 +47,9 @@ type EventRow = {
   error_message: string | null;
   payload: any;
   source_ip: string | null;
+  owner_id: string | null;
+  sub_company_id: string | null;
+  token_id: string | null;
 };
 
 const STATUS_LABEL: Record<string, { label: string; variant: 'default' | 'destructive' | 'secondary' | 'outline' }> = {
@@ -39,17 +61,29 @@ const STATUS_LABEL: Record<string, { label: string; variant: 'default' | 'destru
   unauthorized: { label: 'Token inválido', variant: 'destructive' },
 };
 
+const SUPABASE_URL = (import.meta as any).env.VITE_SUPABASE_URL as string;
+
+function buildWebhookUrl(token: string) {
+  return `${SUPABASE_URL}/functions/v1/wavoip-webhook?token=${encodeURIComponent(token)}`;
+}
+
 export default function WavoipWebhookAdminPage() {
-  const [webhookUrl, setWebhookUrl] = useState<string | null>(null);
-  const [tokenPreview, setTokenPreview] = useState<string | null>(null);
-  const [configured, setConfigured] = useState<boolean | null>(null);
-  const [loadingUrl, setLoadingUrl] = useState(true);
-  const [testing, setTesting] = useState(false);
+  const { user } = useAuth();
+  const [tokens, setTokens] = useState<TokenRow[]>([]);
+  const [subCompanies, setSubCompanies] = useState<SubCompany[]>([]);
+  const [loadingTokens, setLoadingTokens] = useState(true);
+
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [callIdFilter, setCallIdFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [detail, setDetail] = useState<EventRow | null>(null);
+  const [testingId, setTestingId] = useState<string | null>(null);
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createScope, setCreateScope] = useState<string>('company'); // 'company' | sub_company_id
+  const [createLabel, setCreateLabel] = useState('');
+  const [creating, setCreating] = useState(false);
 
   const failuresLast24h = useMemo(
     () => events.filter((e) => ['not_found', 'update_error', 'unauthorized', 'bad_payload'].includes(e.status)
@@ -57,19 +91,26 @@ export default function WavoipWebhookAdminPage() {
     [events],
   );
 
-  const loadConfig = useCallback(async () => {
-    setLoadingUrl(true);
-    const { data, error } = await supabase.functions.invoke('wavoip-webhook-config');
-    if (error) {
-      toast.error('Falha ao carregar URL do webhook', { description: error.message });
-      setConfigured(false);
-    } else if (data) {
-      setConfigured(Boolean(data.configured));
-      setWebhookUrl(data.webhook_url ?? null);
-      setTokenPreview(data.token_preview ?? null);
-    }
-    setLoadingUrl(false);
+  const loadTokens = useCallback(async () => {
+    setLoadingTokens(true);
+    const { data, error } = await (supabase as any)
+      .from('wavoip_webhook_tokens')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) toast.error('Falha ao listar tokens', { description: error.message });
+    else setTokens((data as TokenRow[]) || []);
+    setLoadingTokens(false);
   }, []);
+
+  const loadSubCompanies = useCallback(async () => {
+    if (!user?.id) return;
+    const { data } = await (supabase as any)
+      .from('sub_companies')
+      .select('id, name')
+      .eq('owner_id', user.id)
+      .order('name');
+    setSubCompanies((data as SubCompany[]) || []);
+  }, [user?.id]);
 
   const loadEvents = useCallback(async () => {
     setLoadingEvents(true);
@@ -86,10 +127,9 @@ export default function WavoipWebhookAdminPage() {
     setLoadingEvents(false);
   }, [callIdFilter, statusFilter]);
 
-  useEffect(() => { loadConfig(); }, [loadConfig]);
+  useEffect(() => { loadTokens(); loadSubCompanies(); }, [loadTokens, loadSubCompanies]);
   useEffect(() => { loadEvents(); }, [loadEvents]);
 
-  // Realtime — novos eventos aparecem sozinhos
   useEffect(() => {
     const ch = supabase
       .channel('wavoip-webhook-events')
@@ -100,18 +140,16 @@ export default function WavoipWebhookAdminPage() {
     return () => { supabase.removeChannel(ch); };
   }, [loadEvents]);
 
-  const copyUrl = async () => {
-    if (!webhookUrl) return;
-    await navigator.clipboard.writeText(webhookUrl);
-    toast.success('URL copiada', { description: 'Cole no painel da Wavoip → Integrações → Webhook.' });
+  const copyUrl = async (t: TokenRow) => {
+    await navigator.clipboard.writeText(buildWebhookUrl(t.token));
+    toast.success('URL copiada', { description: 'Cole em Wavoip → Integrações → Webhook.' });
   };
 
-  const testWebhook = async () => {
-    if (!webhookUrl) return;
-    setTesting(true);
+  const testToken = async (t: TokenRow) => {
+    setTestingId(t.id);
     try {
       const fakeId = `test-${crypto.randomUUID()}`;
-      const res = await fetch(webhookUrl, {
+      const res = await fetch(buildWebhookUrl(t.token), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -141,72 +179,151 @@ export default function WavoipWebhookAdminPage() {
     } catch (e) {
       toast.error('Falha ao invocar webhook', { description: (e as Error).message });
     } finally {
-      setTesting(false);
+      setTestingId(null);
     }
   };
 
+  const createToken = async () => {
+    if (!user?.id) return;
+    setCreating(true);
+    try {
+      const p_sub = createScope === 'company' ? null : createScope;
+      const { error } = await (supabase as any).rpc('generate_wavoip_webhook_token', {
+        p_owner_id: user.id,
+        p_sub_company_id: p_sub,
+        p_label: createLabel.trim() || null,
+      });
+      if (error) throw error;
+      toast.success('Token criado');
+      setCreateOpen(false);
+      setCreateLabel('');
+      setCreateScope('company');
+      loadTokens();
+    } catch (e) {
+      toast.error('Não foi possível criar o token', { description: (e as Error).message });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const revokeToken = async (t: TokenRow) => {
+    if (!confirm(`Revogar o token "${t.label ?? t.id}"? A Wavoip parará de conseguir enviar eventos.`)) return;
+    const { error } = await (supabase as any).rpc('revoke_wavoip_webhook_token', { p_token_id: t.id });
+    if (error) toast.error('Falha ao revogar', { description: error.message });
+    else { toast.success('Token revogado'); loadTokens(); }
+  };
+
+  const scopeLabel = (t: TokenRow) => {
+    if (!t.sub_company_id) return 'Empresa (todas as sub-empresas)';
+    const sub = subCompanies.find((s) => s.id === t.sub_company_id);
+    return sub ? `Sub-empresa: ${sub.name}` : `Sub-empresa: ${t.sub_company_id.slice(0, 8)}…`;
+  };
+
   return (
-    <AppLayout title="Webhook Wavoip" subtitle="Configuração, testes e histórico de eventos">
+    <AppLayout title="Webhook Wavoip" subtitle="Um endpoint isolado por Empresa/Sub-empresa (LGPD)">
       <div className="p-6 space-y-6 max-w-6xl mx-auto">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Webhook Wavoip</h1>
           <p className="text-sm text-muted-foreground">
-            Configure a URL abaixo no painel da Wavoip para receber eventos de chamada em tempo real.
+            Cada Empresa (e cada Sub-empresa) recebe o próprio endpoint com um token exclusivo.
+            Nenhum dado é compartilhado entre clientes.
           </p>
         </div>
+
+        <Alert>
+          <ShieldCheck className="h-4 w-4" />
+          <AlertTitle>Isolamento por tenant</AlertTitle>
+          <AlertDescription>
+            O webhook só atualiza chamadas da Empresa/Sub-empresa que emitiu o token. Eventos e logs também
+            ficam restritos ao dono do token — administradores de outras contas não conseguem vê-los.
+          </AlertDescription>
+        </Alert>
 
         {failuresLast24h > 0 && (
           <Alert variant="destructive">
             <ShieldAlert className="h-4 w-4" />
             <AlertTitle>{failuresLast24h} falha(s) nas últimas 24 h</AlertTitle>
             <AlertDescription>
-              Confira os registros abaixo com status <b>Token inválido</b>, <b>Não encontrado</b> ou <b>Erro ao atualizar</b>.
+              Verifique abaixo os registros com status <b>Token inválido</b>, <b>Não encontrado</b> ou <b>Erro ao atualizar</b>.
             </AlertDescription>
           </Alert>
         )}
 
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              Endpoint do webhook
-            </CardTitle>
-            <CardDescription>
-              Cole a URL completa (com token) no campo <b>Endpoint</b> em Wavoip → Integrações → Webhook e clique em Salvar.
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Tokens ativos por Empresa/Sub-empresa</CardTitle>
+              <CardDescription>
+                Gere um token por cliente e cole a URL correspondente no painel da Wavoip → Integrações → Webhook.
+              </CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={loadTokens}>
+                <RefreshCw className="w-3.5 h-3.5 mr-1" /> Atualizar
+              </Button>
+              <Button size="sm" onClick={() => setCreateOpen(true)}>
+                <Plus className="w-4 h-4 mr-1" /> Novo token
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {loadingUrl ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="w-4 h-4 animate-spin" /> Carregando…
-              </div>
-            ) : !configured || !webhookUrl ? (
-              <Alert variant="destructive">
-                <AlertTitle>Segredo não configurado</AlertTitle>
-                <AlertDescription>
-                  `WAVOIP_WEBHOOK_SECRET` não está definido no backend. Contate o administrador.
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <>
-                <div className="flex gap-2">
-                  <Input readOnly value={webhookUrl} className="font-mono text-xs" />
-                  <Button onClick={copyUrl}><Copy className="w-4 h-4 mr-1" /> Copiar</Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Token ativo: <span className="font-mono">{tokenPreview}</span> — a URL contém o segredo, trate-a como sensível.
-                </p>
-                <div className="flex gap-2 pt-2">
-                  <Button variant="outline" onClick={testWebhook} disabled={testing}>
-                    {testing ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <PlayCircle className="w-4 h-4 mr-1" />}
-                    Testar webhook
-                  </Button>
-                  <Button variant="ghost" onClick={loadConfig}>
-                    <RefreshCw className="w-4 h-4 mr-1" /> Recarregar
-                  </Button>
-                </div>
-              </>
-            )}
+          <CardContent>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Rótulo</TableHead>
+                    <TableHead>Escopo</TableHead>
+                    <TableHead>Criado em</TableHead>
+                    <TableHead>Último uso</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loadingTokens ? (
+                    <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-6">
+                      <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Carregando…
+                    </TableCell></TableRow>
+                  ) : tokens.length === 0 ? (
+                    <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-6">
+                      Nenhum token ainda. Clique em <b>Novo token</b>.
+                    </TableCell></TableRow>
+                  ) : tokens.map((t) => (
+                    <TableRow key={t.id}>
+                      <TableCell className="font-medium">{t.label || '—'}</TableCell>
+                      <TableCell className="text-xs">{scopeLabel(t)}</TableCell>
+                      <TableCell className="text-xs whitespace-nowrap">{new Date(t.created_at).toLocaleString('pt-BR')}</TableCell>
+                      <TableCell className="text-xs whitespace-nowrap">
+                        {t.last_used_at ? new Date(t.last_used_at).toLocaleString('pt-BR') : '—'}
+                      </TableCell>
+                      <TableCell>
+                        {t.is_active && !t.revoked_at
+                          ? <Badge variant="default">Ativo</Badge>
+                          : <Badge variant="destructive">Revogado</Badge>}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="outline" size="sm" onClick={() => copyUrl(t)} disabled={!t.is_active}>
+                            <Copy className="w-3.5 h-3.5 mr-1" /> URL
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => testToken(t)} disabled={!t.is_active || testingId === t.id}>
+                            {testingId === t.id
+                              ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                              : <PlayCircle className="w-3.5 h-3.5 mr-1" />}
+                            Testar
+                          </Button>
+                          {t.is_active && !t.revoked_at && (
+                            <Button variant="ghost" size="sm" onClick={() => revokeToken(t)}>
+                              <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 
@@ -215,7 +332,7 @@ export default function WavoipWebhookAdminPage() {
             <div>
               <CardTitle>Últimos eventos recebidos</CardTitle>
               <CardDescription>
-                Consulte por <code>wavoip_call_id</code> e status. Payload bruto disponível ao clicar em uma linha.
+                Você vê apenas eventos dos seus próprios tokens. Clique numa linha para o payload bruto.
               </CardDescription>
             </div>
             <Button variant="outline" size="sm" onClick={loadEvents}>
@@ -269,9 +386,7 @@ export default function WavoipWebhookAdminPage() {
                     const s = STATUS_LABEL[ev.status] || { label: ev.status, variant: 'outline' as const };
                     return (
                       <TableRow key={ev.id} className="cursor-pointer hover:bg-muted/40" onClick={() => setDetail(ev)}>
-                        <TableCell className="text-xs whitespace-nowrap">
-                          {new Date(ev.received_at).toLocaleString('pt-BR')}
-                        </TableCell>
+                        <TableCell className="text-xs whitespace-nowrap">{new Date(ev.received_at).toLocaleString('pt-BR')}</TableCell>
                         <TableCell className="text-xs">{ev.event || '—'}</TableCell>
                         <TableCell><Badge variant={s.variant}>{s.label}</Badge></TableCell>
                         <TableCell className="font-mono text-xs">{ev.wavoip_call_id?.slice(0, 16) || '—'}</TableCell>
@@ -286,6 +401,51 @@ export default function WavoipWebhookAdminPage() {
           </CardContent>
         </Card>
 
+        {/* Novo token */}
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Novo token de webhook</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs uppercase text-muted-foreground font-semibold">Escopo</label>
+                <Select value={createScope} onValueChange={setCreateScope}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="company">Empresa inteira (todas as sub-empresas)</SelectItem>
+                    {subCompanies.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>Sub-empresa: {s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs uppercase text-muted-foreground font-semibold">Rótulo (opcional)</label>
+                <Input
+                  placeholder="Ex.: Mult Seguros — tronco principal"
+                  value={createLabel}
+                  onChange={(e) => setCreateLabel(e.target.value)}
+                />
+              </div>
+              <Alert>
+                <AlertDescription className="text-xs">
+                  O token é gerado no backend e nunca é exibido em log. Copie a URL depois de criar e
+                  cole em Wavoip → Integrações → Webhook.
+                </AlertDescription>
+              </Alert>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setCreateOpen(false)} disabled={creating}>Cancelar</Button>
+              <Button onClick={createToken} disabled={creating}>
+                {creating ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Plus className="w-4 h-4 mr-1" />}
+                Gerar token
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Detalhes do evento */}
         <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
           <DialogContent className="max-w-2xl">
             {detail && (
