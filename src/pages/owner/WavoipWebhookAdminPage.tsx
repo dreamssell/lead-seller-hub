@@ -214,9 +214,13 @@ export default function WavoipWebhookAdminPage() {
   };
 
   const scopeLabel = (t: TokenRow) => {
-    if (!t.sub_company_id) return 'Empresa (todas as sub-empresas)';
+    if (!t.sub_company_id) {
+      return subCompanies.length > 0
+        ? 'Toda a minha conta (inclui minhas sub-empresas)'
+        : 'Toda a minha conta';
+    }
     const sub = subCompanies.find((s) => s.id === t.sub_company_id);
-    return sub ? `Sub-empresa: ${sub.name}` : `Sub-empresa: ${t.sub_company_id.slice(0, 8)}…`;
+    return sub ? `Somente a sub-empresa: ${sub.name}` : `Sub-empresa: ${t.sub_company_id.slice(0, 8)}…`;
   };
 
   return (
