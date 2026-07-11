@@ -4949,11 +4949,14 @@ export type Database = {
           event: string | null
           http_status: number | null
           id: string
+          owner_id: string | null
           payload: Json | null
           phone_number: string | null
           received_at: string
           source_ip: string | null
           status: string
+          sub_company_id: string | null
+          token_id: string | null
           wavoip_call_id: string | null
         }
         Insert: {
@@ -4962,11 +4965,14 @@ export type Database = {
           event?: string | null
           http_status?: number | null
           id?: string
+          owner_id?: string | null
           payload?: Json | null
           phone_number?: string | null
           received_at?: string
           source_ip?: string | null
           status?: string
+          sub_company_id?: string | null
+          token_id?: string | null
           wavoip_call_id?: string | null
         }
         Update: {
@@ -4975,14 +4981,75 @@ export type Database = {
           event?: string | null
           http_status?: number | null
           id?: string
+          owner_id?: string | null
           payload?: Json | null
           phone_number?: string | null
           received_at?: string
           source_ip?: string | null
           status?: string
+          sub_company_id?: string | null
+          token_id?: string | null
           wavoip_call_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "wavoip_webhook_events_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "wavoip_webhook_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wavoip_webhook_tokens: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          label: string | null
+          last_used_at: string | null
+          owner_id: string
+          revoked_at: string | null
+          sub_company_id: string | null
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          last_used_at?: string | null
+          owner_id: string
+          revoked_at?: string | null
+          sub_company_id?: string | null
+          token: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          last_used_at?: string | null
+          owner_id?: string
+          revoked_at?: string | null
+          sub_company_id?: string | null
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wavoip_webhook_tokens_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       webauthn_challenges: {
         Row: {
@@ -5481,6 +5548,32 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      generate_wavoip_webhook_token: {
+        Args: {
+          p_label?: string
+          p_owner_id: string
+          p_sub_company_id?: string
+        }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          label: string | null
+          last_used_at: string | null
+          owner_id: string
+          revoked_at: string | null
+          sub_company_id: string | null
+          token: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "wavoip_webhook_tokens"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_access_health: {
         Args: never
         Returns: {
@@ -5616,6 +5709,10 @@ export type Database = {
         Returns: undefined
       }
       release_provision_lock: { Args: { p_email: string }; Returns: undefined }
+      revoke_wavoip_webhook_token: {
+        Args: { p_token_id: string }
+        Returns: boolean
+      }
       search_audit_logs: {
         Args: {
           p_action?: string
