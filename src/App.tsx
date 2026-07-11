@@ -158,7 +158,9 @@ const App = () => (
               <Route path="/internal-comms" element={<ProtectedRoute><InternalCommsPage /></ProtectedRoute>} />
               <Route path="/internal-comms/message/:id" element={<ProtectedRoute><InternalMessageDetailPage /></ProtectedRoute>} />
               <Route path="/owner/internal-comms-audit" element={<ProtectedRoute ownerOnly><InternalCommsAuditPage /></ProtectedRoute>} />
-              <Route path="/owner/wavoip-webhook" element={<ProtectedRoute ownerOnly><WavoipWebhookAdminPage /></ProtectedRoute>} />
+              {/* Cada Empresa/Sub-empresa gerencia o próprio webhook — RLS escopa tokens e eventos por owner_id */}
+              <Route path="/owner/wavoip-webhook" element={<ProtectedRoute><WavoipWebhookAdminPage /></ProtectedRoute>} />
+              <Route path="/settings/wavoip-webhook" element={<ProtectedRoute><WavoipWebhookAdminPage /></ProtectedRoute>} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>
