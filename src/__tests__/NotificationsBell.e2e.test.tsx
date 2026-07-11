@@ -27,11 +27,12 @@ type Msg = {
 let notifications: Notif[] = [];
 let messages: Msg[] = [];
 const rtHandlers: Array<{ table: string; event: string; filter?: string; cb: (p: any) => void }> = [];
-const toastFn = vi.fn();
-
-vi.mock('sonner', () => ({
-  toast: Object.assign(toastFn, { success: vi.fn(), error: vi.fn(), info: vi.fn() }),
-}));
+vi.mock('sonner', () => {
+  const fn = vi.fn();
+  return { toast: Object.assign(fn, { success: vi.fn(), error: vi.fn(), info: vi.fn() }) };
+});
+// eslint-disable-next-line import/first
+import { toast as toastFn } from 'sonner';
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'me' } }),
