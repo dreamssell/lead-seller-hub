@@ -43,6 +43,7 @@ interface Row {
   duration_seconds: number;
   started_at: string;
   answered_at: string | null;
+  ended_at?: string | null;
   recording_path: string | null;
   recording_url: string | null;
   metadata: Record<string, any> | null;
@@ -65,12 +66,15 @@ export function CallHistoryTable({
   const [hasMore, setHasMore] = useState(false);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [subs, setSubs] = useState<Record<string, string>>({});
-  const [period, setPeriod] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
+  const [period, setPeriod] = useState<'today' | '7d' | '30d' | '90d' | 'all'>('30d');
   const [userFilter, setUserFilter] = useState<string>('all');
   const [connFilter, setConnFilter] = useState<string>(filter?.connectionLabel ?? 'all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [directionFilter, setDirectionFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
+
 
   const buildQuery = (from: number, to: number) => {
     let q: any = (supabase as any).from('call_history').select('*')
