@@ -161,6 +161,8 @@ const App = () => (
               {/* Cada Empresa/Sub-empresa gerencia o próprio webhook — RLS escopa tokens e eventos por owner_id */}
               <Route path="/owner/wavoip-webhook" element={<ProtectedRoute><WavoipWebhookAdminPage /></ProtectedRoute>} />
               <Route path="/settings/wavoip-webhook" element={<ProtectedRoute><WavoipWebhookAdminPage /></ProtectedRoute>} />
+              <Route path="/configuracoes/wavoip-webhook" element={<ProtectedRoute><WavoipWebhookAdminPage /></ProtectedRoute>} />
+              <Route path="/configura%C3%A7%C3%B5es/wavoip-webhook" element={<ProtectedRoute><WavoipWebhookAdminPage /></ProtectedRoute>} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>
