@@ -181,21 +181,82 @@ export function parseCallTimestampMs(value?: string | null): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
-export function getReliableCallDurationSeconds(call: CallTimingFields): number | null {
+// Fonte da duração:
+//  - 'official': valor persistido pelo SDK Wavoip / edge (duration_seconds > 0)
+//  - 'derived' : calculada a partir de answered_at/started_at + ended_at
+//  - null      : nenhuma marca confiável (ex.: chamada ainda em andamento)
+export type CallDurationSource = 'official' | 'derived';
+
+export interface CallDurationDetails {
+  seconds: number | null;
+  source: CallDurationSource | null;
+  reason?: 'in_progress' | 'no_end' | 'invalid';
+}
+
+export function getCallDurationDetails(call: CallTimingFields): CallDurationDetails {
   const stored = Number(call.duration_seconds);
-  if (Number.isFinite(stored) && stored > 0) return Math.max(0, Math.round(stored));
-
+  if (Number.isFinite(stored) && stored > 0) {
+    return { seconds: Math.max(0, Math.round(stored)), source: 'official' };
+  }
   const endedMs = parseCallTimestampMs(call.ended_at);
-  if (!endedMs) return null;
-
+  if (!endedMs) {
+    const status = String(call.status || '').toLowerCase();
+    const inProgress = status === 'initiated' || status === 'ringing' || status === 'answered';
+    return { seconds: null, source: null, reason: inProgress ? 'in_progress' : 'no_end' };
+  }
   const startMs = parseCallTimestampMs(call.answered_at) ?? parseCallTimestampMs(call.started_at);
-  if (!startMs || endedMs < startMs) return null;
-
+  if (!startMs || endedMs < startMs) return { seconds: null, source: null, reason: 'invalid' };
   const seconds = Math.max(0, Math.round((endedMs - startMs) / 1000));
-  return seconds > 0 ? seconds : null;
+  if (seconds <= 0) return { seconds: null, source: null, reason: 'invalid' };
+  return { seconds, source: 'derived' };
+}
+
+export function getReliableCallDurationSeconds(call: CallTimingFields): number | null {
+  return getCallDurationDetails(call).seconds;
 }
 
 export function formatCallDuration(call: CallTimingFields, fallback = '—'): string {
   const seconds = getReliableCallDurationSeconds(call);
   return seconds === null ? fallback : formatDuration(seconds);
 }
+
+// Timezone padronizada para exibição e relatórios (auditável).
+export const DISPLAY_TIMEZONE = 'America/Sao_Paulo';
+
+const DATE_FMT = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: DISPLAY_TIMEZONE,
+  day: '2-digit', month: '2-digit', year: 'numeric',
+  hour: '2-digit', minute: '2-digit', second: '2-digit',
+});
+const TIME_FMT = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: DISPLAY_TIMEZONE,
+  hour: '2-digit', minute: '2-digit', second: '2-digit',
+});
+const SHORT_FMT = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: DISPLAY_TIMEZONE,
+  day: '2-digit', month: '2-digit', year: '2-digit',
+  hour: '2-digit', minute: '2-digit',
+});
+
+export function formatCallDateTime(iso?: string | null): string {
+  if (!iso) return '—';
+  const ms = parseCallTimestampMs(iso);
+  if (ms === null) return '—';
+  return `${DATE_FMT.format(new Date(ms))} (BRT)`;
+}
+export function formatCallTime(iso?: string | null): string {
+  if (!iso) return '—';
+  const ms = parseCallTimestampMs(iso);
+  return ms === null ? '—' : TIME_FMT.format(new Date(ms));
+}
+export function formatCallShort(iso?: string | null): string {
+  if (!iso) return '—';
+  const ms = parseCallTimestampMs(iso);
+  return ms === null ? '—' : SHORT_FMT.format(new Date(ms));
+}
+
+export const CALL_DURATION_FALLBACK_LABEL: Record<NonNullable<CallDurationDetails['reason']>, string> = {
+  in_progress: 'Em andamento',
+  no_end: 'Sem encerramento',
+  invalid: 'Indisponível',
+};
