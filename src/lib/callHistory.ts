@@ -53,27 +53,52 @@ export async function startCallLog(input: StartCallInput): Promise<string | null
   return data?.id ?? null;
 }
 
-export async function markCallAnswered(id: string) {
-  if (!id) return;
+export async function markCallAnswered(id: string): Promise<string | null> {
+  if (!id) return null;
+  const now = new Date().toISOString();
   await (supabase as any).from('call_history')
-    .update({ status: 'answered', answered_at: new Date().toISOString() })
+    .update({ status: 'answered', answered_at: now })
     .eq('id', id);
+  return now;
 }
 
 export async function endCallLog(
   id: string,
-  opts: { status?: CallStatus; startedAt?: number; recordingPath?: string | null } = {},
+  opts: {
+    status?: CallStatus;
+    startedAt?: number;
+    answeredAt?: number | null;
+    recordingPath?: string | null;
+    recordingUrl?: string | null;
+    wavoipCallId?: string | null;
+    metadata?: Record<string, any>;
+  } = {},
 ) {
   if (!id) return;
   const ended = new Date();
-  const duration = opts.startedAt ? Math.max(0, Math.round((Date.now() - opts.startedAt) / 1000)) : undefined;
+  // Duração = tempo falado (a partir do atendimento) quando disponível,
+  // caso contrário usa o dial time como fallback.
+  const baseline = opts.answeredAt ?? opts.startedAt;
+  const duration = baseline ? Math.max(0, Math.round((Date.now() - baseline) / 1000)) : undefined;
   const patch: Record<string, any> = {
     status: opts.status ?? 'ended',
     ended_at: ended.toISOString(),
   };
   if (duration !== undefined) patch.duration_seconds = duration;
   if (opts.recordingPath) patch.recording_path = opts.recordingPath;
+  if (opts.recordingUrl) patch.recording_url = opts.recordingUrl;
+  if (opts.wavoipCallId || opts.metadata) {
+    const meta: Record<string, any> = { ...(opts.metadata || {}) };
+    if (opts.wavoipCallId) meta.wavoip_call_id = opts.wavoipCallId;
+    patch.metadata = meta;
+  }
   await (supabase as any).from('call_history').update(patch).eq('id', id);
+}
+
+// URL pública da gravação da Wavoip. Pode demorar alguns minutos após o
+// encerramento da chamada para ficar disponível.
+export function wavoipRecordingUrl(wavoipCallId: string): string {
+  return `https://storage.wavoip.com/${wavoipCallId}`;
 }
 
 export async function uploadCallRecording(

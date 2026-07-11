@@ -42,7 +42,10 @@ interface Row {
   status: string;
   duration_seconds: number;
   started_at: string;
+  answered_at: string | null;
   recording_path: string | null;
+  recording_url: string | null;
+  metadata: Record<string, any> | null;
   user_id: string | null;
   sub_company_id: string | null;
 }
@@ -159,25 +162,34 @@ export function CallHistoryTable({
     return Array.from(s);
   }, [rows]);
 
+  const resolveRecordingUrl = async (r: Row): Promise<string | null> => {
+    // 1) URL direta (Wavoip storage.wavoip.com ou externo)
+    if (r.recording_url) return r.recording_url;
+    // 2) ID Wavoip salvo em metadata → monta a URL oficial
+    const wavoipId = (r.metadata as any)?.wavoip_call_id;
+    if (wavoipId) return `https://storage.wavoip.com/${wavoipId}`;
+    // 3) Fallback: arquivo em bucket privado
+    if (r.recording_path) return await getRecordingSignedUrl(r.recording_path);
+    return null;
+  };
+
   const handlePlay = async (r: Row) => {
-    if (!r.recording_path) return;
+    const url = await resolveRecordingUrl(r);
+    if (!url) { toast({ title: 'Gravação indisponível', description: 'A Wavoip pode levar alguns minutos para publicar o áudio após o fim da chamada.', variant: 'destructive' }); return; }
     if (playingId === r.id && audioEl) { audioEl.pause(); setPlayingId(null); return; }
-    const url = await getRecordingSignedUrl(r.recording_path);
-    if (!url) { toast({ title: 'Gravação indisponível', variant: 'destructive' }); return; }
     if (audioEl) audioEl.pause();
     const a = new Audio(url);
-    a.play().catch(() => {});
+    a.play().catch(() => toast({ title: 'Não foi possível reproduzir', description: 'A gravação pode ainda não estar disponível.', variant: 'destructive' }));
     a.onended = () => setPlayingId(null);
     setAudioEl(a);
     setPlayingId(r.id);
   };
 
   const handleDownload = async (r: Row) => {
-    if (!r.recording_path) return;
-    const url = await getRecordingSignedUrl(r.recording_path);
-    if (!url) { toast({ title: 'Falha ao gerar link', variant: 'destructive' }); return; }
+    const url = await resolveRecordingUrl(r);
+    if (!url) { toast({ title: 'Gravação indisponível', variant: 'destructive' }); return; }
     const a = document.createElement('a');
-    a.href = url; a.download = `chamada-${r.id}.webm`; a.target = '_blank';
+    a.href = url; a.download = `chamada-${r.id}.mp3`; a.target = '_blank';
     document.body.appendChild(a); a.click(); a.remove();
   };
 
@@ -188,15 +200,30 @@ export function CallHistoryTable({
       numero: r.phone_number,
       canal: r.channel,
       conexao: r.connection_label || '—',
-      direcao: r.direction,
-      status: r.status,
+      direcao: directionLabel(r.direction),
+      status: statusLabelPt(r.status, r.direction),
       duracao: formatDuration(r.duration_seconds),
       usuario: profiles[r.user_id || ''] || '—',
       sub_empresa: subs[r.sub_company_id || ''] || '—',
     })));
   };
 
-  const statusBadge = (s: string) => {
+  const directionLabel = (d: string) => d === 'inbound' ? 'Recebida' : 'Efetuada';
+
+  const statusLabelPt = (s: string, direction: string) => {
+    const ptMap: Record<string, string> = {
+      answered: 'Atendida',
+      ended: direction === 'inbound' ? 'Recebida' : 'Efetuada',
+      missed: direction === 'inbound' ? 'Perdida' : 'Não atendida',
+      failed: 'Falhou',
+      rejected: 'Rejeitada',
+      initiated: 'Iniciando',
+      ringing: 'Chamando',
+    };
+    return ptMap[s] || s;
+  };
+
+  const statusBadge = (s: string, direction: string) => {
     const map: Record<string, string> = {
       answered: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30',
       ended: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30',
@@ -206,7 +233,7 @@ export function CallHistoryTable({
       initiated: 'bg-primary/10 text-primary border-primary/30',
       ringing: 'bg-primary/10 text-primary border-primary/30',
     };
-    return <Badge variant="outline" className={map[s] || ''}>{s}</Badge>;
+    return <Badge variant="outline" className={map[s] || ''}>{statusLabelPt(s, direction)}</Badge>;
   };
 
   return (
@@ -283,12 +310,12 @@ export function CallHistoryTable({
                     </TableCell>
                     {!compact && <TableCell className="text-xs">{profiles[r.user_id || ''] || '—'}</TableCell>}
                     <TableCell className="font-mono text-xs">{formatDuration(r.duration_seconds)}</TableCell>
-                    <TableCell>{statusBadge(r.status)}</TableCell>
+                    <TableCell>{statusBadge(r.status, r.direction)}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(r.started_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </TableCell>
                     <TableCell className="text-right">
-                      {r.recording_path ? (
+                      {(r.recording_url || r.recording_path || (r.metadata as any)?.wavoip_call_id) ? (
                         <div className="flex items-center gap-1 justify-end">
                           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handlePlay(r)} title="Ouvir">
                             {playingId === r.id ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}

@@ -415,6 +415,8 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
     }
 
     const startedAt = Date.now();
+    let answeredAt: number | null = null;
+    let wavoipCallId: string | null = null;
     const finish = async (status: 'ended' | 'failed' | 'missed' | 'rejected' = 'ended') => {
       if (!callLogId || !effectiveOwner) return;
       let recordingPath: string | null = null;
@@ -428,7 +430,20 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
           }
         } catch (e) { console.warn('[Wavoip] recorder stop/upload falhou', e); }
       }
-      await endCallLog(callLogId, { status, startedAt, recordingPath });
+      // Preferência: gravação oficial da Wavoip (storage.wavoip.com/{callId}).
+      // MediaRecorder fica como fallback caso a chamada não tenha ID Wavoip.
+      const recordingUrl = wavoipCallId
+        ? `https://storage.wavoip.com/${wavoipCallId}`
+        : null;
+      await endCallLog(callLogId, {
+        status,
+        startedAt,
+        answeredAt,
+        recordingPath,
+        recordingUrl,
+        wavoipCallId,
+        metadata: { device_id: device.id, recording_enabled: recordingEnabled },
+      });
     };
 
     try {
@@ -444,6 +459,9 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
         return false;
       }
 
+      // Captura o ID Wavoip da chamada (necessário para acessar a gravação).
+      wavoipCallId = call?.id || call?.callId || call?.call_id || null;
+
       // Best-effort: assinar eventos do objeto call devolvido pelo SDK.
       const bindEnd = (event: string, status: 'ended' | 'failed' | 'missed') => {
         try { call?.on?.(event, () => { finish(status); }); } catch { /* noop */ }
@@ -453,8 +471,12 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
       bindEnd('terminate', 'ended');
       bindEnd('cancel', 'missed');
       bindEnd('failed', 'failed');
-      try { call?.on?.('accept', () => callLogId && markCallAnswered(callLogId)); } catch { /* noop */ }
-      try { call?.on?.('answered', () => callLogId && markCallAnswered(callLogId)); } catch { /* noop */ }
+      const onAnswered = async () => {
+        answeredAt = Date.now();
+        if (callLogId) await markCallAnswered(callLogId);
+      };
+      try { call?.on?.('accept', onAnswered); } catch { /* noop */ }
+      try { call?.on?.('answered', onAnswered); } catch { /* noop */ }
 
       // Recording (opt-in) — tenta obter o stream remoto exposto pelo SDK.
       if (recordingEnabled) {
@@ -466,7 +488,7 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
             recorder.ondataavailable = (ev) => { if (ev.data.size) chunks.push(ev.data); };
             recorder.start(1000);
           } else {
-            console.info('[Wavoip] gravação opt-in ativa, mas o SDK não expôs stream remoto.');
+            console.info('[Wavoip] gravação local indisponível — usaremos storage.wavoip.com.');
           }
         } catch (e) { console.warn('[Wavoip] MediaRecorder init falhou', e); }
       }
