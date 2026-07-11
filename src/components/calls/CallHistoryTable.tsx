@@ -405,7 +405,7 @@ export function CallHistoryTable({
     const filterSummary = [
       period !== 'all' ? { today: 'Hoje', '7d': 'Últimos 7 dias', '30d': 'Últimos 30 dias', '90d': 'Últimos 90 dias' }[period] : 'Todo período',
       directionFilter !== 'all' ? `Direção: ${directionLabel(directionFilter)}` : null,
-      statusFilter !== 'all' ? `Status: ${statusFilter === 'initiated' ? 'Em ligação' : statusLabelPt({ status: statusFilter, direction: 'outbound', ended_at: null } as Row)}` : null,
+      statusFilter !== 'all' ? `Status: ${statusFilterLabel(statusFilter)}` : null,
       search ? `Busca: "${search}"` : null,
       `Fuso: ${DISPLAY_TIMEZONE}`,
     ].filter(Boolean).join(' · ');
@@ -442,6 +442,11 @@ export function CallHistoryTable({
     };
 
     return ptMap[r.status] || r.status;
+  };
+
+  const statusFilterLabel = (status: string) => {
+    if (status === 'initiated' || status === 'ringing') return 'Em ligação';
+    return statusLabelPt({ status, direction: 'outbound', ended_at: new Date().toISOString() } as Row);
   };
 
   const statusBadge = (r: Pick<Row, 'status' | 'direction' | 'ended_at'>) => {

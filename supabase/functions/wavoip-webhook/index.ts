@@ -258,6 +258,7 @@ Deno.serve(async (req) => {
         nextAnsweredAt = row.answered_at ?? answeredAt ?? receivedAt;
         if (!row.answered_at) patch.answered_at = nextAnsweredAt;
         if (!currentFinal) patch.status = 'answered';
+        else if (row.status === 'missed') patch.status = 'ended';
       } else if (status === 'ringing' || status === 'initiated') {
         if (!currentFinal) patch.status = status;
       } else if (status && isFinalStatus(status)) {
@@ -267,7 +268,7 @@ Deno.serve(async (req) => {
           nextAnsweredAt = answeredAt;
           patch.answered_at = answeredAt;
         }
-        patch.status = status;
+        patch.status = status === 'missed' && nextAnsweredAt ? 'ended' : status;
       } else {
         if (answeredAt && !row.answered_at) {
           nextAnsweredAt = answeredAt;
