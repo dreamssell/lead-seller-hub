@@ -293,7 +293,13 @@ export default function ProfileTab() {
             type="file"
             accept="image/*,.heic,.heif"
             className="hidden"
-            onChange={(e) => e.target.files?.[0] && runUpload(e.target.files[0])}
+            disabled={uploading}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f && !uploading) runUpload(f);
+              // Reseta o value para permitir reselecionar o mesmo arquivo depois de erro.
+              e.target.value = '';
+            }}
           />
         </div>
 
