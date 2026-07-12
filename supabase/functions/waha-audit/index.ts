@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
       meta: { request_id: requestId, owner_hash: ownerHash },
     };
     log('info', 'empty_scope', { owner_hash: ownerHash, limit, order });
-    return json(payload);
+    return json(payload, 200, rateHeaders);
   }
 
   let evQ = admin.from('connection_events')
