@@ -57,7 +57,7 @@ function normalizePhone(from?: string | null): string | null {
 // Classifies the incoming event into one of our three logical buckets, using
 // both the top-level `event` string and the shape of the payload so we work
 // with WEBJS ("message") and GOWS ("gows.MessageEventData") equally well.
-function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'ignore' {
+function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'presence' | 'ignore' {
   const e = event.toLowerCase();
   if (e === 'session.status' || e === 'status.instance') return 'session';
   if (e === 'message.ack' || e === 'ack' || e.endsWith('.receipteventdata')) return 'ack';
@@ -73,6 +73,10 @@ function classify(event: string, body: any): 'message' | 'ack' | 'session' | 're
   if (e === 'message.revoked' || e === 'message.revoke' || e === 'message.revoke_everyone' || e === 'message.revoke_me' || e.endsWith('.revokeeventdata')) return 'revoke';
   const protoType = String(gowsMsg?.protocolMessage?.type || '').toUpperCase();
   if (protoType === 'REVOKE' || protoType === 'MESSAGE_DELETE') return 'revoke';
+  // Etapa 5 — presença (digitando/gravando/online/last seen).
+  //   WEBJS: `presence.update` com { id: chatId, presences: [{ id, isOnline, lastKnownPresence, lastSeen }] }
+  //   GOWS:  gows.PresenceEventData (online/offline) ou gows.ChatPresenceEventData (typing/recording)
+  if (e === 'presence.update' || e.endsWith('.presenceeventdata') || e.endsWith('.chatpresenceeventdata')) return 'presence';
   if (e === 'message' || e === 'message.any') return 'message';
   // GOWS engine emits gows.MessageEventData with body.data.Info / body.data.Message
   if (e.includes('messageeventdata') || e.includes('gows.message')) return 'message';
@@ -497,6 +501,75 @@ Deno.serve(async (req) => {
       metadata: { ...prevMeta, edited: true, edited_at: new Date().toISOString(), edits },
     }).eq('id', msgRow.id);
     return json({ ok: true, edited: editedTargetId });
+  }
+
+  // ── PRESENCE ─────────────────────────────────────────────────────────────
+  // Atualiza customers.presence / presence_updated_at / last_seen_at para o
+  // contato correspondente ao chatId reportado. Nunca cria contato aqui — só
+  // enriquece quem já existe sob este owner. Ignora grupos e @lid.
+  if (bucket === 'presence') {
+    try {
+      // WEBJS: payload = { id: '<chatId>', presences: [{ id, isOnline, isGroup, lastKnownPresence, lastSeen }] }
+      // GOWS (single):        data = { From, LastSeen, Unavailable }                     → online/offline
+      // GOWS (chatpresence):  data = { MessageSource: { Chat }, State: 'composing'|'paused', Media: 'audio'|null }
+      const webChatId: string | undefined = webPayload?.id;
+      const webPres = Array.isArray(webPayload?.presences) ? webPayload.presences[0] : null;
+      const gowsFrom: string | undefined = gowsData?.From || gowsData?.MessageSource?.Chat || gowsData?.MessageSource?.Sender;
+      const gowsState: string | undefined = gowsData?.State || gowsData?.state;
+      const gowsMedia: string | undefined = gowsData?.Media || gowsData?.media;
+
+      const presenceChat = webChatId || gowsFrom || null;
+      const presencePhone = normalizePhone(presenceChat);
+      if (!presencePhone) return json({ ok: true, skipped: 'presence_no_phone' });
+
+      // Estado normalizado: composing/recording/available/unavailable.
+      let state: string = 'unknown';
+      if (gowsState) {
+        const s = String(gowsState).toLowerCase();
+        if (s === 'composing' || s === 'typing') state = gowsMedia === 'audio' ? 'recording' : 'composing';
+        else if (s === 'paused') state = 'paused';
+        else if (s === 'available' || s === 'online') state = 'available';
+        else if (s === 'unavailable' || s === 'offline') state = 'unavailable';
+      } else if (webPres) {
+        const s = String(webPres.lastKnownPresence || webPres.presence || '').toLowerCase();
+        if (webPres.isOnline === true) state = s === 'composing' ? 'composing' : s === 'recording' ? 'recording' : 'available';
+        else state = 'unavailable';
+      } else if (gowsData?.Unavailable === true) {
+        state = 'unavailable';
+      } else if (gowsData?.Unavailable === false) {
+        state = 'available';
+      }
+
+      const nowIso = new Date().toISOString();
+      const lastSeenIso = (() => {
+        const raw = webPres?.lastSeen ?? gowsData?.LastSeen ?? null;
+        if (!raw) return null;
+        // WEBJS lastSeen é unix seconds; GOWS entrega ISO string.
+        if (typeof raw === 'number' && raw > 0) return new Date(raw * 1000).toISOString();
+        if (typeof raw === 'string') { const t = Date.parse(raw); return Number.isFinite(t) ? new Date(t).toISOString() : null; }
+        return null;
+      })();
+
+      const patch: Record<string, any> = {
+        presence: state,
+        presence_updated_at: nowIso,
+      };
+      if (state === 'available' || state === 'composing' || state === 'recording') {
+        patch.last_seen_at = nowIso;
+      } else if (lastSeenIso) {
+        patch.last_seen_at = lastSeenIso;
+      }
+
+      const { error: updErr } = await supabase
+        .from('customers')
+        .update(patch)
+        .eq('phone', presencePhone)
+        .eq('owner_id', conn.owner_id);
+      if (updErr) return json({ ok: true, presence_update_error: updErr.message });
+      return json({ ok: true, presence: { phone: presencePhone, state, last_seen_at: patch.last_seen_at ?? null } });
+    } catch (e: any) {
+      return json({ ok: true, presence_error: e?.message || String(e) });
+    }
   }
 
   // ── REVOKE / DELETE ──────────────────────────────────────────────────────

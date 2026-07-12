@@ -76,12 +76,26 @@ export const WahaEditSchema = z.object({
   text: z.string().min(1).max(4096),
 });
 
+// Etapa 5 — presença (digitando/gravando) e visto/leitura.
+export const WahaTypingSchema = z.object({
+  session: z.string().min(1),
+  chatId: WahaChatIdSchema,
+});
+export const WahaSeenSchema = z.object({
+  session: z.string().min(1),
+  chatId: WahaChatIdSchema,
+  messageId: z.string().min(1).optional(),
+  participant: z.string().min(1).optional(),
+});
+
 export type WahaSendTextPayload = z.infer<typeof WahaSendTextSchema>;
 export type WahaSendMediaPayload = z.infer<typeof WahaSendMediaSchema>;
 export type WahaSendVoicePayload = z.infer<typeof WahaSendVoiceSchema>;
 export type WahaSendReactionPayload = z.infer<typeof WahaSendReactionSchema>;
 export type WahaForwardPayload = z.infer<typeof WahaForwardSchema>;
 export type WahaEditPayload = z.infer<typeof WahaEditSchema>;
+export type WahaTypingPayload = z.infer<typeof WahaTypingSchema>;
+export type WahaSeenPayload = z.infer<typeof WahaSeenSchema>;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -778,6 +792,133 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
         payload: { chatId, for_everyone: forEveryone },
       });
       throw e;
+    }
+  }
+
+  // ── Etapa 5 — Presença / Digitando / Visto ────────────────────────────
+  // WAHA endpoints:
+  //   POST /api/startTyping   { session, chatId }
+  //   POST /api/stopTyping    { session, chatId }
+  //   POST /api/sendSeen      { session, chatId, messageId?, participant? }
+  //   POST /api/{session}/presence/{chatId}/subscribe (engine GOWS — pega presence.update do contato)
+  async sendTyping(
+    conn: WhatsAppConnection,
+    customerId: string,
+    state: 'typing' | 'recording' | 'paused',
+  ) {
+    const url = normalizeUrl(conn.metadata?.url);
+    const token = conn.metadata?.token || '';
+    if (!url) return { ok: false, skipped: 'unconfigured' };
+
+    const { data: customer } = await supabase
+      .from('customers').select('phone').eq('id', customerId).single();
+    if (!customer?.phone) return { ok: false, skipped: 'no_phone' };
+
+    const rawPayload = {
+      session: this.sessionOf(conn),
+      chatId: normalizeChatId(customer.phone),
+    };
+    const parsed = WahaTypingSchema.safeParse(rawPayload);
+    if (!parsed.success) return { ok: false, skipped: 'invalid_payload' };
+
+    // WAHA não tem "recording" nativo em todos os engines: mapeamos para startTyping,
+    // e "paused" → stopTyping. Best-effort: falhas de rede não bloqueiam o composer.
+    const path = state === 'paused' ? '/api/stopTyping' : '/api/startTyping';
+    try {
+      const data = await wahaFetch(url, token, path, {
+        method: 'POST',
+        body: parsed.data,
+        timeoutMs: 4_000,
+        retries: 0,
+      });
+      return { ok: true, provider: 'waha', state, raw: data };
+    } catch (e: any) {
+      // Nunca lançar — o composer não deve travar por causa de "typing".
+      return { ok: false, error: e?.message || String(e) };
+    }
+  }
+
+  async markAsRead(
+    conn: WhatsAppConnection,
+    customerId: string,
+    providerMessageId?: string | null,
+  ) {
+    const url = normalizeUrl(conn.metadata?.url);
+    const token = conn.metadata?.token || '';
+    if (!url) return { ok: false, skipped: 'unconfigured' };
+
+    const { data: customer } = await supabase
+      .from('customers').select('phone').eq('id', customerId).single();
+    if (!customer?.phone) return { ok: false, skipped: 'no_phone' };
+
+    const rawPayload: Record<string, unknown> = {
+      session: this.sessionOf(conn),
+      chatId: normalizeChatId(customer.phone),
+      ...(providerMessageId ? { messageId: String(providerMessageId) } : {}),
+    };
+    const parsed = WahaSeenSchema.safeParse(rawPayload);
+    if (!parsed.success) return { ok: false, skipped: 'invalid_payload' };
+
+    await writeWahaAudit(conn, {
+      action: 'mark_as_read',
+      status: 'started',
+      customerId,
+      wahaSessionId: parsed.data.session,
+      messageId: parsed.data.messageId ?? null,
+      payload: { chatId: parsed.data.chatId },
+    });
+    try {
+      const data = await wahaFetch(url, token, '/api/sendSeen', {
+        method: 'POST',
+        body: parsed.data,
+        timeoutMs: 6_000,
+        retries: 1,
+      });
+      await writeWahaAudit(conn, {
+        action: 'mark_as_read',
+        status: 'success',
+        customerId,
+        wahaSessionId: parsed.data.session,
+        messageId: parsed.data.messageId ?? null,
+        payload: { chatId: parsed.data.chatId, raw: data },
+      });
+      return { ok: true, provider: 'waha', raw: data };
+    } catch (e: any) {
+      await writeWahaAudit(conn, {
+        action: 'mark_as_read',
+        status: 'error',
+        customerId,
+        wahaSessionId: parsed.data.session,
+        errorMessage: e?.message || String(e),
+        payload: { chatId: parsed.data.chatId },
+      });
+      return { ok: false, error: e?.message || String(e) };
+    }
+  }
+
+  async subscribePresence(conn: WhatsAppConnection, customerId: string) {
+    // GOWS-only endpoint; WEBJS já entrega presence.update sem subscribe.
+    const url = normalizeUrl(conn.metadata?.url);
+    const token = conn.metadata?.token || '';
+    if (!url) return { ok: false, skipped: 'unconfigured' };
+    const engine = String(conn.metadata?.engine || '').toLowerCase();
+    if (engine && !/gows|nows|noweb/.test(engine)) {
+      return { ok: true, skipped: 'engine_autosubscribes' };
+    }
+    const { data: customer } = await supabase
+      .from('customers').select('phone').eq('id', customerId).single();
+    if (!customer?.phone) return { ok: false, skipped: 'no_phone' };
+
+    const session = this.sessionOf(conn);
+    const chatId = normalizeChatId(customer.phone);
+    const path = `/api/${encodeURIComponent(session)}/presence/${encodeURIComponent(chatId)}/subscribe`;
+    try {
+      const data = await wahaFetch(url, token, path, {
+        method: 'POST', body: {}, timeoutMs: 5_000, retries: 0,
+      });
+      return { ok: true, provider: 'waha', raw: data };
+    } catch (e: any) {
+      return { ok: false, error: e?.message || String(e) };
     }
   }
 

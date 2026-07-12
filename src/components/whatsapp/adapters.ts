@@ -13,6 +13,10 @@ export interface WhatsAppProviderAdapter {
   forwardMessage?(conn: WhatsAppConnection, providerMessageId: string, toCustomerId: string): Promise<any>;
   editMessage?(conn: WhatsAppConnection, providerMessageId: string, customerId: string, newText: string): Promise<any>;
   deleteMessage?(conn: WhatsAppConnection, providerMessageId: string, customerId: string, forEveryone?: boolean): Promise<any>;
+  // Etapa 5 — presença: digitando/gravando e "visto".
+  sendTyping?(conn: WhatsAppConnection, customerId: string, state: 'typing' | 'recording' | 'paused'): Promise<any>;
+  markAsRead?(conn: WhatsAppConnection, customerId: string, providerMessageId?: string | null): Promise<any>;
+  subscribePresence?(conn: WhatsAppConnection, customerId: string): Promise<any>;
   syncContacts(conn: WhatsAppConnection): Promise<any>;
 }
 
