@@ -256,8 +256,20 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
           </div>
           <Button size="sm" onClick={() => setMessageIdFilter(pendingMsgId.trim())}>Aplicar filtro</Button>
           <Button size="sm" variant="outline" onClick={() => { setPendingMsgId(''); setMessageIdFilter(''); }}>Limpar</Button>
-          <Button size="sm" variant="outline" onClick={fetchAudit} disabled={loading}>
+          <Button size="sm" variant="outline" onClick={() => fetchAudit()} disabled={loading}>
             <RefreshCcw className={`w-3.5 h-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} /> Recarregar
+          </Button>
+          <Button size="sm" variant="outline" onClick={toggleOrder} title="Alternar ordenação por created_at">
+            {order === 'desc' ? <ArrowDown className="w-3.5 h-3.5 mr-1" /> : <ArrowUp className="w-3.5 h-3.5 mr-1" />}
+            {order === 'desc' ? 'Mais recentes' : 'Mais antigos'}
+          </Button>
+          <Button size="sm" variant="outline" onClick={handlePrevPage} disabled={loading || cursorStack.length === 0}>← Anterior</Button>
+          <Button size="sm" variant="outline" onClick={handleNextPage} disabled={loading || !data?.pagination?.next_cursor}>Próxima →</Button>
+          <Button size="sm" variant="outline" onClick={handleExportCsv} disabled={loading || !data}>
+            <FileDown className="w-3.5 h-3.5 mr-1" /> CSV
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleExportPdf} disabled={loading || !data}>
+            <FileText className="w-3.5 h-3.5 mr-1" /> PDF
           </Button>
           <div className="ml-auto flex items-center gap-2 text-xs">
             <Radio className={`w-3.5 h-3.5 ${realtimeStatus === 'connected' ? 'text-success' : realtimeStatus === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} />
