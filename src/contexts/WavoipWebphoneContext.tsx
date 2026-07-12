@@ -149,7 +149,8 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
     let query = supabase
       .from('wavoip_devices')
       .select('*')
-      .eq('owner_id', owner_id);
+      .eq('owner_id', owner_id)
+      .eq('enabled', true);
     if (sub_company_id) query = query.eq('sub_company_id', sub_company_id);
     else query = query.is('sub_company_id', null);
 
@@ -168,12 +169,17 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
       last_validation_status: r.last_validation_status,
       last_validation_error: r.last_validation_error,
     }));
-    const def = (data || []).find((r: any) => r.is_default);
+    // Prefer the most recently updated default to avoid stale legacy trunks
+    // when multiple rows are accidentally flagged is_default=true.
+    const defaults = (data || []).filter((r: any) => r.is_default);
+    defaults.sort((a: any, b: any) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime());
+    const def = defaults[0];
     setConfig({
       enabled: devices.length > 0,
       defaultDeviceId: def?.id || devices[0]?.id,
       devices,
     });
+
 
     // Migração one-shot: importa devices legados do localStorage para o DB se vazio
     if (devices.length === 0) {
