@@ -2209,7 +2209,27 @@ export default function ChatPage() {
                       <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm relative group ${
                         m.sender_type !== 'client' ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-secondary text-foreground rounded-bl-md'
                       }`}>
-                        <p className="whitespace-pre-wrap break-words">{renderWhatsAppText(m.content)}</p>
+                        {m._mediaUrl && m._mediaType === 'audio' && (
+                          <audio controls preload="metadata" src={m._mediaUrl} className="w-full max-w-[280px] my-1" />
+                        )}
+                        {m._mediaUrl && m._mediaType === 'image' && (
+                          <a href={m._mediaUrl} target="_blank" rel="noreferrer">
+                            <img src={m._mediaUrl} alt={m._mediaFilename || 'imagem'} className="rounded-lg max-h-64 object-cover my-1" loading="lazy" />
+                          </a>
+                        )}
+                        {m._mediaUrl && m._mediaType === 'video' && (
+                          <video controls preload="metadata" src={m._mediaUrl} className="rounded-lg max-h-64 w-full my-1" />
+                        )}
+                        {m._mediaUrl && m._mediaType === 'document' && (
+                          <a href={m._mediaUrl} target="_blank" rel="noreferrer" download={m._mediaFilename || undefined}
+                             className="flex items-center gap-2 rounded-lg border border-current/20 bg-background/20 px-2 py-1.5 my-1 text-xs hover:bg-background/30">
+                            <FileDown className="w-4 h-4 shrink-0" />
+                            <span className="truncate">{m._mediaFilename || 'Arquivo'}</span>
+                          </a>
+                        )}
+                        {(m.content && m.content !== '[mídia]') && (
+                          <p className="whitespace-pre-wrap break-words">{renderWhatsAppText(m.content)}</p>
+                        )}
                         <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
                           <p className="text-[10px]">
                             {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
