@@ -2191,9 +2191,10 @@ export default function ChatPage() {
                           {m.sender_type !== 'client' && (
                             <div className="ml-1">
                               {m.status === 'sending' ? (
-                                <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                                // Sem sinal de "enviando" para atendentes — apenas o dono vê carregamento.
+                                isOwner ? <RefreshCw className="w-2.5 h-2.5 animate-spin" /> : <Check className="w-2.5 h-2.5 opacity-60" />
                               ) : m.status === 'error' ? (
-                                <AlertCircle className="w-2.5 h-2.5 text-destructive-foreground" />
+                                isOwner ? <AlertCircle className="w-2.5 h-2.5 text-destructive-foreground" /> : <Check className="w-2.5 h-2.5 opacity-60" />
                               ) : m.status === 'sent' ? (
                                 <Check className="w-2.5 h-2.5" />
                               ) : m.status === 'delivered' ? (
@@ -2207,20 +2208,20 @@ export default function ChatPage() {
                           )}
                         </div>
 
-                        {m.sender_type !== 'client' && m.status === 'sending' && (
+                        {isOwner && m.sender_type !== 'client' && m.status === 'sending' && (
                           <div className="mt-2 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-2 py-1 text-[10px] flex items-center gap-1.5">
                             <RefreshCw className="w-3 h-3 animate-spin" />
                             Enviando pelo provedor…
                           </div>
                         )}
 
-                        {m.sender_type !== 'client' && m._latency && m.status !== 'error' && (
+                        {isOwner && m.sender_type !== 'client' && m._latency && m.status !== 'error' && (
                           <div className="mt-1 text-[9px] opacity-70 text-right">
                             Evolution aceitou em {m._latency}ms{m._confirmedAt ? ` · confirmado ${new Date(m._confirmedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
                           </div>
                         )}
 
-                        {m.sender_type !== 'client' && errorInfo && (
+                        {isOwner && m.sender_type !== 'client' && errorInfo && (
                           <div className="mt-2 rounded-lg border border-destructive/30 bg-destructive/15 px-2 py-1.5 text-[10px] text-primary-foreground space-y-1">
                             <div className="flex items-start gap-1.5">
                               <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
