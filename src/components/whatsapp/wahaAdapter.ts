@@ -379,6 +379,16 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
     const path = mime.startsWith('image/') ? '/api/sendImage'
       : mime.startsWith('video/') ? '/api/sendVideo'
       : '/api/sendFile';
+    const mediaKind = mime.startsWith('image/') ? 'image'
+      : mime.startsWith('video/') ? 'video'
+      : mime.startsWith('audio/') ? 'audio'
+      : 'document';
+
+    // Mirror the outbound file into chat-media so the sender's UI can render
+    // the same player as the recipient — done in parallel with the WAHA call
+    // to keep latency minimal.
+    const uploadPromise = uploadOutboundToChatMedia(conn, file, mime, parsed.data.file.filename);
+
     await writeWahaAudit(conn, {
       action: 'send_media',
       status: 'started',
@@ -394,21 +404,30 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       });
       const messageId = data?.id?._serialized || data?.id || data?.key?.id || null;
       if (!messageId) {
-        // WAHA sometimes 200s without an id when the media was silently dropped by
-        // GOWS. Surface the full payload so we can diagnose (missing chatId, wrong
-        // mime, session STARTING, etc.) instead of a generic silent failure.
         const dbg = (() => { try { return JSON.stringify(data).slice(0, 500); } catch { return String(data); } })();
         throw new Error(`WAHA respondeu sem message_id (rota ${path}). Resposta: ${dbg}`);
       }
+      const stored = await uploadPromise;
       await writeWahaAudit(conn, {
         action: 'send_media',
         status: 'success',
         customerId,
         wahaSessionId: parsed.data.session,
         messageId,
-        payload: { chatId: parsed.data.chatId, route: path, mimetype: mime, raw: data },
+        payload: { chatId: parsed.data.chatId, route: path, mimetype: mime, raw: data, media_path: stored?.path },
       });
-      return { ok: true, provider: 'waha', message_id: messageId, raw: data };
+      return {
+        ok: true,
+        provider: 'waha',
+        message_id: messageId,
+        media_url: stored?.signedUrl ?? null,
+        media_path: stored?.path ?? null,
+        media_type: mediaKind,
+        media_mime: mime,
+        media_filename: parsed.data.file.filename,
+        media_size: stored?.size ?? null,
+        raw: data,
+      };
     } catch (e: any) {
       await writeWahaAudit(conn, {
         action: 'send_media',
