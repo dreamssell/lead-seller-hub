@@ -72,7 +72,7 @@ function normalizePhone(from?: string | null): string | null {
 function eventToInboundCandidate(eventRow: any) {
   const body = eventRow?.payload ?? {};
   const event = String(body?.event || eventRow?.metadata_json?.raw_event || "");
-  const gowsData = body?.data ?? null;
+  const gowsData = body?.data ?? (body?.Info || body?.Message ? body : null);
   const webPayload = body?.payload ?? (body?._data ? body : {});
   const info = gowsData?.Info ?? gowsData?.Message?.Info ?? webPayload?._data?.Info ?? null;
   const msgWrap = gowsData?.Message ?? webPayload?._data?.Message ?? {};
