@@ -197,6 +197,41 @@ const getMessageErrorInfo = (message: any): NormalizedChatError | null => {
   };
 };
 
+type InboundPipelineDebug = {
+  webhookSeen: number;
+  persistedMessages: number;
+  realtimeSeen: number;
+  renderedMessages: number;
+  lastProviderMessageId?: string | null;
+  lastChatMessageId?: string | null;
+  lastSenderLid?: string | null;
+  lastOwnerId?: string | null;
+  lastEventAt?: string | null;
+  lastBackfill?: any;
+};
+
+const emptyInboundPipelineDebug: InboundPipelineDebug = {
+  webhookSeen: 0,
+  persistedMessages: 0,
+  realtimeSeen: 0,
+  renderedMessages: 0,
+};
+
+function getStoredChatState(ownerId: string | null) {
+  if (!ownerId) return null;
+  try {
+    const raw = localStorage.getItem(`lead-seller:chat-state:${ownerId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return {
+      channel: channels.some((c) => c.key === parsed?.channel) ? parsed.channel as ChannelKey : null,
+      selectedConvId: typeof parsed?.selectedConvId === 'string' ? parsed.selectedConvId : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 const extractProviderMessageId = (data: any) => (
   data?.message_id ||
   data?.raw?.id?._serialized ||
@@ -296,9 +331,13 @@ export default function ChatPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [debugLogs, setDebugLogs] = useState<Array<{ id: string; time: string; type: 'info' | 'error' | 'request'; message: string; data?: any }>>([]);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const showDebugPanelRef = useRef(showDebugPanel);
+  const restoredChatStateRef = useRef<string | null>(null);
+  const wahaBackfillRef = useRef<Record<string, number>>({});
   const [authValidation, setAuthValidation] = useState<{ valid: boolean; reason?: string; loading: boolean }>({ valid: false, loading: true });
   const [activeWhatsAppConn, setActiveWhatsAppConn] = useState<WhatsAppConnection | null>(null);
   const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
+  const [inboundDebug, setInboundDebug] = useState<InboundPipelineDebug>(emptyInboundPipelineDebug);
   const [wavoipLineBusy, setWavoipLineBusy] = useState<{
     busy: boolean;
     phone?: string | null;
@@ -311,6 +350,7 @@ export default function ChatPage() {
     loading: true,
     dbStatus: 'disconnected',
   });
+  const whatsappStatusRef = useRef(whatsappStatus);
 
   // Telegram States
   const [isScheduling, setIsScheduling] = useState(false);
@@ -347,12 +387,38 @@ export default function ChatPage() {
     onSend: () => { /* ChatComposer handles its own Ctrl+Enter via key event */ },
   });
 
+  useEffect(() => {
+    showDebugPanelRef.current = showDebugPanel;
+  }, [showDebugPanel]);
+
+  useEffect(() => {
+    whatsappStatusRef.current = whatsappStatus;
+  }, [whatsappStatus]);
+
+  useEffect(() => {
+    if (!activeOwnerId || restoredChatStateRef.current === activeOwnerId) return;
+    const saved = getStoredChatState(activeOwnerId);
+    restoredChatStateRef.current = activeOwnerId;
+    if (saved?.channel) setActiveChannel(saved.channel);
+    if (saved?.selectedConvId) setSelectedConvId(saved.selectedConvId);
+  }, [activeOwnerId]);
+
+  useEffect(() => {
+    if (!activeOwnerId || restoredChatStateRef.current !== activeOwnerId) return;
+    try {
+      localStorage.setItem(
+        `lead-seller:chat-state:${activeOwnerId}`,
+        JSON.stringify({ channel: activeChannel, selectedConvId, savedAt: new Date().toISOString() }),
+      );
+    } catch {}
+  }, [activeOwnerId, activeChannel, selectedConvId]);
+
 
 
   const addDebugLog = (type: 'info' | 'error' | 'request', message: string, data?: any) => {
     // Evita re-render contínuo: só coleta quando o painel de Diagnóstico está aberto,
     // e quando aberto mantém apenas os 50 eventos mais recentes em memória (sem persistência).
-    if (!showDebugPanel && type !== 'error') return;
+    if (!showDebugPanelRef.current && type !== 'error' && !message.startsWith('[Inbound]')) return;
     setDebugLogs(prev => [{
       id: crypto.randomUUID(),
       time: new Date().toLocaleTimeString(),
@@ -360,6 +426,134 @@ export default function ChatPage() {
       message,
       data
     }, ...prev].slice(0, 50));
+  };
+
+  const loadInboundPipelineDebug = async (conn: WhatsAppConnection | null, ownerId: string | null) => {
+    if (!conn?.id || !ownerId) return;
+    try {
+      const [{ data: events }, { data: persisted }] = await Promise.all([
+        (supabase as any)
+          .from('connection_events')
+          .select('id,event_type,status,created_at,metadata_json,payload,status_detail,error_message')
+          .eq('connection_id', conn.id)
+          .order('created_at', { ascending: false })
+          .limit(30),
+        (supabase as any)
+          .from('chat_messages')
+          .select('id,uaz_msg_id,customer_id,created_at,metadata,customers!inner(owner_id,phone,name)')
+          .eq('connection_id', conn.id)
+          .order('created_at', { ascending: false })
+          .limit(30),
+      ]);
+      const ownMessages = (persisted || []).filter((m: any) => m?.customers?.owner_id === ownerId);
+      const lastEvent = (events || [])[0] as any;
+      const lastMsg = ownMessages[0] as any;
+      setInboundDebug((prev) => ({
+        ...prev,
+        webhookSeen: (events || []).filter((e: any) => String(e.event_type || '').startsWith('waha.')).length,
+        persistedMessages: ownMessages.length,
+        lastProviderMessageId: lastMsg?.uaz_msg_id || lastEvent?.metadata_json?.provider_msg_id || null,
+        lastChatMessageId: lastMsg?.id || lastEvent?.metadata_json?.chat_message_id || null,
+        lastSenderLid: lastMsg?.metadata?.sender_lid || lastEvent?.metadata_json?.sender_lid || null,
+        lastOwnerId: ownerId,
+        lastEventAt: lastMsg?.created_at || lastEvent?.created_at || null,
+      }));
+      addDebugLog('info', '[Inbound] Backend trace atualizado', {
+        owner_id: ownerId,
+        connection_id: conn.id,
+        webhook_events: events?.length || 0,
+        persisted_messages: ownMessages.length,
+        last_event: lastEvent,
+        last_message: lastMsg,
+      });
+    } catch (e) {
+      addDebugLog('error', '[Inbound] Falha ao carregar trace backend', e);
+    }
+  };
+
+  const triggerWahaInboundBackfill = async (conn: WhatsAppConnection | null, ownerId: string | null, reason: string) => {
+    if (!conn?.id || conn.provider !== 'waha' || !ownerId) return;
+    const now = Date.now();
+    if (now - (wahaBackfillRef.current[conn.id] || 0) < 90_000) return;
+    wahaBackfillRef.current[conn.id] = now;
+    try {
+      addDebugLog('request', '[Inbound] Solicitando backfill automático WAHA', { connection_id: conn.id, owner_id: ownerId, reason });
+      const { data, error } = await supabase.functions.invoke('waha-session', {
+        body: { action: 'backfill_inbound', connection_id: conn.id, limit: 100 },
+      });
+      if (error) throw error;
+      setInboundDebug((prev) => ({ ...prev, lastBackfill: data }));
+      addDebugLog('info', '[Inbound] Backfill WAHA concluído', data);
+      await loadInboundPipelineDebug(conn, ownerId);
+      if (selectedConvIdRef.current) await loadMessagesForConversation(selectedConvIdRef.current, 'backfill');
+    } catch (e) {
+      addDebugLog('error', '[Inbound] Backfill WAHA falhou', e);
+    }
+  };
+
+  const loadMessagesForConversation = async (conversationId: string, source: 'select' | 'manual' | 'realtime' | 'backfill' = 'manual') => {
+    const scopedConv = (activeChannelRef.current ? convsRef.current[activeChannelRef.current] : Object.values(convsRef.current).flat()).find((c) => c.id === conversationId) as any;
+    if (!scopedConv) {
+      addDebugLog('info', '[Inbound] Conversa ainda não está carregada; aguardando lista de contatos', {
+        customer_id: conversationId,
+        owner_id: activeOwnerIdRef.current,
+      });
+      return false;
+    }
+    if (!canUseTenantRecord(activeOwnerIdRef.current, scopedConv?.owner_id ?? null)) {
+      addDebugLog('error', 'Consulta de mensagens bloqueada por owner divergente', {
+        owner_ativo: activeOwnerIdRef.current,
+        owner_conversa: scopedConv?.owner_id ?? null,
+        customer_id: conversationId,
+      });
+      toast({
+        title: 'Owner incorreto para esta conversa',
+        description: 'Atualize o access antes de consultar ou enviar mensagens neste contato.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('customer_id', conversationId)
+      .order('created_at', { ascending: true });
+    if (conversationId !== selectedConvIdRef.current) return false;
+    if (error) {
+      console.warn('loadMessages error', error);
+      toast({
+        title: 'Não foi possível carregar as mensagens',
+        description: error.message || 'Verifique suas permissões e recarregue o chat.',
+        variant: 'destructive',
+      });
+      addDebugLog('error', '[Inbound] Falha na gravação/leitura de mensagens', error);
+      return false;
+    }
+    const hydrated = (data || []).map(hydrateChatMessage);
+    setMessages((prev) => applyConversationMessagesAfterSwitch({
+      currentConversationId: selectedConvIdRef.current,
+      requestedConversationId: conversationId,
+      previousMessages: prev,
+      loadedMessages: hydrated,
+    }));
+    const last = hydrated[hydrated.length - 1];
+    setInboundDebug((prev) => ({
+      ...prev,
+      renderedMessages: hydrated.length,
+      lastChatMessageId: last?.id || prev.lastChatMessageId,
+      lastProviderMessageId: last?.uaz_msg_id || prev.lastProviderMessageId,
+      lastSenderLid: last?.metadata?.sender_lid || prev.lastSenderLid,
+      lastEventAt: last?.created_at || prev.lastEventAt,
+    }));
+    addDebugLog('info', `[Inbound] Render atualizado por ${source}`, {
+      customer_id: conversationId,
+      owner_id: activeOwnerIdRef.current,
+      message_count: hydrated.length,
+      last_message_id: last?.id,
+      provider_message_id: last?.uaz_msg_id,
+      sender_lid: last?.metadata?.sender_lid,
+    });
+    return true;
   };
 
   const showSendErrorToast = (err: unknown) => {
@@ -449,6 +643,8 @@ export default function ChatPage() {
 
           if (isConnected) {
             addDebugLog('info', `Status: ATIVO (${summary.labels.join(' + ')}). Iniciando carga de contatos.`);
+            loadInboundPipelineDebug(summary.primary, activeOwnerId);
+            triggerWahaInboundBackfill(summary.primary, activeOwnerId, 'provider_status_connected');
             loadConversations(channel);
           }
         } else if (channel === 'telegram') {
@@ -558,7 +754,14 @@ export default function ChatPage() {
           .map(({ _sortAt, _duplicateKey, ...row }) => row);
 
         
-        setConvs(prev => ({ ...prev, [channel]: formatted }));
+        setConvs(prev => {
+          const next = { ...prev, [channel]: formatted };
+          convsRef.current = next;
+          return next;
+        });
+        if (selectedConvIdRef.current && formatted.some((c: any) => c.id === selectedConvIdRef.current)) {
+          loadMessagesForConversation(selectedConvIdRef.current, 'manual');
+        }
         addDebugLog('info', `Conversas ${channel} formatadas e carregadas na UI`, {
           contatos_carregados: channelCustomers.length,
           conversas_unificadas: formatted.length,
@@ -604,7 +807,23 @@ export default function ChatPage() {
             await loadConversations(currentChannel);
           }
         }
-        addDebugLog('info', 'Nova mensagem recebida via Realtime', row);
+        setInboundDebug((prev) => ({
+          ...prev,
+          realtimeSeen: prev.realtimeSeen + 1,
+          lastChatMessageId: row.id || prev.lastChatMessageId,
+          lastProviderMessageId: row.uaz_msg_id || prev.lastProviderMessageId,
+          lastSenderLid: row.metadata?.sender_lid || prev.lastSenderLid,
+          lastOwnerId: currentOwner || prev.lastOwnerId,
+          lastEventAt: row.created_at || new Date().toISOString(),
+        }));
+        addDebugLog('info', '[Inbound] Nova mensagem recebida via Realtime', {
+          message_id: row.id,
+          provider_message_id: row.uaz_msg_id,
+          sender_lid: row.metadata?.sender_lid,
+          owner_id: currentOwner,
+          customer_id: row.customer_id,
+          connection_id: row.connection_id,
+        });
         if (row.customer_id === selectedConvIdRef.current) {
           setMessages(prev => {
             const cid = row.client_msg_id;
@@ -612,7 +831,9 @@ export default function ChatPage() {
               return prev.map(m => (m.client_msg_id === cid || m.id === cid) ? hydrateChatMessage({ ...m, ...row, status: row.metadata?.status || row.status || m.status }) : m);
             }
             if (prev.some(m => m.id === row.id)) return prev;
-            return [...prev, hydrateChatMessage(row)];
+            const next = [...prev, hydrateChatMessage(row)];
+            setInboundDebug((dbg) => ({ ...dbg, renderedMessages: next.length }));
+            return next;
           });
         }
         if (activeChannelRef.current) loadConversations(activeChannelRef.current);
@@ -734,44 +955,8 @@ export default function ChatPage() {
     let cancelled = false;
     const convAtStart = selectedConvId;
     (async () => {
-      const scopedConv = (activeChannel ? convsRef.current[activeChannel] : Object.values(convsRef.current).flat()).find((c) => c.id === convAtStart) as any;
-      if (!canUseTenantRecord(activeOwnerId, scopedConv?.owner_id ?? null)) {
-        addDebugLog('error', 'Consulta de mensagens bloqueada por owner divergente', {
-          owner_ativo: activeOwnerId,
-          owner_conversa: scopedConv?.owner_id ?? null,
-          customer_id: convAtStart,
-        });
-        toast({
-          title: 'Owner incorreto para esta conversa',
-          description: 'Atualize o access antes de consultar ou enviar mensagens neste contato.',
-          variant: 'destructive',
-        });
-        return;
-      }
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('customer_id', convAtStart)
-        .order('created_at', { ascending: true });
-      // Race guard: only apply if the user hasn't switched conversations meanwhile.
-      if (cancelled || convAtStart !== selectedConvId) return;
-      if (error) {
-        // Never silently clear the transcript on error — that's what caused
-        // "mensagens desaparecem ao trocar de chat" for non-owner users.
-        console.warn('loadMessages error', error);
-        toast({
-          title: 'Não foi possível carregar as mensagens',
-          description: error.message || 'Verifique suas permissões e recarregue o chat.',
-          variant: 'destructive',
-        });
-        return;
-      }
-      setMessages((prev) => applyConversationMessagesAfterSwitch({
-        currentConversationId: selectedConvId,
-        requestedConversationId: convAtStart,
-        previousMessages: prev,
-        loadedMessages: (data || []).map(hydrateChatMessage),
-      }));
+      await loadMessagesForConversation(convAtStart, 'select');
+      if (cancelled) return;
     })();
     return () => { cancelled = true; };
   }, [selectedConvId, activeChannel, activeOwnerId]);

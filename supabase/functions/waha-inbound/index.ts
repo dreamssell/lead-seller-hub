@@ -65,7 +65,8 @@ function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'ig
   // GOWS engine emits gows.MessageEventData with body.data.Info / body.data.Message
   if (e.includes('messageeventdata') || e.includes('gows.message')) return 'message';
   // Some payloads omit `event`; infer from shape.
-  if (!event && body?.data?.Info && body?.data?.Message) return 'message';
+  // Some WAHA/GOWS deployments wrap the same message shape under `engine.event`.
+  if (body?.data?.Info && body?.data?.Message) return 'message';
   return 'ignore';
 }
 
@@ -107,6 +108,20 @@ Deno.serve(async (req) => {
   const webPayload = body?.payload ?? {};
   const info = gowsData?.Info ?? gowsData?.Message?.Info ?? null;
   const msgWrap = gowsData?.Message ?? webPayload?._data?.Message ?? {};
+  const preliminaryRawFrom: string | undefined =
+    webPayload?.from ||
+    info?.Chat ||
+    info?.Sender ||
+    webPayload?._data?.Info?.Chat;
+  const preliminarySenderAlt: string | undefined =
+    info?.SenderAlt ||
+    webPayload?._data?.Info?.SenderAlt;
+  const preliminarySenderLid =
+    typeof preliminaryRawFrom === 'string' && preliminaryRawFrom.includes('@lid')
+      ? preliminaryRawFrom
+      : typeof preliminarySenderAlt === 'string' && preliminarySenderAlt.includes('@lid')
+      ? preliminarySenderAlt
+      : null;
 
   const providerMsgId =
     extractId(webPayload?.id) ||
@@ -119,6 +134,7 @@ Deno.serve(async (req) => {
   const bucket = classify(event, body);
 
   // Observability log — always insert (best-effort), regardless of routing.
+  let eventLogId: string | null = null;
   try {
     const statusForLog =
       bucket === 'session'
@@ -128,7 +144,7 @@ Deno.serve(async (req) => {
         : bucket === 'message'
         ? (info?.IsFromMe ? 'outbound' : 'inbound')
         : isTest ? 'test' : 'received';
-    await supabase.from('connection_events').insert({
+    const { data: logged } = await supabase.from('connection_events').insert({
       connection_id: connectionId,
       event_type: `waha.${event || 'unknown'}`,
       status: statusForLog,
@@ -142,9 +158,15 @@ Deno.serve(async (req) => {
         bucket,
         raw_event: event,
         is_test: isTest,
+        owner_id: conn.owner_id,
+        sub_company_id: conn.sub_company_id,
+        sender_jid: preliminaryRawFrom,
+        sender_alt: preliminarySenderAlt,
+        sender_lid: preliminarySenderLid,
       },
       test_event_id: isTest ? providerMsgId : null,
-    });
+    }).select('id').maybeSingle();
+    eventLogId = logged?.id ?? null;
   } catch (_) { /* swallow */ }
 
   if (isTest) return json({ ok: true, test: true, id: providerMsgId });
@@ -236,6 +258,12 @@ Deno.serve(async (req) => {
   const senderAlt: string | undefined =
     info?.SenderAlt ||
     webPayload?._data?.Info?.SenderAlt;
+  const senderLid =
+    typeof rawFrom === 'string' && rawFrom.includes('@lid')
+      ? rawFrom
+      : typeof senderAlt === 'string' && senderAlt.includes('@lid')
+      ? senderAlt
+      : null;
 
   const isGroup =
     info?.IsGroup === true ||
@@ -321,7 +349,7 @@ Deno.serve(async (req) => {
     !!msgWrap?.documentMessage;
   const content = extractedBody || (hasMedia ? '[mídia]' : '');
 
-  const { error: msgErr } = await supabase.from('chat_messages').insert({
+  const { data: insertedMsg, error: msgErr } = await supabase.from('chat_messages').insert({
     customer_id: customerId,
     sender_type: 'client',
     channel: 'whatsapp',
@@ -333,16 +361,42 @@ Deno.serve(async (req) => {
       provider: 'waha',
       engine: gowsData ? 'gows' : 'webjs',
       event,
+      event_log_id: eventLogId,
       push_name: pushName,
       sender_jid: rawFrom,
       sender_alt: senderAlt,
+      sender_lid: senderLid,
+      owner_id: conn.owner_id,
+      webhook_received_at: new Date().toISOString(),
       raw: gowsData ?? webPayload,
     },
-  });
+  }).select('id').single();
   if (msgErr?.code === '23505') {
     return json({ ok: true, idempotent: true, message_id: providerMsgId, phone });
   }
   if (msgErr) return json({ error: 'message_insert_failed', detail: msgErr.message }, 500);
 
-  return json({ ok: true, customer_id: customerId, message_id: providerMsgId, phone });
+  if (eventLogId && insertedMsg?.id) {
+    await supabase.from('connection_events').update({
+      metadata_json: {
+        source: 'waha-inbound',
+        session,
+        connection_param: connectionId,
+        provider_msg_id: providerMsgId,
+        bucket,
+        raw_event: event,
+        is_test: isTest,
+        owner_id: conn.owner_id,
+        sub_company_id: conn.sub_company_id,
+        sender_jid: rawFrom,
+        sender_alt: senderAlt,
+        sender_lid: senderLid,
+        phone,
+        customer_id: customerId,
+        chat_message_id: insertedMsg.id,
+      },
+    }).eq('id', eventLogId);
+  }
+
+  return json({ ok: true, customer_id: customerId, chat_message_id: insertedMsg?.id, message_id: providerMsgId, phone, sender_lid: senderLid, owner_id: conn.owner_id });
 });

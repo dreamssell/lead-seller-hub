@@ -9,6 +9,7 @@
 //   - "create":      POST /api/sessions on the WAHA server (webhook baked in)
 //   - "delete":      DELETE /api/sessions/{name} on the WAHA server
 //   - "list_remote": list all sessions provisioned on the WAHA server
+//   - "backfill_inbound": rebuild missing inbound chat_messages from stored webhook events
 //
 // Every action that touches a connection row validates that the calling user
 // is the owner OR has account admin access to that owner (via
@@ -54,6 +55,79 @@ function sessionHasOurWebhook(sessionData: any, connectionId: string): boolean {
   return Array.isArray(hooks) && hooks.some((h) => String(h?.url ?? "").trim() === target);
 }
 
+function extractId(id: any): string | null {
+  if (!id) return null;
+  if (typeof id === "string") return id;
+  if (typeof id === "object" && typeof id._serialized === "string") return id._serialized;
+  return null;
+}
+
+function normalizePhone(from?: string | null): string | null {
+  if (!from || typeof from !== "string") return null;
+  if (from.endsWith("@g.us") || from.endsWith("@lid")) return null;
+  const digits = from.replace(/\D/g, "");
+  return digits || null;
+}
+
+function eventToInboundCandidate(eventRow: any) {
+  const body = eventRow?.payload ?? {};
+  const event = String(body?.event || eventRow?.metadata_json?.raw_event || "");
+  const gowsData = body?.data ?? (body?.Info || body?.Message ? body : null);
+  const webPayload = body?.payload ?? (body?._data ? body : {});
+  const info = gowsData?.Info ?? gowsData?.Message?.Info ?? webPayload?._data?.Info ?? null;
+  const msgWrap = gowsData?.Message ?? webPayload?._data?.Message ?? {};
+  const providerMsgId =
+    eventRow?.metadata_json?.provider_msg_id ||
+    extractId(webPayload?.id) ||
+    info?.ID ||
+    gowsData?.Message?.ID ||
+    gowsData?.ID ||
+    null;
+  const fromMeFlag =
+    webPayload?.fromMe === true ||
+    info?.IsFromMe === true ||
+    webPayload?._data?.Info?.IsFromMe === true;
+  const rawFrom: string | undefined =
+    webPayload?.from ||
+    info?.Chat ||
+    info?.Sender ||
+    webPayload?._data?.Info?.Chat;
+  const senderAlt: string | undefined =
+    info?.SenderAlt ||
+    webPayload?._data?.Info?.SenderAlt;
+  const isGroup = info?.IsGroup === true || (typeof rawFrom === "string" && rawFrom.endsWith("@g.us"));
+  const rawFromIsLid = typeof rawFrom === "string" && rawFrom.includes("@lid");
+  const phone = rawFromIsLid
+    ? normalizePhone(senderAlt) || normalizePhone(rawFrom)
+    : normalizePhone(rawFrom) || normalizePhone(senderAlt);
+  const extractedBody =
+    webPayload?.body ||
+    msgWrap?.conversation ||
+    msgWrap?.extendedTextMessage?.text ||
+    msgWrap?.imageMessage?.caption ||
+    msgWrap?.videoMessage?.caption ||
+    msgWrap?.documentMessage?.caption ||
+    "";
+  const hasMedia =
+    webPayload?.hasMedia === true ||
+    !!msgWrap?.imageMessage ||
+    !!msgWrap?.videoMessage ||
+    !!msgWrap?.audioMessage ||
+    !!msgWrap?.documentMessage;
+  return {
+    event,
+    providerMsgId,
+    rawFrom,
+    senderAlt,
+    senderLid: rawFromIsLid ? rawFrom : (typeof senderAlt === "string" && senderAlt.includes("@lid") ? senderAlt : null),
+    phone,
+    pushName: info?.PushName || webPayload?._data?.Info?.PushName || webPayload?.notifyName || null,
+    content: extractedBody || (hasMedia ? "[mídia]" : ""),
+    raw: gowsData ?? webPayload,
+    valid: !fromMeFlag && !isGroup && !!phone && typeof rawFrom === "string" && !rawFrom.includes("status@broadcast"),
+  };
+}
+
 // Rewrites the WAHA session config so `waha-inbound?connection=<id>` receives
 // every relevant event. Stops the session, PUTs the new config, then starts.
 // Returns { ok, status_code, raw } — never throws.
@@ -97,7 +171,7 @@ Deno.serve(async (req) => {
     const action = (body?.action ?? "status") as
       | "status" | "qr" | "restart" | "logout" | "create" | "delete"
       | "list_remote" | "test_webhook" | "cleanup_scan" | "configure_webhook"
-      | "validate_webhook" | "validate_all_webhooks";
+      | "validate_webhook" | "validate_all_webhooks" | "backfill_inbound";
     // When true, `status` will auto-heal a missing/outdated webhook config
     // in the WAHA server without requiring a separate call. Defaults to true.
     const autoHeal: boolean = body?.auto_heal !== false;
@@ -151,8 +225,9 @@ Deno.serve(async (req) => {
             .select("is_account_admin, sub_company_id")
             .eq("user_id", callerId)
             .eq("owner_id", conn.owner_id);
+          const canUseBackfill = action === "backfill_inbound";
           hasAccess = !!access?.some((a: any) =>
-            a.is_account_admin
+            (canUseBackfill || a.is_account_admin)
             && (a.sub_company_id === null || a.sub_company_id === conn.sub_company_id)
           );
         }
@@ -167,6 +242,102 @@ Deno.serve(async (req) => {
       url = url ?? conn.metadata?.url;
       token = token ?? conn.metadata?.token;
       session = session ?? conn.metadata?.session;
+    }
+
+    // ─── backfill_inbound ──────────────────────────────────────────────────
+    // Replays recent WAHA webhook logs already stored in connection_events into
+    // customers + chat_messages. Uses provider_msg_id/uaz_msg_id for idempotency
+    // and preserves webhook timestamps so refresh/realtime gaps do not hide chat.
+    if (action === "backfill_inbound") {
+      if (!conn?.id) return json({ ok: false, error: "connection_required" }, 400);
+      const limit = Math.max(1, Math.min(500, Number(body?.limit ?? 100)));
+      const { data: events, error: evErr } = await supabaseAdmin
+        .from("connection_events")
+        .select("id, created_at, event_type, status, payload, metadata_json")
+        .eq("connection_id", conn.id)
+        .like("event_type", "waha.%")
+        .order("created_at", { ascending: true })
+        .limit(limit);
+      if (evErr) return json({ ok: false, error: "events_read_failed", detail: evErr.message }, 500);
+
+      let considered = 0;
+      let inserted = 0;
+      let skipped = 0;
+      const samples: any[] = [];
+      for (const ev of events ?? []) {
+        const bucket = ev?.metadata_json?.bucket;
+        if (bucket !== "message") { skipped++; continue; }
+        const c = eventToInboundCandidate(ev);
+        considered++;
+        if (!c.valid || !c.providerMsgId || !c.content) {
+          skipped++;
+          continue;
+        }
+        const { data: existingMsg } = await supabaseAdmin
+          .from("chat_messages")
+          .select("id")
+          .eq("uaz_msg_id", c.providerMsgId)
+          .maybeSingle();
+        if (existingMsg) { skipped++; continue; }
+
+        const { data: existingCustomer } = await supabaseAdmin
+          .from("customers")
+          .select("id, name")
+          .eq("phone", c.phone)
+          .eq("owner_id", conn.owner_id)
+          .maybeSingle();
+        let customerId = existingCustomer?.id ?? null;
+        if (!customerId) {
+          const { data: created, error: createErr } = await supabaseAdmin
+            .from("customers")
+            .insert({
+              name: c.pushName || c.phone,
+              phone: c.phone,
+              channel: "whatsapp",
+              created_by: conn.owner_id,
+              owner_id: conn.owner_id,
+              sub_company_id: conn.sub_company_id,
+              origin_connection_id: conn.id,
+              created_at: ev.created_at,
+              updated_at: ev.created_at,
+            })
+            .select("id")
+            .single();
+          if (createErr) { skipped++; samples.push({ event_id: ev.id, error: createErr.message }); continue; }
+          customerId = created.id;
+        }
+
+        const { error: msgErr } = await supabaseAdmin.from("chat_messages").insert({
+          customer_id: customerId,
+          sender_type: "client",
+          channel: "whatsapp",
+          content: c.content,
+          connection_id: conn.id,
+          sub_company_id: conn.sub_company_id,
+          uaz_msg_id: c.providerMsgId,
+          created_at: ev.created_at,
+          metadata: {
+            provider: "waha",
+            source: "waha-session.backfill_inbound",
+            event_id: ev.id,
+            raw_event: c.event,
+            push_name: c.pushName,
+            sender_jid: c.rawFrom,
+            sender_alt: c.senderAlt,
+            sender_lid: c.senderLid,
+            owner_id: conn.owner_id,
+            webhook_created_at: ev.created_at,
+            raw: c.raw,
+          },
+        });
+        if (msgErr?.code === "23505") { skipped++; continue; }
+        if (msgErr) { skipped++; samples.push({ event_id: ev.id, error: msgErr.message }); continue; }
+        inserted++;
+        if (samples.length < 5) samples.push({ event_id: ev.id, message_id: c.providerMsgId, phone: c.phone, sender_lid: c.senderLid });
+      }
+
+      await logEvent("backfill_inbound", "success", { considered, inserted, skipped, samples });
+      return json({ ok: true, action, connection_id: conn.id, owner_id: conn.owner_id, considered, inserted, skipped, samples });
     }
 
     const base = normalizeUrl(url);
