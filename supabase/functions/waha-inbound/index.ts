@@ -68,6 +68,8 @@ function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'ig
   // Some WAHA/GOWS deployments wrap the same message shape under `engine.event`.
   if (body?.data?.Info && body?.data?.Message) return 'message';
   return 'ignore';
+}
+
 // Extract the best available media descriptor from either WEBJS or GOWS payloads.
 // Returns null when no media is present. Never throws.
 function extractMedia(webPayload: any, gowsData: any, msgWrap: any) {
