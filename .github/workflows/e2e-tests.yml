@@ -309,6 +309,35 @@ jobs:
       - name: Install Playwright browsers (cache miss)
         if: steps.pw-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps ${{ matrix.device.install }}
+      - name: Snapshot de env (não-sensível) para auditoria
+        if: always()
+        run: |
+          set -eu
+          PJ="${{ matrix.device.project }}"
+          ENGINE="${{ matrix.device.install }}"
+          mkdir -p ci-audit
+          NODE_V=$(node -v 2>/dev/null || echo "n/a")
+          NPM_V=$(npm -v 2>/dev/null || echo "n/a")
+          PW_V=$(node -e "try{process.stdout.write(require('./package.json').devDependencies['@playwright/test']||'')}catch(e){}" 2>/dev/null || echo "")
+          present() { for n in "$@"; do eval "v=\${$n:-}"; if [ -n "$v" ]; then echo "$n"; fi; done; }
+          absent() { for n in "$@"; do eval "v=\${$n:-}"; if [ -z "$v" ]; then echo "$n"; fi; done; }
+          PRESENT=$(present TEST_USER_EMAIL TEST_USER_PASSWORD VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY | awk 'BEGIN{ORS=","}{print "\""$0"\""}' | sed 's/,$//')
+          ABSENT=$(absent TEST_USER_EMAIL TEST_USER_PASSWORD VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY | awk 'BEGIN{ORS=","}{print "\""$0"\""}' | sed 's/,$//')
+          cat > "ci-audit/env-snapshot-${PJ}.json" <<JSON
+          {
+            "scope": "mobile-responsive.env_snapshot",
+            "project": "${PJ}",
+            "engine": "${ENGINE}",
+            "run_id": "${GITHUB_RUN_ID}",
+            "run_attempt": "${GITHUB_RUN_ATTEMPT}",
+            "event_name": "${GITHUB_EVENT_NAME}",
+            "ref": "${GITHUB_REF}",
+            "versions": { "node": "${NODE_V}", "npm": "${NPM_V}", "playwright_dep": "${PW_V}" },
+            "env_present": [${PRESENT}],
+            "env_absent": [${ABSENT}]
+          }
+          JSON
+          cat "ci-audit/env-snapshot-${PJ}.json"
       - name: Start Vite preview
         run: |
           nohup npm run dev >/tmp/vite.log 2>&1 &
@@ -333,22 +362,34 @@ jobs:
         run: |
           set -eu
           PJ="${{ matrix.device.project }}"
+          ENGINE="${{ matrix.device.install }}"
           OUT="upload/${PJ}"
-          mkdir -p "${OUT}/playwright-report" "${OUT}/screenshots" "${OUT}/traces"
+          mkdir -p "${OUT}/playwright-report" "${OUT}/screenshots" "${OUT}/traces" "${OUT}/videos" "${OUT}/ci-audit"
           [ -d playwright-report ] && cp -R playwright-report/. "${OUT}/playwright-report/" || true
           [ -d artifacts/mobile/${PJ} ] && cp -R artifacts/mobile/${PJ}/. "${OUT}/screenshots/" || true
           if [ -d test-results-mobile ]; then
             find test-results-mobile -type f -name "*.zip" -exec cp {} "${OUT}/traces/" \; || true
             find test-results-mobile -type f -name "*.png" -exec cp {} "${OUT}/screenshots/" \; || true
+            find test-results-mobile -type f \( -name "*.webm" -o -name "*.mp4" \) -exec cp {} "${OUT}/videos/" \; || true
           fi
+          [ -d ci-audit ] && cp -R ci-audit/. "${OUT}/ci-audit/" || true
           {
             echo "{"
+            echo "  \"scope\": \"mobile-responsive.manifest\","
             echo "  \"project\": \"${PJ}\","
-            echo "  \"install\": \"${{ matrix.device.install }}\","
+            echo "  \"engine\": \"${ENGINE}\","
             echo "  \"run_id\": \"${GITHUB_RUN_ID}\","
-            echo "  \"screenshots\": $(ls -1 ${OUT}/screenshots 2>/dev/null | wc -l)"
+            echo "  \"run_attempt\": \"${GITHUB_RUN_ATTEMPT}\","
+            echo "  \"event_name\": \"${GITHUB_EVENT_NAME}\","
+            echo "  \"ref\": \"${GITHUB_REF}\","
+            echo "  \"traces\": $(ls -1 ${OUT}/traces 2>/dev/null | wc -l),"
+            echo "  \"screenshots\": $(ls -1 ${OUT}/screenshots 2>/dev/null | wc -l),"
+            echo "  \"videos\": $(ls -1 ${OUT}/videos 2>/dev/null | wc -l),"
+            echo "  \"has_env_snapshot\": $([ -f ${OUT}/ci-audit/env-snapshot-${PJ}.json ] && echo true || echo false),"
+            echo "  \"has_playwright_report\": $([ -d ${OUT}/playwright-report ] && [ -n \"$(ls -A ${OUT}/playwright-report 2>/dev/null)\" ] && echo true || echo false)"
             echo "}"
           } > "${OUT}/manifest.json"
+          ls -la "${OUT}" || true
       - name: Upload artefatos mobile
         if: always()
         uses: actions/upload-artifact@v4
