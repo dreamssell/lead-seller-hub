@@ -7,26 +7,16 @@ name: Debug WAHA · E2E (Playwright)
 #   - Se estiver definida, roda apenas `e2e/waha-debug-panel.spec.ts`.
 
 on:
-  push:
-    branches: [main, master]
-    paths:
-      - 'e2e/waha-debug-panel.spec.ts'
-      - 'src/components/owner-dashboard/WahaInboundDebugPanel.tsx'
-      - 'supabase/functions/waha-audit/**'
-      - '.github/workflows/waha-debug-e2e.yml'
-  pull_request:
-    branches: [main, master]
-    paths:
-      - 'e2e/waha-debug-panel.spec.ts'
-      - 'src/components/owner-dashboard/WahaInboundDebugPanel.tsx'
-      - 'supabase/functions/waha-audit/**'
-      - '.github/workflows/waha-debug-e2e.yml'
+  # Execução regular acontece integrada em `.github/workflows/e2e-tests.yml`
+  # (job `waha-debug-e2e`). Este workflow fica reservado para reruns manuais
+  # sob demanda, mantendo a mesma lógica de preflight/skip.
   workflow_dispatch:
     inputs:
       allow_skip:
         description: 'Pular (não falhar) quando TEST_OWNER_COMPANY_ID não estiver definido'
         required: false
         default: 'false'
+
 
 jobs:
   waha-debug-e2e:
