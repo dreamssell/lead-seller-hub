@@ -76,12 +76,26 @@ export const WahaEditSchema = z.object({
   text: z.string().min(1).max(4096),
 });
 
+// Etapa 5 — presença (digitando/gravando) e visto/leitura.
+export const WahaTypingSchema = z.object({
+  session: z.string().min(1),
+  chatId: WahaChatIdSchema,
+});
+export const WahaSeenSchema = z.object({
+  session: z.string().min(1),
+  chatId: WahaChatIdSchema,
+  messageId: z.string().min(1).optional(),
+  participant: z.string().min(1).optional(),
+});
+
 export type WahaSendTextPayload = z.infer<typeof WahaSendTextSchema>;
 export type WahaSendMediaPayload = z.infer<typeof WahaSendMediaSchema>;
 export type WahaSendVoicePayload = z.infer<typeof WahaSendVoiceSchema>;
 export type WahaSendReactionPayload = z.infer<typeof WahaSendReactionSchema>;
 export type WahaForwardPayload = z.infer<typeof WahaForwardSchema>;
 export type WahaEditPayload = z.infer<typeof WahaEditSchema>;
+export type WahaTypingPayload = z.infer<typeof WahaTypingSchema>;
+export type WahaSeenPayload = z.infer<typeof WahaSeenSchema>;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers
