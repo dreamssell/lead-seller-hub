@@ -122,19 +122,47 @@ test.describe('Debug WAHA · paginação + gaps + call link + export', () => {
   let currentBuilder: (body: any) => any = (body) =>
     buildAuditPayload({ cursor: body?.cursor ?? null, order: body?.order ?? 'desc' });
 
+  // Rastreio completo de request/response para uso do logger em falhas.
+  const traffic: Array<{ url: string; body: any; status: number; headers: Record<string, string>; respBody: any }> = [];
+
+  function makeRateLimitHeaders(idx: number) {
+    // Simula os headers reais emitidos pela edge function waha-audit.
+    const limit = 30;
+    const remaining = Math.max(0, limit - idx);
+    return {
+      'X-RateLimit-Limit': String(limit),
+      'X-RateLimit-Remaining': String(remaining),
+      'X-RateLimit-Reset': String(Math.floor(Date.now() / 1000) + 60),
+      'Retry-After': remaining === 0 ? '60' : '0',
+    } as Record<string, string>;
+  }
+
   test.beforeEach(async ({ page }) => {
     invocations.length = 0;
+    traffic.length = 0;
     currentBuilder = (body) =>
       buildAuditPayload({ cursor: body?.cursor ?? null, order: body?.order ?? 'desc' });
     await page.route('**/functions/v1/waha-audit', async (route: Route) => {
       let body: any = {};
       try { body = route.request().postDataJSON(); } catch { body = {}; }
       invocations.push(body);
-      return route.fulfill({
-        status: 200, contentType: 'application/json',
-        body: JSON.stringify(currentBuilder(body)),
-      });
+      const respBody = currentBuilder(body);
+      const headers = { 'content-type': 'application/json', ...makeRateLimitHeaders(invocations.length) };
+      traffic.push({ url: route.request().url(), body, status: 200, headers, respBody });
+      return route.fulfill({ status: 200, headers, body: JSON.stringify(respBody) });
     });
+  });
+
+  // Logger acionado quando qualquer teste falha: anexa todas as requests
+  // interceptadas (body do POST + status + headers de rate-limit + resposta)
+  // para simplificar debug de asserts de cursor/order/rate-limit.
+  test.afterEach(async ({}, testInfo) => {
+    if (testInfo.status !== testInfo.expectedStatus) {
+      await testInfo.attach('waha-audit-traffic', {
+        body: JSON.stringify(traffic, null, 2),
+        contentType: 'application/json',
+      });
+    }
   });
 
   test('cursor pagination + ordem + gapsOnly + call link + CSV/PDF export (conteúdo)', async ({ page }, testInfo) => {
