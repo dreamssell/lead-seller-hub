@@ -247,6 +247,25 @@ const extractProviderMessageId = (data: any) => (
   undefined
 );
 
+// Extract media descriptor returned by the outbound provider adapter (WAHA
+// currently) so we can persist it on chat_messages.metadata alongside the
+// provider message id — powering the inline audio/image/video/document player
+// for the sender's side of the conversation.
+const extractOutboundMediaMeta = (data: any) => {
+  if (!data || typeof data !== 'object') return null;
+  const url = data.media_url || data.mediaUrl || null;
+  const type = data.media_type || data.mediaType || null;
+  if (!url && !type) return null;
+  return {
+    media_url: url,
+    media_path: data.media_path || null,
+    media_type: type,
+    media_mime: data.media_mime || data.mediaMime || null,
+    media_filename: data.media_filename || data.filename || null,
+    media_size: data.media_size || null,
+  };
+};
+
 export default function ChatPage() {
   const [activeChannel, setActiveChannel] = useState<ChannelKey | null>(null);
   const [convs, setConvs] = useState(conversationsByChannel);
