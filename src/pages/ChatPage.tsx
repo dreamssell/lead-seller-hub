@@ -2415,8 +2415,15 @@ export default function ChatPage() {
                             <span className="truncate">{m._mediaFilename || 'Arquivo'}</span>
                           </a>
                         )}
-                        {(m.content && m.content !== '[mídia]') && (
-                          <p className="whitespace-pre-wrap break-words">{renderWhatsAppText(m.content)}</p>
+                        {m._revoked ? (
+                          <p className="italic opacity-70 text-xs flex items-center gap-1">
+                            <Trash2 className="w-3 h-3" /> Mensagem apagada
+                          </p>
+                        ) : (m.content && m.content !== '[mídia]') && (
+                          <p className="whitespace-pre-wrap break-words">
+                            {renderWhatsAppText(m.content)}
+                            {m._edited && <span className="ml-1 text-[10px] opacity-60 italic">(editada)</span>}
+                          </p>
                         )}
 
                         {/* Reactions strip — WhatsApp style */}
