@@ -466,8 +466,9 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
         {rows.length === 0 ? (
           <p className="p-6 text-sm text-muted-foreground">Nenhum evento WAHA nas últimas 24h para este owner.</p>
         ) : (
-          <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
-            <table className="w-full text-xs">
+          <div className="overflow-x-auto max-h-[520px] overflow-y-auto -mx-2 px-2">
+            <table className="w-full min-w-[760px] text-xs">
+
               <thead className="bg-muted/40 uppercase text-muted-foreground sticky top-0">
                 <tr>
                   <th className="text-left p-2">Quando</th>
