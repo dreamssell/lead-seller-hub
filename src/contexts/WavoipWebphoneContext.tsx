@@ -55,6 +55,37 @@ export interface WavoipWebphoneConfig {
 
 type Status = 'idle' | 'loading' | 'ready' | 'error';
 
+type WavoipEventSource = 'call' | 'global';
+
+export interface WavoipDeviceSnapshot {
+  token?: string;
+  enabled?: boolean;
+  status?: string | null;
+}
+
+export function isWavoipDeviceUnavailable(device: WavoipDeviceSnapshot | null | undefined): boolean {
+  const status = String(device?.status ?? '').toLowerCase();
+  return device?.enabled === false || /failed|failure|disconnect|connection_lost|offline|disabled|unregistered|stopped/.test(status);
+}
+
+export function needsWavoipDeviceRecovery(configuredTokens: string[], registeredDevices: WavoipDeviceSnapshot[]): boolean {
+  const byToken = new Map(registeredDevices.map((device) => [device.token, device]));
+  return configuredTokens.some((token) => {
+    const registered = byToken.get(token);
+    return !registered || isWavoipDeviceUnavailable(registered);
+  });
+}
+
+export function shouldAcceptWavoipEventForCurrentCall(
+  payloadCallId: string | null,
+  currentCallId: string | null,
+  source: WavoipEventSource,
+): boolean {
+  if (source === 'call') return !payloadCallId || !currentCallId || payloadCallId === currentCallId;
+  if (!payloadCallId) return false;
+  return !currentCallId || payloadCallId === currentCallId;
+}
+
 export interface ValidationResult {
   ok: boolean;
   message: string;
@@ -287,6 +318,42 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
   }, [config.enabled, config.devices]);
 
   useEffect(() => { bootSdk(); }, [bootSdk]);
+
+  const recoverSdkDevices = useCallback(async (reason: string = 'watchdog') => {
+    if (!config.enabled || config.devices.length === 0) return false;
+    const api = (window as any).wavoip;
+    if (!api?.device?.add) {
+      await bootSdk();
+      return true;
+    }
+
+    const raw = api.device.get?.() || [];
+    const registered = (Array.isArray(raw) ? raw : [raw]) as WavoipDeviceSnapshot[];
+    const tokens = config.devices.map((device) => device.token);
+    if (!needsWavoipDeviceRecovery(tokens, registered)) return false;
+
+    console.info(`[Wavoip] recuperando devices do SDK (${reason}) sem encerrar chamadas ativas.`);
+    for (const device of config.devices) {
+      try {
+        api.device.add(device.token, true);
+        api.device.enable?.(device.token);
+        registeredTokens.current.add(device.token);
+      } catch (e) {
+        console.warn('[Wavoip] recovery device.add falhou', device.label, e);
+      }
+    }
+    setStatus('ready');
+    setError(null);
+    return true;
+  }, [bootSdk, config.enabled, config.devices]);
+
+  useEffect(() => {
+    if (!config.enabled || config.devices.length === 0) return;
+    const id = window.setInterval(() => {
+      recoverSdkDevices('device-watchdog').catch((e) => console.warn('[Wavoip] recovery watchdog falhou', e));
+    }, 20000);
+    return () => window.clearInterval(id);
+  }, [config.enabled, config.devices, recoverSdkDevices]);
 
   // ---------- Validar conexão real com a Wavoip ----------
   const validateConnection = useCallback(async (): Promise<ValidationResult> => {
@@ -663,19 +730,19 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
         if (s === 'NOT_ANSWERED') return 'missed';
         return null;
       };
-      const handleWavoipLifecyclePayload = (payload: any) => {
+      const handleWavoipLifecyclePayload = (payload: any, source: WavoipEventSource = 'call') => {
         const sdkStatus = payload?.status ?? payload?.call?.status;
         const finalStatus = mapWavoipFinalStatus(sdkStatus);
         capturePayload(payload, { isFinal: !!finalStatus });
         const id = payloadCallId(payload);
-        if (id && wavoipCallId && id !== wavoipCallId) return;
+        if (!shouldAcceptWavoipEventForCurrentCall(id, wavoipCallId, source)) return;
         if (/ACTIVE/i.test(String(sdkStatus || ''))) onAnswered();
         if (finalStatus) finish(finalStatus);
       };
-      const endHandler = (finalStatus: 'ended' | 'failed' | 'missed') => (payload?: any) => {
+      const endHandler = (finalStatus: 'ended' | 'failed' | 'missed', source: WavoipEventSource = 'call') => (payload?: any) => {
         capturePayload(payload, { isFinal: true });
         const id = payloadCallId(payload);
-        if (id && wavoipCallId && id !== wavoipCallId) return;
+        if (!shouldAcceptWavoipEventForCurrentCall(id, wavoipCallId, source)) return;
         finish(finalStatus);
       };
 
@@ -686,18 +753,18 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
         ['failed', 'failed'], ['error', 'failed'], ['reject', 'failed'], ['rejected', 'failed'],
       ].forEach(([ev, st]) => {
         bindOn(call, ev, endHandler(st as any));
-        bindOn(api?.call, ev, endHandler(st as any));
-        bindOn(api, ev, endHandler(st as any));
-        bindOn(api?.event, ev, endHandler(st as any));
+        bindOn(api?.call, ev, endHandler(st as any, 'global'));
+        bindOn(api, ev, endHandler(st as any, 'global'));
+        bindOn(api?.event, ev, endHandler(st as any, 'global'));
       });
       [
         'call:update', 'call:updated', 'call:status', 'call:ended', 'call:answer', 'call:answered',
         'CALL', 'RECORD', 'UPDATE',
       ].forEach((ev) => {
         bindOn(call, ev, handleWavoipLifecyclePayload);
-        bindOn(api?.call, ev, handleWavoipLifecyclePayload);
-        bindOn(api, ev, handleWavoipLifecyclePayload);
-        bindOn(api?.event, ev, handleWavoipLifecyclePayload);
+        bindOn(api?.call, ev, (payload: any) => handleWavoipLifecyclePayload(payload, 'global'));
+        bindOn(api, ev, (payload: any) => handleWavoipLifecyclePayload(payload, 'global'));
+        bindOn(api?.event, ev, (payload: any) => handleWavoipLifecyclePayload(payload, 'global'));
       });
 
       // Watchdog: consulta periodicamente se a call ainda existe no SDK.
