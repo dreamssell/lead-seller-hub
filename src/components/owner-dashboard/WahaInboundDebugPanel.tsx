@@ -93,6 +93,22 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
   const [cursor, setCursor] = useState<string | null>(null);
   const [cursorStack, setCursorStack] = useState<Array<string | null>>([]);
   const [gapsOnly, setGapsOnly] = useState(false);
+  // Estado de exportação em andamento. Enquanto !== null, todos os botões de
+  // export ficam desabilitados para prevenir cliques concorrentes / arquivos
+  // duplicados. O valor descreve qual export está rodando (útil no E2E).
+  const [exporting, setExporting] = useState<null | 'csv' | 'pdf' | 'csv-consolidado' | 'pdf-consolidado'>(null);
+  const runExport = useCallback(async (kind: NonNullable<typeof exporting>, fn: () => void | Promise<void>) => {
+    if (exporting) return;
+    setExporting(kind);
+    try {
+      // Cede o frame para o React pintar o disabled antes do trabalho síncrono
+      // pesado (jsPDF pode bloquear >100ms para PDFs grandes).
+      await new Promise((r) => setTimeout(r, 0));
+      await fn();
+    } finally {
+      setExporting(null);
+    }
+  }, [exporting]);
 
   const fetchAudit = useCallback(async (opts?: { cursor?: string | null; order?: 'asc' | 'desc' }) => {
     if (!ownerId) return;
@@ -368,17 +384,17 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
             {order === 'desc' ? <ArrowDown className="w-3.5 h-3.5 mr-1" /> : <ArrowUp className="w-3.5 h-3.5 mr-1" />}
             {order === 'desc' ? 'Mais recentes' : 'Mais antigos'}
           </Button>
-          <Button size="sm" variant="outline" onClick={handleExportCsv} disabled={loading || !data}>
-            <FileDown className="w-3.5 h-3.5 mr-1" /> CSV
+          <Button size="sm" variant="outline" data-testid="export-csv" aria-busy={exporting === 'csv'} onClick={() => runExport('csv', handleExportCsv)} disabled={loading || !data || exporting !== null}>
+            <FileDown className={`w-3.5 h-3.5 mr-1 ${exporting === 'csv' ? 'animate-spin' : ''}`} /> {exporting === 'csv' ? 'Exportando…' : 'CSV'}
           </Button>
-          <Button size="sm" variant="outline" onClick={handleExportPdf} disabled={loading || !data}>
-            <FileText className="w-3.5 h-3.5 mr-1" /> PDF
+          <Button size="sm" variant="outline" data-testid="export-pdf" aria-busy={exporting === 'pdf'} onClick={() => runExport('pdf', handleExportPdf)} disabled={loading || !data || exporting !== null}>
+            <FileText className={`w-3.5 h-3.5 mr-1 ${exporting === 'pdf' ? 'animate-spin' : ''}`} /> {exporting === 'pdf' ? 'Exportando…' : 'PDF'}
           </Button>
-          <Button size="sm" variant="outline" onClick={handleExportConsolidatedCsv} disabled={loading || !data}>
-            <FileDown className="w-3.5 h-3.5 mr-1" /> CSV consolidado
+          <Button size="sm" variant="outline" data-testid="export-csv-consolidado" aria-busy={exporting === 'csv-consolidado'} onClick={() => runExport('csv-consolidado', handleExportConsolidatedCsv)} disabled={loading || !data || exporting !== null}>
+            <FileDown className={`w-3.5 h-3.5 mr-1 ${exporting === 'csv-consolidado' ? 'animate-spin' : ''}`} /> CSV consolidado
           </Button>
-          <Button size="sm" variant="outline" onClick={handleExportConsolidatedPdf} disabled={loading || !data}>
-            <FileText className="w-3.5 h-3.5 mr-1" /> PDF consolidado
+          <Button size="sm" variant="outline" data-testid="export-pdf-consolidado" aria-busy={exporting === 'pdf-consolidado'} onClick={() => runExport('pdf-consolidado', handleExportConsolidatedPdf)} disabled={loading || !data || exporting !== null}>
+            <FileText className={`w-3.5 h-3.5 mr-1 ${exporting === 'pdf-consolidado' ? 'animate-spin' : ''}`} /> PDF consolidado
           </Button>
           <div className="ml-auto flex items-center gap-2 text-xs">
             <Radio className={`w-3.5 h-3.5 ${realtimeStatus === 'connected' ? 'text-success' : realtimeStatus === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} />

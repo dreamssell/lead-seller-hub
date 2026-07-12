@@ -122,19 +122,47 @@ test.describe('Debug WAHA · paginação + gaps + call link + export', () => {
   let currentBuilder: (body: any) => any = (body) =>
     buildAuditPayload({ cursor: body?.cursor ?? null, order: body?.order ?? 'desc' });
 
+  // Rastreio completo de request/response para uso do logger em falhas.
+  const traffic: Array<{ url: string; body: any; status: number; headers: Record<string, string>; respBody: any }> = [];
+
+  function makeRateLimitHeaders(idx: number) {
+    // Simula os headers reais emitidos pela edge function waha-audit.
+    const limit = 30;
+    const remaining = Math.max(0, limit - idx);
+    return {
+      'X-RateLimit-Limit': String(limit),
+      'X-RateLimit-Remaining': String(remaining),
+      'X-RateLimit-Reset': String(Math.floor(Date.now() / 1000) + 60),
+      'Retry-After': remaining === 0 ? '60' : '0',
+    } as Record<string, string>;
+  }
+
   test.beforeEach(async ({ page }) => {
     invocations.length = 0;
+    traffic.length = 0;
     currentBuilder = (body) =>
       buildAuditPayload({ cursor: body?.cursor ?? null, order: body?.order ?? 'desc' });
     await page.route('**/functions/v1/waha-audit', async (route: Route) => {
       let body: any = {};
       try { body = route.request().postDataJSON(); } catch { body = {}; }
       invocations.push(body);
-      return route.fulfill({
-        status: 200, contentType: 'application/json',
-        body: JSON.stringify(currentBuilder(body)),
-      });
+      const respBody = currentBuilder(body);
+      const headers = { 'content-type': 'application/json', ...makeRateLimitHeaders(invocations.length) };
+      traffic.push({ url: route.request().url(), body, status: 200, headers, respBody });
+      return route.fulfill({ status: 200, headers, body: JSON.stringify(respBody) });
     });
+  });
+
+  // Logger acionado quando qualquer teste falha: anexa todas as requests
+  // interceptadas (body do POST + status + headers de rate-limit + resposta)
+  // para simplificar debug de asserts de cursor/order/rate-limit.
+  test.afterEach(async ({}, testInfo) => {
+    if (testInfo.status !== testInfo.expectedStatus) {
+      await testInfo.attach('waha-audit-traffic', {
+        body: JSON.stringify(traffic, null, 2),
+        contentType: 'application/json',
+      });
+    }
   });
 
   test('cursor pagination + ordem + gapsOnly + call link + CSV/PDF export (conteúdo)', async ({ page }, testInfo) => {
@@ -368,4 +396,108 @@ test.describe('Debug WAHA · paginação + gaps + call link + export', () => {
     expect(afterDesc.order).toBe('desc');
     expect(afterDesc.cursor).toBeNull();
   });
+
+  test('rate-limit headers presentes em Prev/Next e asc/desc', async ({ page }) => {
+    const responses: Array<{ url: string; headers: Record<string, string> }> = [];
+    page.on('response', (resp) => {
+      if (resp.url().includes('/functions/v1/waha-audit')) {
+        responses.push({ url: resp.url(), headers: resp.headers() });
+      }
+    });
+
+    await page.goto(`/owner/company/${COMPANY_ID}`, { waitUntil: 'domcontentloaded' });
+    await page.locator('#tab-waha-debug').click();
+    await expect.poll(() => responses.length, { timeout: 15_000 }).toBeGreaterThan(0);
+
+    const nextBtn = page.getByRole('button', { name: /Próxima/i });
+    const prevBtn = page.getByRole('button', { name: /Anterior/i });
+    const before = responses.length;
+    await nextBtn.click();
+    await expect.poll(() => responses.length).toBeGreaterThan(before);
+    const b2 = responses.length;
+    await prevBtn.click();
+    await expect.poll(() => responses.length).toBeGreaterThan(b2);
+    const b3 = responses.length;
+    await page.getByRole('button', { name: /Mais recentes|Mais antigos/i }).click();
+    await expect.poll(() => responses.length).toBeGreaterThan(b3);
+
+    // Todas as respostas devem carregar os headers de rate-limit lowercased.
+    for (const r of responses) {
+      expect(r.headers['x-ratelimit-limit']).toBeDefined();
+      expect(Number(r.headers['x-ratelimit-limit'])).toBeGreaterThan(0);
+      expect(r.headers['x-ratelimit-remaining']).toBeDefined();
+      expect(r.headers['retry-after']).toBeDefined();
+    }
+    // O remaining decresce monotonicamente conforme o cliente faz mais requests.
+    const remainings = responses.map((r) => Number(r.headers['x-ratelimit-remaining']));
+    for (let i = 1; i < remainings.length; i++) {
+      expect(remainings[i]).toBeLessThanOrEqual(remainings[i - 1]);
+    }
+  });
+
+  test('export success (200): CSV/PDF contêm IDs esperados e botões ficam desabilitados durante export', async ({ page }) => {
+    // Injeta atraso curto no response para observar o estado "Exportando…".
+    // O runExport cede 1 frame antes do trabalho síncrono; isso é suficiente
+    // para o E2E ver o aria-busy=true.
+    await page.goto(`/owner/company/${COMPANY_ID}`, { waitUntil: 'domcontentloaded' });
+    await page.locator('#tab-waha-debug').click();
+    await expect.poll(() => invocations.length, { timeout: 15_000 }).toBeGreaterThan(0);
+
+    const owner8 = OWNER_ID.slice(0, 8);
+    const csvBtn = page.getByTestId('export-csv');
+    const pdfBtn = page.getByTestId('export-pdf');
+    const csvConsBtn = page.getByTestId('export-csv-consolidado');
+    const pdfConsBtn = page.getByTestId('export-pdf-consolidado');
+
+    // Todos habilitados antes do clique.
+    await expect(csvBtn).toBeEnabled();
+    await expect(pdfBtn).toBeEnabled();
+
+    // CSV: valida IDs + linhas esperadas.
+    const [csvDl] = await Promise.all([
+      page.waitForEvent('download'),
+      csvBtn.click(),
+    ]);
+    const csvText = (await downloadToBuffer(csvDl)).toString('utf8');
+    const lines = csvText.replace(/^\uFEFF/, '').trim().split('\n');
+    // 1 header + 2 linhas de dados (MSG-1 + MSG-2-GAP).
+    expect(lines.length).toBe(3);
+    expect(lines[0]).toMatch(/webhook_at.*message_id.*is_gap/);
+    expect(csvText).toContain('MSG-1');
+    expect(csvText).toContain('MSG-2-GAP');
+    expect(csvText).toContain(CALL_UUID);
+    expect(csvText).toContain('wv-777');
+    expect(csvDl.suggestedFilename().startsWith(`waha-audit-${owner8}-`)).toBe(true);
+
+    // Após terminar, botão volta ao estado habilitado com label "CSV".
+    await expect(csvBtn).toBeEnabled();
+    await expect(csvBtn).toHaveText(/CSV/);
+
+    // PDF: valida conteúdo com IDs esperados.
+    const [pdfDl] = await Promise.all([
+      page.waitForEvent('download'),
+      pdfBtn.click(),
+    ]);
+    const parsed = await pdfParse(await downloadToBuffer(pdfDl));
+    expect(parsed.text).toContain('MSG-1');
+    expect(parsed.text).toContain('MSG-2-GAP');
+    expect(parsed.text).toContain('Auditoria WAHA');
+    expect(pdfDl.suggestedFilename().startsWith(`waha-audit-${owner8}-`)).toBe(true);
+
+    // Loading state observável: dispara PDF consolidado e imediatamente checa
+    // aria-busy + demais botões desabilitados antes do download completar.
+    const consDlPromise = page.waitForEvent('download');
+    await pdfConsBtn.click();
+    // Enquanto exporting !== null todos ficam disabled (aria-busy no ativo).
+    await expect(pdfConsBtn).toHaveAttribute('aria-busy', 'true');
+    await expect(csvBtn).toBeDisabled();
+    await expect(pdfBtn).toBeDisabled();
+    await expect(csvConsBtn).toBeDisabled();
+    const consDl = await consDlPromise;
+    expect(consDl.suggestedFilename()).toContain('-consolidado.pdf');
+    // Após completar, todos voltam a ser clicáveis.
+    await expect(pdfConsBtn).toHaveAttribute('aria-busy', 'false');
+    await expect(csvBtn).toBeEnabled();
+  });
 });
+
