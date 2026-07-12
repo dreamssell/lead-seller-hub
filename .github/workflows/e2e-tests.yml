@@ -20,7 +20,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci || npm install
 
       - name: Run E2E Tests
         env:
@@ -33,8 +33,6 @@ jobs:
           echo "Starting E2E Validation for HMAC and Replay Protection..."
           npx vitest run src/__tests__/DocumentationTelemetry.test.tsx --reporter=default --reporter=junit --reporter=html --outputFile.junit=test-results.xml || {
             echo "::error::Telemetry validation failed."
-            echo "DEBUG LOGS:"
-            echo "X-Correlation-ID tracing enabled for failures."
             exit 1
           }
 
@@ -50,10 +48,14 @@ jobs:
           retention-days: 7
 
   waha-debug-e2e:
-    name: Debug WAHA · E2E (Playwright)
+    name: Debug WAHA · E2E (${{ matrix.browser }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
     env:
       TEST_OWNER_COMPANY_ID: ${{ secrets.TEST_OWNER_COMPANY_ID }}
       TEST_OWNER_ID: ${{ secrets.TEST_OWNER_ID }}
@@ -61,7 +63,6 @@ jobs:
       TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-      # PRs vindos de forks não têm acesso a secrets do repositório.
       IS_FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
     steps:
@@ -71,7 +72,6 @@ jobs:
         id: preflight
         run: |
           set -eu
-          # Detecta secrets ausentes de forma auditável (nomes apenas, nunca valores).
           MISSING=()
           for VAR in TEST_OWNER_COMPANY_ID TEST_USER_EMAIL TEST_USER_PASSWORD VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY; do
             eval "VAL=\${$VAR:-}"
@@ -83,7 +83,6 @@ jobs:
           MISSING_JOIN=$(IFS=,; echo "${MISSING[*]:-}")
           OPT_JOIN=$(IFS=,; echo "${OPTIONAL_MISSING[*]:-}")
 
-          # Hash curto do owner_company_id para correlação em logs sem vazar o UUID.
           OWNER_HASH=""
           if [ -n "${TEST_OWNER_COMPANY_ID:-}" ]; then
             OWNER_HASH=$(printf '%s' "$TEST_OWNER_COMPANY_ID" | sha256sum | cut -c1-12)
@@ -95,17 +94,15 @@ jobs:
           MISSING_JSON=$(json_arr "$MISSING_JOIN")
           OPT_JSON=$(json_arr "$OPT_JOIN")
 
-          # Log estruturado (JSON em uma linha) — parseável por observabilidade de CI.
-          printf '{"scope":"waha-debug-e2e.preflight","event":"checked","repo":"%s","ref":"%s","run_id":"%s","run_attempt":"%s","event_name":"%s","is_fork_pr":%s,"missing_required":[%s],"missing_optional":[%s],"owner_hash":"%s"}\n' \
-            "${GITHUB_REPOSITORY}" "${GITHUB_REF}" "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" \
+          printf '{"scope":"waha-debug-e2e.preflight","event":"checked","browser":"%s","repo":"%s","ref":"%s","run_id":"%s","run_attempt":"%s","event_name":"%s","is_fork_pr":%s,"missing_required":[%s],"missing_optional":[%s],"owner_hash":"%s"}\n' \
+            "${{ matrix.browser }}" "${GITHUB_REPOSITORY}" "${GITHUB_REF}" "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" \
             "${GITHUB_EVENT_NAME}" "${IS_FORK_PR}" "${MISSING_JSON}" "${OPT_JSON}" "${OWNER_HASH}"
 
           {
-            echo "### Debug WAHA · Preflight"
+            echo "### Debug WAHA · Preflight (${{ matrix.browser }})"
             echo ""
+            echo "- browser: \`${{ matrix.browser }}\`"
             echo "- event: \`${GITHUB_EVENT_NAME}\`"
-            echo "- repo: \`${GITHUB_REPOSITORY}\`"
-            echo "- ref: \`${GITHUB_REF}\`"
             echo "- is_fork_pr: \`${IS_FORK_PR}\`"
             echo "- missing_required: \`${MISSING_JOIN:-<none>}\`"
             echo "- missing_optional: \`${OPT_JOIN:-<none>}\`"
@@ -115,20 +112,50 @@ jobs:
           if [ ${#MISSING[@]} -gt 0 ]; then
             REASON="missing_secrets:${MISSING_JOIN}"
             if [ "${IS_FORK_PR}" = "true" ]; then
-              printf '{"scope":"waha-debug-e2e.preflight","event":"skipped","reason":"%s","is_fork_pr":true}\n' "$REASON"
-              echo "::warning title=Debug WAHA pulado (fork PR)::Secrets ausentes em PR de fork: ${MISSING_JOIN}. Suite pulado sem falhar o pipeline."
+              printf '{"scope":"waha-debug-e2e.preflight","event":"skipped","reason":"%s","browser":"%s","is_fork_pr":true}\n' "$REASON" "${{ matrix.browser }}"
+              echo "::warning title=Debug WAHA (${{ matrix.browser }}) pulado (fork PR)::Secrets ausentes: ${MISSING_JOIN}. Suite pulado sem falhar o pipeline."
               echo "should_run=false" >> "$GITHUB_OUTPUT"
               echo "skip_reason=${REASON}" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            printf '{"scope":"waha-debug-e2e.preflight","event":"failed","reason":"%s"}\n' "$REASON"
+            printf '{"scope":"waha-debug-e2e.preflight","event":"failed","reason":"%s","browser":"%s"}\n' "$REASON" "${{ matrix.browser }}"
             echo "::error title=Secrets ausentes::${MISSING_JOIN}. Defina em Settings → Secrets → Actions."
             exit 1
           fi
 
-          printf '{"scope":"waha-debug-e2e.preflight","event":"running","owner_hash":"%s"}\n' "$OWNER_HASH"
+          printf '{"scope":"waha-debug-e2e.preflight","event":"running","browser":"%s","owner_hash":"%s"}\n' "${{ matrix.browser }}" "$OWNER_HASH"
           echo "should_run=true" >> "$GITHUB_OUTPUT"
           echo "owner_hash=${OWNER_HASH}" >> "$GITHUB_OUTPUT"
+
+      - name: Snapshot de env (não-sensível) para auditoria
+        if: always()
+        run: |
+          set -eu
+          mkdir -p ci-audit
+          # Nunca dumpa valores; apenas nomes presentes/ausentes + versões-chave.
+          NODE_V=$(node -v 2>/dev/null || echo "n/a")
+          NPM_V=$(npm -v 2>/dev/null || echo "n/a")
+          PW_V=$(node -e "try{process.stdout.write(require('./package.json').devDependencies['@playwright/test']||'')}catch(e){}" 2>/dev/null || echo "")
+          present() { for n in "$@"; do eval "v=\${$n:-}"; if [ -n "$v" ]; then echo "$n"; fi; done; }
+          absent() { for n in "$@"; do eval "v=\${$n:-}"; if [ -z "$v" ]; then echo "$n"; fi; done; }
+          PRESENT=$(present TEST_OWNER_COMPANY_ID TEST_OWNER_ID TEST_USER_EMAIL TEST_USER_PASSWORD VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY | awk 'BEGIN{ORS=","}{print "\""$0"\""}' | sed 's/,$//')
+          ABSENT=$(absent TEST_OWNER_COMPANY_ID TEST_OWNER_ID TEST_USER_EMAIL TEST_USER_PASSWORD VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY | awk 'BEGIN{ORS=","}{print "\""$0"\""}' | sed 's/,$//')
+          cat > "ci-audit/env-snapshot-${{ matrix.browser }}.json" <<JSON
+          {
+            "scope": "waha-debug-e2e.env_snapshot",
+            "browser": "${{ matrix.browser }}",
+            "run_id": "${GITHUB_RUN_ID}",
+            "run_attempt": "${GITHUB_RUN_ATTEMPT}",
+            "event_name": "${GITHUB_EVENT_NAME}",
+            "should_run": "${{ steps.preflight.outputs.should_run || 'unknown' }}",
+            "owner_hash": "${{ steps.preflight.outputs.owner_hash || '' }}",
+            "versions": { "node": "${NODE_V}", "npm": "${NPM_V}", "playwright_dep": "${PW_V}" },
+            "env_present": [${PRESENT}],
+            "env_absent": [${ABSENT}]
+          }
+          JSON
+          echo "Snapshot escrito em ci-audit/env-snapshot-${{ matrix.browser }}.json"
+          cat "ci-audit/env-snapshot-${{ matrix.browser }}.json"
 
       - name: Setup Node.js
         if: steps.preflight.outputs.should_run == 'true'
@@ -153,31 +180,43 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Playwright version resolved: ${VERSION}"
 
-      - name: Cache Playwright browsers
+      - name: Cache Playwright browsers (${{ matrix.browser }})
         if: steps.preflight.outputs.should_run == 'true'
         id: pw-cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ matrix.browser }}
           restore-keys: |
             playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-
 
-      - name: Install Playwright system deps (cache hit)
+      - name: Install Playwright deps (cache hit)
         if: steps.preflight.outputs.should_run == 'true' && steps.pw-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
+        run: npx playwright install-deps ${{ matrix.browser }}
 
       - name: Install Playwright browsers (cache miss)
         if: steps.preflight.outputs.should_run == 'true' && steps.pw-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps ${{ matrix.browser }}
 
-      - name: Run Debug WAHA E2E
+      - name: Listar testes a executar (dry-run + filtragem)
+        if: steps.preflight.outputs.should_run == 'true'
+        run: |
+          set -eu
+          echo "### Testes selecionados (${{ matrix.browser }})" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          npx playwright test e2e/waha-debug-panel.spec.ts --project=${{ matrix.browser }} --list | tee /tmp/pw-list.txt >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          COUNT=$(grep -cE '^\s*›' /tmp/pw-list.txt || echo 0)
+          printf '{"scope":"waha-debug-e2e.list","browser":"%s","selected_tests":%s}\n' "${{ matrix.browser }}" "${COUNT}"
+
+      - name: Run Debug WAHA E2E (${{ matrix.browser }})
         if: steps.preflight.outputs.should_run == 'true'
         env:
           OWNER_HASH: ${{ steps.preflight.outputs.owner_hash }}
         run: |
-          printf '{"scope":"waha-debug-e2e.run","event":"start","owner_hash":"%s"}\n' "${OWNER_HASH}"
+          printf '{"scope":"waha-debug-e2e.run","event":"start","browser":"%s","owner_hash":"%s"}\n' "${{ matrix.browser }}" "${OWNER_HASH}"
           npx playwright test e2e/waha-debug-panel.spec.ts \
+            --project=${{ matrix.browser }} \
             --reporter=list,html,json \
             --trace=retain-on-failure \
             --output=test-results
@@ -186,17 +225,18 @@ jobs:
         if: always() && steps.preflight.outputs.should_run != 'true'
         run: |
           mkdir -p playwright-report test-results
-          printf '{"skipped":true,"reason":"%s","is_fork_pr":"%s","event":"%s","run_id":"%s"}\n' \
-            "${{ steps.preflight.outputs.skip_reason }}" "${IS_FORK_PR}" "${GITHUB_EVENT_NAME}" "${GITHUB_RUN_ID}" \
+          printf '{"skipped":true,"browser":"%s","reason":"%s","is_fork_pr":"%s","event":"%s","run_id":"%s"}\n' \
+            "${{ matrix.browser }}" "${{ steps.preflight.outputs.skip_reason }}" "${IS_FORK_PR}" "${GITHUB_EVENT_NAME}" "${GITHUB_RUN_ID}" \
             > playwright-report/skip.json
 
-      - name: Upload Playwright report + traces
+      - name: Upload Playwright report + traces + env snapshot
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: waha-debug-playwright-report
+          name: waha-debug-playwright-${{ matrix.browser }}
           path: |
             playwright-report/
             test-results/
+            ci-audit/
           if-no-files-found: warn
           retention-days: 14
