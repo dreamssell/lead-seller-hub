@@ -2487,6 +2487,39 @@ export default function ChatPage() {
                                 </div>
                               </PopoverContent>
                             </Popover>
+                            {/* Etapa 4 — encaminhar */}
+                            {!m._revoked && (
+                              <button
+                                type="button"
+                                onClick={() => setForwardTarget(m)}
+                                className="w-7 h-7 rounded-full bg-background border border-border shadow-sm flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary"
+                                title="Encaminhar mensagem"
+                              >
+                                <ForwardIcon className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {/* Etapa 4 — editar (apenas próprias, dentro de 15 min, sem mídia) */}
+                            {m.sender_type !== 'client' && !m._revoked && !m._mediaUrl && (Date.now() - new Date(m.created_at).getTime() < 15 * 60 * 1000) && (
+                              <button
+                                type="button"
+                                onClick={() => { setEditTarget(m); setEditText(m.content || ''); }}
+                                className="w-7 h-7 rounded-full bg-background border border-border shadow-sm flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary"
+                                title="Editar mensagem (até 15 min)"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {/* Etapa 4 — apagar (apenas próprias) */}
+                            {m.sender_type !== 'client' && !m._revoked && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteMessage(m, true)}
+                                className="w-7 h-7 rounded-full bg-background border border-border shadow-sm flex items-center justify-center text-destructive hover:bg-destructive/10"
+                                title="Apagar para todos"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         )}
 
