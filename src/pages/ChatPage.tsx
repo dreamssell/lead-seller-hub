@@ -1593,26 +1593,30 @@ export default function ChatPage() {
             {channelInfo.key === 'whatsapp' && (connectedProviders.length > 0 || activeWhatsAppConn) && ` (${connectedProviders.length > 0 ? connectedProviders.join(' + ') : activeWhatsAppConn!.provider.toUpperCase()})`}
           </span>
         </div>
-        <div className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-medium ${ownerScopeOk ? 'border-success/30 text-success bg-success/10' : 'border-destructive/30 text-destructive bg-destructive/10'}`} data-testid="active-owner-scope">
-          <ShieldAlert className="h-3 w-3" />
-          Owner ativo: {activeOwnerShort}
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 gap-1.5 text-xs"
-          onClick={refreshOwnerAccess}
-          disabled={accessLoading || isRefreshing}
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${accessLoading || isRefreshing ? 'animate-spin' : ''}`} />
-          Recarregar access
-        </Button>
-        {!ownerScopeOk && selectedConv && (
+        {isOwner && (
+          <div className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-medium ${ownerScopeOk ? 'border-success/30 text-success bg-success/10' : 'border-destructive/30 text-destructive bg-destructive/10'}`} data-testid="active-owner-scope">
+            <ShieldAlert className="h-3 w-3" />
+            Owner ativo: {activeOwnerShort}
+          </div>
+        )}
+        {isOwner && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
+            onClick={refreshOwnerAccess}
+            disabled={accessLoading || isRefreshing}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${accessLoading || isRefreshing ? 'animate-spin' : ''}`} />
+            Recarregar access
+          </Button>
+        )}
+        {isOwner && !ownerScopeOk && selectedConv && (
           <Badge variant="outline" className="h-6 border-destructive/40 text-destructive">
             Conversa: {selectedOwnerShort}
           </Badge>
         )}
-        {(channelInfo.key === 'whatsapp' || channelInfo.key === 'telegram') && (
+        {isOwner && (channelInfo.key === 'whatsapp' || channelInfo.key === 'telegram') && (
           <div className="flex items-center gap-2">
             {channelInfo.key === 'whatsapp' ? (
               whatsappStatus.dbStatus === 'active' ? (
