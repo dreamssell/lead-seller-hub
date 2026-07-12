@@ -184,6 +184,11 @@ const hydrateChatMessage = (row: any) => {
     _latency: row?._latency || meta.latency_ms || null,
     _confirmedAt: row?._confirmedAt || meta.confirmed_at || meta.accepted_at || null,
     _deliveryStatus: row?._deliveryStatus || meta.delivery_status || meta.status || null,
+    _mediaUrl: row?._mediaUrl || meta.media_url || null,
+    _mediaType: row?._mediaType || meta.media_type || null,
+    _mediaMime: row?._mediaMime || meta.media_mime || null,
+    _mediaFilename: row?._mediaFilename || meta.media_filename || null,
+    _mediaDuration: row?._mediaDuration || meta.media_duration || null,
   };
 };
 
