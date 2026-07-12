@@ -399,13 +399,13 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
         </div>
       </Card>
 
-      {/* Alerts */}
+      {/* Backend-side alerts (from waha-audit response) */}
       {data && data.alerts?.length > 0 && (
         <Card className="p-3 border-warning/40 bg-warning/5">
           <div className="flex items-start gap-2 text-sm">
             <AlertTriangle className="w-4 h-4 text-warning mt-0.5" />
             <div>
-              <p className="font-semibold text-warning">Alertas de telemetria</p>
+              <p className="font-semibold text-warning">Alertas de telemetria (backend)</p>
               <ul className="mt-1 text-xs text-muted-foreground list-disc pl-4 space-y-0.5">
                 {data.alerts.map((a) => <li key={a}>{a}</li>)}
               </ul>
@@ -413,6 +413,10 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
           </div>
         </Card>
       )}
+
+      {/* Live alerts derived from the events window (client-side) */}
+      <RecentAlertsCard data={data} />
+
 
       {/* Stats */}
       {data && (
@@ -520,3 +524,172 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
     </div>
   );
 }
+
+// -----------------------------------------------------------------------------
+// Recent alerts card — highlights, for the last X minutes, requests that show
+// high recording latency, recording errors, or suspicious gaps/dedupes. Fully
+// derived from the audit response, no extra network calls.
+// -----------------------------------------------------------------------------
+type AlertKind = 'gap' | 'latency' | 'recording_error';
+interface DerivedAlert {
+  kind: AlertKind;
+  createdAt: string;
+  providerMsgId: string | null;
+  senderLid: string | null;
+  connectionId: string | null;
+  detail: string;
+}
+
+function RecentAlertsCard({ data }: { data: AuditResponse | null }) {
+  const [windowMin, setWindowMin] = useState(15);
+  const [latencyThresholdSec, setLatencyThresholdSec] = useState(30);
+
+  const alerts = useMemo<DerivedAlert[]>(() => {
+    if (!data) return [];
+    const cutoff = Date.now() - windowMin * 60 * 1000;
+    const gapIds = new Set(data.gaps.map((g) => g.event_id));
+    const msgByPid = new Map<string, AuditMessage>();
+    (data.messages || []).forEach((m) => { if (m.uaz_msg_id) msgByPid.set(m.uaz_msg_id, m); });
+
+    const out: DerivedAlert[] = [];
+    for (const ev of data.events || []) {
+      const ts = Date.parse(ev.created_at);
+      if (!Number.isFinite(ts) || ts < cutoff) continue;
+      const meta = ev.metadata_json || {};
+      if (meta.bucket !== 'message') continue;
+
+      const pid = meta.provider_msg_id || null;
+      const senderLid = meta.sender_lid || meta.sender_jid || null;
+
+      // Recording error surfaces from event status or explicit error metadata.
+      const status = String(ev.status || meta.status || '').toLowerCase();
+      const errText = meta.error || meta.error_message || meta.failure_reason || null;
+      if (status.includes('error') || status.includes('failed') || errText) {
+        out.push({
+          kind: 'recording_error', createdAt: ev.created_at, providerMsgId: pid,
+          senderLid, connectionId: ev.connection_id,
+          detail: String(errText || status || 'erro'),
+        });
+        continue;
+      }
+
+      // Gap = webhook received but nothing landed in chat_messages.
+      if (gapIds.has(ev.id)) {
+        out.push({
+          kind: 'gap', createdAt: ev.created_at, providerMsgId: pid,
+          senderLid, connectionId: ev.connection_id,
+          detail: 'webhook sem gravação',
+        });
+        continue;
+      }
+
+      // Latency = webhook stored, but the delta to chat_messages exceeds threshold.
+      if (pid) {
+        const msg = msgByPid.get(pid);
+        if (msg?.created_at) {
+          const deltaSec = (Date.parse(msg.created_at) - ts) / 1000;
+          if (deltaSec >= latencyThresholdSec) {
+            out.push({
+              kind: 'latency', createdAt: ev.created_at, providerMsgId: pid,
+              senderLid, connectionId: ev.connection_id,
+              detail: `gravação demorou ${Math.round(deltaSec)}s`,
+            });
+          }
+        }
+      }
+    }
+    return out
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 40);
+  }, [data, windowMin, latencyThresholdSec]);
+
+  const counts = useMemo(() => {
+    const c = { gap: 0, latency: 0, recording_error: 0 };
+    for (const a of alerts) c[a.kind] += 1;
+    return c;
+  }, [alerts]);
+
+  const kindStyle: Record<AlertKind, { label: string; className: string }> = {
+    gap: { label: 'Gap', className: 'bg-destructive/10 text-destructive border-destructive/20' },
+    latency: { label: 'Latência alta', className: 'bg-warning/10 text-warning border-warning/20' },
+    recording_error: { label: 'Erro de gravação', className: 'bg-destructive/10 text-destructive border-destructive/20' },
+  };
+
+  return (
+    <Card className={`p-3 ${alerts.length > 0 ? 'border-warning/40' : ''}`}>
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <AlertTriangle className={`w-4 h-4 ${alerts.length > 0 ? 'text-warning' : 'text-muted-foreground'}`} />
+        <p className="text-sm font-semibold">
+          Alertas recentes <span className="text-muted-foreground font-normal">— últimos {windowMin} min</span>
+        </p>
+        <Badge variant="outline" className="ml-1">{alerts.length}</Badge>
+
+        <div className="ml-auto flex items-center gap-3 text-[11px] text-muted-foreground">
+          <div className="flex items-center gap-1">
+            <span>Janela:</span>
+            {[5, 15, 30, 60].map((m) => (
+              <Button key={m} size="sm" variant={windowMin === m ? 'default' : 'outline'}
+                className="h-6 px-2 text-[11px]" onClick={() => setWindowMin(m)}>
+                {m}m
+              </Button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
+            <span>Latência ≥</span>
+            <Input
+              type="number" min={1} value={latencyThresholdSec}
+              onChange={(e) => setLatencyThresholdSec(Math.max(1, Number(e.target.value) || 30))}
+              className="h-6 w-16 text-[11px]"
+            />
+            <span>s</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mb-2">
+        <div className="rounded border border-border p-2 text-center">
+          <p className="text-[10px] uppercase text-muted-foreground">Gaps</p>
+          <p className={`text-base font-bold tabular-nums ${counts.gap > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{counts.gap}</p>
+        </div>
+        <div className="rounded border border-border p-2 text-center">
+          <p className="text-[10px] uppercase text-muted-foreground">Latência alta</p>
+          <p className={`text-base font-bold tabular-nums ${counts.latency > 0 ? 'text-warning' : 'text-muted-foreground'}`}>{counts.latency}</p>
+        </div>
+        <div className="rounded border border-border p-2 text-center">
+          <p className="text-[10px] uppercase text-muted-foreground">Erros de gravação</p>
+          <p className={`text-base font-bold tabular-nums ${counts.recording_error > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{counts.recording_error}</p>
+        </div>
+      </div>
+
+      {alerts.length === 0 ? (
+        <p className="text-xs text-muted-foreground">Nenhum alerta na janela selecionada.</p>
+      ) : (
+        <div className="max-h-[220px] overflow-y-auto text-xs">
+          <table className="w-full">
+            <thead className="text-muted-foreground uppercase text-[10px]">
+              <tr>
+                <th className="text-left p-1">Quando</th>
+                <th className="text-left p-1">Tipo</th>
+                <th className="text-left p-1">Message ID</th>
+                <th className="text-left p-1">Sender</th>
+                <th className="text-left p-1">Detalhe</th>
+              </tr>
+            </thead>
+            <tbody>
+              {alerts.map((a, idx) => (
+                <tr key={`${a.kind}-${a.providerMsgId || idx}-${a.createdAt}`} className="border-t border-border align-top">
+                  <td className="p-1 whitespace-nowrap">{dt(a.createdAt)}</td>
+                  <td className="p-1"><Badge variant="outline" className={kindStyle[a.kind].className}>{kindStyle[a.kind].label}</Badge></td>
+                  <td className="p-1 font-mono truncate max-w-[200px]" title={a.providerMsgId || ''}>{a.providerMsgId || '—'}</td>
+                  <td className="p-1 font-mono truncate max-w-[140px]" title={a.senderLid || ''}>{a.senderLid || '—'}</td>
+                  <td className="p-1 text-muted-foreground truncate max-w-[260px]" title={a.detail}>{a.detail}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
