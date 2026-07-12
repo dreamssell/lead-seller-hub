@@ -36,6 +36,7 @@ interface AuthContextType {
   sessionValidated: boolean;
   tenantResolved: boolean;
   authStatus: AuthStatus;
+  reloadAccess: (opts?: { background?: boolean }) => Promise<void>;
   canAccessPage: (page: SidebarPageKey) => boolean;
   signOut: () => Promise<void>;
 }
@@ -318,7 +319,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, access, accessLoading, sessionValidated, tenantResolved, authStatus, canAccessPage, signOut }}>
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, access, accessLoading, sessionValidated, tenantResolved, authStatus, reloadAccess, canAccessPage, signOut }}>
       {children}
     </AuthContext.Provider>
   );
