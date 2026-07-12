@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, CheckCircle2, RefreshCcw, Search, Radio, Activity } from 'lucide-react';
+import { AlertTriangle, RefreshCcw, Search, Radio, Activity, FileDown, FileText, ArrowDown, ArrowUp } from 'lucide-react';
+import { downloadCsv, downloadPdf } from '@/lib/ceoExport';
 
 interface AuditEvent {
   id: string;
