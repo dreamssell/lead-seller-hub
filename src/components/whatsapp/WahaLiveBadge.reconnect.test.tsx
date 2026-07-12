@@ -59,7 +59,10 @@ describe('WahaLiveBadge — reconexão automática', () => {
   it('força restart quando a sessão entra em FAILED sem remover o histórico/estado da conversa aberta', async () => {
     const { unmount } = render(<WahaLiveBadge conn={connection} />);
 
-    await waitFor(() => expect(realtimeHandler).toBeTruthy());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(realtimeHandler).toBeTruthy();
 
     act(() => {
       realtimeHandler?.({
@@ -75,10 +78,13 @@ describe('WahaLiveBadge — reconexão automática', () => {
       });
     });
 
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith('waha-session', {
-        body: { action: 'restart', connection_id: 'conn-waha-1' },
-      });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith('waha-session', {
+      body: { action: 'restart', connection_id: 'conn-waha-1' },
     });
 
     expect(screen.getByTestId('waha-live-badge')).toHaveAttribute('data-testid', 'waha-live-badge');
