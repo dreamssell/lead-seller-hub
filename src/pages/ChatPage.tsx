@@ -52,6 +52,7 @@ import { normalizeChatSendError, NormalizedChatError } from '@/lib/chatErrorMapp
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
 import { Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { applyConversationMessagesAfterSwitch, canUseTenantRecord, getActiveOwnerId } from '@/lib/chatTenantScope';
 
 
@@ -258,7 +259,9 @@ export default function ChatPage() {
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const { isSupervisor, userId: currentUserId } = useIsSupervisor();
   const { access, accessLoading, reloadAccess } = useAuth();
+  const { isOwner } = usePlatformOwner();
   const activeOwnerId = getActiveOwnerId(access?.owner_id, null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const convsRef = useRef(convs);
   const selectedConvIdRef = useRef<string | null>(selectedConvId);
   const activeOwnerIdRef = useRef<string | null>(activeOwnerId);
@@ -271,6 +274,16 @@ export default function ChatPage() {
   useEffect(() => {
     selectedConvIdRef.current = selectedConvId;
   }, [selectedConvId]);
+
+  // Auto-scroll para a última mensagem sempre que a conversa abre ou mensagens chegam.
+  useEffect(() => {
+    const el = messagesEndRef.current;
+    if (!el) return;
+    // Rola imediatamente ao trocar de conversa; suave quando chegam novas mensagens.
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'auto', block: 'end' });
+    });
+  }, [selectedConvId, messages.length]);
 
   useEffect(() => {
     activeOwnerIdRef.current = activeOwnerId;
@@ -1501,8 +1514,8 @@ export default function ChatPage() {
                 <div className="absolute top-3 right-3">
                   {isWhatsApp ? (
                     whatsappStatus.loading ? (
-                      <RefreshCw className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
-                    ) : whatsappStatus.dbStatus === 'disconnected' ? (
+                      isOwner ? <RefreshCw className="w-3.5 h-3.5 text-muted-foreground animate-spin" /> : null
+                    ) : !isOwner ? null : whatsappStatus.dbStatus === 'disconnected' ? (
                       <Link to="/whatsapp" onClick={(e) => e.stopPropagation()} className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border hover:bg-destructive/20 transition-colors ${getWhatsAppStatusClasses(whatsappStatus.dbStatus)}`}>
                         <WhatsAppStatusIcon className="w-3 h-3 shrink-0" />
                         <span className="text-[10px] font-bold uppercase tracking-wider truncate">Desconectado</span>
@@ -1580,26 +1593,30 @@ export default function ChatPage() {
             {channelInfo.key === 'whatsapp' && (connectedProviders.length > 0 || activeWhatsAppConn) && ` (${connectedProviders.length > 0 ? connectedProviders.join(' + ') : activeWhatsAppConn!.provider.toUpperCase()})`}
           </span>
         </div>
-        <div className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-medium ${ownerScopeOk ? 'border-success/30 text-success bg-success/10' : 'border-destructive/30 text-destructive bg-destructive/10'}`} data-testid="active-owner-scope">
-          <ShieldAlert className="h-3 w-3" />
-          Owner ativo: {activeOwnerShort}
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 gap-1.5 text-xs"
-          onClick={refreshOwnerAccess}
-          disabled={accessLoading || isRefreshing}
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${accessLoading || isRefreshing ? 'animate-spin' : ''}`} />
-          Recarregar access
-        </Button>
-        {!ownerScopeOk && selectedConv && (
+        {isOwner && (
+          <div className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-medium ${ownerScopeOk ? 'border-success/30 text-success bg-success/10' : 'border-destructive/30 text-destructive bg-destructive/10'}`} data-testid="active-owner-scope">
+            <ShieldAlert className="h-3 w-3" />
+            Owner ativo: {activeOwnerShort}
+          </div>
+        )}
+        {isOwner && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
+            onClick={refreshOwnerAccess}
+            disabled={accessLoading || isRefreshing}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${accessLoading || isRefreshing ? 'animate-spin' : ''}`} />
+            Recarregar access
+          </Button>
+        )}
+        {isOwner && !ownerScopeOk && selectedConv && (
           <Badge variant="outline" className="h-6 border-destructive/40 text-destructive">
             Conversa: {selectedOwnerShort}
           </Badge>
         )}
-        {(channelInfo.key === 'whatsapp' || channelInfo.key === 'telegram') && (
+        {isOwner && (channelInfo.key === 'whatsapp' || channelInfo.key === 'telegram') && (
           <div className="flex items-center gap-2">
             {channelInfo.key === 'whatsapp' ? (
               whatsappStatus.dbStatus === 'active' ? (
@@ -1763,7 +1780,7 @@ export default function ChatPage() {
           )}
         </AnimatePresence>
 
-        {!whatsappStatus.loading && !whatsappStatus.connected && activeChannel === 'whatsapp' && (
+        {isOwner && !whatsappStatus.loading && !whatsappStatus.connected && activeChannel === 'whatsapp' && (
           <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-50 flex items-center justify-center p-6 text-center">
             <div className="glass-card p-8 max-w-md border-destructive/20 shadow-2xl animate-in fade-in zoom-in duration-300">
               <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
@@ -1789,7 +1806,7 @@ export default function ChatPage() {
           </div>
         )}
 
-        {selectedConv && !ownerScopeOk && (
+        {isOwner && selectedConv && !ownerScopeOk && (
           <div className="absolute inset-0 bg-background/70 backdrop-blur-[2px] z-50 flex items-center justify-center p-6 text-center">
             <div className="glass-card p-8 max-w-lg border-destructive/20 shadow-2xl animate-in fade-in zoom-in duration-300">
               <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
@@ -2174,9 +2191,10 @@ export default function ChatPage() {
                           {m.sender_type !== 'client' && (
                             <div className="ml-1">
                               {m.status === 'sending' ? (
-                                <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                                // Sem sinal de "enviando" para atendentes — apenas o dono vê carregamento.
+                                isOwner ? <RefreshCw className="w-2.5 h-2.5 animate-spin" /> : <Check className="w-2.5 h-2.5 opacity-60" />
                               ) : m.status === 'error' ? (
-                                <AlertCircle className="w-2.5 h-2.5 text-destructive-foreground" />
+                                isOwner ? <AlertCircle className="w-2.5 h-2.5 text-destructive-foreground" /> : <Check className="w-2.5 h-2.5 opacity-60" />
                               ) : m.status === 'sent' ? (
                                 <Check className="w-2.5 h-2.5" />
                               ) : m.status === 'delivered' ? (
@@ -2190,20 +2208,20 @@ export default function ChatPage() {
                           )}
                         </div>
 
-                        {m.sender_type !== 'client' && m.status === 'sending' && (
+                        {isOwner && m.sender_type !== 'client' && m.status === 'sending' && (
                           <div className="mt-2 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-2 py-1 text-[10px] flex items-center gap-1.5">
                             <RefreshCw className="w-3 h-3 animate-spin" />
                             Enviando pelo provedor…
                           </div>
                         )}
 
-                        {m.sender_type !== 'client' && m._latency && m.status !== 'error' && (
+                        {isOwner && m.sender_type !== 'client' && m._latency && m.status !== 'error' && (
                           <div className="mt-1 text-[9px] opacity-70 text-right">
                             Evolution aceitou em {m._latency}ms{m._confirmedAt ? ` · confirmado ${new Date(m._confirmedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
                           </div>
                         )}
 
-                        {m.sender_type !== 'client' && errorInfo && (
+                        {isOwner && m.sender_type !== 'client' && errorInfo && (
                           <div className="mt-2 rounded-lg border border-destructive/30 bg-destructive/15 px-2 py-1.5 text-[10px] text-primary-foreground space-y-1">
                             <div className="flex items-start gap-1.5">
                               <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
@@ -2229,6 +2247,7 @@ export default function ChatPage() {
                     </motion.div>
                   );
                 })}
+                <div ref={messagesEndRef} aria-hidden />
               </div>
 
               <ChatComposer
