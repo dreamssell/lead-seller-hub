@@ -49,3 +49,75 @@ jobs:
             html/
             screenshots/
           retention-days: 7
+
+  waha-debug-e2e:
+    name: Debug WAHA · E2E (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: test
+    env:
+      TEST_OWNER_COMPANY_ID: ${{ secrets.TEST_OWNER_COMPANY_ID }}
+      TEST_OWNER_ID: ${{ secrets.TEST_OWNER_ID }}
+      TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+      TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      # PRs vindos de forks não têm acesso a secrets do repositório.
+      IS_FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preflight · secret + contexto do PR
+        id: preflight
+        run: |
+          set -eu
+          echo "event=${GITHUB_EVENT_NAME} repo=${GITHUB_REPOSITORY} ref=${GITHUB_REF}"
+          echo "is_fork_pr=${IS_FORK_PR}"
+          if [ -z "${TEST_OWNER_COMPANY_ID:-}" ]; then
+            echo "::group::Diagnóstico"
+            echo "TEST_OWNER_COMPANY_ID ausente neste runner."
+            echo "Secrets esperadas: TEST_OWNER_COMPANY_ID, TEST_OWNER_ID (opcional),"
+            echo "                   TEST_USER_EMAIL, TEST_USER_PASSWORD,"
+            echo "                   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY"
+            echo "::endgroup::"
+            if [ "${IS_FORK_PR}" = "true" ]; then
+              echo "::warning title=Debug WAHA pulado::PR de fork não tem acesso a secrets do repositório. Pulando suite Debug WAHA sem falhar o pipeline. Um mantenedor pode re-executar após aprovar/mesclar em branch interno."
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error title=Secret ausente::Defina TEST_OWNER_COMPANY_ID em Settings → Secrets → Actions (repo ou environment). Sem ela o suite Debug WAHA não pode rodar em branches internos."
+            exit 1
+          fi
+          echo "TEST_OWNER_COMPANY_ID presente (len=${#TEST_OWNER_COMPANY_ID}). Prosseguindo."
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        if: steps.preflight.outputs.should_run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        if: steps.preflight.outputs.should_run == 'true'
+        run: npm ci || npm install
+
+      - name: Install Playwright browsers
+        if: steps.preflight.outputs.should_run == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Debug WAHA E2E
+        if: steps.preflight.outputs.should_run == 'true'
+        run: npx playwright test e2e/waha-debug-panel.spec.ts --reporter=list,html
+
+      - name: Upload Playwright report
+        if: always() && steps.preflight.outputs.should_run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: waha-debug-playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
