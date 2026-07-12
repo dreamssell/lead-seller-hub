@@ -183,11 +183,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!p || typeof (p as any).then !== 'function') return { data: null } as any;
       try { return await p; } catch { return { data: null } as any; }
     };
+    const getCompanyForUser = () => {
+      const query = client.from?.('client_companies')?.select?.('id, owner_id, auth_user_id, sub_company_id, status')?.eq?.('auth_user_id', uid);
+      return query?.maybeSingle?.();
+    };
+    const getAccountAccessRows = () => {
+      const query = client.from?.('user_account_access')?.select?.('owner_id, sub_company_id, allowed_pages, is_account_admin, is_owner, created_at')?.eq?.('user_id', uid);
+      return query?.order?.('created_at', { ascending: false }) || query;
+    };
     const [{ data }, roleRes, ccRes, accessRes] = await Promise.all([
       safe(client.rpc?.('get_my_account_access')),
       safe(client.rpc?.('has_role', { _user_id: uid, _role: 'admin' })),
-      safe(client.from?.('client_companies')?.select?.('id, owner_id, auth_user_id, sub_company_id, status').eq('auth_user_id', uid).maybeSingle()),
-      safe(client.from?.('user_account_access')?.select?.('owner_id, sub_company_id, allowed_pages, is_account_admin, is_owner, created_at').eq('user_id', uid).order('created_at', { ascending: false })),
+      safe(getCompanyForUser()),
+      safe(getAccountAccessRows()),
     ]) as any;
     let row: AccountAccess | null = Array.isArray(data) ? data[0] : null;
 
@@ -257,18 +265,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
-  const ownerId = access?.owner_id ?? session?.user?.id ?? null;
+  const ownerId = access?.owner_id ?? null;
   const subId = access?.sub_company_id ?? null;
   useEffect(() => {
-    if (!session?.user) return;
+    if (!session?.user || !tenantResolved) return;
     const uid = session.user.id;
     const channel = supabase.channel(`access-watch:${uid}`);
 
-    channel.on(
-      'postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'client_companies', filter: `auth_user_id=eq.${ownerId ?? uid}` },
-      () => reloadAccess({ background: true }),
-    );
+    if (ownerId) {
+      channel.on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'client_companies', filter: `owner_id=eq.${ownerId}` },
+        () => reloadAccess({ background: true }),
+      );
+    }
 
     if (subId) {
       channel.on(
@@ -290,7 +300,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.user?.id, ownerId, subId]);
+  }, [session?.user?.id, ownerId, subId, tenantResolved]);
 
   // Re-sync APENAS em visibilitychange, com debounce. Removemos focus/online
   // duplicados para evitar cascatas de requisições redundantes quando o
