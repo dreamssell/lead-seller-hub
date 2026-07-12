@@ -241,9 +241,12 @@ export async function wahaFetch(
 // Adapter
 // ────────────────────────────────────────────────────────────────────────────
 export interface WahaSendOptions {
+export interface WahaSendOptions {
   timeoutMs?: number;
   retries?: number;
   signal?: AbortSignal;
+  /** Etapa 3 — provider messageId being quoted/replied. */
+  replyTo?: string;
 }
 
 export class WahaAdapter implements WhatsAppProviderAdapter {
