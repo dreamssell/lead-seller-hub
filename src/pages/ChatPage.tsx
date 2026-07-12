@@ -425,7 +425,10 @@ export default function ChatPage() {
   const [externalAttachment, setExternalAttachment] = useState<File | null>(null);
   // Etapa 3 — mensagem sendo respondida (quote/reply). null = envio normal.
   const [replyingTo, setReplyingTo] = useState<any | null>(null);
-  useEffect(() => { setReplyingTo(null); }, [selectedConvId]);
+  const [forwardTarget, setForwardTarget] = useState<any | null>(null);
+  const [editTarget, setEditTarget] = useState<any | null>(null);
+  const [editText, setEditText] = useState('');
+  useEffect(() => { setReplyingTo(null); setForwardTarget(null); setEditTarget(null); }, [selectedConvId]);
 
   useChatShortcuts(!!selectedConvId, {
     onHelp: () => setShortcutsOpen(true),
