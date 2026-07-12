@@ -83,7 +83,12 @@ export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
           className="hidden md:inline-flex p-2.5 rounded-xl hover:bg-secondary transition-colors"
           aria-label="Buscar"
         >
-          <Search className="w-4 h-4 text-muted-foreground" />
+            <Tooltip>
+            <TooltipTrigger asChild>
+              <Search className="w-4 h-4 text-muted-foreground" />
+            </TooltipTrigger>
+            <TooltipContent>Buscar</TooltipContent>
+          </Tooltip>
         </button>
         <NotificationsBell />
         <motion.button
