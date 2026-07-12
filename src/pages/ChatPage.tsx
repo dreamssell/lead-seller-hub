@@ -275,6 +275,16 @@ export default function ChatPage() {
     selectedConvIdRef.current = selectedConvId;
   }, [selectedConvId]);
 
+  // Auto-scroll para a última mensagem sempre que a conversa abre ou mensagens chegam.
+  useEffect(() => {
+    const el = messagesEndRef.current;
+    if (!el) return;
+    // Rola imediatamente ao trocar de conversa; suave quando chegam novas mensagens.
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'auto', block: 'end' });
+    });
+  }, [selectedConvId, messages.length]);
+
   useEffect(() => {
     activeOwnerIdRef.current = activeOwnerId;
   }, [activeOwnerId]);
