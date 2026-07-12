@@ -62,10 +62,26 @@ export const WahaSendReactionSchema = z.object({
   reaction: z.string().max(8), // single emoji or "" to clear
 });
 
+// Etapa 4 — encaminhar / editar / apagar.
+export const WahaForwardSchema = z.object({
+  session: z.string().min(1),
+  chatId: WahaChatIdSchema,
+  messageId: z.string().min(1),
+});
+
+export const WahaEditSchema = z.object({
+  session: z.string().min(1),
+  chatId: WahaChatIdSchema,
+  messageId: z.string().min(1),
+  text: z.string().min(1).max(4096),
+});
+
 export type WahaSendTextPayload = z.infer<typeof WahaSendTextSchema>;
 export type WahaSendMediaPayload = z.infer<typeof WahaSendMediaSchema>;
 export type WahaSendVoicePayload = z.infer<typeof WahaSendVoiceSchema>;
 export type WahaSendReactionPayload = z.infer<typeof WahaSendReactionSchema>;
+export type WahaForwardPayload = z.infer<typeof WahaForwardSchema>;
+export type WahaEditPayload = z.infer<typeof WahaEditSchema>;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers
