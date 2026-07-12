@@ -190,6 +190,7 @@ const hydrateChatMessage = (row: any) => {
     _mediaFilename: row?._mediaFilename || meta.media_filename || null,
     _mediaDuration: row?._mediaDuration || meta.media_duration || null,
     _reactions: (meta.reactions && typeof meta.reactions === 'object') ? meta.reactions : {},
+    _quoted: (meta.quoted && typeof meta.quoted === 'object') ? meta.quoted : null,
   };
 };
 
