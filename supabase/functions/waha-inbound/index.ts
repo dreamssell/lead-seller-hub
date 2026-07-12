@@ -462,6 +462,75 @@ Deno.serve(async (req) => {
     return json({ ok: true, reaction: { target: targetMsgId, by: reactorKey, emoji: emoji || null } });
   }
 
+  // ── EDIT ─────────────────────────────────────────────────────────────────
+  // WEBJS: body.payload = { id, body: newText, before: oldText } no evento message.edited
+  // GOWS:  body.data.Message.editedMessage.message.{conversation|extendedTextMessage.text}
+  //        (ou body.data.Message.protocolMessage.editedMessage.{conversation|...})
+  if (bucket === 'edit') {
+    const editedGows = msgWrap?.editedMessage?.message || msgWrap?.protocolMessage?.editedMessage;
+    const editedTargetId =
+      extractId(webPayload?.id) ||
+      msgWrap?.editedMessage?.key?.id ||
+      msgWrap?.protocolMessage?.key?.id ||
+      providerMsgId ||
+      null;
+    const newText =
+      webPayload?.body ||
+      webPayload?.newBody ||
+      editedGows?.conversation ||
+      editedGows?.extendedTextMessage?.text ||
+      '';
+    if (!editedTargetId || !newText) {
+      return json({ ok: true, skipped: 'edit_missing_fields' });
+    }
+    const { data: msgRow } = await supabase
+      .from('chat_messages')
+      .select('id, content, metadata')
+      .eq('uaz_msg_id', editedTargetId)
+      .maybeSingle();
+    if (!msgRow) return json({ ok: true, skipped: 'edit_target_not_found', target: editedTargetId });
+    const prevMeta = (msgRow.metadata as any) || {};
+    const edits = Array.isArray(prevMeta.edits) ? prevMeta.edits : [];
+    edits.push({ at: new Date().toISOString(), from: msgRow.content });
+    await supabase.from('chat_messages').update({
+      content: String(newText),
+      metadata: { ...prevMeta, edited: true, edited_at: new Date().toISOString(), edits },
+    }).eq('id', msgRow.id);
+    return json({ ok: true, edited: editedTargetId });
+  }
+
+  // ── REVOKE / DELETE ──────────────────────────────────────────────────────
+  // WEBJS: message.revoke_everyone { after: { id }, before: {...} } ou payload.id
+  // GOWS:  msgWrap.protocolMessage = { type: 'REVOKE', key: { id } }
+  if (bucket === 'revoke') {
+    const revokedId =
+      extractId(webPayload?.after?.id) ||
+      extractId(webPayload?.before?.id) ||
+      extractId(webPayload?.id) ||
+      msgWrap?.protocolMessage?.key?.id ||
+      msgWrap?.protocolMessage?.key?.ID ||
+      providerMsgId ||
+      null;
+    if (!revokedId) return json({ ok: true, skipped: 'revoke_missing_id' });
+    const { data: msgRow } = await supabase
+      .from('chat_messages')
+      .select('id, content, metadata')
+      .eq('uaz_msg_id', revokedId)
+      .maybeSingle();
+    if (!msgRow) return json({ ok: true, skipped: 'revoke_target_not_found', target: revokedId });
+    const prevMeta = (msgRow.metadata as any) || {};
+    await supabase.from('chat_messages').update({
+      content: '[mensagem apagada]',
+      metadata: {
+        ...prevMeta,
+        revoked: true,
+        revoked_at: new Date().toISOString(),
+        original_content: prevMeta.original_content ?? msgRow.content,
+      },
+    }).eq('id', msgRow.id);
+    return json({ ok: true, revoked: revokedId });
+  }
+
   // ── INBOUND MESSAGE ──────────────────────────────────────────────────────
   // Prefer GOWS Info; fall back to WEBJS payload and Baileys _data wrapper.
   const fromMeFlag =
