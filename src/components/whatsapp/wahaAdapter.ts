@@ -536,6 +536,66 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
     }
   }
 
+  // Etapa 2 — reações. WAHA expõe PUT /api/reaction; passar `reaction: ""`
+  // remove a reação anterior do mesmo remetente na mesma mensagem.
+  async sendReaction(
+    conn: WhatsAppConnection,
+    providerMessageId: string,
+    emoji: string,
+    _customerId?: string,
+  ) {
+    const url = normalizeUrl(conn.metadata?.url);
+    const token = conn.metadata?.token || '';
+    if (!url) throw new Error('URL WAHA ausente.');
+
+    const rawPayload = {
+      session: this.sessionOf(conn),
+      messageId: String(providerMessageId || ''),
+      reaction: String(emoji ?? ''),
+    };
+    const parsed = WahaSendReactionSchema.safeParse(rawPayload);
+    if (!parsed.success) {
+      throw new Error(`WAHA reação inválida: ${parsed.error.issues.map((i) => i.message).join(', ')}`);
+    }
+
+    await writeWahaAudit(conn, {
+      action: parsed.data.reaction ? 'send_reaction' : 'clear_reaction',
+      status: 'started',
+      customerId: _customerId ?? null,
+      wahaSessionId: parsed.data.session,
+      messageId: parsed.data.messageId,
+      payload: { emoji: parsed.data.reaction },
+    });
+    try {
+      const data = await wahaFetch(url, token, '/api/reaction', {
+        method: 'PUT',
+        body: parsed.data,
+        timeoutMs: 8_000,
+        retries: 1,
+      });
+      await writeWahaAudit(conn, {
+        action: parsed.data.reaction ? 'send_reaction' : 'clear_reaction',
+        status: 'success',
+        customerId: _customerId ?? null,
+        wahaSessionId: parsed.data.session,
+        messageId: parsed.data.messageId,
+        payload: { emoji: parsed.data.reaction, raw: data },
+      });
+      return { ok: true, provider: 'waha', message_id: parsed.data.messageId, emoji: parsed.data.reaction, raw: data };
+    } catch (e: any) {
+      await writeWahaAudit(conn, {
+        action: parsed.data.reaction ? 'send_reaction' : 'clear_reaction',
+        status: 'error',
+        customerId: _customerId ?? null,
+        wahaSessionId: parsed.data.session,
+        messageId: parsed.data.messageId,
+        errorMessage: e?.message || String(e),
+        payload: { emoji: parsed.data.reaction },
+      });
+      throw e;
+    }
+  }
+
   async syncContacts(_conn: WhatsAppConnection) {
     return { success: true };
   }
