@@ -1,48 +1,53 @@
-import { test, expect, Route } from '@playwright/test';
+import { test, expect, Route, Download } from '@playwright/test';
+import fs from 'node:fs/promises';
+// pdf-parse ships CJS; the default export is the parser function.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>;
 
 /**
- * E2E · Debug WAHA (owner-only) — valida no painel `WahaInboundDebugPanel`:
- *   1. Paginação por cursor: "Próxima →" envia `cursor` no body do waha-audit,
- *      atualiza rótulo "Cursor atual" e habilita "← Anterior"; voltar restaura
- *      o cursor prévio e desabilita novamente.
- *   2. Filtro "Somente gaps": ativa `gapsOnly`, reduz linhas da tabela para
- *      conter APENAS eventos marcados como gap (badge/linha destacada).
- *   3. Link de call: coluna "Call" renderiza <a> com href contendo
- *      `call_id=<uuid>` e `wavoip_call_id=<id>` apontando para `/calls`.
- *   4. Exportação CSV/PDF: cliques disparam download e o filename inclui
- *      o prefixo `waha-audit-<owner8>-` (CSV termina em .csv; PDF em .pdf).
+ * E2E · Debug WAHA (owner-only). Cobre:
+ *   1. Paginação por cursor: primeira página tem "← Anterior" DESABILITADO e
+ *      body sem cursor com order=desc. "Próxima →" envia cursor não-nulo e
+ *      mantém order; "Anterior" restaura cursor null e desabilita novamente.
+ *   2. Alternar ordem (desc ↔ asc) reseta cursor e envia order novo no body.
+ *   3. Filtro "Somente gaps" reduz linhas e mantém apenas eventos de gap.
+ *   4. Link da coluna Call abre /calls?call_id=…&wavoip_call_id=…
+ *   5. Exportação CSV/PDF: filename inclui `waha-audit-<owner8>-` e o PDF
+ *      contém título, subtítulo com filtros e headers de coluna esperados.
+ *   6. Cenário vazio: sem events/messages/gaps, CSV vem apenas com BOM (sem
+ *      linhas de dados) e o PDF ainda tem título/subtítulo/KPIs válidos.
  *
- * Requisitos: preview autenticado como owner + env `TEST_OWNER_COMPANY_ID`
- * apontando para uma empresa acessível ao usuário. Sem a env, os testes são
- * pulados para não falharem em ambientes sem seed.
+ * Executa apenas com TEST_OWNER_COMPANY_ID definido. Caso contrário todo o
+ * suite é pulado com uma mensagem clara — mesma env é validada no workflow
+ * `.github/workflows/waha-debug-e2e.yml` para falhar cedo no CI.
  */
 
 const COMPANY_ID = process.env.TEST_OWNER_COMPANY_ID || '';
 const OWNER_ID = process.env.TEST_OWNER_ID || '00000000-0000-0000-0000-000000000001';
 
-// Payload determinístico do waha-audit — 2 páginas + gaps + call para link.
+const PAGE1_FIRST = '2026-07-12T12:00:00.000Z';
+const PAGE1_LAST = '2026-07-12T11:00:00.000Z';
+const PAGE2_FIRST = '2026-07-12T10:00:00.000Z';
+const CALL_UUID = 'call-uuid-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+
 function buildAuditPayload(opts: { cursor?: string | null; order?: 'asc' | 'desc' } = {}) {
-  const page1First = '2026-07-12T12:00:00.000Z';
-  const page1Last = '2026-07-12T11:00:00.000Z';
-  const page2First = '2026-07-12T10:00:00.000Z';
   const isNext = !!opts.cursor;
   const events = isNext
     ? [
         {
-          id: 'ev-3', connection_id: 'conn-1', created_at: page2First,
+          id: 'ev-3', connection_id: 'conn-1', created_at: PAGE2_FIRST,
           event_type: 'waha.message', status: null,
           metadata_json: { bucket: 'message', provider_msg_id: 'MSG-3', sender_lid: '5511@lid', owner_id: OWNER_ID },
         },
       ]
     : [
         {
-          id: 'ev-1', connection_id: 'conn-1', created_at: page1First,
+          id: 'ev-1', connection_id: 'conn-1', created_at: PAGE1_FIRST,
           event_type: 'waha.message', status: null,
           metadata_json: { bucket: 'message', provider_msg_id: 'MSG-1', sender_lid: '5511@lid', owner_id: OWNER_ID, chat_message_id: 'cm-1' },
         },
         {
-          // Este NÃO tem chat_message_id nem match em messages ⇒ vira gap.
-          id: 'ev-2', connection_id: 'conn-1', created_at: page1Last,
+          id: 'ev-2', connection_id: 'conn-1', created_at: PAGE1_LAST,
           event_type: 'waha.message', status: null,
           metadata_json: { bucket: 'message', provider_msg_id: 'MSG-2-GAP', sender_lid: '5511@lid', owner_id: OWNER_ID, raw_event: 'raw-gap' },
         },
@@ -51,7 +56,7 @@ function buildAuditPayload(opts: { cursor?: string | null; order?: 'asc' | 'desc
     ? []
     : [
         {
-          id: 'cm-1', created_at: page1First, uaz_msg_id: 'MSG-1', connection_id: 'conn-1',
+          id: 'cm-1', created_at: PAGE1_FIRST, uaz_msg_id: 'MSG-1', connection_id: 'conn-1',
           content: 'ola mundo', customers: { owner_id: OWNER_ID, phone: '5511988887777', name: 'Cliente' },
         },
       ];
@@ -59,7 +64,7 @@ function buildAuditPayload(opts: { cursor?: string | null; order?: 'asc' | 'desc
     ? []
     : [
         {
-          event_id: 'ev-2', created_at: page1Last, connection_id: 'conn-1',
+          event_id: 'ev-2', created_at: PAGE1_LAST, connection_id: 'conn-1',
           provider_msg_id: 'MSG-2-GAP', sender_lid: '5511@lid', owner_id: OWNER_ID, raw_event: 'raw-gap',
         },
       ];
@@ -67,15 +72,14 @@ function buildAuditPayload(opts: { cursor?: string | null; order?: 'asc' | 'desc
     ? []
     : [
         {
-          id: 'call-uuid-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
-          wavoip_call_id: 'wv-777', phone_number: '5511988887777', contact_name: 'Cliente',
+          id: CALL_UUID, wavoip_call_id: 'wv-777', phone_number: '5511988887777', contact_name: 'Cliente',
           direction: 'inbound', status: 'answered', duration_seconds: 42,
-          started_at: page1First, answered_at: page1First, ended_at: page1First, created_at: page1First,
+          started_at: PAGE1_FIRST, answered_at: PAGE1_FIRST, ended_at: PAGE1_FIRST, created_at: PAGE1_FIRST,
         },
       ];
   return {
     ok: true, owner_id: OWNER_ID,
-    connections: [{ id: 'conn-1', provider: 'waha', status: 'WORKING' }],
+    connections: [{ id: 'conn-1', provider: 'waha', status: 'WORKING', owner_id: OWNER_ID }],
     events, messages, gaps, calls,
     stats: {
       events_total: events.length, message_events: events.length,
@@ -86,105 +90,198 @@ function buildAuditPayload(opts: { cursor?: string | null; order?: 'asc' | 'desc
     alerts: [],
     pagination: {
       limit: 200, order: opts.order ?? 'desc',
-      next_cursor: isNext ? null : page1Last,
+      next_cursor: isNext ? null : PAGE1_LAST,
       cursor_used: opts.cursor ?? null,
     },
     meta: { request_id: 'req-mock', owner_hash: 'ownerhash' },
   };
 }
 
+function buildEmptyPayload(opts: { order?: 'asc' | 'desc' } = {}) {
+  return {
+    ok: true, owner_id: OWNER_ID,
+    connections: [{ id: 'conn-1', provider: 'waha', status: 'WORKING', owner_id: OWNER_ID }],
+    events: [], messages: [], gaps: [], calls: [],
+    stats: { events_total: 0, message_events: 0, messages_stored: 0, gaps: 0, gap_rate: 0, since_iso: '2026-07-11T12:00:00.000Z' },
+    alerts: [],
+    pagination: { limit: 200, order: opts.order ?? 'desc', next_cursor: null, cursor_used: null },
+    meta: { request_id: 'req-empty', owner_hash: 'ownerhash' },
+  };
+}
+
+async function downloadToBuffer(dl: Download): Promise<Buffer> {
+  const path = await dl.path();
+  if (!path) throw new Error('download.path() unavailable');
+  return fs.readFile(path);
+}
+
 test.describe('Debug WAHA · paginação + gaps + call link + export', () => {
   test.skip(!COMPANY_ID, 'Defina TEST_OWNER_COMPANY_ID para executar este suite');
 
-  // Captura os bodies enviados para /waha-audit para asserts posteriores.
   const invocations: any[] = [];
+  let currentBuilder: (body: any) => any = (body) =>
+    buildAuditPayload({ cursor: body?.cursor ?? null, order: body?.order ?? 'desc' });
 
   test.beforeEach(async ({ page }) => {
     invocations.length = 0;
+    currentBuilder = (body) =>
+      buildAuditPayload({ cursor: body?.cursor ?? null, order: body?.order ?? 'desc' });
     await page.route('**/functions/v1/waha-audit', async (route: Route) => {
       let body: any = {};
       try { body = route.request().postDataJSON(); } catch { body = {}; }
       invocations.push(body);
-      const payload = buildAuditPayload({ cursor: body?.cursor ?? null, order: body?.order ?? 'desc' });
       return route.fulfill({
-        status: 200, contentType: 'application/json', body: JSON.stringify(payload),
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify(currentBuilder(body)),
       });
     });
   });
 
-  test('cursor pagination + gapsOnly + call link + CSV/PDF export', async ({ page }, testInfo) => {
+  test('cursor pagination + ordem + gapsOnly + call link + CSV/PDF export (conteúdo)', async ({ page }, testInfo) => {
     await page.goto(`/owner/company/${COMPANY_ID}`, { waitUntil: 'domcontentloaded' });
-
-    // Abre a aba Debug WAHA (id-âncora estável definido em CompanyDetailPage).
     await page.locator('#tab-waha-debug').click();
 
-    // 1) Primeira chamada sem cursor.
+    // 1) Primeira chamada — cursor null, order desc, Prev DESABILITADO.
     await expect.poll(() => invocations.length, { timeout: 15_000 }).toBeGreaterThan(0);
     expect(invocations[0]).toMatchObject({ owner_id: expect.any(String), cursor: null, order: 'desc' });
 
     const nextBtn = page.getByRole('button', { name: /Próxima/i });
     const prevBtn = page.getByRole('button', { name: /Anterior/i });
-    await expect(prevBtn).toBeDisabled();
+    await expect(prevBtn, 'Prev deve começar desabilitado na primeira página').toBeDisabled();
     await expect(nextBtn).toBeEnabled();
 
-    // Snapshot de linhas antes do filtro gaps: deve mostrar MSG-1 e MSG-2-GAP.
     await expect(page.getByText('MSG-1', { exact: false })).toBeVisible();
     await expect(page.getByText('MSG-2-GAP', { exact: false })).toBeVisible();
 
-    // 3) Link da call na coluna "Call" renderiza com call_id + wavoip_call_id.
+    // Link da call
     const callLink = page.locator('a[href*="/calls?call_id="]').first();
     await expect(callLink).toBeVisible();
     const href = await callLink.getAttribute('href');
-    expect(href).toContain('call_id=call-uuid-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    expect(href).toContain(`call_id=${CALL_UUID}`);
     expect(href).toContain('wavoip_call_id=wv-777');
 
-    // 2) Ativa "Somente gaps" — a linha MSG-1 (gravada) deve desaparecer, MSG-2-GAP fica.
+    // Filtro Somente gaps
     await page.getByRole('button', { name: /Somente gaps/i }).click();
     await expect(page.getByText('somente gaps', { exact: false })).toBeVisible();
     await expect(page.getByText('MSG-2-GAP')).toBeVisible();
     await expect(page.getByText('MSG-1', { exact: true })).toHaveCount(0);
-
-    // Desliga gaps para não interferir na paginação.
     await page.getByRole('button', { name: /Somente gaps/i }).click();
 
-    // 1b) Próxima → dispara nova chamada com cursor não-nulo; Anterior habilita.
+    // 2) Próxima → cursor não-nulo, mesma ordem, Prev habilita, Next desabilita.
     const before = invocations.length;
     await nextBtn.click();
     await expect.poll(() => invocations.length, { timeout: 10_000 }).toBeGreaterThan(before);
     const nextCall = invocations[invocations.length - 1];
-    expect(nextCall.cursor).toBeTruthy();
+    expect(nextCall.cursor, 'cursor da 2ª página deve ser o next_cursor devolvido').toBe(PAGE1_LAST);
     expect(nextCall.order).toBe('desc');
     await expect(prevBtn).toBeEnabled();
-    // Após a segunda página não há next_cursor ⇒ Próxima desabilita.
     await expect(nextBtn).toBeDisabled();
 
-    // Voltar restaura cursor null e desabilita Anterior novamente.
+    // Voltar → cursor null, Prev desabilita.
     const before2 = invocations.length;
     await prevBtn.click();
     await expect.poll(() => invocations.length, { timeout: 10_000 }).toBeGreaterThan(before2);
     expect(invocations[invocations.length - 1].cursor).toBeNull();
     await expect(prevBtn).toBeDisabled();
 
-    // 4) Exportação CSV — captura o download e valida nome do arquivo.
+    // 3) Alternar ordenação: reseta cursor e envia order novo.
+    const before3 = invocations.length;
+    await page.getByRole('button', { name: /Mais recentes|Mais antigos/i }).click();
+    await expect.poll(() => invocations.length, { timeout: 10_000 }).toBeGreaterThan(before3);
+    const afterToggle = invocations[invocations.length - 1];
+    expect(afterToggle.order).toBe('asc');
+    expect(afterToggle.cursor).toBeNull();
+    // Volta para desc para exportar em estado conhecido.
+    await page.getByRole('button', { name: /Mais recentes|Mais antigos/i }).click();
+
+    // 4) CSV filename com owner8.
+    const owner8 = OWNER_ID.slice(0, 8);
     const [csvDownload] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('button', { name: /^CSV$/ }).click(),
     ]);
     const csvName = csvDownload.suggestedFilename();
-    expect(csvName.startsWith('waha-audit-')).toBe(true);
+    expect(csvName.startsWith(`waha-audit-${owner8}-`)).toBe(true);
     expect(csvName.endsWith('.csv')).toBe(true);
+    const csvBuf = await downloadToBuffer(csvDownload);
+    const csvText = csvBuf.toString('utf8');
+    // Header do CSV (primeira linha) contém colunas do exportRows.
+    expect(csvText).toMatch(/webhook_at.*message_id.*is_gap/);
+    expect(csvText).toContain('MSG-1');
+    expect(csvText).toContain('MSG-2-GAP');
 
-    // Exportação PDF.
+    // 5) PDF filename + conteúdo (título, subtítulo com filtros e headers de coluna).
     const [pdfDownload] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('button', { name: /^PDF$/ }).click(),
     ]);
     const pdfName = pdfDownload.suggestedFilename();
-    expect(pdfName.startsWith('waha-audit-')).toBe(true);
+    expect(pdfName.startsWith(`waha-audit-${owner8}-`)).toBe(true);
     expect(pdfName.endsWith('.pdf')).toBe(true);
+
+    const pdfBuf = await downloadToBuffer(pdfDownload);
+    const parsed = await pdfParse(pdfBuf);
+    const text = parsed.text;
+    expect(text).toContain('Auditoria WAHA');
+    expect(text).toContain('pipeline inbound');
+    expect(text).toMatch(/Owner .*ordem=desc/);
+    expect(text).toMatch(/filtros: msg=—|filtros: msg=-/);
+    // KPIs
+    expect(text).toContain('Webhooks msg');
+    expect(text).toContain('Gravados');
+    // Colunas
+    expect(text).toContain('message_id');
+    expect(text).toContain('is_gap');
+    // Linhas
+    expect(text).toContain('MSG-1');
+    expect(text).toContain('MSG-2-GAP');
 
     await testInfo.attach('waha-audit-invocations', {
       body: JSON.stringify(invocations, null, 2), contentType: 'application/json',
     });
+    await testInfo.attach('pdf-text', { body: text, contentType: 'text/plain' });
+  });
+
+  test('cenário vazio: CSV só com BOM e PDF válido com headers/KPIs mas sem linhas', async ({ page }, testInfo) => {
+    currentBuilder = (body) => buildEmptyPayload({ order: body?.order ?? 'desc' });
+
+    await page.goto(`/owner/company/${COMPANY_ID}`, { waitUntil: 'domcontentloaded' });
+    await page.locator('#tab-waha-debug').click();
+    await expect.poll(() => invocations.length, { timeout: 15_000 }).toBeGreaterThan(0);
+
+    // UI reflete estado vazio.
+    await expect(page.getByText(/Nenhum evento WAHA/i)).toBeVisible();
+    const nextBtn = page.getByRole('button', { name: /Próxima/i });
+    const prevBtn = page.getByRole('button', { name: /Anterior/i });
+    await expect(prevBtn).toBeDisabled();
+    await expect(nextBtn).toBeDisabled();
+
+    // CSV vazio = apenas BOM (\uFEFF), sem linhas de dados.
+    const [csvDl] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: /^CSV$/ }).click(),
+    ]);
+    const csvBuf = await downloadToBuffer(csvDl);
+    const csvStr = csvBuf.toString('utf8');
+    expect(csvStr.charCodeAt(0)).toBe(0xFEFF);
+    // Sem \n = sem linhas separadoras de dados.
+    expect(csvStr.replace(/^\uFEFF/, '')).toBe('');
+
+    // PDF ainda tem título, subtítulo e KPIs (mesmo com todos zero).
+    const [pdfDl] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: /^PDF$/ }).click(),
+    ]);
+    const pdfBuf = await downloadToBuffer(pdfDl);
+    const parsed = await pdfParse(pdfBuf);
+    const text = parsed.text;
+    expect(text).toContain('Auditoria WAHA');
+    expect(text).toContain('Webhooks msg');
+    expect(text).toContain('Gravados');
+    // Nenhuma linha real de dados: os IDs mockados NÃO aparecem.
+    expect(text).not.toContain('MSG-1');
+    expect(text).not.toContain('MSG-2-GAP');
+
+    await testInfo.attach('pdf-empty-text', { body: text, contentType: 'text/plain' });
   });
 });
