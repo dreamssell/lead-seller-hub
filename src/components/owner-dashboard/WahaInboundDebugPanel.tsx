@@ -680,8 +680,9 @@ function RecentAlertsCard({ data }: { data: AuditResponse | null }) {
       {alerts.length === 0 ? (
         <p className="text-xs text-muted-foreground">Nenhum alerta na janela selecionada.</p>
       ) : (
-        <div className="max-h-[220px] overflow-y-auto text-xs">
-          <table className="w-full">
+        <div className="max-h-[220px] overflow-y-auto overflow-x-auto text-xs -mx-2 px-2">
+          <table className="w-full min-w-[560px]">
+
             <thead className="text-muted-foreground uppercase text-[10px]">
               <tr>
                 <th className="text-left p-1">Quando</th>
