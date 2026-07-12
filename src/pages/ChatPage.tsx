@@ -1806,7 +1806,7 @@ export default function ChatPage() {
           </div>
         )}
 
-        {selectedConv && !ownerScopeOk && (
+        {isOwner && selectedConv && !ownerScopeOk && (
           <div className="absolute inset-0 bg-background/70 backdrop-blur-[2px] z-50 flex items-center justify-center p-6 text-center">
             <div className="glass-card p-8 max-w-lg border-destructive/20 shadow-2xl animate-in fade-in zoom-in duration-300">
               <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
