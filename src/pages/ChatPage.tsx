@@ -5,7 +5,7 @@ import {
   Send, Paperclip, Phone, Video, MoreVertical, Search, Circle,
   Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Settings,
   Database, Activity, ShieldAlert, Wifi, WifiOff, Terminal, ChevronDown, ChevronUp, History as HistoryIcon, Bug, Play, Share2,
-  FileDown, Filter, Calendar, Clock, Loader2, X, AlertTriangle, Check
+  FileDown, Filter, Calendar, Clock, Loader2, X, AlertTriangle, Check, SmilePlus
 } from 'lucide-react';
 import {
   Popover,
