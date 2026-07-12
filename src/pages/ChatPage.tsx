@@ -2242,6 +2242,7 @@ export default function ChatPage() {
                     </motion.div>
                   );
                 })}
+                <div ref={messagesEndRef} aria-hidden />
               </div>
 
               <ChatComposer
