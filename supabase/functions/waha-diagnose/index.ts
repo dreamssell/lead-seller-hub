@@ -212,6 +212,8 @@ Deno.serve(async (req) => {
       generated_at: new Date().toISOString(),
       display_name: conn.display_name,
       engine,
+      me: sessionData?.me ?? null,
+      webhooks: Array.isArray(sessionData?.config?.webhooks) ? sessionData.config.webhooks : [],
       session_status: sessionData?.status ?? null,
       checks,
       summary: worstOf(checks),

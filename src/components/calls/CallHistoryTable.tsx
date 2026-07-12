@@ -62,6 +62,18 @@ interface Row {
   sub_company_id: string | null;
 }
 
+interface WavoipEventRow {
+  id: string;
+  received_at: string;
+  event: string | null;
+  status: string | null;
+  wavoip_call_id: string | null;
+  call_id: string | null;
+  http_status: number | null;
+  error_message: string | null;
+  payload: Record<string, any> | null;
+}
+
 type SortKey = 'status' | 'direction' | 'duration_seconds' | 'answered_at' | 'started_at';
 type SortDir = 'asc' | 'desc';
 
@@ -111,6 +123,8 @@ export function CallHistoryTable({
   const [sortDir, setSortDir] = useState<SortDir>((gp('sd', 'desc') as SortDir));
   const [page, setPage] = useState(Math.max(0, parseInt(gp('pg', '0'), 10) || 0));
   const [detail, setDetail] = useState<Row | null>(null);
+  const [wavoipEvents, setWavoipEvents] = useState<WavoipEventRow[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
   const rowsRef = useRef<Row[]>([]);
   rowsRef.current = rows;
 
@@ -424,10 +438,52 @@ export function CallHistoryTable({
         channel: r.channel,
         connection_label: r.connection_label,
         user_name: profiles[r.user_id || ''] || null,
+        call_id: (r.metadata as any)?.call_id ?? null,
+        wavoip_call_id: (r.metadata as any)?.wavoip_call_id ?? null,
+        audit_timestamps: [
+          (r.metadata as any)?.last_webhook_received_at ? `recv ${formatCallDateTime((r.metadata as any).last_webhook_received_at)}` : null,
+          (r.metadata as any)?.webhook_answered_at ? `ans ${formatCallDateTime((r.metadata as any).webhook_answered_at)}` : null,
+          (r.metadata as any)?.webhook_ended_at ? `end ${formatCallDateTime((r.metadata as any).webhook_ended_at)}` : null,
+        ].filter(Boolean).join(' | '),
       })),
       { title, subtitle: `${sorted.length} chamada(s) · ${filterSummary}`, filterSummary },
     );
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadTimeline = async () => {
+      if (!detail) {
+        setWavoipEvents([]);
+        return;
+      }
+      const meta = (detail.metadata || {}) as any;
+      const wavoipId = meta.wavoip_call_id;
+      const callId = meta.call_id;
+      if (!wavoipId && !callId && !detail.id) {
+        setWavoipEvents([]);
+        return;
+      }
+      setEventsLoading(true);
+      try {
+        let q: any = (supabase as any)
+          .from('wavoip_webhook_events')
+          .select('id,received_at,event,status,wavoip_call_id,call_id,http_status,error_message,payload')
+          .order('received_at', { ascending: true })
+          .limit(80);
+        const filters = [`call_history_id.eq.${detail.id}`];
+        if (wavoipId) filters.push(`wavoip_call_id.eq.${wavoipId}`);
+        if (callId) filters.push(`call_id.eq.${callId}`);
+        q = q.or(filters.join(','));
+        const { data, error } = await q;
+        if (!cancelled) setWavoipEvents(error ? [] : (data || []));
+      } finally {
+        if (!cancelled) setEventsLoading(false);
+      }
+    };
+    loadTimeline();
+    return () => { cancelled = true; };
+  }, [detail?.id]);
 
   const directionLabel = (d: string) => d === 'inbound' ? 'Recebida' : 'Efetuada';
 
@@ -688,6 +744,42 @@ export function CallHistoryTable({
                   <Field label="Encerrada em" value={formatCallDateTime(detail.ended_at)} />
                   <Field label="Iniciada em" value={formatCallDateTime(detail.started_at)} />
                   <Field label="Usuário" value={profiles[detail.user_id || ''] || '—'} />
+                </div>
+                <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Auditoria Wavoip</p>
+                    <Badge variant="outline" className="text-[10px]">{wavoipEvents.length} eventos</Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <Field label="call_id" value={(detail.metadata as any)?.call_id || '—'} mono />
+                    <Field label="wavoip_call_id" value={(detail.metadata as any)?.wavoip_call_id || '—'} mono />
+                    <Field label="Webhook recebido" value={formatCallDateTime((detail.metadata as any)?.last_webhook_received_at)} />
+                    <Field label="Answered webhook" value={formatCallDateTime((detail.metadata as any)?.webhook_answered_at)} />
+                    <Field label="Ended webhook" value={formatCallDateTime((detail.metadata as any)?.webhook_ended_at)} />
+                    <Field label="Fonte duração" value={(detail.metadata as any)?.duration_source || '—'} />
+                  </div>
+                  <div className="pt-2 border-t border-border/50">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Timeline dos eventos</p>
+                    {eventsLoading ? (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Carregando eventos…</p>
+                    ) : wavoipEvents.length ? (
+                      <ol className="space-y-2 max-h-56 overflow-y-auto">
+                        {wavoipEvents.map((ev) => (
+                          <li key={ev.id} className="grid grid-cols-[92px_1fr] gap-2 text-xs">
+                            <span className="font-mono text-muted-foreground">{formatCallTime(ev.received_at)}</span>
+                            <span>
+                              <span className="font-semibold">{ev.event || 'evento'}</span>
+                              {ev.status && <span className="text-muted-foreground"> · {ev.status}</span>}
+                              {ev.http_status && <span className="text-muted-foreground"> · HTTP {ev.http_status}</span>}
+                              {ev.error_message && <span className="text-destructive"> · {ev.error_message}</span>}
+                            </span>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Nenhum evento de webhook vinculado a esta chamada.</p>
+                    )}
+                  </div>
                 </div>
                 <div className="pt-2 border-t flex flex-col gap-2">
                   {(detail.recording_url || detail.recording_path || (detail.metadata as any)?.wavoip_call_id) ? (

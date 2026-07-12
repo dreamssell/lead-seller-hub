@@ -8,12 +8,20 @@ import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { supabase } from '@/integrations/supabase/client';
-import { CheckCheck, Check, Clock, Loader2, WifiOff, History } from 'lucide-react';
+import { CheckCheck, Check, Clock, Loader2, WifiOff, History, Stethoscope } from 'lucide-react';
 import { toast } from 'sonner';
 import type { WhatsAppConnection } from './types';
 
 type Live = { connected: boolean; status: string; phone?: string | null; error?: string };
 type AckEntry = { id?: string; status: string; at: string };
+type Diagnosis = {
+  session_status?: string | null;
+  engine?: string | null;
+  me?: any;
+  webhooks?: any[];
+  checks?: Array<{ key: string; label: string; severity: string; detail: string; hint?: string }>;
+  expected_webhook_url?: string;
+};
 
 const ACK_META: Record<string, { label: string; icon: any; cls: string }> = {
   sent:      { label: 'Enviado',     icon: Check,      cls: 'text-muted-foreground' },
@@ -35,6 +43,7 @@ export function WahaLiveBadge({ conn }: { conn: WhatsAppConnection }) {
     return last?.status && last?.at ? [{ id: last.id, status: last.status, at: last.at }] : [];
   });
   const [status, setStatus] = useState<string>(conn.status);
+  const [diagnosis, setDiagnosis] = useState<{ loading: boolean; data: Diagnosis | null; error?: string }>({ loading: false, data: null });
   const lastAckKeyRef = useRef<string | null>(
     conn.metadata?.last_ack ? `${conn.metadata.last_ack.id ?? ''}:${conn.metadata.last_ack.at ?? ''}` : null,
   );
@@ -44,6 +53,9 @@ export function WahaLiveBadge({ conn }: { conn: WhatsAppConnection }) {
   const retryAttemptRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryingRef = useRef(false);
+  const autoRestartingRef = useRef(false);
+
+  const isCriticalWahaState = (value?: string | null) => /failed|stopped|stop/i.test(String(value || ''));
 
   // Push a new ACK into the history buffer if it hasn't been seen.
   const pushAck = (ack: { id?: string; status?: string; at?: string } | undefined) => {
@@ -62,6 +74,31 @@ export function WahaLiveBadge({ conn }: { conn: WhatsAppConnection }) {
     retryingRef.current = false;
   };
 
+  const restartSession = async (reason: string, silent = false) => {
+    if (autoRestartingRef.current) return;
+    autoRestartingRef.current = true;
+    const toastId = silent ? null : toast.loading('Reiniciando sessão WAHA…', { description: reason });
+    try {
+      const { data, error } = await supabase.functions.invoke('waha-session', {
+        body: { action: 'restart', connection_id: conn.id },
+      });
+      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'Falha no restart');
+      if (toastId) toast.dismiss(toastId);
+      toast.success('Restart WAHA solicitado', {
+        description: `Estado retornado: ${data.status || 'desconhecido'}`,
+        duration: 4000,
+      });
+    } catch (e: any) {
+      if (toastId) toast.dismiss(toastId);
+      toast.warning('Restart WAHA falhou', {
+        description: e?.message || 'Tente diagnosticar a sessão.',
+        duration: 5000,
+      });
+    } finally {
+      autoRestartingRef.current = false;
+    }
+  };
+
   // Kick off a progressive-retry cycle: 10s, 30s, 60s, 120s, capped at 300s.
   const scheduleRetry = () => {
     if (retryingRef.current) return;
@@ -71,21 +108,9 @@ export function WahaLiveBadge({ conn }: { conn: WhatsAppConnection }) {
     const delay = delays[Math.min(attempt, delays.length - 1)];
     retryTimerRef.current = setTimeout(async () => {
       retryAttemptRef.current = attempt + 1;
-      const toastId = toast.loading(`Reconectando WAHA (tentativa ${attempt + 1})…`, {
-        description: `Tentando restart automático da sessão ${conn.metadata?.session || ''}.`,
-      });
       try {
-        const { data, error } = await supabase.functions.invoke('waha-session', {
-          body: { action: 'restart', connection_id: conn.id },
-        });
-        if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'Falha no restart');
-        toast.dismiss(toastId);
-        toast.success('WAHA reiniciada', {
-          description: `Estado: ${data.status}. Se pedir QR, abra o card para escanear.`,
-          duration: 4000,
-        });
+        await restartSession(`Tentativa automática ${attempt + 1} da sessão ${conn.metadata?.session || ''}.`, true);
       } catch (e: any) {
-        toast.dismiss(toastId);
         toast.warning(`Tentativa ${attempt + 1} falhou`, {
           description: `${e?.message ?? 'Erro'} — próxima tentativa em ${(delays[Math.min(attempt + 1, delays.length - 1)] / 1000)}s.`,
           duration: 5000,
@@ -101,17 +126,37 @@ export function WahaLiveBadge({ conn }: { conn: WhatsAppConnection }) {
   // Discreet toast + progressive-retry when connection drops.
   const notifyStatusChange = (next: string, prev: string) => {
     if (next === prev) return;
-    if ((next === 'disconnected' || next === 'error') && prev !== 'disconnected' && prev !== 'error') {
+    if (isCriticalWahaState(next)) {
+      toast.warning('WAHA em estado crítico', {
+        description: `Estado ${next}. Restart automático iniciado sem interromper a tela atual.`,
+        duration: 6000,
+      });
+      restartSession(`Estado crítico detectado: ${next}.`, true);
+      scheduleRetry();
+    } else if ((next === 'disconnected' || next === 'error') && prev !== 'disconnected' && prev !== 'error') {
       const id = toast.warning(`WAHA ${next === 'error' ? 'com falha' : 'desconectada'}`, {
         description: 'Iniciando reconexão automática com retry progressivo. UAZ, Evolution e Wavoip seguem operando.',
         duration: 6000,
       });
       disconnectedToastRef.current = id;
       scheduleRetry();
-    } else if (next === 'connected' && (prev === 'disconnected' || prev === 'error')) {
+    } else if (next === 'connected' && (prev === 'disconnected' || prev === 'error' || isCriticalWahaState(prev))) {
       if (disconnectedToastRef.current != null) toast.dismiss(disconnectedToastRef.current);
       cancelRetry();
       toast.success('WAHA reconectada', { duration: 3000 });
+    }
+  };
+
+  const runDiagnosis = async () => {
+    setDiagnosis({ loading: true, data: null });
+    try {
+      const { data, error } = await supabase.functions.invoke('waha-diagnose', {
+        body: { connection_id: conn.id },
+      });
+      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'Diagnóstico indisponível');
+      setDiagnosis({ loading: false, data: data as Diagnosis });
+    } catch (e: any) {
+      setDiagnosis({ loading: false, data: null, error: e?.message || 'Falha ao diagnosticar' });
     }
   };
 
@@ -158,7 +203,7 @@ export function WahaLiveBadge({ conn }: { conn: WhatsAppConnection }) {
   // when Realtime hasn't confirmed a subscription (fallback path).
   useEffect(() => {
     let cancelled = false;
-    let backoff = 60_000; // start at 60s — Realtime is the primary channel
+    const intervalMs = 20_000;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const url = conn.metadata?.url;
@@ -188,21 +233,13 @@ export function WahaLiveBadge({ conn }: { conn: WhatsAppConnection }) {
           notifyStatusChange(mapped, prev);
           return mapped;
         });
-        backoff = 60_000; // reset on success
       } catch {
         if (cancelled) return;
         setLive((prev) => prev ?? { connected: false, status: 'unreachable', error: 'network' });
-        backoff = Math.min(backoff * 2, 5 * 60_000); // exponential up to 5 min
       } finally {
         if (!cancelled) {
           setLoading(false);
-          // Skip scheduled polling entirely when Realtime is confirmed active.
-          if (!realtimeOkRef.current) {
-            timer = setTimeout(probe, backoff);
-          } else {
-            // still keep a very slow heartbeat every 5 min as safety net
-            timer = setTimeout(probe, 5 * 60_000);
-          }
+          timer = setTimeout(probe, intervalMs);
         }
       }
     };
@@ -291,6 +328,51 @@ export function WahaLiveBadge({ conn }: { conn: WhatsAppConnection }) {
           </PopoverContent>
         </Popover>
       )}
+
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-md border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50 transition"
+            onClick={runDiagnosis}
+            data-testid="waha-diagnose-trigger"
+          >
+            {diagnosis.loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Stethoscope className="w-3 h-3" />}
+            Diagnosticar sessão
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-96 p-3" data-testid="waha-diagnose-panel">
+          <div className="space-y-3 text-xs">
+            <div>
+              <p className="text-[10px] font-bold uppercase text-muted-foreground">Diagnóstico WAHA</p>
+              {diagnosis.error && <p className="mt-1 text-destructive">{diagnosis.error}</p>}
+              {diagnosis.loading && <p className="mt-1 text-muted-foreground">Verificando sessão…</p>}
+            </div>
+            {diagnosis.data && (
+              <>
+                <div className="grid grid-cols-2 gap-2 rounded-md border border-border/60 p-2">
+                  <div><span className="text-muted-foreground">State</span><p className="font-mono">{diagnosis.data.session_status || '—'}</p></div>
+                  <div><span className="text-muted-foreground">Engine</span><p className="font-mono">{diagnosis.data.engine || '—'}</p></div>
+                  <div className="col-span-2"><span className="text-muted-foreground">Me</span><p className="truncate font-mono">{JSON.stringify((diagnosis.data as any).me ?? null)}</p></div>
+                  <div className="col-span-2"><span className="text-muted-foreground">Webhooks</span><p className="truncate font-mono">{((diagnosis.data as any).webhooks || []).map((w: any) => w?.url).join(' · ') || '—'}</p></div>
+                </div>
+                <ul className="max-h-64 overflow-y-auto divide-y divide-border/40">
+                  {(diagnosis.data.checks || []).map((check) => (
+                    <li key={check.key} className="py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium">{check.label}</span>
+                        <Badge variant="outline" className="text-[10px]">{check.severity}</Badge>
+                      </div>
+                      <p className="text-muted-foreground">{check.detail}</p>
+                      {check.hint && <p className="text-[10px] text-muted-foreground">{check.hint}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

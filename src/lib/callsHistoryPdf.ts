@@ -28,6 +28,9 @@ export interface CallHistoryPdfRow {
   channel: string;
   connection_label?: string | null;
   user_name?: string | null;
+  call_id?: string | null;
+  wavoip_call_id?: string | null;
+  audit_timestamps?: string | null;
 }
 
 interface Options {
@@ -291,6 +294,27 @@ export async function exportCallHistoryPdf(rows: CallHistoryPdfRow[], opts: Opti
       if (doc.getCurrentPageInfo().pageNumber > 1) {
         drawHeader(doc, logo, opts.title || 'Histórico de Ligações', opts.subtitle);
       }
+    },
+  });
+
+  const finalY = (doc as any).lastAutoTable?.finalY ?? afterChart + 8;
+  autoTable(doc, {
+    startY: finalY + 8,
+    head: [['Auditoria', 'call_id', 'wavoip_call_id', 'Timestamps do webhook']],
+    body: rows.map((r, index) => [
+      `#${index + 1} · ${fmtDt(r.started_at)}`,
+      r.call_id || '—',
+      r.wavoip_call_id || '—',
+      r.audit_timestamps || '—',
+    ]),
+    styles: { fontSize: 7, cellPadding: 1.8, textColor: INK, overflow: 'linebreak' },
+    headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    margin: { left: 12, right: 12 },
+    columnStyles: {
+      1: { font: 'courier', cellWidth: 38 },
+      2: { font: 'courier', cellWidth: 38 },
+      3: { cellWidth: 70 },
     },
   });
 

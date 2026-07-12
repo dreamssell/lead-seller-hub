@@ -2624,6 +2624,69 @@ export type Database = {
           },
         ]
       }
+      omnichannel_audit_logs: {
+        Row: {
+          action: string
+          call_history_id: string | null
+          call_id: string | null
+          connection_id: string | null
+          created_at: string
+          customer_id: string | null
+          error_message: string | null
+          id: string
+          message_id: string | null
+          owner_id: string
+          payload: Json
+          phone: string | null
+          provider: string
+          status: string
+          sub_company_id: string | null
+          user_id: string | null
+          waha_session_id: string | null
+          wavoip_call_id: string | null
+        }
+        Insert: {
+          action: string
+          call_history_id?: string | null
+          call_id?: string | null
+          connection_id?: string | null
+          created_at?: string
+          customer_id?: string | null
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          owner_id: string
+          payload?: Json
+          phone?: string | null
+          provider: string
+          status: string
+          sub_company_id?: string | null
+          user_id?: string | null
+          waha_session_id?: string | null
+          wavoip_call_id?: string | null
+        }
+        Update: {
+          action?: string
+          call_history_id?: string | null
+          call_id?: string | null
+          connection_id?: string | null
+          created_at?: string
+          customer_id?: string | null
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          owner_id?: string
+          payload?: Json
+          phone?: string | null
+          provider?: string
+          status?: string
+          sub_company_id?: string | null
+          user_id?: string | null
+          waha_session_id?: string | null
+          wavoip_call_id?: string | null
+        }
+        Relationships: []
+      }
       password_change_audit: {
         Row: {
           created_at: string
@@ -4840,6 +4903,54 @@ export type Database = {
         }
         Relationships: []
       }
+      wavoip_line_state: {
+        Row: {
+          call_history_id: string | null
+          created_at: string
+          id: string
+          last_heartbeat_at: string
+          metadata: Json
+          owner_id: string
+          phone: string
+          since: string
+          status: string
+          sub_company_id: string | null
+          updated_at: string
+          user_id: string
+          wavoip_call_id: string | null
+        }
+        Insert: {
+          call_history_id?: string | null
+          created_at?: string
+          id?: string
+          last_heartbeat_at?: string
+          metadata?: Json
+          owner_id: string
+          phone: string
+          since?: string
+          status?: string
+          sub_company_id?: string | null
+          updated_at?: string
+          user_id: string
+          wavoip_call_id?: string | null
+        }
+        Update: {
+          call_history_id?: string | null
+          created_at?: string
+          id?: string
+          last_heartbeat_at?: string
+          metadata?: Json
+          owner_id?: string
+          phone?: string
+          since?: string
+          status?: string
+          sub_company_id?: string | null
+          updated_at?: string
+          user_id?: string
+          wavoip_call_id?: string | null
+        }
+        Relationships: []
+      }
       wavoip_settings: {
         Row: {
           alert_channels: Json | null
@@ -5710,6 +5821,10 @@ export type Database = {
           p_target_user_id: string
         }
         Returns: undefined
+      }
+      reconcile_wavoip_call_history: {
+        Args: { p_call_id?: string; p_wavoip_call_id?: string }
+        Returns: number
       }
       release_provision_lock: { Args: { p_email: string }; Returns: undefined }
       revoke_wavoip_webhook_token: {

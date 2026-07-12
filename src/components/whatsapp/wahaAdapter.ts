@@ -69,6 +69,42 @@ function normalizeChatId(phone: string): string {
   return digits.includes('@') ? phone : `${digits}@c.us`;
 }
 
+async function writeWahaAudit(
+  conn: WhatsAppConnection,
+  input: {
+    action: string;
+    status: 'started' | 'success' | 'error';
+    customerId?: string | null;
+    wahaSessionId?: string | null;
+    messageId?: string | null;
+    errorMessage?: string | null;
+    payload?: Record<string, any>;
+  },
+) {
+  if (!conn.owner_id) return;
+  try {
+    const { data: authUser } = await supabase.auth.getUser();
+    const userId = authUser?.user?.id;
+    if (!userId) return;
+    await (supabase as any).from('omnichannel_audit_logs').insert({
+      owner_id: conn.owner_id,
+      sub_company_id: conn.sub_company_id ?? null,
+      user_id: userId,
+      provider: 'waha',
+      action: input.action,
+      status: input.status,
+      connection_id: conn.id,
+      customer_id: input.customerId ?? null,
+      waha_session_id: input.wahaSessionId ?? null,
+      message_id: input.messageId ?? null,
+      error_message: input.errorMessage ?? null,
+      payload: input.payload ?? {},
+    });
+  } catch (e) {
+    console.warn('[WAHA] audit log falhou', e);
+  }
+}
+
 async function blobToBase64(blob: Blob): Promise<string> {
   const arrayBuffer = typeof (blob as any).arrayBuffer === 'function'
     ? await blob.arrayBuffer()
@@ -234,17 +270,45 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       throw new Error(`WAHA payload inválido: ${parsed.error.issues.map((i) => i.message).join(', ')}`);
     }
 
-    const data = await wahaFetch(url, token, '/api/sendText', {
-      method: 'POST',
-      body: parsed.data,
-      // Snappier defaults: WAHA usually responds in <1s. Waiting 15s with 2
-      // retries makes the UI sit on "enviando pelo servidor" forever whenever
-      // WAHA is momentarily slow.
-      timeoutMs: opts.timeoutMs ?? 8_000,
-      retries: opts.retries ?? 1,
-      signal: opts.signal,
+    await writeWahaAudit(conn, {
+      action: 'send_text',
+      status: 'started',
+      customerId,
+      wahaSessionId: parsed.data.session,
+      payload: { chatId: parsed.data.chatId, length: parsed.data.text.length },
     });
-    return { ok: true, provider: 'waha', message_id: data?.id?._serialized || data?.id || null, raw: data };
+    try {
+      const data = await wahaFetch(url, token, '/api/sendText', {
+        method: 'POST',
+        body: parsed.data,
+        // Snappier defaults: WAHA usually responds in <1s. Waiting 15s with 2
+        // retries makes the UI sit on "enviando pelo servidor" forever whenever
+        // WAHA is momentarily slow.
+        timeoutMs: opts.timeoutMs ?? 8_000,
+        retries: opts.retries ?? 1,
+        signal: opts.signal,
+      });
+      const messageId = data?.id?._serialized || data?.id || null;
+      await writeWahaAudit(conn, {
+        action: 'send_text',
+        status: 'success',
+        customerId,
+        wahaSessionId: parsed.data.session,
+        messageId,
+        payload: { chatId: parsed.data.chatId, raw: data },
+      });
+      return { ok: true, provider: 'waha', message_id: messageId, raw: data };
+    } catch (e: any) {
+      await writeWahaAudit(conn, {
+        action: 'send_text',
+        status: 'error',
+        customerId,
+        wahaSessionId: parsed.data.session,
+        errorMessage: e?.message || String(e),
+        payload: { chatId: parsed.data.chatId },
+      });
+      throw e;
+    }
   }
 
   async sendMedia(conn: WhatsAppConnection, customerId: string, file: File, caption?: string) {
@@ -284,20 +348,47 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
     const path = mime.startsWith('image/') ? '/api/sendImage'
       : mime.startsWith('video/') ? '/api/sendVideo'
       : '/api/sendFile';
-    const data = await wahaFetch(url, token, path, {
-      method: 'POST',
-      body: parsed.data,
-      timeoutMs: 30_000,
+    await writeWahaAudit(conn, {
+      action: 'send_media',
+      status: 'started',
+      customerId,
+      wahaSessionId: parsed.data.session,
+      payload: { chatId: parsed.data.chatId, route: path, mimetype: mime, filename: parsed.data.file.filename },
     });
-    const messageId = data?.id?._serialized || data?.id || data?.key?.id || null;
-    if (!messageId) {
-      // WAHA sometimes 200s without an id when the media was silently dropped by
-      // GOWS. Surface the full payload so we can diagnose (missing chatId, wrong
-      // mime, session STARTING, etc.) instead of a generic silent failure.
-      const dbg = (() => { try { return JSON.stringify(data).slice(0, 500); } catch { return String(data); } })();
-      throw new Error(`WAHA respondeu sem message_id (rota ${path}). Resposta: ${dbg}`);
+    try {
+      const data = await wahaFetch(url, token, path, {
+        method: 'POST',
+        body: parsed.data,
+        timeoutMs: 30_000,
+      });
+      const messageId = data?.id?._serialized || data?.id || data?.key?.id || null;
+      if (!messageId) {
+        // WAHA sometimes 200s without an id when the media was silently dropped by
+        // GOWS. Surface the full payload so we can diagnose (missing chatId, wrong
+        // mime, session STARTING, etc.) instead of a generic silent failure.
+        const dbg = (() => { try { return JSON.stringify(data).slice(0, 500); } catch { return String(data); } })();
+        throw new Error(`WAHA respondeu sem message_id (rota ${path}). Resposta: ${dbg}`);
+      }
+      await writeWahaAudit(conn, {
+        action: 'send_media',
+        status: 'success',
+        customerId,
+        wahaSessionId: parsed.data.session,
+        messageId,
+        payload: { chatId: parsed.data.chatId, route: path, mimetype: mime, raw: data },
+      });
+      return { ok: true, provider: 'waha', message_id: messageId, raw: data };
+    } catch (e: any) {
+      await writeWahaAudit(conn, {
+        action: 'send_media',
+        status: 'error',
+        customerId,
+        wahaSessionId: parsed.data.session,
+        errorMessage: e?.message || String(e),
+        payload: { chatId: parsed.data.chatId, route: path, mimetype: mime },
+      });
+      throw e;
     }
-    return { ok: true, provider: 'waha', message_id: messageId, raw: data };
   }
 
   async sendAudio(conn: WhatsAppConnection, customerId: string, blob: Blob) {
@@ -331,16 +422,43 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       throw new Error(`WAHA voice inválido: ${parsed.error.issues.map((i) => i.message).join(', ')}`);
     }
 
-    const data = await wahaFetch(url, token, '/api/sendVoice', {
-      method: 'POST',
-      body: parsed.data,
-      timeoutMs: 30_000,
+    await writeWahaAudit(conn, {
+      action: 'send_audio',
+      status: 'started',
+      customerId,
+      wahaSessionId: parsed.data.session,
+      payload: { chatId: parsed.data.chatId, mimetype: parsed.data.file.mimetype },
     });
-    const messageId = data?.id?._serialized || data?.id || null;
-    if (!messageId) {
-      throw new Error('WAHA aceitou o áudio mas não retornou message_id — provável falha na sessão. Reconecte e tente novamente.');
+    try {
+      const data = await wahaFetch(url, token, '/api/sendVoice', {
+        method: 'POST',
+        body: parsed.data,
+        timeoutMs: 30_000,
+      });
+      const messageId = data?.id?._serialized || data?.id || null;
+      if (!messageId) {
+        throw new Error('WAHA aceitou o áudio mas não retornou message_id — provável falha na sessão. Reconecte e tente novamente.');
+      }
+      await writeWahaAudit(conn, {
+        action: 'send_audio',
+        status: 'success',
+        customerId,
+        wahaSessionId: parsed.data.session,
+        messageId,
+        payload: { chatId: parsed.data.chatId, raw: data },
+      });
+      return { ok: true, provider: 'waha', message_id: messageId, raw: data };
+    } catch (e: any) {
+      await writeWahaAudit(conn, {
+        action: 'send_audio',
+        status: 'error',
+        customerId,
+        wahaSessionId: parsed.data.session,
+        errorMessage: e?.message || String(e),
+        payload: { chatId: parsed.data.chatId },
+      });
+      throw e;
     }
-    return { ok: true, provider: 'waha', message_id: messageId, raw: data };
   }
 
   async syncContacts(_conn: WhatsAppConnection) {

@@ -101,6 +101,16 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
   const [lastValidation, setLastValidation] = useState<ValidationResult | null>(null);
   const webphoneRef = useRef<any>(null);
   const registeredTokens = useRef<Set<string>>(new Set());
+  const lineHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clearLineHeartbeat = useCallback(() => {
+    if (lineHeartbeatRef.current) {
+      clearInterval(lineHeartbeatRef.current);
+      lineHeartbeatRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => clearLineHeartbeat(), [clearLineHeartbeat]);
 
   // ---------- Persistência por sub-empresa ----------
   const loadFromDb = useCallback(async () => {
@@ -426,11 +436,96 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
       if (watchdog) { clearInterval(watchdog); watchdog = null; }
       if (hardTimeout) { clearTimeout(hardTimeout); hardTimeout = null; }
     };
+
+    const audit = async (action: string, auditStatus: 'success' | 'error' | 'started', payload: Record<string, any> = {}) => {
+      if (!effectiveOwner || !effectiveUserId) return;
+      try {
+        await (supabase as any).from('omnichannel_audit_logs').insert({
+          owner_id: effectiveOwner,
+          sub_company_id: effectiveSub,
+          user_id: effectiveUserId,
+          provider: 'wavoip',
+          action,
+          status: auditStatus,
+          customer_id: meta?.customerId ?? null,
+          call_history_id: callLogId,
+          call_id: wavoipCallId,
+          wavoip_call_id: wavoipCallId,
+          phone: normalized,
+          payload: {
+            device_id: device.id,
+            device_label: device.label,
+            ...payload,
+          },
+        });
+      } catch (e) { console.warn('[Wavoip] audit log falhou', e); }
+    };
+
+    const updateLineState = async (extra: Record<string, any> = {}) => {
+      if (!effectiveOwner || !effectiveUserId) return;
+      try {
+        await (supabase as any)
+          .from('wavoip_line_state')
+          .update({
+            last_heartbeat_at: new Date().toISOString(),
+            call_history_id: callLogId,
+            wavoip_call_id: wavoipCallId,
+            metadata: { device_id: device.id, device_label: device.label, contact_name: meta?.contactName ?? null, ...extra },
+          })
+          .eq('owner_id', effectiveOwner)
+          .eq('user_id', effectiveUserId)
+          .eq('status', 'in_call');
+      } catch (e) { console.warn('[Wavoip] line heartbeat falhou', e); }
+    };
+
+    const startLineState = async () => {
+      if (!effectiveOwner || !effectiveUserId) return;
+      clearLineHeartbeat();
+      try {
+        await (supabase as any)
+          .from('wavoip_line_state')
+          .delete()
+          .eq('owner_id', effectiveOwner)
+          .eq('user_id', effectiveUserId)
+          .eq('status', 'in_call');
+        await (supabase as any).from('wavoip_line_state').insert({
+          owner_id: effectiveOwner,
+          sub_company_id: effectiveSub,
+          user_id: effectiveUserId,
+          phone: normalized,
+          status: 'in_call',
+          since: new Date(startedAt).toISOString(),
+          last_heartbeat_at: new Date().toISOString(),
+          call_history_id: callLogId,
+          wavoip_call_id: wavoipCallId,
+          metadata: { device_id: device.id, device_label: device.label, contact_name: meta?.contactName ?? null },
+        });
+        lineHeartbeatRef.current = setInterval(() => updateLineState(), 15000);
+      } catch (e) { console.warn('[Wavoip] line state start falhou', e); }
+    };
+
+    const clearLineState = async () => {
+      clearLineHeartbeat();
+      if (!effectiveOwner || !effectiveUserId) return;
+      try {
+        await (supabase as any)
+          .from('wavoip_line_state')
+          .delete()
+          .eq('owner_id', effectiveOwner)
+          .eq('user_id', effectiveUserId)
+          .eq('status', 'in_call');
+      } catch (e) { console.warn('[Wavoip] line state cleanup falhou', e); }
+    };
+
     const finish = async (finalStatus: 'ended' | 'failed' | 'missed' | 'rejected' = 'ended') => {
       if (finished) return;
       finished = true;
       clearWatchers();
-      if (!callLogId || !effectiveOwner) return;
+      await clearLineState();
+      if (!callLogId || !effectiveOwner) {
+        await audit('call_end', finalStatus === 'ended' ? 'success' : 'error', { final_status: finalStatus, no_call_log: true });
+        return;
+      }
       let recordingPath: string | null = null;
       if (recorder && recorder.state !== 'inactive') {
         try {
@@ -458,6 +553,12 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
         recordingUrl,
         wavoipCallId,
         metadata: { device_id: device.id, recording_enabled: recordingEnabled, initiated_by_user_id: effectiveUserId },
+      });
+      await audit('call_end', effectiveStatus === 'ended' ? 'success' : 'error', {
+        final_status: effectiveStatus,
+        answered_at: answeredAt ? new Date(answeredAt).toISOString() : null,
+        ended_at: new Date().toISOString(),
+        official_duration_seconds: officialDurationSeconds,
       });
     };
 
@@ -503,6 +604,7 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
               },
             })
             .eq('id', callLogId);
+          await updateLineState({ wavoip_call_id: id });
         } catch (e) { console.warn('[Wavoip] persist wavoip_call_id falhou', e); }
       };
       const capturePayload = (payload: any, opts?: { isFinal?: boolean }) => {
@@ -532,6 +634,8 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
         if (answeredAt) return;
         answeredAt = Date.now();
         if (callLogId) await markCallAnswered(callLogId);
+        await updateLineState({ answered_at: new Date(answeredAt).toISOString() });
+        await audit('call_answered', 'success', { answered_at: new Date(answeredAt).toISOString() });
       };
       const bindOn = (target: any, event: string, handler: (...a: any[]) => void) => {
         try { target?.on?.(event, handler); } catch { /* noop */ }
@@ -617,6 +721,9 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
       // Ao fechar a aba, tenta encerrar
       window.addEventListener('beforeunload', () => { finish('ended'); }, { once: true });
 
+      await startLineState();
+      await audit('call_start', 'started', { started_at: new Date(startedAt).toISOString() });
+
       // Recording (opt-in) — tenta obter o stream remoto exposto pelo SDK.
       if (recordingEnabled) {
         try {
@@ -638,10 +745,11 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
     } catch (e: any) {
       console.error('[Wavoip] callWhatsApp error', e);
       toast.error(`Falha ao ligar via Wavoip: ${e?.message || 'erro desconhecido'}`);
+      await audit('call_error', 'error', { error: e?.message || String(e) });
       await finish('failed');
       return false;
     }
-  }, [config, status, bootSdk, openDialer, owner_id, sub_company_id, user?.id]);
+  }, [config, status, bootSdk, openDialer, owner_id, sub_company_id, user?.id, clearLineHeartbeat]);
 
 
 
