@@ -2461,6 +2461,27 @@ export default function ChatPage() {
                 <div ref={messagesEndRef} aria-hidden />
               </div>
 
+              {/* Etapa 3 — barra de resposta acima do composer */}
+              {replyingTo && (
+                <div className="mx-3 mt-2 px-3 py-2 rounded-lg border-l-4 border-primary bg-secondary/60 flex items-start gap-2">
+                  <Reply className="w-4 h-4 mt-0.5 text-primary shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                      Respondendo a {replyingTo.sender_type === 'client' ? (selectedConv?.name || 'contato') : 'você'}
+                    </div>
+                    <div className="text-xs truncate">{(replyingTo.content || '[mídia]').slice(0, 200)}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplyingTo(null)}
+                    className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive shrink-0"
+                    title="Cancelar resposta"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
               <ChatComposer
                 conversationId={selectedConvId!}
                 text={messageText}
