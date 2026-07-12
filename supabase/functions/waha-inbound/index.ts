@@ -206,40 +206,62 @@ Deno.serve(async (req) => {
   }
 
   // ── ACK ──────────────────────────────────────────────────────────────────
+  // WEBJS emits { ack: 1..4 } on a single message id.
+  // GOWS emits ReceiptEventData with { Type: 'delivery'|'read'|'played', MessageIDs: string[] }
+  // and NO numeric ack. We must handle both to render ✓✓ and ✓✓ (blue) in the UI.
   if (bucket === 'ack') {
-    const ackNum = webPayload?.ack ?? gowsData?.Receipt?.Ack ?? 0;
+    const ackNum = webPayload?.ack ?? gowsData?.Receipt?.Ack;
+    const gowsType = String(gowsData?.Type || gowsData?.Receipt?.Type || '').toLowerCase();
     const mapAck: Record<number, string> = { 1: 'sent', 2: 'delivered', 3: 'read', 4: 'played' };
-    const ackLabel = mapAck[ackNum as number] || String(webPayload?.status || gowsData?.Receipt?.Type || 'unknown');
+    const ackLabelFromType =
+      gowsType.includes('play') ? 'played'
+      : gowsType.includes('read') ? 'read'
+      : gowsType.includes('deliver') || gowsType.includes('received') ? 'delivered'
+      : gowsType.includes('server') || gowsType.includes('sent') ? 'sent'
+      : null;
+    const ackLabel = mapAck[ackNum as number] || ackLabelFromType || String(webPayload?.status || 'unknown');
+
+    // Collect every impacted provider message id.
+    const gowsIds: string[] = Array.isArray(gowsData?.MessageIDs) ? gowsData.MessageIDs
+      : Array.isArray(gowsData?.Receipt?.MessageIDs) ? gowsData.Receipt.MessageIDs
+      : [];
+    const idSet = new Set<string>([...(providerMsgId ? [providerMsgId] : []), ...gowsIds.filter(Boolean)]);
+    const ids = Array.from(idSet);
+
     await supabase
       .from('whatsapp_connections')
       .update({
         metadata: {
           ...((conn.metadata as any) ?? {}),
-          last_ack: { id: providerMsgId, status: ackLabel, at: new Date().toISOString() },
+          last_ack: { ids, status: ackLabel, at: new Date().toISOString() },
         },
       })
       .eq('id', connectionId);
-    if (providerMsgId) {
+
+    const ackRank: Record<string, number> = { sent: 1, delivered: 2, read: 3, played: 4 };
+    for (const id of ids) {
       const { data: msgRow } = await supabase
         .from('chat_messages')
         .select('id, metadata')
-        .eq('uaz_msg_id', providerMsgId)
+        .eq('uaz_msg_id', id)
         .maybeSingle();
-      if (msgRow) {
-        await supabase
-          .from('chat_messages')
-          .update({
-            metadata: {
-              ...(msgRow.metadata || {}),
-              delivery_status: ackLabel,
-              status: ackLabel,
-              confirmed_at: new Date().toISOString(),
-            },
-          })
-          .eq('id', msgRow.id);
-      }
+      if (!msgRow) continue;
+      const prevLabel = (msgRow.metadata as any)?.delivery_status || (msgRow.metadata as any)?.status;
+      // Never downgrade (read → delivered would lose the blue ticks).
+      if (prevLabel && (ackRank[prevLabel] ?? 0) >= (ackRank[ackLabel] ?? 0)) continue;
+      await supabase
+        .from('chat_messages')
+        .update({
+          metadata: {
+            ...(msgRow.metadata || {}),
+            delivery_status: ackLabel,
+            status: ackLabel,
+            confirmed_at: new Date().toISOString(),
+          },
+        })
+        .eq('id', msgRow.id);
     }
-    return json({ ok: true, ack: ackLabel, id: providerMsgId });
+    return json({ ok: true, ack: ackLabel, ids });
   }
 
   // ── INBOUND MESSAGE ──────────────────────────────────────────────────────
