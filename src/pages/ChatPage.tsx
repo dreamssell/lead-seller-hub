@@ -184,6 +184,11 @@ const hydrateChatMessage = (row: any) => {
     _latency: row?._latency || meta.latency_ms || null,
     _confirmedAt: row?._confirmedAt || meta.confirmed_at || meta.accepted_at || null,
     _deliveryStatus: row?._deliveryStatus || meta.delivery_status || meta.status || null,
+    _mediaUrl: row?._mediaUrl || meta.media_url || null,
+    _mediaType: row?._mediaType || meta.media_type || null,
+    _mediaMime: row?._mediaMime || meta.media_mime || null,
+    _mediaFilename: row?._mediaFilename || meta.media_filename || null,
+    _mediaDuration: row?._mediaDuration || meta.media_duration || null,
   };
 };
 
@@ -246,6 +251,25 @@ const extractProviderMessageId = (data: any) => (
   data?.messageId ||
   undefined
 );
+
+// Extract media descriptor returned by the outbound provider adapter (WAHA
+// currently) so we can persist it on chat_messages.metadata alongside the
+// provider message id — powering the inline audio/image/video/document player
+// for the sender's side of the conversation.
+const extractOutboundMediaMeta = (data: any) => {
+  if (!data || typeof data !== 'object') return null;
+  const url = data.media_url || data.mediaUrl || null;
+  const type = data.media_type || data.mediaType || null;
+  if (!url && !type) return null;
+  return {
+    media_url: url,
+    media_path: data.media_path || null,
+    media_type: type,
+    media_mime: data.media_mime || data.mediaMime || null,
+    media_filename: data.media_filename || data.filename || null,
+    media_size: data.media_size || null,
+  };
+};
 
 export default function ChatPage() {
   const [activeChannel, setActiveChannel] = useState<ChannelKey | null>(null);
@@ -1409,7 +1433,8 @@ export default function ChatPage() {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
         if (!adapter.sendMedia) throw new Error('Este canal não suporta envio de mídia ainda.');
         const data = await adapter.sendMedia(activeWhatsAppConn, selectedConvId, a.file, caption);
-        markStatus(id, 'sent', extractProviderMessageId(data), { accepted_at: new Date().toISOString(), provider_response_ok: true });
+        const mediaMeta = extractOutboundMediaMeta(data) || {};
+        markStatus(id, 'sent', extractProviderMessageId(data), { accepted_at: new Date().toISOString(), provider_response_ok: true, ...mediaMeta });
       } else {
         await new Promise(r => setTimeout(r, 400));
         markStatus(id, 'sent');
@@ -1430,7 +1455,8 @@ export default function ChatPage() {
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
         if (!adapter.sendAudio) throw new Error('Este canal não suporta áudio ainda.');
         const data = await adapter.sendAudio(activeWhatsAppConn, selectedConvId, blob);
-        markStatus(id, 'sent', extractProviderMessageId(data), { accepted_at: new Date().toISOString(), provider_response_ok: true });
+        const mediaMeta = extractOutboundMediaMeta(data) || {};
+        markStatus(id, 'sent', extractProviderMessageId(data), { accepted_at: new Date().toISOString(), provider_response_ok: true, media_duration: durationSec, ...mediaMeta });
       } else {
         await new Promise(r => setTimeout(r, 400));
         markStatus(id, 'sent');
@@ -2183,7 +2209,27 @@ export default function ChatPage() {
                       <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm relative group ${
                         m.sender_type !== 'client' ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-secondary text-foreground rounded-bl-md'
                       }`}>
-                        <p className="whitespace-pre-wrap break-words">{renderWhatsAppText(m.content)}</p>
+                        {m._mediaUrl && m._mediaType === 'audio' && (
+                          <audio controls preload="metadata" src={m._mediaUrl} className="w-full max-w-[280px] my-1" />
+                        )}
+                        {m._mediaUrl && m._mediaType === 'image' && (
+                          <a href={m._mediaUrl} target="_blank" rel="noreferrer">
+                            <img src={m._mediaUrl} alt={m._mediaFilename || 'imagem'} className="rounded-lg max-h-64 object-cover my-1" loading="lazy" />
+                          </a>
+                        )}
+                        {m._mediaUrl && m._mediaType === 'video' && (
+                          <video controls preload="metadata" src={m._mediaUrl} className="rounded-lg max-h-64 w-full my-1" />
+                        )}
+                        {m._mediaUrl && m._mediaType === 'document' && (
+                          <a href={m._mediaUrl} target="_blank" rel="noreferrer" download={m._mediaFilename || undefined}
+                             className="flex items-center gap-2 rounded-lg border border-current/20 bg-background/20 px-2 py-1.5 my-1 text-xs hover:bg-background/30">
+                            <FileDown className="w-4 h-4 shrink-0" />
+                            <span className="truncate">{m._mediaFilename || 'Arquivo'}</span>
+                          </a>
+                        )}
+                        {(m.content && m.content !== '[mídia]') && (
+                          <p className="whitespace-pre-wrap break-words">{renderWhatsAppText(m.content)}</p>
+                        )}
                         <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
                           <p className="text-[10px]">
                             {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

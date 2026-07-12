@@ -70,6 +70,125 @@ function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'ig
   return 'ignore';
 }
 
+// Extract the best available media descriptor from either WEBJS or GOWS payloads.
+// Returns null when no media is present. Never throws.
+function extractMedia(webPayload: any, gowsData: any, msgWrap: any) {
+  // WEBJS classic: payload.media = { url, mimetype, filename, data(base64)? }
+  const web = webPayload?.media || webPayload?._data?.media;
+  if (web && (web.url || web.data)) {
+    const mimetype: string = web.mimetype || web.mimeType || 'application/octet-stream';
+    return {
+      url: web.url || null,
+      base64: web.data || null,
+      mimetype,
+      filename: web.filename || `media-${Date.now()}`,
+      kind: kindFromMime(mimetype),
+      duration: web.duration || web.seconds || null,
+    };
+  }
+  // GOWS/Baileys: {audio,image,video,document}Message inside Message. Some WAHA
+  // GOWS deployments expose an already-decrypted URL under `.mediaUrl` / `.url`.
+  const wraps = [msgWrap?.audioMessage, msgWrap?.imageMessage, msgWrap?.videoMessage, msgWrap?.documentMessage, msgWrap?.stickerMessage];
+  for (const w of wraps) {
+    if (!w) continue;
+    const mimetype: string = w.mimetype || w.mimeType || 'application/octet-stream';
+    const url = w.mediaUrl || w.directPath || w.url || null;
+    if (!url && !w.data) continue;
+    return {
+      url,
+      base64: w.data || null,
+      mimetype,
+      filename: w.fileName || w.filename || `media-${Date.now()}`,
+      kind: kindFromMime(mimetype),
+      duration: w.seconds || w.duration || null,
+    };
+  }
+  // GOWS may also expose top-level `data.media`
+  const g = gowsData?.media;
+  if (g && (g.url || g.data)) {
+    const mimetype: string = g.mimetype || g.mimeType || 'application/octet-stream';
+    return {
+      url: g.url || null,
+      base64: g.data || null,
+      mimetype,
+      filename: g.filename || `media-${Date.now()}`,
+      kind: kindFromMime(mimetype),
+      duration: g.duration || null,
+    };
+  }
+  return null;
+}
+
+function kindFromMime(m: string): 'audio' | 'image' | 'video' | 'document' {
+  if (m.startsWith('audio/')) return 'audio';
+  if (m.startsWith('image/')) return 'image';
+  if (m.startsWith('video/')) return 'video';
+  return 'document';
+}
+
+function extFromMime(m: string): string {
+  if (m.includes('ogg')) return 'ogg';
+  if (m.includes('mpeg')) return 'mp3';
+  if (m.includes('mp4')) return 'mp4';
+  if (m.includes('webm')) return 'webm';
+  if (m.includes('jpeg') || m.includes('jpg')) return 'jpg';
+  if (m.includes('png')) return 'png';
+  if (m.includes('webp')) return 'webp';
+  if (m.includes('pdf')) return 'pdf';
+  return 'bin';
+}
+
+// Download from a URL (with optional X-Api-Key), or decode base64. Uploads to
+// the chat-media bucket and returns a signed URL. Best-effort — returns null
+// on failure so we still persist the text/[mídia] placeholder.
+async function persistWahaMedia(
+  supabase: any,
+  args: {
+    ownerId: string;
+    connectionId: string;
+    providerMsgId: string | null;
+    wahaUrl: string | null;
+    wahaToken: string | null;
+    media: { url: string | null; base64: string | null; mimetype: string; filename: string; kind: string };
+  },
+): Promise<{ path: string; signedUrl: string; size: number } | null> {
+  try {
+    let bytes: Uint8Array | null = null;
+    if (args.media.base64) {
+      const bin = atob(args.media.base64);
+      bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    } else if (args.media.url) {
+      const isAbsolute = /^https?:\/\//i.test(args.media.url);
+      const url = isAbsolute ? args.media.url : `${args.wahaUrl || ''}${args.media.url}`;
+      const res = await fetch(url, {
+        headers: args.wahaToken ? { 'X-Api-Key': args.wahaToken } : {},
+      });
+      if (!res.ok) return null;
+      bytes = new Uint8Array(await res.arrayBuffer());
+    }
+    if (!bytes || bytes.length === 0) return null;
+    const ext = extFromMime(args.media.mimetype);
+    const stamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
+    const idPart = (args.providerMsgId || crypto.randomUUID()).replace(/[^a-zA-Z0-9]/g, '').slice(-20);
+    const path = `${args.ownerId}/${args.connectionId}/${stamp}-${idPart}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('chat-media').upload(path, bytes, {
+      contentType: args.media.mimetype,
+      upsert: true,
+    });
+    if (upErr) return null;
+    const { data: signed } = await supabase.storage
+      .from('chat-media')
+      .createSignedUrl(path, 60 * 60 * 24 * 30); // 30 dias
+    if (!signed?.signedUrl) return null;
+    return { path, signedUrl: signed.signedUrl, size: bytes.length };
+  } catch {
+    return null;
+  }
+}
+
+
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
@@ -206,40 +325,62 @@ Deno.serve(async (req) => {
   }
 
   // ── ACK ──────────────────────────────────────────────────────────────────
+  // WEBJS emits { ack: 1..4 } on a single message id.
+  // GOWS emits ReceiptEventData with { Type: 'delivery'|'read'|'played', MessageIDs: string[] }
+  // and NO numeric ack. We must handle both to render ✓✓ and ✓✓ (blue) in the UI.
   if (bucket === 'ack') {
-    const ackNum = webPayload?.ack ?? gowsData?.Receipt?.Ack ?? 0;
+    const ackNum = webPayload?.ack ?? gowsData?.Receipt?.Ack;
+    const gowsType = String(gowsData?.Type || gowsData?.Receipt?.Type || '').toLowerCase();
     const mapAck: Record<number, string> = { 1: 'sent', 2: 'delivered', 3: 'read', 4: 'played' };
-    const ackLabel = mapAck[ackNum as number] || String(webPayload?.status || gowsData?.Receipt?.Type || 'unknown');
+    const ackLabelFromType =
+      gowsType.includes('play') ? 'played'
+      : gowsType.includes('read') ? 'read'
+      : gowsType.includes('deliver') || gowsType.includes('received') ? 'delivered'
+      : gowsType.includes('server') || gowsType.includes('sent') ? 'sent'
+      : null;
+    const ackLabel = mapAck[ackNum as number] || ackLabelFromType || String(webPayload?.status || 'unknown');
+
+    // Collect every impacted provider message id.
+    const gowsIds: string[] = Array.isArray(gowsData?.MessageIDs) ? gowsData.MessageIDs
+      : Array.isArray(gowsData?.Receipt?.MessageIDs) ? gowsData.Receipt.MessageIDs
+      : [];
+    const idSet = new Set<string>([...(providerMsgId ? [providerMsgId] : []), ...gowsIds.filter(Boolean)]);
+    const ids = Array.from(idSet);
+
     await supabase
       .from('whatsapp_connections')
       .update({
         metadata: {
           ...((conn.metadata as any) ?? {}),
-          last_ack: { id: providerMsgId, status: ackLabel, at: new Date().toISOString() },
+          last_ack: { ids, status: ackLabel, at: new Date().toISOString() },
         },
       })
       .eq('id', connectionId);
-    if (providerMsgId) {
+
+    const ackRank: Record<string, number> = { sent: 1, delivered: 2, read: 3, played: 4 };
+    for (const id of ids) {
       const { data: msgRow } = await supabase
         .from('chat_messages')
         .select('id, metadata')
-        .eq('uaz_msg_id', providerMsgId)
+        .eq('uaz_msg_id', id)
         .maybeSingle();
-      if (msgRow) {
-        await supabase
-          .from('chat_messages')
-          .update({
-            metadata: {
-              ...(msgRow.metadata || {}),
-              delivery_status: ackLabel,
-              status: ackLabel,
-              confirmed_at: new Date().toISOString(),
-            },
-          })
-          .eq('id', msgRow.id);
-      }
+      if (!msgRow) continue;
+      const prevLabel = (msgRow.metadata as any)?.delivery_status || (msgRow.metadata as any)?.status;
+      // Never downgrade (read → delivered would lose the blue ticks).
+      if (prevLabel && (ackRank[prevLabel] ?? 0) >= (ackRank[ackLabel] ?? 0)) continue;
+      await supabase
+        .from('chat_messages')
+        .update({
+          metadata: {
+            ...(msgRow.metadata || {}),
+            delivery_status: ackLabel,
+            status: ackLabel,
+            confirmed_at: new Date().toISOString(),
+          },
+        })
+        .eq('id', msgRow.id);
     }
-    return json({ ok: true, ack: ackLabel, id: providerMsgId });
+    return json({ ok: true, ack: ackLabel, ids });
   }
 
   // ── INBOUND MESSAGE ──────────────────────────────────────────────────────
@@ -349,6 +490,34 @@ Deno.serve(async (req) => {
     !!msgWrap?.documentMessage;
   const content = extractedBody || (hasMedia ? '[mídia]' : '');
 
+  // Best-effort media persistence into the private chat-media bucket. Failure
+  // never blocks the inbound message — we just fall back to the [mídia] label.
+  let mediaMeta: any = null;
+  if (hasMedia) {
+    const media = extractMedia(webPayload, gowsData, msgWrap);
+    if (media) {
+      const wahaUrl = (conn.metadata as any)?.url || null;
+      const wahaToken = (conn.metadata as any)?.token || null;
+      const stored = await persistWahaMedia(supabase, {
+        ownerId: conn.owner_id,
+        connectionId: conn.id,
+        providerMsgId,
+        wahaUrl,
+        wahaToken,
+        media,
+      });
+      mediaMeta = {
+        media_type: media.kind,
+        media_mime: media.mimetype,
+        media_filename: media.filename,
+        media_duration: media.duration ?? null,
+        media_url: stored?.signedUrl ?? null,
+        media_path: stored?.path ?? null,
+        media_size: stored?.size ?? null,
+      };
+    }
+  }
+
   const { data: insertedMsg, error: msgErr } = await supabase.from('chat_messages').insert({
     customer_id: customerId,
     sender_type: 'client',
@@ -368,6 +537,7 @@ Deno.serve(async (req) => {
       sender_lid: senderLid,
       owner_id: conn.owner_id,
       webhook_received_at: new Date().toISOString(),
+      ...(mediaMeta || {}),
       raw: gowsData ?? webPayload,
     },
   }).select('id').single();
