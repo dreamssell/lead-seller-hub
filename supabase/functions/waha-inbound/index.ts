@@ -656,6 +656,7 @@ Deno.serve(async (req) => {
       owner_id: conn.owner_id,
       webhook_received_at: new Date().toISOString(),
       ...(mediaMeta || {}),
+      ...(quotedMeta ? { quoted: quotedMeta } : {}),
       raw: gowsData ?? webPayload,
     },
   }).select('id').single();
