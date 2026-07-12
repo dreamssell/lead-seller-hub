@@ -399,13 +399,13 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
         </div>
       </Card>
 
-      {/* Alerts */}
+      {/* Backend-side alerts (from waha-audit response) */}
       {data && data.alerts?.length > 0 && (
         <Card className="p-3 border-warning/40 bg-warning/5">
           <div className="flex items-start gap-2 text-sm">
             <AlertTriangle className="w-4 h-4 text-warning mt-0.5" />
             <div>
-              <p className="font-semibold text-warning">Alertas de telemetria</p>
+              <p className="font-semibold text-warning">Alertas de telemetria (backend)</p>
               <ul className="mt-1 text-xs text-muted-foreground list-disc pl-4 space-y-0.5">
                 {data.alerts.map((a) => <li key={a}>{a}</li>)}
               </ul>
@@ -413,6 +413,10 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
           </div>
         </Card>
       )}
+
+      {/* Live alerts derived from the events window (client-side) */}
+      <RecentAlertsCard data={data} />
+
 
       {/* Stats */}
       {data && (
