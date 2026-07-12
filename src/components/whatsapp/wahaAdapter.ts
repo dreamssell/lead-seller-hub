@@ -305,11 +305,12 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       } catch { /* best-effort — never block send on template errors */ }
     }
 
-    const rawPayload = {
+    const rawPayload: Record<string, unknown> = {
       session: this.sessionOf(conn),
       chatId: normalizeChatId(customer.phone),
       text,
     };
+    if (opts.replyTo) rawPayload.reply_to = String(opts.replyTo);
     const parsed = WahaSendTextSchema.safeParse(rawPayload);
     if (!parsed.success) {
       throw new Error(`WAHA payload inválido: ${parsed.error.issues.map((i) => i.message).join(', ')}`);
