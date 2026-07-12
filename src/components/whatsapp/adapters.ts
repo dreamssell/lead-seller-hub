@@ -9,6 +9,10 @@ export interface WhatsAppProviderAdapter {
   sendAudio?(conn: WhatsAppConnection, customerId: string, blob: Blob): Promise<any>;
   sendRich?(conn: WhatsAppConnection, customerId: string, payload: any): Promise<any>;
   sendReaction?(conn: WhatsAppConnection, providerMessageId: string, emoji: string, customerId?: string): Promise<any>;
+  // Etapa 4 — encaminhar / editar / apagar mensagens.
+  forwardMessage?(conn: WhatsAppConnection, providerMessageId: string, toCustomerId: string): Promise<any>;
+  editMessage?(conn: WhatsAppConnection, providerMessageId: string, customerId: string, newText: string): Promise<any>;
+  deleteMessage?(conn: WhatsAppConnection, providerMessageId: string, customerId: string, forEveryone?: boolean): Promise<any>;
   syncContacts(conn: WhatsAppConnection): Promise<any>;
 }
 
