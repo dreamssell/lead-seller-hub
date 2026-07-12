@@ -1514,8 +1514,8 @@ export default function ChatPage() {
                 <div className="absolute top-3 right-3">
                   {isWhatsApp ? (
                     whatsappStatus.loading ? (
-                      <RefreshCw className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
-                    ) : whatsappStatus.dbStatus === 'disconnected' ? (
+                      isOwner ? <RefreshCw className="w-3.5 h-3.5 text-muted-foreground animate-spin" /> : null
+                    ) : !isOwner ? null : whatsappStatus.dbStatus === 'disconnected' ? (
                       <Link to="/whatsapp" onClick={(e) => e.stopPropagation()} className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border hover:bg-destructive/20 transition-colors ${getWhatsAppStatusClasses(whatsappStatus.dbStatus)}`}>
                         <WhatsAppStatusIcon className="w-3 h-3 shrink-0" />
                         <span className="text-[10px] font-bold uppercase tracking-wider truncate">Desconectado</span>
