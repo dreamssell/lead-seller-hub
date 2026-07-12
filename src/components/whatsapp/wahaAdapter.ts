@@ -472,6 +472,10 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       throw new Error(`WAHA voice inválido: ${parsed.error.issues.map((i) => i.message).join(', ')}`);
     }
 
+    // Upload the sender's own voice note to chat-media in parallel so their UI
+    // shows a real <audio> player instead of the "🎤 Áudio (Ns)" text placeholder.
+    const uploadPromise = uploadOutboundToChatMedia(conn, blob, 'audio/ogg', 'voice.ogg');
+
     await writeWahaAudit(conn, {
       action: 'send_audio',
       status: 'started',
@@ -489,15 +493,27 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       if (!messageId) {
         throw new Error('WAHA aceitou o áudio mas não retornou message_id — provável falha na sessão. Reconecte e tente novamente.');
       }
+      const stored = await uploadPromise;
       await writeWahaAudit(conn, {
         action: 'send_audio',
         status: 'success',
         customerId,
         wahaSessionId: parsed.data.session,
         messageId,
-        payload: { chatId: parsed.data.chatId, raw: data },
+        payload: { chatId: parsed.data.chatId, raw: data, media_path: stored?.path },
       });
-      return { ok: true, provider: 'waha', message_id: messageId, raw: data };
+      return {
+        ok: true,
+        provider: 'waha',
+        message_id: messageId,
+        media_url: stored?.signedUrl ?? null,
+        media_path: stored?.path ?? null,
+        media_type: 'audio' as const,
+        media_mime: 'audio/ogg',
+        media_filename: 'voice.ogg',
+        media_size: stored?.size ?? null,
+        raw: data,
+      };
     } catch (e: any) {
       await writeWahaAudit(conn, {
         action: 'send_audio',
