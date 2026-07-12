@@ -5,7 +5,7 @@ import {
   Send, Paperclip, Phone, Video, MoreVertical, Search, Circle,
   Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Settings,
   Database, Activity, ShieldAlert, Wifi, WifiOff, Terminal, ChevronDown, ChevronUp, History as HistoryIcon, Bug, Play, Share2,
-  FileDown, Filter, Calendar, Clock, Loader2, X, AlertTriangle, Check, SmilePlus
+  FileDown, Filter, Calendar, Clock, Loader2, X, AlertTriangle, Check, SmilePlus, Reply
 } from 'lucide-react';
 import {
   Popover,
@@ -190,6 +190,7 @@ const hydrateChatMessage = (row: any) => {
     _mediaFilename: row?._mediaFilename || meta.media_filename || null,
     _mediaDuration: row?._mediaDuration || meta.media_duration || null,
     _reactions: (meta.reactions && typeof meta.reactions === 'object') ? meta.reactions : {},
+    _quoted: (meta.quoted && typeof meta.quoted === 'object') ? meta.quoted : null,
   };
 };
 
@@ -419,6 +420,9 @@ export default function ChatPage() {
   const wavoip = useWavoipWebphone();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [externalAttachment, setExternalAttachment] = useState<File | null>(null);
+  // Etapa 3 — mensagem sendo respondida (quote/reply). null = envio normal.
+  const [replyingTo, setReplyingTo] = useState<any | null>(null);
+  useEffect(() => { setReplyingTo(null); }, [selectedConvId]);
 
   useChatShortcuts(!!selectedConvId, {
     onHelp: () => setShortcutsOpen(true),
@@ -1320,7 +1324,7 @@ export default function ChatPage() {
     } catch {}
   };
 
-  const sendTextThroughActiveChannel = async (customerId: string, text: string) => {
+  const sendTextThroughActiveChannel = async (customerId: string, text: string, replyToProviderId?: string | null) => {
     if (activeChannel === 'whatsapp') {
       if (!activeWhatsAppConn) throw new Error('Conexão ativa não encontrada');
       const adapter = getProviderAdapter(activeWhatsAppConn.provider);
@@ -1330,8 +1334,9 @@ export default function ChatPage() {
         customer_id: customerId,
         text_length: text.length,
         has_text: text.trim().length > 0,
+        reply_to: replyToProviderId || null,
       });
-      return adapter.sendMessage(activeWhatsAppConn, customerId, text);
+      return adapter.sendMessage(activeWhatsAppConn, customerId, text, undefined, replyToProviderId ? { replyTo: replyToProviderId } : undefined);
     }
     await new Promise(r => setTimeout(r, 400));
     return { key: { id: crypto.randomUUID() } };
@@ -1340,11 +1345,33 @@ export default function ChatPage() {
   const handleSendText = async (text: string) => {
     if (!selectedConvId || !text.trim()) return;
     if (!ensureActiveOwnerScope()) throw new Error('Owner ativo inválido para esta conversa.');
+    // Snapshot the reply target BEFORE clearing so we can restore on error.
+    const replyTarget = replyingTo;
+    const replyProviderId: string | null = replyTarget?.uaz_msg_id || null;
+    const quotedPreview = replyTarget ? {
+      message_id: replyProviderId,
+      body: (replyTarget.content || '').slice(0, 240),
+      from_me: replyTarget.sender_type !== 'client',
+      participant: null,
+    } : null;
+    // Etapa 3 — persist quoted preview locally right away so the bubble shows
+    // the "answering: …" strip even before the ACK returns from WAHA.
     const id = await sendOptimistic(text);
+    if (quotedPreview) {
+      setMessages(prev => prev.map(m => (m.id === id || m.client_msg_id === id)
+        ? hydrateChatMessage({ ...m, metadata: { ...(m.metadata || {}), quoted: quotedPreview } })
+        : m));
+    }
+    setReplyingTo(null);
     try {
       const t0 = Date.now();
-      const data = await sendTextThroughActiveChannel(selectedConvId, text);
-      await markStatus(id, 'sent', extractProviderMessageId(data), { latency_ms: Date.now() - t0, accepted_at: new Date().toISOString(), provider_response_ok: true });
+      const data = await sendTextThroughActiveChannel(selectedConvId, text, replyProviderId);
+      await markStatus(id, 'sent', extractProviderMessageId(data), {
+        latency_ms: Date.now() - t0,
+        accepted_at: new Date().toISOString(),
+        provider_response_ok: true,
+        ...(quotedPreview ? { quoted: quotedPreview } : {}),
+      });
     } catch (err: any) {
       const normalized = showSendErrorToast(err);
       await markStatus(id, 'error', undefined, {
@@ -1353,7 +1380,10 @@ export default function ChatPage() {
         error_code: normalized.code,
         blocked_by: normalized.blockedBy,
         retryable: normalized.retryable,
+        ...(quotedPreview ? { quoted: quotedPreview } : {}),
       });
+      // Restore the composer's reply target so the user can retry.
+      if (replyTarget) setReplyingTo(replyTarget);
       throw err;
     }
   };
@@ -1401,7 +1431,7 @@ export default function ChatPage() {
 
     try {
       const t0 = Date.now();
-      const data = await sendTextThroughActiveChannel(message.customer_id || selectedConvId, message.content);
+      const data = await sendTextThroughActiveChannel(message.customer_id || selectedConvId, message.content, (message._quoted?.message_id || meta?.quoted?.message_id) || null);
       await markStatus(msgId, 'sent', extractProviderMessageId(data), {
         latency_ms: Date.now() - t0,
         accepted_at: new Date().toISOString(),
@@ -2252,6 +2282,7 @@ export default function ChatPage() {
                   return (
                     <motion.div
                       key={m.id}
+                      data-msg-id={m.uaz_msg_id || m.id}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       className={`flex ${m.sender_type !== 'client' ? 'justify-end' : 'justify-start'}`}
@@ -2259,6 +2290,25 @@ export default function ChatPage() {
                       <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm relative group ${
                         m.sender_type !== 'client' ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-secondary text-foreground rounded-bl-md'
                       }`}>
+                        {/* Quoted/reply preview — Etapa 3 */}
+                        {m._quoted && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const el = document.querySelector(`[data-msg-id="${m._quoted.message_id}"]`) as HTMLElement | null;
+                              if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('ring-2','ring-primary/60'); setTimeout(() => el.classList.remove('ring-2','ring-primary/60'), 1200); }
+                            }}
+                            className={`block w-full text-left mb-1.5 px-2 py-1 rounded border-l-2 text-xs opacity-90 hover:opacity-100 ${
+                              m.sender_type !== 'client' ? 'bg-primary-foreground/10 border-primary-foreground/60' : 'bg-background/60 border-primary'
+                            }`}
+                            title="Ir para a mensagem citada"
+                          >
+                            <div className="font-medium text-[10px] uppercase tracking-wider opacity-70">
+                              {m._quoted.from_me ? 'Você' : 'Contato'}
+                            </div>
+                            <div className="truncate">{m._quoted.body || '[mídia]'}</div>
+                          </button>
+                        )}
                         {m._mediaUrl && m._mediaType === 'audio' && (
                           <audio controls preload="metadata" src={m._mediaUrl} className="w-full max-w-[280px] my-1" />
                         )}
@@ -2304,7 +2354,15 @@ export default function ChatPage() {
 
                         {/* Reaction picker — appears on hover (WhatsApp only) */}
                         {activeChannel === 'whatsapp' && m.uaz_msg_id && (
-                          <div className={`absolute -top-3 ${m.sender_type !== 'client' ? '-left-2' : '-right-2'} opacity-0 group-hover:opacity-100 transition-opacity`}>
+                          <div className={`absolute -top-3 ${m.sender_type !== 'client' ? '-left-2' : '-right-2'} opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1`}>
+                            <button
+                              type="button"
+                              onClick={() => { setReplyingTo(m); const ta = document.querySelector<HTMLTextAreaElement>('textarea[data-composer="1"]'); ta?.focus(); }}
+                              className="w-7 h-7 rounded-full bg-background border border-border shadow-sm flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary"
+                              title="Responder à mensagem"
+                            >
+                              <Reply className="w-3.5 h-3.5" />
+                            </button>
                             <Popover>
                               <PopoverTrigger asChild>
                                 <button
@@ -2402,6 +2460,27 @@ export default function ChatPage() {
                 })}
                 <div ref={messagesEndRef} aria-hidden />
               </div>
+
+              {/* Etapa 3 — barra de resposta acima do composer */}
+              {replyingTo && (
+                <div className="mx-3 mt-2 px-3 py-2 rounded-lg border-l-4 border-primary bg-secondary/60 flex items-start gap-2">
+                  <Reply className="w-4 h-4 mt-0.5 text-primary shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                      Respondendo a {replyingTo.sender_type === 'client' ? (selectedConv?.name || 'contato') : 'você'}
+                    </div>
+                    <div className="text-xs truncate">{(replyingTo.content || '[mídia]').slice(0, 200)}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplyingTo(null)}
+                    className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive shrink-0"
+                    title="Cancelar resposta"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
 
               <ChatComposer
                 conversationId={selectedConvId!}

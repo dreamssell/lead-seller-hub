@@ -28,6 +28,9 @@ export const WahaSendTextSchema = z.object({
   session: z.string().min(1),
   chatId: WahaChatIdSchema,
   text: z.string().min(1).max(4096),
+  // Etapa 3 — quote/reply. WAHA accepts `reply_to` = provider messageId
+  // (e.g. `false_5511...@c.us_ABCD1234`). Omitted when not replying.
+  reply_to: z.string().min(1).optional(),
 });
 
 export const WahaSendMediaSchema = z.object({
@@ -241,6 +244,8 @@ export interface WahaSendOptions {
   timeoutMs?: number;
   retries?: number;
   signal?: AbortSignal;
+  /** Etapa 3 — provider messageId being quoted/replied. */
+  replyTo?: string;
 }
 
 export class WahaAdapter implements WhatsAppProviderAdapter {
@@ -300,11 +305,12 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       } catch { /* best-effort — never block send on template errors */ }
     }
 
-    const rawPayload = {
+    const rawPayload: Record<string, unknown> = {
       session: this.sessionOf(conn),
       chatId: normalizeChatId(customer.phone),
       text,
     };
+    if (opts.replyTo) rawPayload.reply_to = String(opts.replyTo);
     const parsed = WahaSendTextSchema.safeParse(rawPayload);
     if (!parsed.success) {
       throw new Error(`WAHA payload inválido: ${parsed.error.issues.map((i) => i.message).join(', ')}`);
@@ -315,7 +321,7 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       status: 'started',
       customerId,
       wahaSessionId: parsed.data.session,
-      payload: { chatId: parsed.data.chatId, length: parsed.data.text.length },
+      payload: { chatId: parsed.data.chatId, length: parsed.data.text.length, reply_to: parsed.data.reply_to ?? null },
     });
     try {
       const data = await wahaFetch(url, token, '/api/sendText', {

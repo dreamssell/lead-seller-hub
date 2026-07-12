@@ -563,6 +563,51 @@ Deno.serve(async (req) => {
     !!msgWrap?.documentMessage;
   const content = extractedBody || (hasMedia ? '[mídia]' : '');
 
+  // Etapa 3 — quoted/reply context.
+  // WEBJS: payload.hasQuotedMsg + payload._data.quotedMsg / quotedStanzaID
+  // GOWS:  msgWrap.extendedTextMessage.contextInfo { stanzaId, participant, quotedMessage }
+  //        or contextInfo directly under msgWrap for media replies.
+  const ctxInfo =
+    msgWrap?.extendedTextMessage?.contextInfo ||
+    msgWrap?.imageMessage?.contextInfo ||
+    msgWrap?.videoMessage?.contextInfo ||
+    msgWrap?.audioMessage?.contextInfo ||
+    msgWrap?.documentMessage?.contextInfo ||
+    null;
+  const webQuoted = webPayload?._data?.quotedMsg || webPayload?.quotedMsg || null;
+  const quotedProviderId =
+    ctxInfo?.stanzaId ||
+    ctxInfo?.StanzaId ||
+    webPayload?._data?.quotedStanzaID ||
+    webPayload?.quotedStanzaID ||
+    extractId(webQuoted?.id) ||
+    null;
+  const quotedBodyRaw =
+    ctxInfo?.quotedMessage?.conversation ||
+    ctxInfo?.quotedMessage?.extendedTextMessage?.text ||
+    ctxInfo?.quotedMessage?.imageMessage?.caption ||
+    ctxInfo?.quotedMessage?.videoMessage?.caption ||
+    webQuoted?.body ||
+    webQuoted?.caption ||
+    '';
+  const quotedParticipant =
+    ctxInfo?.participant ||
+    ctxInfo?.Participant ||
+    webQuoted?.from ||
+    null;
+  const quotedFromMe =
+    webQuoted?.fromMe === true ||
+    ctxInfo?.quotedMessage?.key?.fromMe === true ||
+    false;
+  const quotedMeta = quotedProviderId
+    ? {
+        message_id: quotedProviderId,
+        body: (typeof quotedBodyRaw === 'string' ? quotedBodyRaw : '').slice(0, 240),
+        from_me: quotedFromMe,
+        participant: typeof quotedParticipant === 'string' ? quotedParticipant : null,
+      }
+    : null;
+
   // Best-effort media persistence into the private chat-media bucket. Failure
   // never blocks the inbound message — we just fall back to the [mídia] label.
   let mediaMeta: any = null;
@@ -611,6 +656,7 @@ Deno.serve(async (req) => {
       owner_id: conn.owner_id,
       webhook_received_at: new Date().toISOString(),
       ...(mediaMeta || {}),
+      ...(quotedMeta ? { quoted: quotedMeta } : {}),
       raw: gowsData ?? webPayload,
     },
   }).select('id').single();
