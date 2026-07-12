@@ -190,6 +190,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ]) as any;
     let row: AccountAccess | null = Array.isArray(data) ? data[0] : null;
 
+    if (ccRes?.data) {
+      const cc = ccRes.data as { owner_id: string | null; auth_user_id: string | null; sub_company_id: string | null; status: string | null };
+      const companyOwnerId = cc.owner_id || uid;
+      if (!row || row.owner_id === uid || row.owner_id !== companyOwnerId) {
+        row = {
+          owner_id: companyOwnerId,
+          sub_company_id: cc.sub_company_id,
+          sub_company_name: null,
+          allowed_pages: row?.owner_id === companyOwnerId ? row.allowed_pages : [],
+          is_account_admin: row?.owner_id === companyOwnerId ? row.is_account_admin : true,
+          blocked_pages: row?.owner_id === companyOwnerId ? row.blocked_pages : [],
+          status: cc.status === 'blocked' ? 'blocked' : 'active',
+          allow_custom_logic: row?.owner_id === companyOwnerId ? row.allow_custom_logic : true,
+          feature_landing_builder: row?.owner_id === companyOwnerId ? row.feature_landing_builder : false,
+        };
+      }
+    }
+
     if (!row && roleRes?.data === true) {
       row = {
         owner_id: uid,
@@ -201,21 +219,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         status: 'active',
         allow_custom_logic: true,
         feature_landing_builder: true,
-      };
-    }
-
-    if (!row && ccRes?.data) {
-      const cc = ccRes.data as { owner_id: string | null; auth_user_id: string | null; sub_company_id: string | null; status: string | null };
-      row = {
-        owner_id: cc.auth_user_id === uid ? uid : (cc.owner_id || uid),
-        sub_company_id: cc.sub_company_id,
-        sub_company_name: null,
-        allowed_pages: [],
-        is_account_admin: true,
-        blocked_pages: [],
-        status: cc.status === 'blocked' ? 'blocked' : 'active',
-        allow_custom_logic: true,
-        feature_landing_builder: false,
       };
     }
 
@@ -279,8 +282,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const maybeRefresh = (reason: string) => {
       if (document.visibilityState !== 'visible') return;
       const now = Date.now();
-      if (now - lastVisibilityRefreshRef.current < VISIBILITY_REFRESH_DEBOUNCE_MS) return;
-      lastVisibilityRefreshRef.current = now;
+      if (reason !== 'online') {
+        if (now - lastVisibilityRefreshRef.current < VISIBILITY_REFRESH_DEBOUNCE_MS) return;
+        lastVisibilityRefreshRef.current = now;
+      }
       void logRouteTelemetry({
         type: 'auth_visibility_refresh',
         message: `Refresh silencioso disparado por ${reason}`,
