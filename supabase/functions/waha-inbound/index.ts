@@ -68,7 +68,124 @@ function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'ig
   // Some WAHA/GOWS deployments wrap the same message shape under `engine.event`.
   if (body?.data?.Info && body?.data?.Message) return 'message';
   return 'ignore';
+// Extract the best available media descriptor from either WEBJS or GOWS payloads.
+// Returns null when no media is present. Never throws.
+function extractMedia(webPayload: any, gowsData: any, msgWrap: any) {
+  // WEBJS classic: payload.media = { url, mimetype, filename, data(base64)? }
+  const web = webPayload?.media || webPayload?._data?.media;
+  if (web && (web.url || web.data)) {
+    const mimetype: string = web.mimetype || web.mimeType || 'application/octet-stream';
+    return {
+      url: web.url || null,
+      base64: web.data || null,
+      mimetype,
+      filename: web.filename || `media-${Date.now()}`,
+      kind: kindFromMime(mimetype),
+      duration: web.duration || web.seconds || null,
+    };
+  }
+  // GOWS/Baileys: {audio,image,video,document}Message inside Message. Some WAHA
+  // GOWS deployments expose an already-decrypted URL under `.mediaUrl` / `.url`.
+  const wraps = [msgWrap?.audioMessage, msgWrap?.imageMessage, msgWrap?.videoMessage, msgWrap?.documentMessage, msgWrap?.stickerMessage];
+  for (const w of wraps) {
+    if (!w) continue;
+    const mimetype: string = w.mimetype || w.mimeType || 'application/octet-stream';
+    const url = w.mediaUrl || w.directPath || w.url || null;
+    if (!url && !w.data) continue;
+    return {
+      url,
+      base64: w.data || null,
+      mimetype,
+      filename: w.fileName || w.filename || `media-${Date.now()}`,
+      kind: kindFromMime(mimetype),
+      duration: w.seconds || w.duration || null,
+    };
+  }
+  // GOWS may also expose top-level `data.media`
+  const g = gowsData?.media;
+  if (g && (g.url || g.data)) {
+    const mimetype: string = g.mimetype || g.mimeType || 'application/octet-stream';
+    return {
+      url: g.url || null,
+      base64: g.data || null,
+      mimetype,
+      filename: g.filename || `media-${Date.now()}`,
+      kind: kindFromMime(mimetype),
+      duration: g.duration || null,
+    };
+  }
+  return null;
 }
+
+function kindFromMime(m: string): 'audio' | 'image' | 'video' | 'document' {
+  if (m.startsWith('audio/')) return 'audio';
+  if (m.startsWith('image/')) return 'image';
+  if (m.startsWith('video/')) return 'video';
+  return 'document';
+}
+
+function extFromMime(m: string): string {
+  if (m.includes('ogg')) return 'ogg';
+  if (m.includes('mpeg')) return 'mp3';
+  if (m.includes('mp4')) return 'mp4';
+  if (m.includes('webm')) return 'webm';
+  if (m.includes('jpeg') || m.includes('jpg')) return 'jpg';
+  if (m.includes('png')) return 'png';
+  if (m.includes('webp')) return 'webp';
+  if (m.includes('pdf')) return 'pdf';
+  return 'bin';
+}
+
+// Download from a URL (with optional X-Api-Key), or decode base64. Uploads to
+// the chat-media bucket and returns a signed URL. Best-effort — returns null
+// on failure so we still persist the text/[mídia] placeholder.
+async function persistWahaMedia(
+  supabase: any,
+  args: {
+    ownerId: string;
+    connectionId: string;
+    providerMsgId: string | null;
+    wahaUrl: string | null;
+    wahaToken: string | null;
+    media: { url: string | null; base64: string | null; mimetype: string; filename: string; kind: string };
+  },
+): Promise<{ path: string; signedUrl: string; size: number } | null> {
+  try {
+    let bytes: Uint8Array | null = null;
+    if (args.media.base64) {
+      const bin = atob(args.media.base64);
+      bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    } else if (args.media.url) {
+      const isAbsolute = /^https?:\/\//i.test(args.media.url);
+      const url = isAbsolute ? args.media.url : `${args.wahaUrl || ''}${args.media.url}`;
+      const res = await fetch(url, {
+        headers: args.wahaToken ? { 'X-Api-Key': args.wahaToken } : {},
+      });
+      if (!res.ok) return null;
+      bytes = new Uint8Array(await res.arrayBuffer());
+    }
+    if (!bytes || bytes.length === 0) return null;
+    const ext = extFromMime(args.media.mimetype);
+    const stamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
+    const idPart = (args.providerMsgId || crypto.randomUUID()).replace(/[^a-zA-Z0-9]/g, '').slice(-20);
+    const path = `${args.ownerId}/${args.connectionId}/${stamp}-${idPart}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('chat-media').upload(path, bytes, {
+      contentType: args.media.mimetype,
+      upsert: true,
+    });
+    if (upErr) return null;
+    const { data: signed } = await supabase.storage
+      .from('chat-media')
+      .createSignedUrl(path, 60 * 60 * 24 * 30); // 30 dias
+    if (!signed?.signedUrl) return null;
+    return { path, signedUrl: signed.signedUrl, size: bytes.length };
+  } catch {
+    return null;
+  }
+}
+
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
