@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, CheckCircle2, RefreshCcw, Search, Radio, Activity } from 'lucide-react';
+import { AlertTriangle, RefreshCcw, Search, Radio, Activity, FileDown, FileText, ArrowDown, ArrowUp } from 'lucide-react';
+import { downloadCsv, downloadPdf } from '@/lib/ceoExport';
 
 interface AuditEvent {
   id: string;
@@ -54,6 +55,12 @@ interface AuditResponse {
     since_iso: string;
   };
   alerts: string[];
+  calls?: Array<{
+    id: string; wavoip_call_id: string | null; phone_number: string | null; contact_name: string | null;
+    direction: string | null; status: string | null; duration_seconds: number | null;
+    started_at: string | null; answered_at: string | null; ended_at: string | null; created_at: string;
+  }>;
+  pagination?: { limit: number; order: 'asc' | 'desc'; next_cursor: string | null };
 }
 
 const dt = (iso: string) => new Date(iso).toLocaleString('pt-BR');
@@ -76,13 +83,23 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
   const [renderTick, setRenderTick] = useState(0);
   const lastRealtimeRef = useRef<string | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<'idle' | 'connected' | 'error'>('idle');
+  const [order, setOrder] = useState<'asc' | 'desc'>('desc');
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [cursorStack, setCursorStack] = useState<Array<string | null>>([]);
 
-  const fetchAudit = useCallback(async () => {
+  const fetchAudit = useCallback(async (opts?: { cursor?: string | null; order?: 'asc' | 'desc' }) => {
     if (!ownerId) return;
     setLoading(true); setError(null);
     try {
       const { data: res, error: fnErr } = await supabase.functions.invoke('waha-audit', {
-        body: { owner_id: ownerId, message_id: messageIdFilter || null, limit: 200, since_hours: 24 },
+        body: {
+          owner_id: ownerId,
+          message_id: messageIdFilter || null,
+          limit: 200,
+          since_hours: 24,
+          order: opts?.order ?? order,
+          cursor: opts?.cursor ?? cursor,
+        },
       });
       if (fnErr) throw fnErr;
       setData(res as AuditResponse);
@@ -91,12 +108,85 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
     } finally {
       setLoading(false);
     }
-  }, [ownerId, messageIdFilter]);
+  }, [ownerId, messageIdFilter, order, cursor]);
 
   useEffect(() => { fetchAudit(); }, [fetchAudit]);
 
-  // Realtime subscription: renders update when a chat_message for one of the
-  // owner's WAHA connections lands. Confirms the "render" stage is live.
+  const handleNextPage = () => {
+    const next = data?.pagination?.next_cursor ?? null;
+    if (!next) return;
+    setCursorStack((s) => [...s, cursor]);
+    setCursor(next);
+  };
+  const handlePrevPage = () => {
+    setCursorStack((s) => {
+      const copy = [...s];
+      const prev = copy.pop() ?? null;
+      setCursor(prev);
+      return copy;
+    });
+  };
+  const toggleOrder = () => {
+    setOrder((o) => (o === 'desc' ? 'asc' : 'desc'));
+    setCursor(null); setCursorStack([]);
+  };
+
+  const exportRows = useMemo(() => {
+    if (!data) return [] as Array<Record<string, string | number>>;
+    const callsByPhone = new Map<string, { call_id: string; wavoip_call_id: string | null; answered_at: string | null; ended_at: string | null }>();
+    (data.calls || []).forEach((c) => {
+      const key = (c.phone_number || '').replace(/\D/g, '');
+      if (key) callsByPhone.set(key, { call_id: c.id, wavoip_call_id: c.wavoip_call_id, answered_at: c.answered_at, ended_at: c.ended_at });
+    });
+    const msgByPid = new Map<string, AuditMessage>();
+    (data.messages || []).forEach((m) => { if (m.uaz_msg_id) msgByPid.set(m.uaz_msg_id, m); });
+    const rowsOut: Array<Record<string, string | number>> = [];
+    for (const ev of data.events || []) {
+      const meta = ev.metadata_json || {};
+      if (meta.bucket !== 'message') continue;
+      const msg = meta.provider_msg_id ? msgByPid.get(meta.provider_msg_id) : undefined;
+      const phone = (msg?.customers?.phone || meta.sender_jid || '').replace(/\D/g, '');
+      const call = phone ? callsByPhone.get(phone) : undefined;
+      rowsOut.push({
+        webhook_at: ev.created_at,
+        message_id: meta.provider_msg_id || '',
+        sender_lid: meta.sender_lid || meta.sender_jid || '',
+        owner_id: meta.owner_id || msg?.customers?.owner_id || '',
+        recorded: msg ? 'sim' : 'nao',
+        recorded_at: msg?.created_at || '',
+        preview: (msg?.content || meta.raw_event || '').toString().slice(0, 200),
+        call_id: call?.call_id || '',
+        wavoip_call_id: call?.wavoip_call_id || '',
+        call_answered_at: call?.answered_at || '',
+        call_ended_at: call?.ended_at || '',
+      });
+    }
+    return rowsOut;
+  }, [data]);
+
+  const handleExportCsv = () => {
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    downloadCsv(`waha-audit-${ownerId}-${stamp}.csv`, exportRows);
+  };
+  const handleExportPdf = () => {
+    if (!data) return;
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    downloadPdf(
+      `waha-audit-${ownerId}-${stamp}.pdf`,
+      'Auditoria WAHA — pipeline inbound',
+      `Owner ${ownerId} · desde ${new Date(data.stats.since_iso).toLocaleString('pt-BR')} · ordem ${order}`,
+      [
+        { label: 'Webhooks msg', value: data.stats.message_events },
+        { label: 'Gravados', value: data.stats.messages_stored },
+        { label: 'Gaps', value: data.stats.gaps },
+        { label: 'Gap rate', value: `${Math.round(data.stats.gap_rate * 100)}%` },
+        { label: 'Ligações', value: (data.calls || []).length },
+      ],
+      exportRows,
+    );
+  };
+
+  // Realtime subscription
   useEffect(() => {
     if (!ownerId || connectionIds.length === 0) return;
     const filter = `connection_id=in.(${connectionIds.join(',')})`;
@@ -166,8 +256,20 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
           </div>
           <Button size="sm" onClick={() => setMessageIdFilter(pendingMsgId.trim())}>Aplicar filtro</Button>
           <Button size="sm" variant="outline" onClick={() => { setPendingMsgId(''); setMessageIdFilter(''); }}>Limpar</Button>
-          <Button size="sm" variant="outline" onClick={fetchAudit} disabled={loading}>
+          <Button size="sm" variant="outline" onClick={() => fetchAudit()} disabled={loading}>
             <RefreshCcw className={`w-3.5 h-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} /> Recarregar
+          </Button>
+          <Button size="sm" variant="outline" onClick={toggleOrder} title="Alternar ordenação por created_at">
+            {order === 'desc' ? <ArrowDown className="w-3.5 h-3.5 mr-1" /> : <ArrowUp className="w-3.5 h-3.5 mr-1" />}
+            {order === 'desc' ? 'Mais recentes' : 'Mais antigos'}
+          </Button>
+          <Button size="sm" variant="outline" onClick={handlePrevPage} disabled={loading || cursorStack.length === 0}>← Anterior</Button>
+          <Button size="sm" variant="outline" onClick={handleNextPage} disabled={loading || !data?.pagination?.next_cursor}>Próxima →</Button>
+          <Button size="sm" variant="outline" onClick={handleExportCsv} disabled={loading || !data}>
+            <FileDown className="w-3.5 h-3.5 mr-1" /> CSV
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleExportPdf} disabled={loading || !data}>
+            <FileText className="w-3.5 h-3.5 mr-1" /> PDF
           </Button>
           <div className="ml-auto flex items-center gap-2 text-xs">
             <Radio className={`w-3.5 h-3.5 ${realtimeStatus === 'connected' ? 'text-success' : realtimeStatus === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} />
