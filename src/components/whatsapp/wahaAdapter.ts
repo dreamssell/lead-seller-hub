@@ -105,6 +105,37 @@ async function writeWahaAudit(
   }
 }
 
+// Upload an outbound media/audio blob to the private `chat-media` bucket so
+// the sender's UI can render the same player as the recipient sees. Returns
+// null on failure — the message is still sent, we just lose local playback.
+async function uploadOutboundToChatMedia(
+  conn: WhatsAppConnection,
+  blob: Blob | File,
+  mimetype: string,
+  filename: string,
+): Promise<{ path: string; signedUrl: string; size: number } | null> {
+  try {
+    if (!conn.owner_id) return null;
+    const ext = (filename.split('.').pop() || 'bin').toLowerCase().slice(0, 6);
+    const stamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
+    const rand = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+    const path = `${conn.owner_id}/${conn.id}/out-${stamp}-${rand}.${ext}`;
+    const { error: upErr } = await (supabase as any).storage
+      .from('chat-media')
+      .upload(path, blob, { contentType: mimetype, upsert: false });
+    if (upErr) return null;
+    const { data: signed } = await (supabase as any).storage
+      .from('chat-media')
+      .createSignedUrl(path, 60 * 60 * 24 * 30);
+    if (!signed?.signedUrl) return null;
+    return { path, signedUrl: signed.signedUrl, size: (blob as any).size ?? 0 };
+  } catch {
+    return null;
+  }
+}
+
+
+
 async function blobToBase64(blob: Blob): Promise<string> {
   const arrayBuffer = typeof (blob as any).arrayBuffer === 'function'
     ? await blob.arrayBuffer()
