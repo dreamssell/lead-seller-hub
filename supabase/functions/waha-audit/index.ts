@@ -290,6 +290,6 @@ Deno.serve(async (req) => {
     ok: true, owner_id: ownerId, message_id: messageId ?? null,
     connections, events, messages, calls: calls ?? [], gaps, stats, alerts,
     pagination: { limit, order, next_cursor: nextCursor, cursor_used: cursor ?? null },
-    meta: { request_id: requestId, owner_hash: ownerHash },
-  });
+    meta: { request_id: requestId, owner_hash: ownerHash, rate_remaining: rate.remaining },
+  }, 200, rateHeaders);
 });
