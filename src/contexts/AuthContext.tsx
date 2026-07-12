@@ -183,12 +183,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!p || typeof (p as any).then !== 'function') return { data: null } as any;
       try { return await p; } catch { return { data: null } as any; }
     };
-    const [{ data }, roleRes, ccRes] = await Promise.all([
+    const [{ data }, roleRes, ccRes, accessRes] = await Promise.all([
       safe(client.rpc?.('get_my_account_access')),
       safe(client.rpc?.('has_role', { _user_id: uid, _role: 'admin' })),
       safe(client.from?.('client_companies')?.select?.('id, owner_id, auth_user_id, sub_company_id, status').eq('auth_user_id', uid).maybeSingle()),
+      safe(client.from?.('user_account_access')?.select?.('owner_id, sub_company_id, allowed_pages, is_account_admin, is_owner, created_at').eq('user_id', uid).order('created_at', { ascending: false })),
     ]) as any;
     let row: AccountAccess | null = Array.isArray(data) ? data[0] : null;
+
+    const accessRows = Array.isArray(accessRes?.data) ? accessRes.data : [];
+    const canonicalAccess = accessRows.find((item: any) => item?.owner_id && item.owner_id !== uid) || accessRows[0];
+
+    if (canonicalAccess?.owner_id && (!row || row.owner_id === uid || row.owner_id !== canonicalAccess.owner_id)) {
+      row = {
+        owner_id: canonicalAccess.owner_id,
+        sub_company_id: canonicalAccess.sub_company_id || null,
+        sub_company_name: row?.owner_id === canonicalAccess.owner_id ? row.sub_company_name : null,
+        allowed_pages: Array.isArray(canonicalAccess.allowed_pages) ? canonicalAccess.allowed_pages : [],
+        is_account_admin: Boolean(canonicalAccess.is_account_admin || canonicalAccess.is_owner),
+        blocked_pages: row?.owner_id === canonicalAccess.owner_id ? row.blocked_pages : [],
+        status: row?.owner_id === canonicalAccess.owner_id ? row.status : 'active',
+        allow_custom_logic: row?.owner_id === canonicalAccess.owner_id ? row.allow_custom_logic : true,
+        feature_landing_builder: row?.owner_id === canonicalAccess.owner_id ? row.feature_landing_builder : false,
+      };
+    }
 
     if (ccRes?.data) {
       const cc = ccRes.data as { owner_id: string | null; auth_user_id: string | null; sub_company_id: string | null; status: string | null };
