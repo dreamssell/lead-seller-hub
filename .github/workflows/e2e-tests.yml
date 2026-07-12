@@ -221,22 +221,43 @@ jobs:
             --trace=retain-on-failure \
             --output=test-results
 
-      - name: Record skip reason artifact
-        if: always() && steps.preflight.outputs.should_run != 'true'
+      - name: Segregar artefatos por browser (rename + organizar)
+        if: always()
         run: |
-          mkdir -p playwright-report test-results
-          printf '{"skipped":true,"browser":"%s","reason":"%s","is_fork_pr":"%s","event":"%s","run_id":"%s"}\n' \
-            "${{ matrix.browser }}" "${{ steps.preflight.outputs.skip_reason }}" "${IS_FORK_PR}" "${GITHUB_EVENT_NAME}" "${GITHUB_RUN_ID}" \
-            > playwright-report/skip.json
+          set -eu
+          BR="${{ matrix.browser }}"
+          OUT="artifacts/${BR}"
+          mkdir -p "${OUT}/playwright-report" "${OUT}/traces" "${OUT}/screenshots" "${OUT}/videos" "${OUT}/ci-audit"
+          # HTML report + JSON
+          if [ -d playwright-report ]; then cp -R playwright-report/. "${OUT}/playwright-report/" || true; fi
+          # test-results contém traces (.zip), screenshots (.png) e videos (.webm)
+          if [ -d test-results ]; then
+            find test-results -type f -name "*.zip" -exec cp {} "${OUT}/traces/" \; || true
+            find test-results -type f -name "*.png" -exec cp {} "${OUT}/screenshots/" \; || true
+            find test-results -type f \( -name "*.webm" -o -name "*.mp4" \) -exec cp {} "${OUT}/videos/" \; || true
+          fi
+          # Env snapshot já é nomeado por browser
+          if [ -d ci-audit ]; then cp -R ci-audit/. "${OUT}/ci-audit/" || true; fi
+          # Manifest do bundle para facilitar comparação lado-a-lado.
+          {
+            echo "{"
+            echo "  \"browser\": \"${BR}\","
+            echo "  \"run_id\": \"${GITHUB_RUN_ID}\","
+            echo "  \"run_attempt\": \"${GITHUB_RUN_ATTEMPT}\","
+            echo "  \"should_run\": \"${{ steps.preflight.outputs.should_run || 'unknown' }}\","
+            echo "  \"traces\": $(ls -1 ${OUT}/traces 2>/dev/null | wc -l),"
+            echo "  \"screenshots\": $(ls -1 ${OUT}/screenshots 2>/dev/null | wc -l),"
+            echo "  \"videos\": $(ls -1 ${OUT}/videos 2>/dev/null | wc -l)"
+            echo "}"
+          } > "${OUT}/manifest.json"
+          ls -la "${OUT}" || true
 
-      - name: Upload Playwright report + traces + env snapshot
+      - name: Upload artefatos separados por browser
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: waha-debug-playwright-${{ matrix.browser }}
-          path: |
-            playwright-report/
-            test-results/
-            ci-audit/
+          name: waha-debug-${{ matrix.browser }}
+          path: artifacts/${{ matrix.browser }}/
           if-no-files-found: warn
           retention-days: 14
+
