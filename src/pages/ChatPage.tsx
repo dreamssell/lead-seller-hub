@@ -471,8 +471,35 @@ export default function ChatPage() {
     }
   };
 
+  const triggerWahaInboundBackfill = async (conn: WhatsAppConnection | null, ownerId: string | null, reason: string) => {
+    if (!conn?.id || conn.provider !== 'waha' || !ownerId) return;
+    const now = Date.now();
+    if (now - (wahaBackfillRef.current[conn.id] || 0) < 90_000) return;
+    wahaBackfillRef.current[conn.id] = now;
+    try {
+      addDebugLog('request', '[Inbound] Solicitando backfill automático WAHA', { connection_id: conn.id, owner_id: ownerId, reason });
+      const { data, error } = await supabase.functions.invoke('waha-session', {
+        body: { action: 'backfill_inbound', connection_id: conn.id, limit: 100 },
+      });
+      if (error) throw error;
+      setInboundDebug((prev) => ({ ...prev, lastBackfill: data }));
+      addDebugLog('info', '[Inbound] Backfill WAHA concluído', data);
+      await loadInboundPipelineDebug(conn, ownerId);
+      if (selectedConvIdRef.current) await loadMessagesForConversation(selectedConvIdRef.current, 'backfill');
+    } catch (e) {
+      addDebugLog('error', '[Inbound] Backfill WAHA falhou', e);
+    }
+  };
+
   const loadMessagesForConversation = async (conversationId: string, source: 'select' | 'manual' | 'realtime' | 'backfill' = 'manual') => {
     const scopedConv = (activeChannelRef.current ? convsRef.current[activeChannelRef.current] : Object.values(convsRef.current).flat()).find((c) => c.id === conversationId) as any;
+    if (!scopedConv) {
+      addDebugLog('info', '[Inbound] Conversa ainda não está carregada; aguardando lista de contatos', {
+        customer_id: conversationId,
+        owner_id: activeOwnerIdRef.current,
+      });
+      return false;
+    }
     if (!canUseTenantRecord(activeOwnerIdRef.current, scopedConv?.owner_id ?? null)) {
       addDebugLog('error', 'Consulta de mensagens bloqueada por owner divergente', {
         owner_ativo: activeOwnerIdRef.current,
@@ -616,6 +643,8 @@ export default function ChatPage() {
 
           if (isConnected) {
             addDebugLog('info', `Status: ATIVO (${summary.labels.join(' + ')}). Iniciando carga de contatos.`);
+            loadInboundPipelineDebug(summary.primary, activeOwnerId);
+            triggerWahaInboundBackfill(summary.primary, activeOwnerId, 'provider_status_connected');
             loadConversations(channel);
           }
         } else if (channel === 'telegram') {
@@ -725,7 +754,14 @@ export default function ChatPage() {
           .map(({ _sortAt, _duplicateKey, ...row }) => row);
 
         
-        setConvs(prev => ({ ...prev, [channel]: formatted }));
+        setConvs(prev => {
+          const next = { ...prev, [channel]: formatted };
+          convsRef.current = next;
+          return next;
+        });
+        if (selectedConvIdRef.current && formatted.some((c: any) => c.id === selectedConvIdRef.current)) {
+          loadMessagesForConversation(selectedConvIdRef.current, 'manual');
+        }
         addDebugLog('info', `Conversas ${channel} formatadas e carregadas na UI`, {
           contatos_carregados: channelCustomers.length,
           conversas_unificadas: formatted.length,
@@ -771,7 +807,23 @@ export default function ChatPage() {
             await loadConversations(currentChannel);
           }
         }
-        addDebugLog('info', 'Nova mensagem recebida via Realtime', row);
+        setInboundDebug((prev) => ({
+          ...prev,
+          realtimeSeen: prev.realtimeSeen + 1,
+          lastChatMessageId: row.id || prev.lastChatMessageId,
+          lastProviderMessageId: row.uaz_msg_id || prev.lastProviderMessageId,
+          lastSenderLid: row.metadata?.sender_lid || prev.lastSenderLid,
+          lastOwnerId: currentOwner || prev.lastOwnerId,
+          lastEventAt: row.created_at || new Date().toISOString(),
+        }));
+        addDebugLog('info', '[Inbound] Nova mensagem recebida via Realtime', {
+          message_id: row.id,
+          provider_message_id: row.uaz_msg_id,
+          sender_lid: row.metadata?.sender_lid,
+          owner_id: currentOwner,
+          customer_id: row.customer_id,
+          connection_id: row.connection_id,
+        });
         if (row.customer_id === selectedConvIdRef.current) {
           setMessages(prev => {
             const cid = row.client_msg_id;
@@ -779,7 +831,9 @@ export default function ChatPage() {
               return prev.map(m => (m.client_msg_id === cid || m.id === cid) ? hydrateChatMessage({ ...m, ...row, status: row.metadata?.status || row.status || m.status }) : m);
             }
             if (prev.some(m => m.id === row.id)) return prev;
-            return [...prev, hydrateChatMessage(row)];
+            const next = [...prev, hydrateChatMessage(row)];
+            setInboundDebug((dbg) => ({ ...dbg, renderedMessages: next.length }));
+            return next;
           });
         }
         if (activeChannelRef.current) loadConversations(activeChannelRef.current);
@@ -901,44 +955,8 @@ export default function ChatPage() {
     let cancelled = false;
     const convAtStart = selectedConvId;
     (async () => {
-      const scopedConv = (activeChannel ? convsRef.current[activeChannel] : Object.values(convsRef.current).flat()).find((c) => c.id === convAtStart) as any;
-      if (!canUseTenantRecord(activeOwnerId, scopedConv?.owner_id ?? null)) {
-        addDebugLog('error', 'Consulta de mensagens bloqueada por owner divergente', {
-          owner_ativo: activeOwnerId,
-          owner_conversa: scopedConv?.owner_id ?? null,
-          customer_id: convAtStart,
-        });
-        toast({
-          title: 'Owner incorreto para esta conversa',
-          description: 'Atualize o access antes de consultar ou enviar mensagens neste contato.',
-          variant: 'destructive',
-        });
-        return;
-      }
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('customer_id', convAtStart)
-        .order('created_at', { ascending: true });
-      // Race guard: only apply if the user hasn't switched conversations meanwhile.
-      if (cancelled || convAtStart !== selectedConvId) return;
-      if (error) {
-        // Never silently clear the transcript on error — that's what caused
-        // "mensagens desaparecem ao trocar de chat" for non-owner users.
-        console.warn('loadMessages error', error);
-        toast({
-          title: 'Não foi possível carregar as mensagens',
-          description: error.message || 'Verifique suas permissões e recarregue o chat.',
-          variant: 'destructive',
-        });
-        return;
-      }
-      setMessages((prev) => applyConversationMessagesAfterSwitch({
-        currentConversationId: selectedConvId,
-        requestedConversationId: convAtStart,
-        previousMessages: prev,
-        loadedMessages: (data || []).map(hydrateChatMessage),
-      }));
+      await loadMessagesForConversation(convAtStart, 'select');
+      if (cancelled) return;
     })();
     return () => { cancelled = true; };
   }, [selectedConvId, activeChannel, activeOwnerId]);
