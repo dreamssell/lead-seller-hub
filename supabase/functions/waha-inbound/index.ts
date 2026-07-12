@@ -57,15 +57,20 @@ function normalizePhone(from?: string | null): string | null {
 // Classifies the incoming event into one of our three logical buckets, using
 // both the top-level `event` string and the shape of the payload so we work
 // with WEBJS ("message") and GOWS ("gows.MessageEventData") equally well.
-function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'ignore' {
+function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'ignore' {
   const e = event.toLowerCase();
   if (e === 'session.status' || e === 'status.instance') return 'session';
   if (e === 'message.ack' || e === 'ack' || e.endsWith('.receipteventdata')) return 'ack';
+  // Reactions: WEBJS emits `message.reaction`; GOWS wraps a `reactionMessage`
+  // inside a normal MessageEventData, or emits `*.reactioneventdata`.
+  if (e === 'message.reaction' || e.endsWith('.reactioneventdata')) return 'reaction';
+  const gowsMsg = body?.data?.Message ?? body?.payload?._data?.Message;
+  if (gowsMsg?.reactionMessage) return 'reaction';
+  if (body?.payload?.reaction && (body?.payload?.reaction?.text !== undefined || body?.payload?.reaction?.msgId)) return 'reaction';
   if (e === 'message' || e === 'message.any') return 'message';
   // GOWS engine emits gows.MessageEventData with body.data.Info / body.data.Message
   if (e.includes('messageeventdata') || e.includes('gows.message')) return 'message';
   // Some payloads omit `event`; infer from shape.
-  // Some WAHA/GOWS deployments wrap the same message shape under `engine.event`.
   if (body?.data?.Info && body?.data?.Message) return 'message';
   return 'ignore';
 }
