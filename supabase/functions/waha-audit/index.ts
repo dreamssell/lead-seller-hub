@@ -149,10 +149,9 @@ Deno.serve(async (req) => {
   if (gaps.length > 0) {
     try {
       await admin.from('telemetry_logs').insert({
-        source: 'waha-audit',
-        level: 'warning',
+        type: 'waha_audit_gap',
         message: `WAHA audit detectou ${gaps.length} eventos sem chat_messages`,
-        metadata: { owner_id: ownerId, connection_ids: connIds, gap_count: gaps.length, alerts },
+        metadata: { owner_id: ownerId, connection_ids: connIds, gap_count: gaps.length, alerts, source: 'waha-audit' },
       });
     } catch { /* telemetry is best-effort */ }
   }
