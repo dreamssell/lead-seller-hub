@@ -289,10 +289,13 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       body: parsed.data,
       timeoutMs: 30_000,
     });
-    const messageId = data?.id?._serialized || data?.id || null;
+    const messageId = data?.id?._serialized || data?.id || data?.key?.id || null;
     if (!messageId) {
-      // WAHA sometimes 200s without an id when the media was silently dropped.
-      throw new Error('WAHA aceitou a mídia mas não retornou message_id — provável falha na sessão. Reconecte e tente novamente.');
+      // WAHA sometimes 200s without an id when the media was silently dropped by
+      // GOWS. Surface the full payload so we can diagnose (missing chatId, wrong
+      // mime, session STARTING, etc.) instead of a generic silent failure.
+      const dbg = (() => { try { return JSON.stringify(data).slice(0, 500); } catch { return String(data); } })();
+      throw new Error(`WAHA respondeu sem message_id (rota ${path}). Resposta: ${dbg}`);
     }
     return { ok: true, provider: 'waha', message_id: messageId, raw: data };
   }
