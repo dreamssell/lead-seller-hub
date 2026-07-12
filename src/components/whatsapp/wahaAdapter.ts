@@ -321,7 +321,7 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       status: 'started',
       customerId,
       wahaSessionId: parsed.data.session,
-      payload: { chatId: parsed.data.chatId, length: parsed.data.text.length },
+      payload: { chatId: parsed.data.chatId, length: parsed.data.text.length, reply_to: parsed.data.reply_to ?? null },
     });
     try {
       const data = await wahaFetch(url, token, '/api/sendText', {
