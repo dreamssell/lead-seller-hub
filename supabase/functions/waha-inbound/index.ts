@@ -57,7 +57,7 @@ function normalizePhone(from?: string | null): string | null {
 // Classifies the incoming event into one of our three logical buckets, using
 // both the top-level `event` string and the shape of the payload so we work
 // with WEBJS ("message") and GOWS ("gows.MessageEventData") equally well.
-function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'ignore' {
+function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'ignore' {
   const e = event.toLowerCase();
   if (e === 'session.status' || e === 'status.instance') return 'session';
   if (e === 'message.ack' || e === 'ack' || e.endsWith('.receipteventdata')) return 'ack';
@@ -67,6 +67,12 @@ function classify(event: string, body: any): 'message' | 'ack' | 'session' | 're
   const gowsMsg = body?.data?.Message ?? body?.payload?._data?.Message;
   if (gowsMsg?.reactionMessage) return 'reaction';
   if (body?.payload?.reaction && (body?.payload?.reaction?.text !== undefined || body?.payload?.reaction?.msgId)) return 'reaction';
+  // Etapa 4 — edições e revogações.
+  if (e === 'message.edited' || e === 'message.edit' || e.endsWith('.editeventdata')) return 'edit';
+  if (gowsMsg?.editedMessage || gowsMsg?.protocolMessage?.editedMessage) return 'edit';
+  if (e === 'message.revoked' || e === 'message.revoke' || e === 'message.revoke_everyone' || e === 'message.revoke_me' || e.endsWith('.revokeeventdata')) return 'revoke';
+  const protoType = String(gowsMsg?.protocolMessage?.type || '').toUpperCase();
+  if (protoType === 'REVOKE' || protoType === 'MESSAGE_DELETE') return 'revoke';
   if (e === 'message' || e === 'message.any') return 'message';
   // GOWS engine emits gows.MessageEventData with body.data.Info / body.data.Message
   if (e.includes('messageeventdata') || e.includes('gows.message')) return 'message';
