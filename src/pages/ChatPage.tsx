@@ -1344,11 +1344,33 @@ export default function ChatPage() {
   const handleSendText = async (text: string) => {
     if (!selectedConvId || !text.trim()) return;
     if (!ensureActiveOwnerScope()) throw new Error('Owner ativo inválido para esta conversa.');
+    // Snapshot the reply target BEFORE clearing so we can restore on error.
+    const replyTarget = replyingTo;
+    const replyProviderId: string | null = replyTarget?.uaz_msg_id || null;
+    const quotedPreview = replyTarget ? {
+      message_id: replyProviderId,
+      body: (replyTarget.content || '').slice(0, 240),
+      from_me: replyTarget.sender_type !== 'client',
+      participant: null,
+    } : null;
+    // Etapa 3 — persist quoted preview locally right away so the bubble shows
+    // the "answering: …" strip even before the ACK returns from WAHA.
     const id = await sendOptimistic(text);
+    if (quotedPreview) {
+      setMessages(prev => prev.map(m => (m.id === id || m.client_msg_id === id)
+        ? hydrateChatMessage({ ...m, metadata: { ...(m.metadata || {}), quoted: quotedPreview } })
+        : m));
+    }
+    setReplyingTo(null);
     try {
       const t0 = Date.now();
-      const data = await sendTextThroughActiveChannel(selectedConvId, text);
-      await markStatus(id, 'sent', extractProviderMessageId(data), { latency_ms: Date.now() - t0, accepted_at: new Date().toISOString(), provider_response_ok: true });
+      const data = await sendTextThroughActiveChannel(selectedConvId, text, replyProviderId);
+      await markStatus(id, 'sent', extractProviderMessageId(data), {
+        latency_ms: Date.now() - t0,
+        accepted_at: new Date().toISOString(),
+        provider_response_ok: true,
+        ...(quotedPreview ? { quoted: quotedPreview } : {}),
+      });
     } catch (err: any) {
       const normalized = showSendErrorToast(err);
       await markStatus(id, 'error', undefined, {
@@ -1357,7 +1379,10 @@ export default function ChatPage() {
         error_code: normalized.code,
         blocked_by: normalized.blockedBy,
         retryable: normalized.retryable,
+        ...(quotedPreview ? { quoted: quotedPreview } : {}),
       });
+      // Restore the composer's reply target so the user can retry.
+      if (replyTarget) setReplyingTo(replyTarget);
       throw err;
     }
   };
