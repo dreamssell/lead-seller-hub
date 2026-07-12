@@ -438,9 +438,11 @@ export function CallHistoryTable({
         channel: r.channel,
         connection_label: r.connection_label,
         user_name: profiles[r.user_id || ''] || null,
-        call_id: (r.metadata as any)?.call_id ?? null,
+        call_id: (r.metadata as any)?.call_id ?? r.id,
         wavoip_call_id: (r.metadata as any)?.wavoip_call_id ?? null,
         audit_timestamps: [
+          r.answered_at ? `answeredAt ${formatCallDateTime(r.answered_at)}` : null,
+          r.ended_at ? `endedAt ${formatCallDateTime(r.ended_at)}` : null,
           (r.metadata as any)?.last_webhook_received_at ? `recv ${formatCallDateTime((r.metadata as any).last_webhook_received_at)}` : null,
           (r.metadata as any)?.webhook_answered_at ? `ans ${formatCallDateTime((r.metadata as any).webhook_answered_at)}` : null,
           (r.metadata as any)?.webhook_ended_at ? `end ${formatCallDateTime((r.metadata as any).webhook_ended_at)}` : null,

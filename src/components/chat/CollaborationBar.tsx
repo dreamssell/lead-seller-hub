@@ -7,6 +7,7 @@ import { SlaTimer } from './SlaTimer';
 import { Button } from '@/components/ui/button';
 import { Bot, UserCog, Sparkles, Eye } from 'lucide-react';
 import { toast } from 'sonner';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface CustomerRow {
   id: string;
@@ -56,7 +57,6 @@ export function CollaborationBar({ customerId, onOpenTransfer, isSupervisor, cur
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId]);
 
   const update = async (patch: Partial<CustomerRow>) => {
@@ -102,49 +102,58 @@ export function CollaborationBar({ customerId, onOpenTransfer, isSupervisor, cur
   const isOtherAgent = !!row.assigned_to && row.assigned_to !== currentUserId;
 
   return (
-    <div className="border-b border-border bg-secondary/30 px-4 py-2 flex items-center gap-2 flex-wrap text-xs">
-      <div className="inline-flex items-center gap-1.5 rounded-md border bg-background/70 px-2 py-1">
-        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Prioridade</span>
-        <PrioritySelect value={row.priority} onChange={(v) => update({ priority: v })} />
-      </div>
-      <div className="inline-flex items-center gap-1.5 rounded-md border bg-background/70 px-2 py-1">
-        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Status</span>
-        <TicketStatusSelect value={row.ticket_status} onChange={(v) => update({ ticket_status: v })} />
-      </div>
-      <TagPicker ownerId={row.owner_id} selected={row.tags || []} onChange={(ids) => update({ tags: ids })} />
-
-      {row.assigned_to && (
-        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-background border text-[11px]">
-          <UserCog className="w-3 h-3 text-primary" />
-          <span className="text-muted-foreground">Atendente:</span>
-          <span className="font-medium">{assigneeName || '—'}</span>
+    <TooltipProvider>
+      <div className="border-b border-border bg-secondary/30 px-4 py-2 flex items-center gap-2 flex-wrap text-xs">
+        <div className="inline-flex items-center gap-1.5 rounded-md border bg-background/70 px-2 py-1">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Prioridade</span>
+          <PrioritySelect value={row.priority} onChange={(v) => update({ priority: v })} />
         </div>
-      )}
+        <div className="inline-flex items-center gap-1.5 rounded-md border bg-background/70 px-2 py-1">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Status</span>
+          <TicketStatusSelect value={row.ticket_status} onChange={(v) => update({ ticket_status: v })} />
+        </div>
+        <TagPicker ownerId={row.owner_id} selected={row.tags || []} onChange={(ids) => update({ tags: ids })} />
 
-      <SlaTimer label="1ª resposta" dueAt={row.sla_first_response_due_at} totalMinutes={15} />
-      <SlaTimer label="Próxima" dueAt={row.sla_next_response_due_at} totalMinutes={30} />
-      <SlaTimer label="Resolução" dueAt={row.sla_resolution_due_at} totalMinutes={1440} />
-
-      <div className="ml-auto flex items-center gap-2">
-        {isSupervisor && isOtherAgent && (
-          <span className="inline-flex items-center gap-1 text-[10px] text-amber-600">
-            <Eye className="w-3 h-3" /> Modo Supervisor
-          </span>
+        {row.assigned_to && (
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-background border text-[11px]">
+            <UserCog className="w-3 h-3 text-primary" />
+            <span className="text-muted-foreground">Atendente:</span>
+            <span className="font-medium">{assigneeName || '—'}</span>
+          </div>
         )}
-        <Button
-          size="sm"
-          variant={aiActive ? 'default' : 'outline'}
-          className="h-7 gap-1.5"
-          onClick={toggleAiHandoff}
-          title={aiActive ? 'Bot está respondendo · clique para assumir' : 'Passar atendimento para a IA'}
-        >
-          {aiActive ? <Bot className="w-3.5 h-3.5" /> : <Sparkles className="w-3.5 h-3.5" />}
-          {aiActive ? 'Assumir do bot' : 'Passar p/ IA'}
-        </Button>
-        <Button size="sm" variant="outline" className="h-7 gap-1.5" onClick={onOpenTransfer}>
-          <UserCog className="w-3.5 h-3.5" /> Transferir
-        </Button>
+
+        <SlaTimer label="1ª resposta" dueAt={row.sla_first_response_due_at} totalMinutes={15} />
+        <SlaTimer label="Próxima" dueAt={row.sla_next_response_due_at} totalMinutes={30} />
+        <SlaTimer label="Resolução" dueAt={row.sla_resolution_due_at} totalMinutes={1440} />
+
+        <div className="ml-auto flex items-center gap-2">
+          {isSupervisor && isOtherAgent && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-amber-600">
+              <Eye className="w-3 h-3" /> Modo Supervisor
+            </span>
+          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant={aiActive ? 'default' : 'outline'}
+                className="h-7 gap-1.5"
+                onClick={toggleAiHandoff}
+              >
+                {aiActive ? <Bot className="w-3.5 h-3.5" /> : <Sparkles className="w-3.5 h-3.5" />}
+                {aiActive ? 'Assumir do bot' : 'Passar p/ IA'}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {aiActive ? 'Bot está respondendo · clique para assumir' : 'Passar atendimento para a IA'}
+            </TooltipContent>
+          </Tooltip>
+          
+          <Button size="sm" variant="outline" className="h-7 gap-1.5" onClick={onOpenTransfer}>
+            <UserCog className="w-3.5 h-3.5" /> Transferir
+          </Button>
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }

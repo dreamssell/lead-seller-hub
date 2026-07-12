@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 
 interface TopBarProps {
   title: string;
@@ -45,7 +45,6 @@ export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
       }
     };
     load();
-    // refresh when profile updates elsewhere
     const handler = () => load();
     window.addEventListener('profile:updated', handler);
     return () => {
@@ -62,92 +61,91 @@ export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
     .toUpperCase();
 
   return (
-    <header className="h-14 md:h-16 border-b border-border bg-card/60 backdrop-blur-md flex items-center justify-between px-3 md:px-6 shrink-0 sticky top-0 z-30">
-      <div className="flex items-center gap-2 min-w-0">
-        <button
-          onClick={onOpenMenu}
-          className="md:hidden p-2 rounded-xl hover:bg-secondary transition-colors"
-          aria-label="Abrir menu"
-        >
-          <Menu className="w-5 h-5 text-foreground" />
-        </button>
-        <div className="min-w-0">
-          <h1 className="text-base md:text-lg font-semibold text-foreground truncate">{title}</h1>
-          {subtitle && <p className="text-xs text-muted-foreground truncate hidden sm:block">{subtitle}</p>}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-1 md:gap-2">
-        {/* Desktop actions */}
-        <button
-          className="hidden md:inline-flex p-2.5 rounded-xl hover:bg-secondary transition-colors"
-          aria-label="Buscar"
-        >
-          <Search className="w-4 h-4 text-muted-foreground" />
-        </button>
-        <NotificationsBell />
-        <motion.button
-          onClick={toggleTheme}
-          className="hidden md:inline-flex p-2.5 rounded-xl hover:bg-secondary transition-colors"
-          whileTap={{ scale: 0.9, rotate: 180 }}
-          transition={{ duration: 0.3 }}
-          aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
-        >
-          {theme === 'dark' ? (
-            <Sun className="w-4 h-4 text-muted-foreground" />
-          ) : (
-            <Moon className="w-4 h-4 text-muted-foreground" />
-          )}
-        </motion.button>
-
-        {/* Mobile combined menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger
+    <TooltipProvider>
+      <header className="h-14 md:h-16 border-b border-border bg-card/60 backdrop-blur-md flex items-center justify-between px-3 md:px-6 shrink-0 sticky top-0 z-30">
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            onClick={onOpenMenu}
             className="md:hidden p-2 rounded-xl hover:bg-secondary transition-colors"
-            aria-label="Idioma, tema e ações"
+            aria-label="Abrir menu"
           >
-            <Globe className="w-5 h-5 text-foreground" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>Idioma</DropdownMenuLabel>
-            <DropdownMenuItem>🇧🇷 Português</DropdownMenuItem>
-            <DropdownMenuItem>🇺🇸 English</DropdownMenuItem>
-            <DropdownMenuItem>🇪🇸 Español</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Tema</DropdownMenuLabel>
-            <DropdownMenuItem onClick={toggleTheme}>
-              {theme === 'dark' ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
-              {theme === 'dark' ? 'Claro' : 'Escuro'}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Ações</DropdownMenuLabel>
-            <DropdownMenuItem>
-              <LogIn className="w-4 h-4 mr-2" /> Fazer Login
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <CalendarPlus className="w-4 h-4 mr-2" /> Agendar Demo
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            <Menu className="w-5 h-5 text-foreground" />
+          </button>
+          <div className="min-w-0">
+            <h1 className="text-base md:text-lg font-semibold text-foreground truncate">{title}</h1>
+            {subtitle && <p className="text-xs text-muted-foreground truncate hidden sm:block">{subtitle}</p>}
+          </div>
+        </div>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Avatar
-              className="w-8 h-8 ml-1 shrink-0 ring-2 ring-primary/20 cursor-pointer hover:ring-primary/50 transition-all"
-              onClick={() => navigate('/settings')}
+        <div className="flex items-center gap-1 md:gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className="hidden md:inline-flex p-2.5 rounded-xl hover:bg-secondary transition-colors"
+                aria-label="Buscar"
+              >
+                <Search className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Buscar</TooltipContent>
+          </Tooltip>
+
+          <NotificationsBell />
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <motion.button
+                onClick={toggleTheme}
+                className="hidden md:inline-flex p-2.5 rounded-xl hover:bg-secondary transition-colors"
+                whileTap={{ scale: 0.9, rotate: 180 }}
+                transition={{ duration: 0.3 }}
+                aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
+              >
+                {theme === 'dark' ? (
+                  <Sun className="w-4 h-4 text-muted-foreground" />
+                ) : (
+                  <Moon className="w-4 h-4 text-muted-foreground" />
+                )}
+              </motion.button>
+            </TooltipTrigger>
+            <TooltipContent>{theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}</TooltipContent>
+          </Tooltip>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="md:hidden p-2 rounded-xl hover:bg-secondary transition-colors"
+              aria-label="Idioma, tema e ações"
             >
-              <AvatarImage src={avatarUrl || undefined} alt={displayName} />
-              <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">{initials}</AvatarFallback>
-            </Avatar>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" align="end">
-            <div className="flex items-center gap-2">
-              <Settings className="w-3.5 h-3.5" />
-              <span>Configurações do Perfil</span>
-            </div>
-          </TooltipContent>
-        </Tooltip>
-      </div>
-    </header>
+              <Globe className="w-5 h-5 text-foreground" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem>🇧🇷 Português</DropdownMenuItem>
+              <DropdownMenuItem onClick={toggleTheme}>
+                {theme === 'dark' ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
+                {theme === 'dark' ? 'Claro' : 'Escuro'}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Avatar
+                className="w-8 h-8 ml-1 shrink-0 ring-2 ring-primary/20 cursor-pointer hover:ring-primary/50 transition-all"
+                onClick={() => navigate('/settings')}
+              >
+                <AvatarImage src={avatarUrl || undefined} alt={displayName} />
+                <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">{initials}</AvatarFallback>
+              </Avatar>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="end">
+              <div className="flex items-center gap-2">
+                <Settings className="w-3.5 h-3.5" />
+                <span>Configurações do Perfil</span>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </header>
+    </TooltipProvider>
   );
 }

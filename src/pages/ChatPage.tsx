@@ -18,7 +18,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 
 
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -51,6 +51,8 @@ import { useIsSupervisor } from '@/hooks/useIsSupervisor';
 import { normalizeChatSendError, NormalizedChatError } from '@/lib/chatErrorMapper';
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
 import { Plus } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { applyConversationMessagesAfterSwitch, canUseTenantRecord, getActiveOwnerId } from '@/lib/chatTenantScope';
 
 
 
@@ -75,7 +77,7 @@ const channels: Array<{
 
 
 
-type ConvItem = { id: string; name: string; msg: string; time: string; online: boolean; botEnabled: boolean; assignedTo: string; phone?: string; avatar_url?: string | null; email?: string | null; presence?: string | null; presenceLabel?: string; lastSeenAt?: string | null };
+type ConvItem = { id: string; name: string; msg: string; time: string; online: boolean; botEnabled: boolean; assignedTo: string; phone?: string; avatar_url?: string | null; email?: string | null; presence?: string | null; presenceLabel?: string; lastSeenAt?: string | null; owner_id?: string | null; sub_company_id?: string | null };
 const conversationsByChannel: Record<ChannelKey, Array<ConvItem>> = {
   whatsapp: [],
   instagram: [],
@@ -220,6 +222,13 @@ export default function ChatPage() {
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const { isSupervisor, userId: currentUserId } = useIsSupervisor();
+  const { access, accessLoading, reloadAccess } = useAuth();
+  const activeOwnerId = getActiveOwnerId(access?.owner_id, null);
+  const convsRef = useRef(convs);
+
+  useEffect(() => {
+    convsRef.current = convs;
+  }, [convs]);
 
   // Ctrl/Cmd+K → busca global
   useEffect(() => {
@@ -358,11 +367,14 @@ export default function ChatPage() {
       
       try {
         if (channel === 'whatsapp') {
-          const { data: connections, error: connError } = await supabase
+          let connQuery = supabase
             .from('whatsapp_connections')
             .select('*')
-            .in('provider', ['meta', 'evolution', 'waha'])
-            .order('updated_at', { ascending: false });
+            .in('provider', ['meta', 'evolution', 'waha']);
+
+          if (activeOwnerId) connQuery = connQuery.eq('owner_id', activeOwnerId);
+
+          const { data: connections, error: connError } = await connQuery.order('updated_at', { ascending: false });
 
           if (connError) {
             addDebugLog('error', 'Erro ao ler conexões WhatsApp no banco', connError);
@@ -436,10 +448,17 @@ export default function ChatPage() {
 
     async function loadConversations(channel: ChannelKey) {
       addDebugLog('request', `Buscando contatos ${channel} no banco de dados`);
+
+      if (!activeOwnerId) {
+        setConvs(prev => ({ ...prev, [channel]: [] }));
+        setAuthValidation({ valid: false, reason: 'Owner ativo não resolvido. Atualize o access antes de consultar mensagens.', loading: false });
+        return;
+      }
       
       const { data: customers, error } = await supabase
         .from('customers')
         .select('*')
+        .eq('owner_id', activeOwnerId)
         .order('updated_at', { ascending: false });
 
       if (error) {
@@ -464,10 +483,10 @@ export default function ChatPage() {
 
         addDebugLog('info', `${channelCustomers.length} contatos encontrados. Buscando últimas mensagens.`);
         
-        const { data: lastMessages } = await supabase
-          .from('chat_messages')
-          .select('customer_id, content, created_at')
-          .order('created_at', { ascending: false });
+        const customerIds = channelCustomers.map((c) => c.id).filter(Boolean);
+        const { data: lastMessages } = customerIds.length
+          ? await (supabase as any).rpc('get_latest_chat_messages_for_customers', { _customer_ids: customerIds })
+          : { data: [] as any[] };
 
         const byIdentity = new Map<string, any>();
         channelCustomers.forEach(c => {
@@ -537,6 +556,8 @@ export default function ChatPage() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
         const row: any = payload.new;
         if (!row) return;
+        const belongsToVisibleScope = Object.values(convsRef.current).some((items) => items.some((c: any) => c.id === row.customer_id && c.owner_id === activeOwnerId));
+        if (!belongsToVisibleScope) return;
         addDebugLog('info', 'Nova mensagem recebida via Realtime', row);
         if (row.customer_id === selectedConvId) {
           setMessages(prev => {
@@ -595,7 +616,7 @@ export default function ChatPage() {
       clearInterval(receiptTimer);
       supabase.removeChannel(channel);
     };
-  }, [selectedConvId, whatsappStatus.connected, activeChannel]);
+  }, [selectedConvId, whatsappStatus.connected, activeChannel, activeOwnerId]);
 
   useEffect(() => {
     // Real-time listener for connection events (Omnichannel Diagnostics)
@@ -656,6 +677,20 @@ export default function ChatPage() {
     let cancelled = false;
     const convAtStart = selectedConvId;
     (async () => {
+      const scopedConv = (activeChannel ? convsRef.current[activeChannel] : Object.values(convsRef.current).flat()).find((c) => c.id === convAtStart) as any;
+      if (!canUseTenantRecord(activeOwnerId, scopedConv?.owner_id ?? null)) {
+        addDebugLog('error', 'Consulta de mensagens bloqueada por owner divergente', {
+          owner_ativo: activeOwnerId,
+          owner_conversa: scopedConv?.owner_id ?? null,
+          customer_id: convAtStart,
+        });
+        toast({
+          title: 'Owner incorreto para esta conversa',
+          description: 'Atualize o access antes de consultar ou enviar mensagens neste contato.',
+          variant: 'destructive',
+        });
+        return;
+      }
       const { data, error } = await supabase
         .from('chat_messages')
         .select('*')
@@ -674,10 +709,15 @@ export default function ChatPage() {
         });
         return;
       }
-      setMessages((data || []).map(hydrateChatMessage));
+      setMessages((prev) => applyConversationMessagesAfterSwitch({
+        currentConversationId: selectedConvId,
+        requestedConversationId: convAtStart,
+        previousMessages: prev,
+        loadedMessages: (data || []).map(hydrateChatMessage),
+      }));
     })();
     return () => { cancelled = true; };
-  }, [selectedConvId]);
+  }, [selectedConvId, activeChannel, activeOwnerId]);
 
   // Autofocus composer when a conversation is selected
   useEffect(() => {
@@ -704,6 +744,37 @@ export default function ChatPage() {
 
   const list = activeChannel ? convs[activeChannel] : [];
   const selectedConv = list.find((c) => c.id === selectedConvId) || (selectedConvId ? null : list[0]);
+  const selectedConvOwnerId = (selectedConv as any)?.owner_id ?? null;
+  const ownerScopeOk = !selectedConv || canUseTenantRecord(activeOwnerId, selectedConvOwnerId);
+  const activeOwnerShort = activeOwnerId ? `${activeOwnerId.slice(0, 8)}…${activeOwnerId.slice(-4)}` : 'não resolvido';
+  const selectedOwnerShort = selectedConvOwnerId ? `${selectedConvOwnerId.slice(0, 8)}…${selectedConvOwnerId.slice(-4)}` : 'sem owner';
+
+  const refreshOwnerAccess = async () => {
+    setIsRefreshing(true);
+    await reloadAccess();
+    setIsRefreshing(false);
+    toast({ title: 'Access atualizado', description: 'Owner ativo recarregado sem precisar apertar F5.' });
+  };
+
+  const ensureActiveOwnerScope = () => {
+    if (accessLoading) {
+      toast({ title: 'Access carregando', description: 'Aguarde a resolução do owner antes de enviar.', variant: 'destructive' });
+      return false;
+    }
+    if (!activeOwnerId) {
+      toast({ title: 'Owner não resolvido', description: 'Atualize o access antes de enviar ou consultar.', variant: 'destructive' });
+      return false;
+    }
+    if (selectedConv && !canUseTenantRecord(activeOwnerId, selectedConvOwnerId)) {
+      toast({ title: 'Envio bloqueado por owner incorreto', description: `Owner ativo ${activeOwnerShort}; conversa ${selectedOwnerShort}.`, variant: 'destructive' });
+      return false;
+    }
+    if (activeWhatsAppConn?.owner_id && activeWhatsAppConn.owner_id !== activeOwnerId) {
+      toast({ title: 'Conexão fora do owner ativo', description: 'Recarregue o access ou revise a conexão WhatsApp.', variant: 'destructive' });
+      return false;
+    }
+    return true;
+  };
 
   useEffect(() => {
     const owner = activeWhatsAppConn?.owner_id || (selectedConv as any)?.owner_id || wavoip.scope.owner_id;
@@ -839,6 +910,7 @@ export default function ChatPage() {
 
   const handleSendMessage = async () => {
     if ((!messageText && !selectedFile) || !selectedConvId) return;
+    if (!ensureActiveOwnerScope()) return;
     
     if (isScheduling) {
       const scheduleTime = `${format(scheduledDate || new Date(), 'yyyy-MM-dd')} ${scheduledTime}`;
@@ -937,6 +1009,7 @@ export default function ChatPage() {
 
   // New rich-composer handlers
   const sendOptimistic = async (content: string) => {
+    if (!ensureActiveOwnerScope()) throw new Error('Owner ativo inválido para esta conversa.');
     const id = crypto.randomUUID();
     setMessages(prev => [...prev, {
       id, client_msg_id: id, customer_id: selectedConvId, sender_type: 'agent',
@@ -986,6 +1059,7 @@ export default function ChatPage() {
 
   const handleSendText = async (text: string) => {
     if (!selectedConvId || !text.trim()) return;
+    if (!ensureActiveOwnerScope()) throw new Error('Owner ativo inválido para esta conversa.');
     const id = await sendOptimistic(text);
     try {
       const t0 = Date.now();
@@ -1073,6 +1147,7 @@ export default function ChatPage() {
 
   const handleSendMedia = async (a: ComposerAttachment, caption: string) => {
     if (!selectedConvId) return;
+    if (!ensureActiveOwnerScope()) throw new Error('Owner ativo inválido para esta conversa.');
     const id = await sendOptimistic(`📎 ${a.file.name}${caption ? ` — ${caption}` : ''}`);
     try {
       if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
@@ -1093,6 +1168,7 @@ export default function ChatPage() {
 
   const handleSendAudio = async (blob: Blob, durationSec: number) => {
     if (!selectedConvId) return;
+    if (!ensureActiveOwnerScope()) throw new Error('Owner ativo inválido para esta conversa.');
     const id = await sendOptimistic(`🎤 Áudio (${durationSec}s)`);
     try {
       if (activeChannel === 'whatsapp' && activeWhatsAppConn) {
@@ -1113,6 +1189,7 @@ export default function ChatPage() {
 
   const handleSendRich = async (payload: RichPayload) => {
     if (!selectedConvId) return;
+    if (!ensureActiveOwnerScope()) throw new Error('Owner ativo inválido para esta conversa.');
     const labelMap: Record<string, string> = {
       location: '📍 Localização',
       contact: '👤 Contato',
@@ -1261,6 +1338,25 @@ export default function ChatPage() {
             {channelInfo.key === 'whatsapp' && (connectedProviders.length > 0 || activeWhatsAppConn) && ` (${connectedProviders.length > 0 ? connectedProviders.join(' + ') : activeWhatsAppConn!.provider.toUpperCase()})`}
           </span>
         </div>
+        <div className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-medium ${ownerScopeOk ? 'border-success/30 text-success bg-success/10' : 'border-destructive/30 text-destructive bg-destructive/10'}`} data-testid="active-owner-scope">
+          <ShieldAlert className="h-3 w-3" />
+          Owner ativo: {activeOwnerShort}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 text-xs"
+          onClick={refreshOwnerAccess}
+          disabled={accessLoading || isRefreshing}
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${accessLoading || isRefreshing ? 'animate-spin' : ''}`} />
+          Recarregar access
+        </Button>
+        {!ownerScopeOk && selectedConv && (
+          <Badge variant="outline" className="h-6 border-destructive/40 text-destructive">
+            Conversa: {selectedOwnerShort}
+          </Badge>
+        )}
         {(channelInfo.key === 'whatsapp' || channelInfo.key === 'telegram') && (
           <div className="flex items-center gap-2">
             {channelInfo.key === 'whatsapp' ? (
@@ -1451,6 +1547,28 @@ export default function ChatPage() {
           </div>
         )}
 
+        {selectedConv && !ownerScopeOk && (
+          <div className="absolute inset-0 bg-background/70 backdrop-blur-[2px] z-50 flex items-center justify-center p-6 text-center">
+            <div className="glass-card p-8 max-w-lg border-destructive/20 shadow-2xl animate-in fade-in zoom-in duration-300">
+              <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
+                <ShieldAlert className="w-8 h-8 text-destructive" />
+              </div>
+              <h3 className="text-xl font-bold mb-2">Owner ativo diferente da conversa</h3>
+              <p className="text-muted-foreground mb-6">
+                Consulta e envio foram bloqueados para evitar mistura de histórico entre empresas e sub-empresas.
+              </p>
+              <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-left">
+                <div className="rounded-lg border border-border p-3"><span className="text-muted-foreground">Owner ativo</span><br /><code>{activeOwnerId || 'não resolvido'}</code></div>
+                <div className="rounded-lg border border-border p-3"><span className="text-muted-foreground">Owner da conversa</span><br /><code>{selectedConvOwnerId || 'sem owner'}</code></div>
+              </div>
+              <Button onClick={refreshOwnerAccess} disabled={accessLoading || isRefreshing}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${accessLoading || isRefreshing ? 'animate-spin' : ''}`} />
+                Recarregar access do owner
+              </Button>
+            </div>
+          </div>
+        )}
+
 
         {/* Lista */}
         <div className="w-80 border-r border-border flex flex-col">
@@ -1459,8 +1577,8 @@ export default function ChatPage() {
               <Button
                 onClick={() => setNewConversationOpen(true)}
                 className="w-full h-9 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-                disabled={!activeWhatsAppConn}
-                title={!activeWhatsAppConn ? 'Selecione uma conexão WhatsApp ativa' : 'Iniciar conversa a partir de um número'}
+                disabled={!activeWhatsAppConn || !activeOwnerId}
+                title={!activeWhatsAppConn ? 'Selecione uma conexão WhatsApp ativa' : !activeOwnerId ? 'Recarregue o access do owner' : 'Iniciar conversa a partir de um número'}
               >
                 <Plus className="w-4 h-4" />
                 Nova conversa
@@ -1654,6 +1772,7 @@ export default function ChatPage() {
                                 toast({ title: 'Linha Wavoip ocupada', description: wavoipLineBusy.tooltip, variant: 'destructive' });
                                 return;
                               }
+                              if (!ensureActiveOwnerScope()) return;
                               if (!selectedConv.phone) {
                                 toast({ title: 'Sem número', description: 'Este contato não possui telefone.', variant: 'destructive' });
                                 return;
@@ -1669,7 +1788,7 @@ export default function ChatPage() {
                               wavoip.callWhatsApp(selectedConv.phone, undefined, {
                                 customerId: selectedConv.id,
                                 contactName: selectedConv.name,
-                                ownerId: (selectedConv as any)?.owner_id ?? activeWhatsAppConn?.owner_id ?? null,
+                                ownerId: activeOwnerId,
                                 subCompanyId: (selectedConv as any)?.sub_company_id ?? activeWhatsAppConn?.sub_company_id ?? null,
                               });
                             }}
@@ -1730,7 +1849,7 @@ export default function ChatPage() {
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={async () => {
-                          if (!selectedConvId) return;
+                          if (!selectedConvId || !ensureActiveOwnerScope()) return;
                           const { data } = await supabase
                             .from('chat_messages')
                             .select('*')
@@ -1879,6 +1998,7 @@ export default function ChatPage() {
                 onSendAudio={handleSendAudio}
                 recentMessages={messages.map((m: any) => ({ sender_type: m.sender_type, content: m.content }))}
                 contactName={selectedConv?.name}
+                disabled={!ownerScopeOk || accessLoading || !activeOwnerId}
                 externalAttachment={externalAttachment}
                 onConsumeExternalAttachment={() => setExternalAttachment(null)}
                 extras={
