@@ -5736,7 +5736,7 @@ export type Database = {
           owner_id: string
           status: string
           sub_company_id: string
-          sub_company_name: string
+          sub_name: string
         }[]
       }
       get_my_signature_role: {
