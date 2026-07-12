@@ -684,6 +684,13 @@ export default function CompanyDetailPage() {
                 )}
               </Card>
             </TabsContent>
+
+            <TabsContent value="waha-debug" className="mt-4">
+              <WahaInboundDebugPanel
+                ownerId={ownerId}
+                connectionIds={(data.whatsapp || []).filter((w: any) => w.provider === 'waha').map((w: any) => w.id)}
+              />
+            </TabsContent>
           </Tabs>
 
           <p className="text-[11px] text-muted-foreground flex items-center gap-1">
