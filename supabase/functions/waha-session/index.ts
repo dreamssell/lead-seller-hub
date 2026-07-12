@@ -273,10 +273,14 @@ Deno.serve(async (req) => {
           skipped++;
           continue;
         }
+        // Dedup key is (owner_id, uaz_msg_id) so that reusing the same WhatsApp
+        // provider id across different owners cannot accidentally hide legit
+        // messages, and repeated backfills stay idempotent per tenant.
         const { data: existingMsg } = await supabaseAdmin
           .from("chat_messages")
-          .select("id")
+          .select("id, customers!inner(owner_id)")
           .eq("uaz_msg_id", c.providerMsgId)
+          .eq("customers.owner_id", conn.owner_id)
           .maybeSingle();
         if (existingMsg) { skipped++; continue; }
 
