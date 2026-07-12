@@ -52,6 +52,7 @@ import { normalizeChatSendError, NormalizedChatError } from '@/lib/chatErrorMapp
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
 import { Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { applyConversationMessagesAfterSwitch, canUseTenantRecord, getActiveOwnerId } from '@/lib/chatTenantScope';
 
 
