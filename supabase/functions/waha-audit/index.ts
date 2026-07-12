@@ -5,7 +5,7 @@
 // echo and a hashed owner id for safe log correlation.
 
 import { createClient } from 'npm:@supabase/supabase-js@2.49.4';
-import { z } from 'npm:zod@3.23.8';
+import { BodySchema } from './schema.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,29 +13,43 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const json = (data: unknown, status = 200) =>
+const json = (data: unknown, status = 200, extraHeaders: Record<string, string> = {}) =>
   new Response(JSON.stringify(data), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json', ...extraHeaders },
   });
-
-const BodySchema = z.object({
-  owner_id: z.string().uuid({ message: 'owner_id must be uuid' }),
-  message_id: z.string().min(1).max(200).nullish(),
-  connection_id: z.string().uuid().nullish(),
-  sub_company_id: z.string().uuid().nullish(),
-  call_id: z.string().uuid().nullish(),
-  wavoip_call_id: z.string().min(1).max(200).nullish(),
-  limit: z.number().int().min(1).max(500).default(100),
-  since_hours: z.number().int().min(1).max(24 * 30).default(24),
-  order: z.enum(['asc', 'desc']).default('desc'),
-  cursor: z.string().datetime({ offset: true }).nullish(),
-  gaps_only: z.boolean().optional(),
-}).strict();
 
 async function sha256Hex(input: string) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ---------------------- In-memory rate limiter ----------------------
+// Keyed by `${owner_hash}:${ip}` when authenticated, `anon:${ip}` otherwise.
+// Warm instances share the map; cold starts reset it. Good enough to blunt
+// abuse without adding external infra.
+const RATE_LIMIT_MAX = Number(Deno.env.get('WAHA_AUDIT_RATE_MAX') ?? 30);
+const RATE_LIMIT_WINDOW_MS = Number(Deno.env.get('WAHA_AUDIT_RATE_WINDOW_MS') ?? 60_000);
+const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function rateLimitTake(key: string, now: number) {
+  const bucket = rateBuckets.get(key);
+  if (!bucket || bucket.resetAt <= now) {
+    const resetAt = now + RATE_LIMIT_WINDOW_MS;
+    rateBuckets.set(key, { count: 1, resetAt });
+    return { allowed: true, remaining: RATE_LIMIT_MAX - 1, resetAt };
+  }
+  if (bucket.count >= RATE_LIMIT_MAX) {
+    return { allowed: false, remaining: 0, resetAt: bucket.resetAt };
+  }
+  bucket.count += 1;
+  return { allowed: true, remaining: RATE_LIMIT_MAX - bucket.count, resetAt: bucket.resetAt };
+}
+
+function clientIp(req: Request) {
+  const xff = req.headers.get('x-forwarded-for');
+  if (xff) return xff.split(',')[0]!.trim();
+  return req.headers.get('x-real-ip') || 'unknown';
 }
 
 Deno.serve(async (req) => {
