@@ -57,7 +57,7 @@ function normalizePhone(from?: string | null): string | null {
 // Classifies the incoming event into one of our three logical buckets, using
 // both the top-level `event` string and the shape of the payload so we work
 // with WEBJS ("message") and GOWS ("gows.MessageEventData") equally well.
-function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'ignore' {
+function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'ignore' {
   const e = event.toLowerCase();
   if (e === 'session.status' || e === 'status.instance') return 'session';
   if (e === 'message.ack' || e === 'ack' || e.endsWith('.receipteventdata')) return 'ack';
@@ -67,6 +67,12 @@ function classify(event: string, body: any): 'message' | 'ack' | 'session' | 're
   const gowsMsg = body?.data?.Message ?? body?.payload?._data?.Message;
   if (gowsMsg?.reactionMessage) return 'reaction';
   if (body?.payload?.reaction && (body?.payload?.reaction?.text !== undefined || body?.payload?.reaction?.msgId)) return 'reaction';
+  // Etapa 4 — edições e revogações.
+  if (e === 'message.edited' || e === 'message.edit' || e.endsWith('.editeventdata')) return 'edit';
+  if (gowsMsg?.editedMessage || gowsMsg?.protocolMessage?.editedMessage) return 'edit';
+  if (e === 'message.revoked' || e === 'message.revoke' || e === 'message.revoke_everyone' || e === 'message.revoke_me' || e.endsWith('.revokeeventdata')) return 'revoke';
+  const protoType = String(gowsMsg?.protocolMessage?.type || '').toUpperCase();
+  if (protoType === 'REVOKE' || protoType === 'MESSAGE_DELETE') return 'revoke';
   if (e === 'message' || e === 'message.any') return 'message';
   // GOWS engine emits gows.MessageEventData with body.data.Info / body.data.Message
   if (e.includes('messageeventdata') || e.includes('gows.message')) return 'message';
@@ -454,6 +460,75 @@ Deno.serve(async (req) => {
       .eq('id', msgRow.id);
 
     return json({ ok: true, reaction: { target: targetMsgId, by: reactorKey, emoji: emoji || null } });
+  }
+
+  // ── EDIT ─────────────────────────────────────────────────────────────────
+  // WEBJS: body.payload = { id, body: newText, before: oldText } no evento message.edited
+  // GOWS:  body.data.Message.editedMessage.message.{conversation|extendedTextMessage.text}
+  //        (ou body.data.Message.protocolMessage.editedMessage.{conversation|...})
+  if (bucket === 'edit') {
+    const editedGows = msgWrap?.editedMessage?.message || msgWrap?.protocolMessage?.editedMessage;
+    const editedTargetId =
+      extractId(webPayload?.id) ||
+      msgWrap?.editedMessage?.key?.id ||
+      msgWrap?.protocolMessage?.key?.id ||
+      providerMsgId ||
+      null;
+    const newText =
+      webPayload?.body ||
+      webPayload?.newBody ||
+      editedGows?.conversation ||
+      editedGows?.extendedTextMessage?.text ||
+      '';
+    if (!editedTargetId || !newText) {
+      return json({ ok: true, skipped: 'edit_missing_fields' });
+    }
+    const { data: msgRow } = await supabase
+      .from('chat_messages')
+      .select('id, content, metadata')
+      .eq('uaz_msg_id', editedTargetId)
+      .maybeSingle();
+    if (!msgRow) return json({ ok: true, skipped: 'edit_target_not_found', target: editedTargetId });
+    const prevMeta = (msgRow.metadata as any) || {};
+    const edits = Array.isArray(prevMeta.edits) ? prevMeta.edits : [];
+    edits.push({ at: new Date().toISOString(), from: msgRow.content });
+    await supabase.from('chat_messages').update({
+      content: String(newText),
+      metadata: { ...prevMeta, edited: true, edited_at: new Date().toISOString(), edits },
+    }).eq('id', msgRow.id);
+    return json({ ok: true, edited: editedTargetId });
+  }
+
+  // ── REVOKE / DELETE ──────────────────────────────────────────────────────
+  // WEBJS: message.revoke_everyone { after: { id }, before: {...} } ou payload.id
+  // GOWS:  msgWrap.protocolMessage = { type: 'REVOKE', key: { id } }
+  if (bucket === 'revoke') {
+    const revokedId =
+      extractId(webPayload?.after?.id) ||
+      extractId(webPayload?.before?.id) ||
+      extractId(webPayload?.id) ||
+      msgWrap?.protocolMessage?.key?.id ||
+      msgWrap?.protocolMessage?.key?.ID ||
+      providerMsgId ||
+      null;
+    if (!revokedId) return json({ ok: true, skipped: 'revoke_missing_id' });
+    const { data: msgRow } = await supabase
+      .from('chat_messages')
+      .select('id, content, metadata')
+      .eq('uaz_msg_id', revokedId)
+      .maybeSingle();
+    if (!msgRow) return json({ ok: true, skipped: 'revoke_target_not_found', target: revokedId });
+    const prevMeta = (msgRow.metadata as any) || {};
+    await supabase.from('chat_messages').update({
+      content: '[mensagem apagada]',
+      metadata: {
+        ...prevMeta,
+        revoked: true,
+        revoked_at: new Date().toISOString(),
+        original_content: prevMeta.original_content ?? msgRow.content,
+      },
+    }).eq('id', msgRow.id);
+    return json({ ok: true, revoked: revokedId });
   }
 
   // ── INBOUND MESSAGE ──────────────────────────────────────────────────────

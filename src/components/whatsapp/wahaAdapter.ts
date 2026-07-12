@@ -62,10 +62,26 @@ export const WahaSendReactionSchema = z.object({
   reaction: z.string().max(8), // single emoji or "" to clear
 });
 
+// Etapa 4 — encaminhar / editar / apagar.
+export const WahaForwardSchema = z.object({
+  session: z.string().min(1),
+  chatId: WahaChatIdSchema,
+  messageId: z.string().min(1),
+});
+
+export const WahaEditSchema = z.object({
+  session: z.string().min(1),
+  chatId: WahaChatIdSchema,
+  messageId: z.string().min(1),
+  text: z.string().min(1).max(4096),
+});
+
 export type WahaSendTextPayload = z.infer<typeof WahaSendTextSchema>;
 export type WahaSendMediaPayload = z.infer<typeof WahaSendMediaSchema>;
 export type WahaSendVoicePayload = z.infer<typeof WahaSendVoiceSchema>;
 export type WahaSendReactionPayload = z.infer<typeof WahaSendReactionSchema>;
+export type WahaForwardPayload = z.infer<typeof WahaForwardSchema>;
+export type WahaEditPayload = z.infer<typeof WahaEditSchema>;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -597,6 +613,169 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
         messageId: parsed.data.messageId,
         errorMessage: e?.message || String(e),
         payload: { emoji: parsed.data.reaction },
+      });
+      throw e;
+    }
+  }
+
+  // Etapa 4 — Encaminhar mensagem para outro contato (mesmo owner).
+  // WAHA: POST /api/forwardMessage { session, chatId, messageId }
+  async forwardMessage(
+    conn: WhatsAppConnection,
+    providerMessageId: string,
+    toCustomerId: string,
+  ) {
+    const url = normalizeUrl(conn.metadata?.url);
+    const token = conn.metadata?.token || '';
+    if (!url) throw new Error('URL WAHA ausente.');
+
+    const { data: customer, error: custErr } = await supabase
+      .from('customers').select('phone').eq('id', toCustomerId).single();
+    if (custErr || !customer?.phone) throw new Error('Contato de destino sem telefone cadastrado.');
+
+    const rawPayload = {
+      session: this.sessionOf(conn),
+      chatId: normalizeChatId(customer.phone),
+      messageId: String(providerMessageId || ''),
+    };
+    const parsed = WahaForwardSchema.safeParse(rawPayload);
+    if (!parsed.success) {
+      throw new Error(`WAHA encaminhamento inválido: ${parsed.error.issues.map((i) => i.message).join(', ')}`);
+    }
+
+    await writeWahaAudit(conn, {
+      action: 'forward_message', status: 'started',
+      customerId: toCustomerId, wahaSessionId: parsed.data.session,
+      messageId: parsed.data.messageId,
+      payload: { chatId: parsed.data.chatId },
+    });
+    try {
+      const data = await wahaFetch(url, token, '/api/forwardMessage', {
+        method: 'POST', body: parsed.data, timeoutMs: 10_000, retries: 1,
+      });
+      const messageId = data?.id?._serialized || data?.id || null;
+      await writeWahaAudit(conn, {
+        action: 'forward_message', status: 'success',
+        customerId: toCustomerId, wahaSessionId: parsed.data.session,
+        messageId: messageId || parsed.data.messageId,
+        payload: { chatId: parsed.data.chatId, raw: data },
+      });
+      return { ok: true, provider: 'waha', message_id: messageId, raw: data };
+    } catch (e: any) {
+      await writeWahaAudit(conn, {
+        action: 'forward_message', status: 'error',
+        customerId: toCustomerId, wahaSessionId: parsed.data.session,
+        messageId: parsed.data.messageId,
+        errorMessage: e?.message || String(e),
+        payload: { chatId: parsed.data.chatId },
+      });
+      throw e;
+    }
+  }
+
+  // Etapa 4 — Editar texto da própria mensagem (janela WhatsApp de 15 min).
+  // WAHA: PUT /api/{session}/chats/{chatId}/messages/{messageId} { text }
+  async editMessage(
+    conn: WhatsAppConnection,
+    providerMessageId: string,
+    customerId: string,
+    newText: string,
+  ) {
+    const url = normalizeUrl(conn.metadata?.url);
+    const token = conn.metadata?.token || '';
+    if (!url) throw new Error('URL WAHA ausente.');
+
+    const { data: customer, error: custErr } = await supabase
+      .from('customers').select('phone').eq('id', customerId).single();
+    if (custErr || !customer?.phone) throw new Error('Cliente sem telefone cadastrado.');
+
+    const rawPayload = {
+      session: this.sessionOf(conn),
+      chatId: normalizeChatId(customer.phone),
+      messageId: String(providerMessageId || ''),
+      text: String(newText ?? ''),
+    };
+    const parsed = WahaEditSchema.safeParse(rawPayload);
+    if (!parsed.success) {
+      throw new Error(`WAHA edição inválida: ${parsed.error.issues.map((i) => i.message).join(', ')}`);
+    }
+
+    const path = `/api/${encodeURIComponent(parsed.data.session)}/chats/${encodeURIComponent(parsed.data.chatId)}/messages/${encodeURIComponent(parsed.data.messageId)}`;
+
+    await writeWahaAudit(conn, {
+      action: 'edit_message', status: 'started',
+      customerId, wahaSessionId: parsed.data.session,
+      messageId: parsed.data.messageId,
+      payload: { chatId: parsed.data.chatId, length: parsed.data.text.length },
+    });
+    try {
+      const data = await wahaFetch(url, token, path, {
+        method: 'PUT', body: { text: parsed.data.text },
+        timeoutMs: 10_000, retries: 1,
+      });
+      await writeWahaAudit(conn, {
+        action: 'edit_message', status: 'success',
+        customerId, wahaSessionId: parsed.data.session,
+        messageId: parsed.data.messageId,
+        payload: { chatId: parsed.data.chatId, raw: data },
+      });
+      return { ok: true, provider: 'waha', message_id: parsed.data.messageId, text: parsed.data.text, raw: data };
+    } catch (e: any) {
+      await writeWahaAudit(conn, {
+        action: 'edit_message', status: 'error',
+        customerId, wahaSessionId: parsed.data.session,
+        messageId: parsed.data.messageId,
+        errorMessage: e?.message || String(e),
+        payload: { chatId: parsed.data.chatId },
+      });
+      throw e;
+    }
+  }
+
+  // Etapa 4 — Apagar mensagem (para todos por padrão).
+  // WAHA: DELETE /api/{session}/chats/{chatId}/messages/{messageId}?forEveryone=true
+  async deleteMessage(
+    conn: WhatsAppConnection,
+    providerMessageId: string,
+    customerId: string,
+    forEveryone = true,
+  ) {
+    const url = normalizeUrl(conn.metadata?.url);
+    const token = conn.metadata?.token || '';
+    if (!url) throw new Error('URL WAHA ausente.');
+
+    const { data: customer, error: custErr } = await supabase
+      .from('customers').select('phone').eq('id', customerId).single();
+    if (custErr || !customer?.phone) throw new Error('Cliente sem telefone cadastrado.');
+
+    const session = this.sessionOf(conn);
+    const chatId = normalizeChatId(customer.phone);
+    const messageId = String(providerMessageId || '');
+    if (!messageId) throw new Error('messageId ausente para apagar.');
+
+    const path = `/api/${encodeURIComponent(session)}/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}?forEveryone=${forEveryone ? 'true' : 'false'}`;
+
+    await writeWahaAudit(conn, {
+      action: 'delete_message', status: 'started',
+      customerId, wahaSessionId: session, messageId,
+      payload: { chatId, for_everyone: forEveryone },
+    });
+    try {
+      const data = await wahaFetch(url, token, path, {
+        method: 'DELETE', timeoutMs: 10_000, retries: 1,
+      });
+      await writeWahaAudit(conn, {
+        action: 'delete_message', status: 'success',
+        customerId, wahaSessionId: session, messageId,
+        payload: { chatId, for_everyone: forEveryone, raw: data },
+      });
+      return { ok: true, provider: 'waha', message_id: messageId, for_everyone: forEveryone, raw: data };
+    } catch (e: any) {
+      await writeWahaAudit(conn, {
+        action: 'delete_message', status: 'error',
+        customerId, wahaSessionId: session, messageId,
+        errorMessage: e?.message || String(e),
+        payload: { chatId, for_everyone: forEveryone },
       });
       throw e;
     }
