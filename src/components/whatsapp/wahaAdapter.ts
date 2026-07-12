@@ -241,7 +241,6 @@ export async function wahaFetch(
 // Adapter
 // ────────────────────────────────────────────────────────────────────────────
 export interface WahaSendOptions {
-export interface WahaSendOptions {
   timeoutMs?: number;
   retries?: number;
   signal?: AbortSignal;
