@@ -420,6 +420,8 @@ export default function ChatPage() {
   const wavoip = useWavoipWebphone();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [externalAttachment, setExternalAttachment] = useState<File | null>(null);
+  // Etapa 3 — mensagem sendo respondida (quote/reply). null = envio normal.
+  const [replyingTo, setReplyingTo] = useState<any | null>(null);
 
   useChatShortcuts(!!selectedConvId, {
     onHelp: () => setShortcutsOpen(true),
