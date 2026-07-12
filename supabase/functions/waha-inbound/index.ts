@@ -150,8 +150,10 @@ Deno.serve(async (req) => {
   if (isTest) return json({ ok: true, test: true, id: providerMsgId });
   if (bucket === 'ignore') return json({ ok: true, ignored: event });
 
-  // Idempotency — key on message id only (event name variants collapse).
-  if (providerMsgId && (bucket === 'message' || bucket === 'ack')) {
+  // Idempotency for ACKs can happen immediately. For messages, wait until we
+  // know the event is a valid individual inbound; WAHA often emits message.any
+  // plus message, and status/group/no-phone variants must not consume the key.
+  if (providerMsgId && bucket === 'ack') {
     const idemKey = bucket === 'ack' ? `waha:ack:${providerMsgId}` : `waha:msg:${providerMsgId}`;
     const { data: existing } = await supabase
       .from('webhook_idempotency_keys')
@@ -245,9 +247,30 @@ Deno.serve(async (req) => {
   if (fromMeFlag) return json({ ok: true, skipped: 'from_me' });
   if (isGroup)   return json({ ok: true, skipped: 'group_message' });
 
-  // If Sender is a @lid (Baileys "linked id"), phone must come from SenderAlt.
-  const phone = normalizePhone(rawFrom) || normalizePhone(senderAlt);
+  // If Sender/Chat is a @lid (Baileys "linked id"), the real phone must come
+  // from SenderAlt. Normalizing the LID itself creates an invalid contact and
+  // makes the chat disappear after refresh because it no longer matches the
+  // user's WhatsApp number.
+  const rawFromIsLid = typeof rawFrom === 'string' && rawFrom.includes('@lid');
+  const phone = rawFromIsLid
+    ? normalizePhone(senderAlt) || normalizePhone(rawFrom)
+    : normalizePhone(rawFrom) || normalizePhone(senderAlt);
   if (!phone) return json({ ok: true, skipped: 'no_individual_sender', rawFrom, senderAlt });
+
+  if (providerMsgId) {
+    const idemKey = `waha:msg:${providerMsgId}`;
+    const { data: existing } = await supabase
+      .from('webhook_idempotency_keys')
+      .select('id')
+      .eq('webhook_id', connectionId)
+      .eq('idempotency_key', idemKey)
+      .maybeSingle();
+    if (existing) return json({ ok: true, idempotent: true });
+    await supabase.from('webhook_idempotency_keys').insert({
+      webhook_id: connectionId,
+      idempotency_key: idemKey,
+    });
+  }
 
   const pushName: string | null =
     info?.PushName || webPayload?._data?.Info?.PushName || webPayload?.notifyName || null;

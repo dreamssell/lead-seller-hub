@@ -69,12 +69,12 @@ describe('AuthContext · rápido chaveamento Empresa ↔ Sub-empresa', () => {
     currentScope = { owner_id: 'owner-1', sub_company_id: null, blocked_pages: [] };
   });
 
-  it('canal usa filtro por auth_user_id do owner quando está na Empresa e não observa sub_companies', async () => {
+  it('canal usa filtro por owner_id quando está na Empresa e não observa sub_companies', async () => {
     render(<AuthProvider><Probe /></AuthProvider>);
     await waitFor(() => expect(filters.length).toBeGreaterThan(0));
     const cc = filters.find(f => f.table === 'client_companies');
     const sub = filters.find(f => f.table === 'sub_companies');
-    expect(cc?.filter).toBe('auth_user_id=eq.owner-1');
+    expect(cc?.filter).toBe('owner_id=eq.owner-1');
     expect(sub).toBeUndefined();
   });
 

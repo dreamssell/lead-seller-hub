@@ -225,10 +225,25 @@ export default function ChatPage() {
   const { access, accessLoading, reloadAccess } = useAuth();
   const activeOwnerId = getActiveOwnerId(access?.owner_id, null);
   const convsRef = useRef(convs);
+  const selectedConvIdRef = useRef<string | null>(selectedConvId);
+  const activeOwnerIdRef = useRef<string | null>(activeOwnerId);
+  const activeChannelRef = useRef<ChannelKey | null>(activeChannel);
 
   useEffect(() => {
     convsRef.current = convs;
   }, [convs]);
+
+  useEffect(() => {
+    selectedConvIdRef.current = selectedConvId;
+  }, [selectedConvId]);
+
+  useEffect(() => {
+    activeOwnerIdRef.current = activeOwnerId;
+  }, [activeOwnerId]);
+
+  useEffect(() => {
+    activeChannelRef.current = activeChannel;
+  }, [activeChannel]);
 
   // Ctrl/Cmd+K → busca global
   useEffect(() => {
@@ -361,6 +376,25 @@ export default function ChatPage() {
   useEffect(() => {
     async function checkProviderStatus(channel: ChannelKey, isManual = false) {
       if (isManual) setIsRefreshing(true);
+
+      if (channel === 'whatsapp' && !activeOwnerId) {
+        setActiveWhatsAppConn(null);
+        setConnectedProviders([]);
+        setWhatsappStatus(prev => ({
+          ...prev,
+          connected: false,
+          loading: accessLoading,
+          dbStatus: 'disconnected',
+          error: accessLoading ? undefined : 'Owner ativo não resolvido.',
+        }));
+        setAuthValidation({
+          valid: false,
+          reason: accessLoading ? 'Resolvendo owner ativo…' : 'Owner ativo não resolvido. Atualize o access antes de consultar mensagens.',
+          loading: accessLoading,
+        });
+        if (isManual) setIsRefreshing(false);
+        return;
+      }
       
       const providerName = channel === 'whatsapp' ? 'WhatsApp via status persistido' : channel.toUpperCase();
       addDebugLog('request', `Lendo status: ${providerName}`);
@@ -450,8 +484,7 @@ export default function ChatPage() {
       addDebugLog('request', `Buscando contatos ${channel} no banco de dados`);
 
       if (!activeOwnerId) {
-        setConvs(prev => ({ ...prev, [channel]: [] }));
-        setAuthValidation({ valid: false, reason: 'Owner ativo não resolvido. Atualize o access antes de consultar mensagens.', loading: false });
+        setAuthValidation({ valid: false, reason: accessLoading ? 'Resolvendo owner ativo…' : 'Owner ativo não resolvido. Atualize o access antes de consultar mensagens.', loading: accessLoading });
         return;
       }
       
@@ -553,13 +586,26 @@ export default function ChatPage() {
     // Realtime subscription
     const channel = supabase
       .channel('chat_updates')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, async (payload) => {
         const row: any = payload.new;
         if (!row) return;
-        const belongsToVisibleScope = Object.values(convsRef.current).some((items) => items.some((c: any) => c.id === row.customer_id && c.owner_id === activeOwnerId));
-        if (!belongsToVisibleScope) return;
+        const currentOwner = activeOwnerIdRef.current;
+        const visibleConv = Object.values(convsRef.current).flat().find((c: any) => c.id === row.customer_id);
+        if (visibleConv && visibleConv.owner_id !== currentOwner) return;
+        if (!visibleConv && currentOwner) {
+          const { data: customer } = await supabase
+            .from('customers')
+            .select('id, owner_id, channel')
+            .eq('id', row.customer_id)
+            .maybeSingle();
+          if (!customer || (customer as any).owner_id !== currentOwner) return;
+          const currentChannel = activeChannelRef.current;
+          if (currentChannel && ((customer as any).channel === currentChannel || currentChannel === 'whatsapp')) {
+            await loadConversations(currentChannel);
+          }
+        }
         addDebugLog('info', 'Nova mensagem recebida via Realtime', row);
-        if (row.customer_id === selectedConvId) {
+        if (row.customer_id === selectedConvIdRef.current) {
           setMessages(prev => {
             const cid = row.client_msg_id;
             if (cid && prev.some(m => m.client_msg_id === cid || m.id === cid)) {
@@ -569,7 +615,7 @@ export default function ChatPage() {
             return [...prev, hydrateChatMessage(row)];
           });
         }
-        if (activeChannel) loadConversations(activeChannel);
+        if (activeChannelRef.current) loadConversations(activeChannelRef.current);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages' }, (payload) => {
         const row: any = payload.new;
@@ -578,13 +624,24 @@ export default function ChatPage() {
           setMessages(prev => prev.map(m => (m.id === row.id || (row.client_msg_id && m.client_msg_id === row.client_msg_id)) ? hydrateChatMessage({ ...m, ...row }) : m));
         }
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_connections' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_connections' }, (payload) => {
+        const row: any = payload.new || payload.old;
+        if (row?.owner_id && activeOwnerIdRef.current && row.owner_id !== activeOwnerIdRef.current) return;
         addDebugLog('info', 'Conexão WhatsApp atualizada no banco; relendo status persistido.');
         checkProviderStatus('whatsapp');
       })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'customers' }, (payload) => {
+        const c: any = payload.new;
+        if (!c?.id || !activeOwnerIdRef.current || c.owner_id !== activeOwnerIdRef.current) return;
+        const currentChannel = activeChannelRef.current;
+        if (!currentChannel) return;
+        if (currentChannel === 'whatsapp' && (c.channel === 'whatsapp' || (!c.channel && c.phone && !String(c.phone).includes('@telegram')))) {
+          loadConversations(currentChannel);
+        }
+      })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'customers' }, (payload) => {
         const c: any = payload.new;
-        if (!c?.id) return;
+        if (!c?.id || (activeOwnerIdRef.current && c.owner_id !== activeOwnerIdRef.current)) return;
         const pres = computePresence(c.presence, c.presence_updated_at, c.last_seen_at);
         setConvs(prev => {
           const next: any = { ...prev };
@@ -616,7 +673,7 @@ export default function ChatPage() {
       clearInterval(receiptTimer);
       supabase.removeChannel(channel);
     };
-  }, [selectedConvId, whatsappStatus.connected, activeChannel, activeOwnerId]);
+  }, [selectedConvId, whatsappStatus.connected, activeChannel, activeOwnerId, accessLoading]);
 
   useEffect(() => {
     // Real-time listener for connection events (Omnichannel Diagnostics)

@@ -123,7 +123,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             message: `Revalidação falhou: ${error?.message ?? 'user mismatch'}`,
             metadata: { expected_user_id: expected, received_user_id: data?.user?.id ?? null, error: error?.message ?? null },
           });
-          if (error && !data?.user) {
+          const errorMessage = String(error?.message || '').toLowerCase();
+          const looksLikeInvalidSession = /invalid|jwt|token|expired|refresh|session/.test(errorMessage);
+          if (error && !data?.user && !looksLikeInvalidSession) {
             // rede/servidor indisponível — mantém sessão local mas sinaliza
             setAuthStatus('unavailable');
             return;
@@ -183,12 +185,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!p || typeof (p as any).then !== 'function') return { data: null } as any;
       try { return await p; } catch { return { data: null } as any; }
     };
-    const [{ data }, roleRes, ccRes] = await Promise.all([
+    const getCompanyForUser = () => {
+      const query = client.from?.('client_companies')?.select?.('id, owner_id, auth_user_id, sub_company_id, status')?.eq?.('auth_user_id', uid);
+      return query?.maybeSingle?.();
+    };
+    const getAccountAccessRows = () => {
+      const query = client.from?.('user_account_access')?.select?.('owner_id, sub_company_id, allowed_pages, is_account_admin, is_owner, created_at')?.eq?.('user_id', uid);
+      return query?.order?.('created_at', { ascending: false }) || query;
+    };
+    const [{ data }, roleRes, ccRes, accessRes] = await Promise.all([
       safe(client.rpc?.('get_my_account_access')),
       safe(client.rpc?.('has_role', { _user_id: uid, _role: 'admin' })),
-      safe(client.from?.('client_companies')?.select?.('id, owner_id, auth_user_id, sub_company_id, status').eq('auth_user_id', uid).maybeSingle()),
+      safe(getCompanyForUser()),
+      safe(getAccountAccessRows()),
     ]) as any;
     let row: AccountAccess | null = Array.isArray(data) ? data[0] : null;
+
+    const accessRows = Array.isArray(accessRes?.data) ? accessRes.data : [];
+    const canonicalAccess = accessRows.find((item: any) => item?.owner_id && item.owner_id !== uid) || accessRows[0];
+
+    if (canonicalAccess?.owner_id && (!row || row.owner_id === uid || row.owner_id !== canonicalAccess.owner_id)) {
+      row = {
+        owner_id: canonicalAccess.owner_id,
+        sub_company_id: canonicalAccess.sub_company_id || null,
+        sub_company_name: row?.owner_id === canonicalAccess.owner_id ? row.sub_company_name : null,
+        allowed_pages: Array.isArray(canonicalAccess.allowed_pages) ? canonicalAccess.allowed_pages : [],
+        is_account_admin: Boolean(canonicalAccess.is_account_admin || canonicalAccess.is_owner),
+        blocked_pages: row?.owner_id === canonicalAccess.owner_id ? row.blocked_pages : [],
+        status: row?.owner_id === canonicalAccess.owner_id ? row.status : 'active',
+        allow_custom_logic: row?.owner_id === canonicalAccess.owner_id ? row.allow_custom_logic : true,
+        feature_landing_builder: row?.owner_id === canonicalAccess.owner_id ? row.feature_landing_builder : false,
+      };
+    }
+
+    if (ccRes?.data) {
+      const cc = ccRes.data as { owner_id: string | null; auth_user_id: string | null; sub_company_id: string | null; status: string | null };
+      const companyOwnerId = cc.owner_id || uid;
+      if (!row || row.owner_id === uid || row.owner_id !== companyOwnerId) {
+        row = {
+          owner_id: companyOwnerId,
+          sub_company_id: cc.sub_company_id,
+          sub_company_name: null,
+          allowed_pages: row?.owner_id === companyOwnerId ? row.allowed_pages : [],
+          is_account_admin: row?.owner_id === companyOwnerId ? row.is_account_admin : true,
+          blocked_pages: row?.owner_id === companyOwnerId ? row.blocked_pages : [],
+          status: cc.status === 'blocked' ? 'blocked' : 'active',
+          allow_custom_logic: row?.owner_id === companyOwnerId ? row.allow_custom_logic : true,
+          feature_landing_builder: row?.owner_id === companyOwnerId ? row.feature_landing_builder : false,
+        };
+      }
+    }
 
     if (!row && roleRes?.data === true) {
       row = {
@@ -201,21 +247,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         status: 'active',
         allow_custom_logic: true,
         feature_landing_builder: true,
-      };
-    }
-
-    if (!row && ccRes?.data) {
-      const cc = ccRes.data as { owner_id: string | null; auth_user_id: string | null; sub_company_id: string | null; status: string | null };
-      row = {
-        owner_id: cc.auth_user_id === uid ? uid : (cc.owner_id || uid),
-        sub_company_id: cc.sub_company_id,
-        sub_company_name: null,
-        allowed_pages: [],
-        is_account_admin: true,
-        blocked_pages: [],
-        status: cc.status === 'blocked' ? 'blocked' : 'active',
-        allow_custom_logic: true,
-        feature_landing_builder: false,
       };
     }
 
@@ -236,18 +267,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
-  const ownerId = access?.owner_id ?? session?.user?.id ?? null;
+  const ownerId = access?.owner_id ?? null;
   const subId = access?.sub_company_id ?? null;
   useEffect(() => {
-    if (!session?.user) return;
+    if (!session?.user || !tenantResolved) return;
     const uid = session.user.id;
     const channel = supabase.channel(`access-watch:${uid}`);
 
-    channel.on(
-      'postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'client_companies', filter: `auth_user_id=eq.${ownerId ?? uid}` },
-      () => reloadAccess({ background: true }),
-    );
+    if (ownerId) {
+      channel.on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'client_companies', filter: `owner_id=eq.${ownerId}` },
+        () => reloadAccess({ background: true }),
+      );
+    }
 
     if (subId) {
       channel.on(
@@ -269,7 +302,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.user?.id, ownerId, subId]);
+  }, [session?.user?.id, ownerId, subId, tenantResolved]);
 
   // Re-sync APENAS em visibilitychange, com debounce. Removemos focus/online
   // duplicados para evitar cascatas de requisições redundantes quando o
@@ -279,8 +312,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const maybeRefresh = (reason: string) => {
       if (document.visibilityState !== 'visible') return;
       const now = Date.now();
-      if (now - lastVisibilityRefreshRef.current < VISIBILITY_REFRESH_DEBOUNCE_MS) return;
-      lastVisibilityRefreshRef.current = now;
+      if (reason !== 'online') {
+        if (now - lastVisibilityRefreshRef.current < VISIBILITY_REFRESH_DEBOUNCE_MS) return;
+        lastVisibilityRefreshRef.current = now;
+      }
       void logRouteTelemetry({
         type: 'auth_visibility_refresh',
         message: `Refresh silencioso disparado por ${reason}`,
