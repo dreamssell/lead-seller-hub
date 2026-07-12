@@ -485,12 +485,7 @@ export default function ChatPage() {
         
         const customerIds = channelCustomers.map((c) => c.id).filter(Boolean);
         const { data: lastMessages } = customerIds.length
-          ? await supabase
-            .from('chat_messages')
-            .select('customer_id, content, created_at')
-            .in('customer_id', customerIds)
-            .order('created_at', { ascending: false })
-            .limit(Math.min(1000, Math.max(50, customerIds.length * 3)))
+          ? await (supabase as any).rpc('get_latest_chat_messages_for_customers', { _customer_ids: customerIds })
           : { data: [] as any[] };
 
         const byIdentity = new Map<string, any>();
