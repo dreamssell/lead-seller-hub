@@ -5,7 +5,7 @@ import {
   Send, Paperclip, Phone, Video, MoreVertical, Search, Circle,
   Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Settings,
   Database, Activity, ShieldAlert, Wifi, WifiOff, Terminal, ChevronDown, ChevronUp, History as HistoryIcon, Bug, Play, Share2,
-  FileDown, Filter, Calendar, Clock, Loader2, X, AlertTriangle, Check
+  FileDown, Filter, Calendar, Clock, Loader2, X, AlertTriangle, Check, SmilePlus
 } from 'lucide-react';
 import {
   Popover,
@@ -189,6 +189,7 @@ const hydrateChatMessage = (row: any) => {
     _mediaMime: row?._mediaMime || meta.media_mime || null,
     _mediaFilename: row?._mediaFilename || meta.media_filename || null,
     _mediaDuration: row?._mediaDuration || meta.media_duration || null,
+    _reactions: (meta.reactions && typeof meta.reactions === 'object') ? meta.reactions : {},
   };
 };
 
@@ -1468,6 +1469,55 @@ export default function ChatPage() {
     }
   };
 
+  // Etapa 2 — reações. Toggle emoji na mensagem: passa "" para remover.
+  // Aplica optimistic update local e delega ao adapter WAHA.
+  const handleToggleReaction = async (message: any, emoji: string) => {
+    if (!message || activeChannel !== 'whatsapp' || !activeWhatsAppConn) {
+      toast({ title: 'Reações disponíveis apenas no WhatsApp', variant: 'destructive' });
+      return;
+    }
+    const providerMessageId = message.uaz_msg_id;
+    if (!providerMessageId) {
+      toast({ title: 'Não é possível reagir', description: 'Aguarde a mensagem ser confirmada pelo provedor.', variant: 'destructive' });
+      return;
+    }
+    const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+    if (!adapter.sendReaction) {
+      toast({ title: 'Este canal ainda não suporta reações', variant: 'destructive' });
+      return;
+    }
+
+    const prevReactions = { ...(message._reactions || {}) };
+    const currentMine = prevReactions.me?.emoji || '';
+    const nextEmoji = currentMine === emoji ? '' : emoji;
+    const nextReactions = { ...prevReactions };
+    if (nextEmoji) {
+      nextReactions.me = { emoji: nextEmoji, from_me: true, at: new Date().toISOString() };
+    } else {
+      delete nextReactions.me;
+    }
+
+    // Optimistic
+    setMessages(prev => prev.map(m => (m.id === message.id) ? { ...m, _reactions: nextReactions } : m));
+    // Persist locally so refresh mantém o estado enquanto o webhook não chega.
+    try {
+      const meta = getMessageMetadata(message);
+      await supabase.from('chat_messages')
+        .update({ metadata: { ...meta, reactions: nextReactions, last_reaction_at: new Date().toISOString() } })
+        .eq('id', message.id);
+    } catch { /* best-effort */ }
+
+    try {
+      await adapter.sendReaction(activeWhatsAppConn, providerMessageId, nextEmoji, message.customer_id);
+    } catch (err: any) {
+      // Rollback on failure
+      setMessages(prev => prev.map(m => (m.id === message.id) ? { ...m, _reactions: prevReactions } : m));
+      toast({ title: 'Falha ao enviar reação', description: err?.message || String(err), variant: 'destructive' });
+    }
+  };
+
+
+
   const handleSendRich = async (payload: RichPayload) => {
     if (!selectedConvId) return;
     if (!ensureActiveOwnerScope()) throw new Error('Owner ativo inválido para esta conversa.');
@@ -2230,6 +2280,63 @@ export default function ChatPage() {
                         {(m.content && m.content !== '[mídia]') && (
                           <p className="whitespace-pre-wrap break-words">{renderWhatsAppText(m.content)}</p>
                         )}
+
+                        {/* Reactions strip — WhatsApp style */}
+                        {m._reactions && Object.keys(m._reactions).length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {Object.entries(m._reactions as Record<string, any>).map(([who, r]: any) => (
+                              <button
+                                key={who}
+                                type="button"
+                                onClick={() => who === 'me' && handleToggleReaction(m, r.emoji)}
+                                className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs border ${
+                                  m.sender_type !== 'client'
+                                    ? 'bg-primary-foreground/15 border-primary-foreground/25'
+                                    : 'bg-background border-border'
+                                } ${who === 'me' ? 'ring-1 ring-primary/40' : ''}`}
+                                title={who === 'me' ? 'Sua reação — clique para remover' : `Reação de ${r.jid || 'contato'}`}
+                              >
+                                <span className="text-sm leading-none">{r.emoji}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Reaction picker — appears on hover (WhatsApp only) */}
+                        {activeChannel === 'whatsapp' && m.uaz_msg_id && (
+                          <div className={`absolute -top-3 ${m.sender_type !== 'client' ? '-left-2' : '-right-2'} opacity-0 group-hover:opacity-100 transition-opacity`}>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="w-7 h-7 rounded-full bg-background border border-border shadow-sm flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary"
+                                  title="Reagir à mensagem"
+                                >
+                                  <SmilePlus className="w-3.5 h-3.5" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent align="center" side="top" className="w-auto p-1.5">
+                                <div className="flex gap-1">
+                                  {['👍','❤️','😂','😮','😢','🙏'].map((emoji) => {
+                                    const isActive = m._reactions?.me?.emoji === emoji;
+                                    return (
+                                      <button
+                                        key={emoji}
+                                        type="button"
+                                        onClick={() => handleToggleReaction(m, emoji)}
+                                        className={`w-8 h-8 rounded-full text-lg hover:bg-secondary transition ${isActive ? 'bg-primary/15 ring-1 ring-primary/40' : ''}`}
+                                        title={isActive ? 'Remover reação' : `Reagir com ${emoji}`}
+                                      >
+                                        {emoji}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                        )}
+
                         <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
                           <p className="text-[10px]">
                             {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

@@ -8,6 +8,7 @@ export interface WhatsAppProviderAdapter {
   sendMedia?(conn: WhatsAppConnection, customerId: string, file: File, caption?: string): Promise<any>;
   sendAudio?(conn: WhatsAppConnection, customerId: string, blob: Blob): Promise<any>;
   sendRich?(conn: WhatsAppConnection, customerId: string, payload: any): Promise<any>;
+  sendReaction?(conn: WhatsAppConnection, providerMessageId: string, emoji: string, customerId?: string): Promise<any>;
   syncContacts(conn: WhatsAppConnection): Promise<any>;
 }
 
