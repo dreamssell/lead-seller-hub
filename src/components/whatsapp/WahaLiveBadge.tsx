@@ -353,8 +353,8 @@ export function WahaLiveBadge({ conn }: { conn: WhatsAppConnection }) {
                 <div className="grid grid-cols-2 gap-2 rounded-md border border-border/60 p-2">
                   <div><span className="text-muted-foreground">State</span><p className="font-mono">{diagnosis.data.session_status || '—'}</p></div>
                   <div><span className="text-muted-foreground">Engine</span><p className="font-mono">{diagnosis.data.engine || '—'}</p></div>
-                  <div className="col-span-2"><span className="text-muted-foreground">Me</span><p className="truncate font-mono">{JSON.stringify(diagnosis.data.me ?? null)}</p></div>
-                  <div className="col-span-2"><span className="text-muted-foreground">Webhooks</span><p className="truncate font-mono">{(diagnosis.data.webhooks || []).map((w: any) => w?.url).join(' · ') || '—'}</p></div>
+                  <div className="col-span-2"><span className="text-muted-foreground">Me</span><p className="truncate font-mono">{JSON.stringify((diagnosis.data as any).me ?? null)}</p></div>
+                  <div className="col-span-2"><span className="text-muted-foreground">Webhooks</span><p className="truncate font-mono">{((diagnosis.data as any).webhooks || []).map((w: any) => w?.url).join(' · ') || '—'}</p></div>
                 </div>
                 <ul className="max-h-64 overflow-y-auto divide-y divide-border/40">
                   {(diagnosis.data.checks || []).map((check) => (
