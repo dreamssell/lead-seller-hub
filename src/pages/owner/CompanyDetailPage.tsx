@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { LicenseManagerDialog } from '@/components/owner-dashboard/LicenseManagerDialog';
+import { WahaInboundDebugPanel } from '@/components/owner-dashboard/WahaInboundDebugPanel';
 import { generateExecutiveReport } from '@/lib/executiveReportPdf';
 import {
   ArrowLeft, Users, MessagesSquare, Phone, TrendingUp, DollarSign,
@@ -437,6 +438,7 @@ export default function CompanyDetailPage() {
               <TabsTrigger value="audit">Auditoria</TabsTrigger>
               <TabsTrigger value="seat" id="tab-seat">Bloqueios de assentos</TabsTrigger>
               <TabsTrigger value="licenses">Licenças</TabsTrigger>
+              <TabsTrigger value="waha-debug" id="tab-waha-debug">Debug WAHA</TabsTrigger>
             </TabsList>
 
             <TabsContent value="channels" className="mt-4">
@@ -681,6 +683,13 @@ export default function CompanyDetailPage() {
                   </table>
                 )}
               </Card>
+            </TabsContent>
+
+            <TabsContent value="waha-debug" className="mt-4">
+              <WahaInboundDebugPanel
+                ownerId={ownerId}
+                connectionIds={(data.whatsapp || []).filter((w: any) => w.provider === 'waha').map((w: any) => w.id)}
+              />
             </TabsContent>
           </Tabs>
 
