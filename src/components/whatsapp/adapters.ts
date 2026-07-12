@@ -4,7 +4,7 @@ import { WahaAdapter } from './wahaAdapter';
 
 export interface WhatsAppProviderAdapter {
   getStatus(conn: WhatsAppConnection): Promise<{ connected: boolean; status: string; phone?: string; error?: string; raw?: any }>;
-  sendMessage(conn: WhatsAppConnection, customerId: string, content: string, correlationId?: string): Promise<any>;
+  sendMessage(conn: WhatsAppConnection, customerId: string, content: string, correlationId?: string, opts?: { replyTo?: string }): Promise<any>;
   sendMedia?(conn: WhatsAppConnection, customerId: string, file: File, caption?: string): Promise<any>;
   sendAudio?(conn: WhatsAppConnection, customerId: string, blob: Blob): Promise<any>;
   sendRich?(conn: WhatsAppConnection, customerId: string, payload: any): Promise<any>;
