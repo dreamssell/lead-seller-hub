@@ -250,6 +250,12 @@ jobs:
             echo "  \"videos\": $(ls -1 ${OUT}/videos 2>/dev/null | wc -l)"
             echo "}"
           } > "${OUT}/manifest.json"
+          # Skip reason (só quando o job foi pulado por preflight).
+          if [ "${{ steps.preflight.outputs.should_run || 'unknown' }}" != "true" ]; then
+            printf '{"skipped":true,"browser":"%s","reason":"%s","is_fork_pr":"%s","event":"%s","run_id":"%s"}\n' \
+              "${BR}" "${{ steps.preflight.outputs.skip_reason || 'unknown' }}" "${IS_FORK_PR}" "${GITHUB_EVENT_NAME}" "${GITHUB_RUN_ID}" \
+              > "${OUT}/skip.json"
+          fi
           ls -la "${OUT}" || true
 
       - name: Upload artefatos separados por browser
