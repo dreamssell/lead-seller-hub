@@ -222,7 +222,7 @@ export default function ChatPage() {
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const { isSupervisor, userId: currentUserId } = useIsSupervisor();
-  const { access, accessLoading, reloadAccess, user } = useAuth();
+  const { access, accessLoading, reloadAccess } = useAuth();
   const activeOwnerId = getActiveOwnerId(access?.owner_id, null);
   const convsRef = useRef(convs);
 
