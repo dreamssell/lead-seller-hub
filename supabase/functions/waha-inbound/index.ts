@@ -388,6 +388,74 @@ Deno.serve(async (req) => {
     return json({ ok: true, ack: ackLabel, ids });
   }
 
+  // ── REACTION ─────────────────────────────────────────────────────────────
+  // WEBJS: body.payload.reaction = { msgId: {_serialized}, text, senderId, fromMe, ack }
+  // GOWS/Baileys: body.data.Message.reactionMessage = { key: { id, remoteJid, fromMe }, text, senderTimestampMs }
+  if (bucket === 'reaction') {
+    const reactWeb = webPayload?.reaction || null;
+    const reactGows = msgWrap?.reactionMessage || null;
+
+    const targetMsgId =
+      extractId(reactWeb?.msgId) ||
+      extractId(reactWeb?.id) ||
+      reactGows?.key?.id ||
+      reactGows?.key?.ID ||
+      null;
+    const emoji = String(reactWeb?.text ?? reactGows?.text ?? '');
+    const reactionFromMe =
+      reactWeb?.fromMe === true ||
+      reactGows?.key?.fromMe === true ||
+      info?.IsFromMe === true;
+    const reactorJid =
+      reactWeb?.senderId ||
+      info?.Sender ||
+      info?.Chat ||
+      reactGows?.key?.participant ||
+      reactGows?.key?.remoteJid ||
+      null;
+    const reactorKey = reactionFromMe ? 'me' : (typeof reactorJid === 'string' ? reactorJid : 'peer');
+
+    if (!targetMsgId) {
+      return json({ ok: true, skipped: 'reaction_without_target' });
+    }
+
+    const { data: msgRow } = await supabase
+      .from('chat_messages')
+      .select('id, metadata')
+      .eq('uaz_msg_id', targetMsgId)
+      .maybeSingle();
+    if (!msgRow) {
+      return json({ ok: true, skipped: 'reaction_target_not_found', target: targetMsgId });
+    }
+
+    const prevReactions = ((msgRow.metadata as any)?.reactions) || {};
+    const nextReactions: Record<string, any> = { ...prevReactions };
+    if (!emoji) {
+      // Empty reaction text → remove.
+      delete nextReactions[reactorKey];
+    } else {
+      nextReactions[reactorKey] = {
+        emoji,
+        from_me: reactionFromMe,
+        jid: reactorJid,
+        at: new Date().toISOString(),
+      };
+    }
+
+    await supabase
+      .from('chat_messages')
+      .update({
+        metadata: {
+          ...(msgRow.metadata || {}),
+          reactions: nextReactions,
+          last_reaction_at: new Date().toISOString(),
+        },
+      })
+      .eq('id', msgRow.id);
+
+    return json({ ok: true, reaction: { target: targetMsgId, by: reactorKey, emoji: emoji || null } });
+  }
+
   // ── INBOUND MESSAGE ──────────────────────────────────────────────────────
   // Prefer GOWS Info; fall back to WEBJS payload and Baileys _data wrapper.
   const fromMeFlag =
