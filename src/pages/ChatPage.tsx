@@ -18,7 +18,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 
 
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -223,7 +223,12 @@ export default function ChatPage() {
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const { isSupervisor, userId: currentUserId } = useIsSupervisor();
   const { access, accessLoading, reloadAccess, user } = useAuth();
-  const activeOwnerId = getActiveOwnerId(access?.owner_id, user?.id ?? currentUserId ?? null);
+  const activeOwnerId = getActiveOwnerId(access?.owner_id, null);
+  const convsRef = useRef(convs);
+
+  useEffect(() => {
+    convsRef.current = convs;
+  }, [convs]);
 
   // Ctrl/Cmd+K → busca global
   useEffect(() => {
@@ -556,7 +561,7 @@ export default function ChatPage() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
         const row: any = payload.new;
         if (!row) return;
-        const belongsToVisibleScope = Object.values(convs).some((items) => items.some((c: any) => c.id === row.customer_id && c.owner_id === activeOwnerId));
+        const belongsToVisibleScope = Object.values(convsRef.current).some((items) => items.some((c: any) => c.id === row.customer_id && c.owner_id === activeOwnerId));
         if (!belongsToVisibleScope) return;
         addDebugLog('info', 'Nova mensagem recebida via Realtime', row);
         if (row.customer_id === selectedConvId) {
@@ -616,7 +621,7 @@ export default function ChatPage() {
       clearInterval(receiptTimer);
       supabase.removeChannel(channel);
     };
-  }, [selectedConvId, whatsappStatus.connected, activeChannel, activeOwnerId, convs]);
+  }, [selectedConvId, whatsappStatus.connected, activeChannel, activeOwnerId]);
 
   useEffect(() => {
     // Real-time listener for connection events (Omnichannel Diagnostics)
@@ -677,7 +682,7 @@ export default function ChatPage() {
     let cancelled = false;
     const convAtStart = selectedConvId;
     (async () => {
-      const scopedConv = (activeChannel ? convs[activeChannel] : Object.values(convs).flat()).find((c) => c.id === convAtStart) as any;
+      const scopedConv = (activeChannel ? convsRef.current[activeChannel] : Object.values(convsRef.current).flat()).find((c) => c.id === convAtStart) as any;
       if (!canUseTenantRecord(activeOwnerId, scopedConv?.owner_id ?? null)) {
         addDebugLog('error', 'Consulta de mensagens bloqueada por owner divergente', {
           owner_ativo: activeOwnerId,
@@ -717,7 +722,7 @@ export default function ChatPage() {
       }));
     })();
     return () => { cancelled = true; };
-  }, [selectedConvId, activeChannel, activeOwnerId, convs]);
+  }, [selectedConvId, activeChannel, activeOwnerId]);
 
   // Autofocus composer when a conversation is selected
   useEffect(() => {
