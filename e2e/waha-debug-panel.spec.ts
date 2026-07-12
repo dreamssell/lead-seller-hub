@@ -350,6 +350,36 @@ test.describe('Debug WAHA · paginação + gaps + call link + export', () => {
     await page.getByRole('button', { name: /^PDF$/ }).click({ force: true }).catch(() => {});
     await page.waitForTimeout(1500);
     expect(downloadFired, 'nenhum arquivo deve ser gerado após erro 500').toBe(false);
+
+    // aria-busy nunca deve ficar preso em 'true' quando a request falha:
+    // o botão não deve entrar no fluxo de exporting (data === null bloqueia
+    // runExport pelo disabled), portanto aria-busy permanece 'false'.
+    for (const tid of ['export-csv', 'export-pdf', 'export-csv-consolidado', 'export-pdf-consolidado']) {
+      const btn = page.getByTestId(tid);
+      await expect(btn).toHaveAttribute('aria-busy', 'false');
+      await expect(btn).toBeDisabled();
+    }
+
+    // Ao recuperar (mock volta a responder 200), a UI reabilita os botões e
+    // aria-busy segue em 'false' até o usuário clicar.
+    await page.unroute('**/functions/v1/waha-audit');
+    await page.route('**/functions/v1/waha-audit', async (route: Route) => {
+      let body: any = {};
+      try { body = route.request().postDataJSON(); } catch { body = {}; }
+      const respBody = buildAuditPayload({ cursor: body?.cursor ?? null, order: body?.order ?? 'desc' });
+      return route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(respBody),
+      });
+    });
+    await page.getByRole('button', { name: /Recarregar/i }).click();
+    await expect(page.getByText('MSG-1', { exact: false })).toBeVisible({ timeout: 10_000 });
+    for (const tid of ['export-csv', 'export-pdf']) {
+      const btn = page.getByTestId(tid);
+      await expect(btn).toBeEnabled();
+      await expect(btn).toHaveAttribute('aria-busy', 'false');
+    }
   });
 
   test('intercepta body do waha-audit: order/cursor mudam exatamente no toggle de Prev/Next e asc/desc', async ({ page }) => {
