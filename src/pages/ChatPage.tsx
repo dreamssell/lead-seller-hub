@@ -1554,6 +1554,88 @@ export default function ChatPage() {
 
 
 
+  // Etapa 4 — encaminhar mensagem para outro contato do mesmo canal.
+  const handleForwardTo = async (message: any, toConvId: string) => {
+    if (!message?.uaz_msg_id || activeChannel !== 'whatsapp' || !activeWhatsAppConn) {
+      toast({ title: 'Encaminhamento indisponível', description: 'Mensagem ainda não confirmada pelo provedor.', variant: 'destructive' });
+      return;
+    }
+    const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+    if (!adapter.forwardMessage) {
+      toast({ title: 'Canal não suporta encaminhamento', variant: 'destructive' });
+      return;
+    }
+    try {
+      await adapter.forwardMessage(activeWhatsAppConn, message.uaz_msg_id, toConvId);
+      toast({ title: 'Mensagem encaminhada' });
+      setForwardTarget(null);
+    } catch (err: any) {
+      toast({ title: 'Falha ao encaminhar', description: err?.message || String(err), variant: 'destructive' });
+    }
+  };
+
+  // Etapa 4 — editar texto da própria mensagem (janela WhatsApp 15min).
+  const handleConfirmEdit = async () => {
+    const message = editTarget;
+    const newText = editText.trim();
+    if (!message || !newText) { setEditTarget(null); return; }
+    if (activeChannel !== 'whatsapp' || !activeWhatsAppConn) {
+      toast({ title: 'Edição disponível apenas no WhatsApp', variant: 'destructive' });
+      return;
+    }
+    const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+    if (!adapter.editMessage) {
+      toast({ title: 'Canal não suporta edição', variant: 'destructive' });
+      return;
+    }
+    const prevContent = message.content;
+    // Optimistic
+    setMessages(prev => prev.map(m => (m.id === message.id) ? { ...m, content: newText, _edited: true, _editedAt: new Date().toISOString() } : m));
+    try {
+      const meta = getMessageMetadata(message) || {};
+      const edits = Array.isArray(meta.edits) ? meta.edits : [];
+      edits.push({ at: new Date().toISOString(), from: prevContent });
+      await supabase.from('chat_messages').update({
+        content: newText,
+        metadata: { ...meta, edited: true, edited_at: new Date().toISOString(), edits },
+      }).eq('id', message.id);
+      await adapter.editMessage(activeWhatsAppConn, message.uaz_msg_id, message.customer_id || selectedConvId, newText);
+      toast({ title: 'Mensagem editada' });
+      setEditTarget(null);
+    } catch (err: any) {
+      setMessages(prev => prev.map(m => (m.id === message.id) ? { ...m, content: prevContent } : m));
+      toast({ title: 'Falha ao editar', description: err?.message || String(err), variant: 'destructive' });
+    }
+  };
+
+  // Etapa 4 — apagar mensagem para todos (default) ou apenas para mim.
+  const handleDeleteMessage = async (message: any, forEveryone = true) => {
+    if (!message?.uaz_msg_id || activeChannel !== 'whatsapp' || !activeWhatsAppConn) {
+      toast({ title: 'Exclusão indisponível', description: 'Mensagem ainda não confirmada pelo provedor.', variant: 'destructive' });
+      return;
+    }
+    if (!window.confirm(forEveryone ? 'Apagar esta mensagem para todos?' : 'Apagar esta mensagem apenas para você?')) return;
+    const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+    if (!adapter.deleteMessage) {
+      toast({ title: 'Canal não suporta exclusão', variant: 'destructive' });
+      return;
+    }
+    const prev = { content: message.content, revoked: message._revoked };
+    setMessages(list => list.map(m => (m.id === message.id) ? { ...m, content: '[mensagem apagada]', _revoked: true } : m));
+    try {
+      const meta = getMessageMetadata(message) || {};
+      await supabase.from('chat_messages').update({
+        content: '[mensagem apagada]',
+        metadata: { ...meta, revoked: true, revoked_at: new Date().toISOString(), original_content: meta.original_content ?? prev.content },
+      }).eq('id', message.id);
+      await adapter.deleteMessage(activeWhatsAppConn, message.uaz_msg_id, message.customer_id || selectedConvId, forEveryone);
+      toast({ title: 'Mensagem apagada' });
+    } catch (err: any) {
+      setMessages(list => list.map(m => (m.id === message.id) ? { ...m, content: prev.content, _revoked: prev.revoked } : m));
+      toast({ title: 'Falha ao apagar', description: err?.message || String(err), variant: 'destructive' });
+    }
+  };
+
   const handleSendRich = async (payload: RichPayload) => {
     if (!selectedConvId) return;
     if (!ensureActiveOwnerScope()) throw new Error('Owner ativo inválido para esta conversa.');
