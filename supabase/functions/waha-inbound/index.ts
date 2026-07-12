@@ -490,6 +490,34 @@ Deno.serve(async (req) => {
     !!msgWrap?.documentMessage;
   const content = extractedBody || (hasMedia ? '[mídia]' : '');
 
+  // Best-effort media persistence into the private chat-media bucket. Failure
+  // never blocks the inbound message — we just fall back to the [mídia] label.
+  let mediaMeta: any = null;
+  if (hasMedia) {
+    const media = extractMedia(webPayload, gowsData, msgWrap);
+    if (media) {
+      const wahaUrl = (conn.metadata as any)?.url || null;
+      const wahaToken = (conn.metadata as any)?.token || null;
+      const stored = await persistWahaMedia(supabase, {
+        ownerId: conn.owner_id,
+        connectionId: conn.id,
+        providerMsgId,
+        wahaUrl,
+        wahaToken,
+        media,
+      });
+      mediaMeta = {
+        media_type: media.kind,
+        media_mime: media.mimetype,
+        media_filename: media.filename,
+        media_duration: media.duration ?? null,
+        media_url: stored?.signedUrl ?? null,
+        media_path: stored?.path ?? null,
+        media_size: stored?.size ?? null,
+      };
+    }
+  }
+
   const { data: insertedMsg, error: msgErr } = await supabase.from('chat_messages').insert({
     customer_id: customerId,
     sender_type: 'client',
@@ -509,6 +537,7 @@ Deno.serve(async (req) => {
       sender_lid: senderLid,
       owner_id: conn.owner_id,
       webhook_received_at: new Date().toISOString(),
+      ...(mediaMeta || {}),
       raw: gowsData ?? webPayload,
     },
   }).select('id').single();
