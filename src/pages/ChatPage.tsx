@@ -1780,7 +1780,7 @@ export default function ChatPage() {
           )}
         </AnimatePresence>
 
-        {!whatsappStatus.loading && !whatsappStatus.connected && activeChannel === 'whatsapp' && (
+        {isOwner && !whatsappStatus.loading && !whatsappStatus.connected && activeChannel === 'whatsapp' && (
           <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-50 flex items-center justify-center p-6 text-center">
             <div className="glass-card p-8 max-w-md border-destructive/20 shadow-2xl animate-in fade-in zoom-in duration-300">
               <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
