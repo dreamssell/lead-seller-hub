@@ -2705,6 +2705,69 @@ export default function ChatPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Etapa 4 — Encaminhar mensagem */}
+      <Dialog open={!!forwardTarget} onOpenChange={(o) => !o && setForwardTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Encaminhar mensagem</DialogTitle>
+            <DialogDescription>Selecione um contato do WhatsApp para receber a mensagem.</DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border border-border bg-secondary/40 p-2 text-xs max-h-24 overflow-hidden">
+            <span className="opacity-70">Prévia: </span>
+            <span className="line-clamp-3">{forwardTarget?.content || '[mídia]'}</span>
+          </div>
+          <ScrollArea className="h-64 mt-2 border border-border rounded-md">
+            <div className="divide-y divide-border">
+              {(convs.whatsapp || []).filter((c: any) => c.id !== selectedConvId).map((c: any) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className="w-full text-left px-3 py-2 hover:bg-secondary/60 flex items-center gap-2"
+                  onClick={() => handleForwardTo(forwardTarget, c.id)}
+                >
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
+                    {(c.name || '?').split(/[\s.@]/).filter(Boolean).slice(0,2).map((n: string) => n[0]?.toUpperCase()).join('')}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm truncate">{c.name}</div>
+                    {c.phone && <div className="text-[10px] text-muted-foreground truncate">{c.phone}</div>}
+                  </div>
+                </button>
+              ))}
+              {(convs.whatsapp || []).length <= 1 && (
+                <div className="p-4 text-center text-xs text-muted-foreground">Nenhum outro contato disponível.</div>
+              )}
+            </div>
+          </ScrollArea>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setForwardTarget(null)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Etapa 4 — Editar mensagem */}
+      <Dialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar mensagem</DialogTitle>
+            <DialogDescription>O WhatsApp permite editar mensagens em até 15 minutos após o envio.</DialogDescription>
+          </DialogHeader>
+          <textarea
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            rows={4}
+            maxLength={4096}
+            className="w-full rounded-md border border-border bg-background p-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>Cancelar</Button>
+            <Button onClick={handleConfirmEdit} disabled={!editText.trim() || editText.trim() === (editTarget?.content || '')}>Salvar edição</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
+
       <MediaDropzone active={!!selectedConvId} onDrop={(files) => setExternalAttachment(files[0] || null)} />
       <KeyboardShortcutsHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       <GlobalSearchDialog open={globalSearchOpen} onOpenChange={setGlobalSearchOpen} />
