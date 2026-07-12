@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, RefreshCcw, Search, Radio, Activity, FileDown, FileText, ArrowDown, ArrowUp } from 'lucide-react';
+import { AlertTriangle, RefreshCcw, Search, Radio, Activity, FileDown, FileText, ArrowDown, ArrowUp, ExternalLink, Filter } from 'lucide-react';
 import { downloadCsv, downloadPdf } from '@/lib/ceoExport';
 
 interface AuditEvent {
@@ -39,6 +39,11 @@ interface AuditGap {
   owner_id?: string | null;
   raw_event?: string;
 }
+interface AuditCall {
+  id: string; wavoip_call_id: string | null; phone_number: string | null; contact_name: string | null;
+  direction: string | null; status: string | null; duration_seconds: number | null;
+  started_at: string | null; answered_at: string | null; ended_at: string | null; created_at: string;
+}
 interface AuditResponse {
   ok: boolean;
   owner_id: string;
@@ -55,15 +60,14 @@ interface AuditResponse {
     since_iso: string;
   };
   alerts: string[];
-  calls?: Array<{
-    id: string; wavoip_call_id: string | null; phone_number: string | null; contact_name: string | null;
-    direction: string | null; status: string | null; duration_seconds: number | null;
-    started_at: string | null; answered_at: string | null; ended_at: string | null; created_at: string;
-  }>;
-  pagination?: { limit: number; order: 'asc' | 'desc'; next_cursor: string | null };
+  calls?: AuditCall[];
+  pagination?: { limit: number; order: 'asc' | 'desc'; next_cursor: string | null; cursor_used: string | null };
+  meta?: { request_id?: string; owner_hash?: string };
 }
 
-const dt = (iso: string) => new Date(iso).toLocaleString('pt-BR');
+const dt = (iso: string) => (iso ? new Date(iso).toLocaleString('pt-BR') : '');
+const safeStamp = (iso?: string | null) =>
+  iso ? new Date(iso).toISOString().slice(0, 19).replace(/[:T]/g, '-') : 'inicio';
 
 function StageBadge({ label, ok, tone = 'default' }: { label: string; ok: boolean; tone?: 'default' | 'warn' }) {
   const cls = ok
@@ -80,12 +84,15 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
   const [error, setError] = useState<string | null>(null);
   const [messageIdFilter, setMessageIdFilter] = useState('');
   const [pendingMsgId, setPendingMsgId] = useState('');
+  const [callIdFilter, setCallIdFilter] = useState('');
+  const [pendingCallId, setPendingCallId] = useState('');
   const [renderTick, setRenderTick] = useState(0);
   const lastRealtimeRef = useRef<string | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<'idle' | 'connected' | 'error'>('idle');
   const [order, setOrder] = useState<'asc' | 'desc'>('desc');
   const [cursor, setCursor] = useState<string | null>(null);
   const [cursorStack, setCursorStack] = useState<Array<string | null>>([]);
+  const [gapsOnly, setGapsOnly] = useState(false);
 
   const fetchAudit = useCallback(async (opts?: { cursor?: string | null; order?: 'asc' | 'desc' }) => {
     if (!ownerId) return;
@@ -95,6 +102,7 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
         body: {
           owner_id: ownerId,
           message_id: messageIdFilter || null,
+          call_id: callIdFilter || null,
           limit: 200,
           since_hours: 24,
           order: opts?.order ?? order,
@@ -108,7 +116,7 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
     } finally {
       setLoading(false);
     }
-  }, [ownerId, messageIdFilter, order, cursor]);
+  }, [ownerId, messageIdFilter, callIdFilter, order, cursor]);
 
   useEffect(() => { fetchAudit(); }, [fetchAudit]);
 
@@ -131,19 +139,23 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
     setCursor(null); setCursorStack([]);
   };
 
+  // Aggregated rows (per-event, joined to messages and calls)
   const exportRows = useMemo(() => {
     if (!data) return [] as Array<Record<string, string | number>>;
-    const callsByPhone = new Map<string, { call_id: string; wavoip_call_id: string | null; answered_at: string | null; ended_at: string | null }>();
+    const callsByPhone = new Map<string, AuditCall>();
     (data.calls || []).forEach((c) => {
       const key = (c.phone_number || '').replace(/\D/g, '');
-      if (key) callsByPhone.set(key, { call_id: c.id, wavoip_call_id: c.wavoip_call_id, answered_at: c.answered_at, ended_at: c.ended_at });
+      if (key) callsByPhone.set(key, c);
     });
     const msgByPid = new Map<string, AuditMessage>();
     (data.messages || []).forEach((m) => { if (m.uaz_msg_id) msgByPid.set(m.uaz_msg_id, m); });
+    const gapIds = new Set(data.gaps.map((g) => g.event_id));
     const rowsOut: Array<Record<string, string | number>> = [];
     for (const ev of data.events || []) {
       const meta = ev.metadata_json || {};
       if (meta.bucket !== 'message') continue;
+      const isGap = gapIds.has(ev.id);
+      if (gapsOnly && !isGap) continue;
       const msg = meta.provider_msg_id ? msgByPid.get(meta.provider_msg_id) : undefined;
       const phone = (msg?.customers?.phone || meta.sender_jid || '').replace(/\D/g, '');
       const call = phone ? callsByPhone.get(phone) : undefined;
@@ -153,28 +165,76 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
         sender_lid: meta.sender_lid || meta.sender_jid || '',
         owner_id: meta.owner_id || msg?.customers?.owner_id || '',
         recorded: msg ? 'sim' : 'nao',
+        is_gap: isGap ? 'sim' : 'nao',
         recorded_at: msg?.created_at || '',
         preview: (msg?.content || meta.raw_event || '').toString().slice(0, 200),
-        call_id: call?.call_id || '',
+        call_id: call?.id || '',
         wavoip_call_id: call?.wavoip_call_id || '',
         call_answered_at: call?.answered_at || '',
         call_ended_at: call?.ended_at || '',
       });
     }
     return rowsOut;
+  }, [data, gapsOnly]);
+
+  // Consolidated aggregation: per-sender + per-hour bucket (owner-scoped).
+  const consolidatedRows = useMemo(() => {
+    if (!data) return [] as Array<Record<string, string | number>>;
+    const gapIds = new Set(data.gaps.map((g) => g.event_id));
+    const storedPids = new Set((data.messages || []).map((m) => m.uaz_msg_id).filter(Boolean));
+    const buckets = new Map<string, { sender: string; hour: string; webhooks: number; recorded: number; gaps: number; last_at: string }>();
+    for (const ev of data.events || []) {
+      const meta = ev.metadata_json || {};
+      if (meta.bucket !== 'message') continue;
+      const sender = meta.sender_lid || meta.sender_jid || 'desconhecido';
+      const hour = ev.created_at.slice(0, 13) + ':00';
+      const key = `${sender}::${hour}`;
+      const row = buckets.get(key) || { sender, hour, webhooks: 0, recorded: 0, gaps: 0, last_at: ev.created_at };
+      row.webhooks += 1;
+      if (meta.provider_msg_id && storedPids.has(meta.provider_msg_id)) row.recorded += 1;
+      if (gapIds.has(ev.id)) row.gaps += 1;
+      if (ev.created_at > row.last_at) row.last_at = ev.created_at;
+      buckets.set(key, row);
+    }
+    return Array.from(buckets.values())
+      .sort((a, b) => (a.hour === b.hour ? a.sender.localeCompare(b.sender) : b.hour.localeCompare(a.hour)))
+      .map((r) => ({
+        hora: r.hour, sender: r.sender, webhooks: r.webhooks, gravadas: r.recorded,
+        gaps: r.gaps, gap_rate_pct: r.webhooks > 0 ? Math.round((r.gaps / r.webhooks) * 100) : 0,
+        ultima: r.last_at,
+      }));
   }, [data]);
 
+  const rangeFrom = data?.stats.since_iso ?? null;
+  const rangeTo = useMemo(() => {
+    if (!data?.events?.length) return null;
+    return data.events.reduce((max, e) => (e.created_at > max ? e.created_at : max), data.events[0].created_at);
+  }, [data]);
+
+  const filenameBase = () => {
+    const ownerFrag = (ownerId || 'owner').slice(0, 8);
+    return `waha-audit-${ownerFrag}-${safeStamp(rangeFrom)}_to_${safeStamp(rangeTo)}`;
+  };
+
+  const filtersLine = () => {
+    const parts = [
+      `filtros: msg=${messageIdFilter || '—'}`,
+      `call=${callIdFilter || '—'}`,
+      `gaps_only=${gapsOnly ? 'sim' : 'nao'}`,
+      `ordem=${order}`,
+    ];
+    return parts.join(' · ');
+  };
+
   const handleExportCsv = () => {
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-    downloadCsv(`waha-audit-${ownerId}-${stamp}.csv`, exportRows);
+    downloadCsv(`${filenameBase()}.csv`, exportRows);
   };
   const handleExportPdf = () => {
     if (!data) return;
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
     downloadPdf(
-      `waha-audit-${ownerId}-${stamp}.pdf`,
+      `${filenameBase()}.pdf`,
       'Auditoria WAHA — pipeline inbound',
-      `Owner ${ownerId} · desde ${new Date(data.stats.since_iso).toLocaleString('pt-BR')} · ordem ${order}`,
+      `Owner ${ownerId} · janela ${dt(rangeFrom || '')} → ${dt(rangeTo || '')} · ${filtersLine()}`,
       [
         { label: 'Webhooks msg', value: data.stats.message_events },
         { label: 'Gravados', value: data.stats.messages_stored },
@@ -183,6 +243,24 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
         { label: 'Ligações', value: (data.calls || []).length },
       ],
       exportRows,
+    );
+  };
+  const handleExportConsolidatedCsv = () => {
+    downloadCsv(`${filenameBase()}-consolidado.csv`, consolidatedRows);
+  };
+  const handleExportConsolidatedPdf = () => {
+    if (!data) return;
+    downloadPdf(
+      `${filenameBase()}-consolidado.pdf`,
+      'Auditoria WAHA — consolidado por sender/hora',
+      `Owner ${ownerId} · janela ${dt(rangeFrom || '')} → ${dt(rangeTo || '')} · ${filtersLine()}`,
+      [
+        { label: 'Senders únicos', value: new Set(consolidatedRows.map((r) => r.sender)).size },
+        { label: 'Horas cobertas', value: new Set(consolidatedRows.map((r) => r.hora)).size },
+        { label: 'Webhooks msg', value: data.stats.message_events },
+        { label: 'Gaps totais', value: data.stats.gaps },
+      ],
+      consolidatedRows,
     );
   };
 
@@ -195,7 +273,6 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter }, (payload) => {
         lastRealtimeRef.current = new Date().toISOString();
         setRenderTick((t) => t + 1);
-        // opportunistic refresh so gap counts update
         fetchAudit();
         // eslint-disable-next-line no-console
         console.info('[WahaDebug] realtime insert', payload.new);
@@ -209,12 +286,18 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
 
   const rows = useMemo(() => {
     if (!data) return [] as Array<{
-      event: AuditEvent | null; message: AuditMessage | null; providerMsgId: string | null;
+      event: AuditEvent | null; message: AuditMessage | null; providerMsgId: string | null; isGap: boolean; call: AuditCall | null;
     }>;
     const byMsgId = new Map<string, AuditMessage>();
     (data.messages || []).forEach((m) => { if (m.uaz_msg_id) byMsgId.set(m.uaz_msg_id, m); });
+    const callsByPhone = new Map<string, AuditCall>();
+    (data.calls || []).forEach((c) => {
+      const key = (c.phone_number || '').replace(/\D/g, '');
+      if (key) callsByPhone.set(key, c);
+    });
+    const gapIds = new Set(data.gaps.map((g) => g.event_id));
     const seen = new Set<string>();
-    const out: Array<{ event: AuditEvent | null; message: AuditMessage | null; providerMsgId: string | null }> = [];
+    const out: Array<{ event: AuditEvent | null; message: AuditMessage | null; providerMsgId: string | null; isGap: boolean; call: AuditCall | null }> = [];
     for (const ev of data.events || []) {
       const meta = ev.metadata_json || {};
       if (meta.bucket !== 'message') continue;
@@ -222,20 +305,29 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
       const key = `ev:${ev.id}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ event: ev, message: pid ? byMsgId.get(pid) || null : null, providerMsgId: pid });
+      const msg = pid ? byMsgId.get(pid) || null : null;
+      const phone = (msg?.customers?.phone || meta.sender_jid || '').replace(/\D/g, '');
+      const call = phone ? callsByPhone.get(phone) || null : null;
+      const isGap = gapIds.has(ev.id);
+      if (gapsOnly && !isGap) continue;
+      out.push({ event: ev, message: msg, providerMsgId: pid, isGap, call });
     }
-    // orphan messages (no matching event within window)
-    const eventPids = new Set((data.events || []).map((e) => e.metadata_json?.provider_msg_id).filter(Boolean));
-    for (const m of data.messages || []) {
-      if (!m.uaz_msg_id || eventPids.has(m.uaz_msg_id)) continue;
-      out.push({ event: null, message: m, providerMsgId: m.uaz_msg_id });
+    if (!gapsOnly) {
+      const eventPids = new Set((data.events || []).map((e) => e.metadata_json?.provider_msg_id).filter(Boolean));
+      for (const m of data.messages || []) {
+        if (!m.uaz_msg_id || eventPids.has(m.uaz_msg_id)) continue;
+        out.push({ event: null, message: m, providerMsgId: m.uaz_msg_id, isGap: false, call: null });
+      }
     }
     return out.slice(0, 120);
-  }, [data]);
+  }, [data, gapsOnly]);
 
   if (!ownerId) {
     return <Card className="p-6 text-sm text-muted-foreground">Owner sem canal WAHA para auditar.</Card>;
   }
+
+  const cursorLabel = cursor ? dt(cursor) : 'início da janela';
+  const nextLabel = data?.pagination?.next_cursor ? dt(data.pagination.next_cursor) : null;
 
   return (
     <div className="space-y-3">
@@ -254,8 +346,21 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
               />
             </div>
           </div>
-          <Button size="sm" onClick={() => setMessageIdFilter(pendingMsgId.trim())}>Aplicar filtro</Button>
-          <Button size="sm" variant="outline" onClick={() => { setPendingMsgId(''); setMessageIdFilter(''); }}>Limpar</Button>
+          <div className="min-w-[200px]">
+            <Label className="text-[11px] text-muted-foreground">Filtrar por call_id</Label>
+            <Input
+              value={pendingCallId}
+              onChange={(e) => setPendingCallId(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && setCallIdFilter(pendingCallId.trim())}
+              placeholder="uuid da chamada"
+              className="h-9 font-mono text-xs"
+            />
+          </div>
+          <Button size="sm" onClick={() => { setMessageIdFilter(pendingMsgId.trim()); setCallIdFilter(pendingCallId.trim()); setCursor(null); setCursorStack([]); }}>Aplicar</Button>
+          <Button size="sm" variant="outline" onClick={() => { setPendingMsgId(''); setMessageIdFilter(''); setPendingCallId(''); setCallIdFilter(''); setCursor(null); setCursorStack([]); }}>Limpar</Button>
+          <Button size="sm" variant={gapsOnly ? 'default' : 'outline'} onClick={() => setGapsOnly((v) => !v)} title="Mostrar apenas gaps/deduplicações suspeitas">
+            <Filter className="w-3.5 h-3.5 mr-1" /> {gapsOnly ? 'Somente gaps ✓' : 'Somente gaps'}
+          </Button>
           <Button size="sm" variant="outline" onClick={() => fetchAudit()} disabled={loading}>
             <RefreshCcw className={`w-3.5 h-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} /> Recarregar
           </Button>
@@ -263,18 +368,33 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
             {order === 'desc' ? <ArrowDown className="w-3.5 h-3.5 mr-1" /> : <ArrowUp className="w-3.5 h-3.5 mr-1" />}
             {order === 'desc' ? 'Mais recentes' : 'Mais antigos'}
           </Button>
-          <Button size="sm" variant="outline" onClick={handlePrevPage} disabled={loading || cursorStack.length === 0}>← Anterior</Button>
-          <Button size="sm" variant="outline" onClick={handleNextPage} disabled={loading || !data?.pagination?.next_cursor}>Próxima →</Button>
           <Button size="sm" variant="outline" onClick={handleExportCsv} disabled={loading || !data}>
             <FileDown className="w-3.5 h-3.5 mr-1" /> CSV
           </Button>
           <Button size="sm" variant="outline" onClick={handleExportPdf} disabled={loading || !data}>
             <FileText className="w-3.5 h-3.5 mr-1" /> PDF
           </Button>
+          <Button size="sm" variant="outline" onClick={handleExportConsolidatedCsv} disabled={loading || !data}>
+            <FileDown className="w-3.5 h-3.5 mr-1" /> CSV consolidado
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleExportConsolidatedPdf} disabled={loading || !data}>
+            <FileText className="w-3.5 h-3.5 mr-1" /> PDF consolidado
+          </Button>
           <div className="ml-auto flex items-center gap-2 text-xs">
             <Radio className={`w-3.5 h-3.5 ${realtimeStatus === 'connected' ? 'text-success' : realtimeStatus === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} />
             Realtime {realtimeStatus === 'connected' ? 'ativo' : realtimeStatus === 'error' ? 'com erro' : 'inicializando'}
             {renderTick > 0 && <span className="text-muted-foreground">· {renderTick} eventos renderizados</span>}
+          </div>
+        </div>
+
+        {/* Pagination row */}
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground border-t border-border/60 pt-2">
+          <span>Cursor atual: <strong className="text-foreground font-mono">{cursorLabel}</strong></span>
+          <span>· Ordenando por <strong className="text-foreground">created_at {order}</strong></span>
+          {nextLabel && <span>· Próximo lote inicia em <strong className="text-foreground font-mono">{nextLabel}</strong></span>}
+          <div className="ml-auto flex gap-2">
+            <Button size="sm" variant="outline" onClick={handlePrevPage} disabled={loading || cursorStack.length === 0}>← Anterior</Button>
+            <Button size="sm" variant="outline" onClick={handleNextPage} disabled={loading || !data?.pagination?.next_cursor}>Próxima →</Button>
           </div>
         </div>
       </Card>
@@ -318,7 +438,9 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
       <Card className="p-0 overflow-hidden">
         <div className="p-3 border-b border-border flex items-center gap-2">
           <Activity className="w-4 h-4 text-primary" />
-          <p className="text-sm font-semibold">Pipeline webhook → gravação → realtime → render</p>
+          <p className="text-sm font-semibold">
+            Pipeline webhook → gravação → realtime → render {gapsOnly && <span className="text-destructive">· somente gaps</span>}
+          </p>
           <span className="text-xs text-muted-foreground ml-auto">Últimas {rows.length} entradas</span>
         </div>
         {rows.length === 0 ? (
@@ -334,6 +456,7 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
                   <th className="text-left p-2">Owner</th>
                   <th className="text-left p-2">Webhook</th>
                   <th className="text-left p-2">Gravado</th>
+                  <th className="text-left p-2">Call</th>
                   <th className="text-left p-2">Preview</th>
                 </tr>
               </thead>
@@ -343,7 +466,7 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
                   const stageWebhook = !!r.event;
                   const stageRecorded = !!r.message || !!meta.chat_message_id;
                   return (
-                    <tr key={`${r.event?.id || r.message?.id || i}`} className="border-t border-border align-top">
+                    <tr key={`${r.event?.id || r.message?.id || i}`} className={`border-t border-border align-top ${r.isGap ? 'bg-destructive/5' : ''}`}>
                       <td className="p-2 whitespace-nowrap">{dt(r.event?.created_at || r.message?.created_at || '')}</td>
                       <td className="p-2 font-mono truncate max-w-[200px]" title={r.providerMsgId || ''}>{r.providerMsgId || '—'}</td>
                       <td className="p-2 font-mono truncate max-w-[160px]" title={meta.sender_lid || meta.sender_jid || ''}>{meta.sender_lid || meta.sender_jid || r.message?.customers?.phone || '—'}</td>
@@ -351,6 +474,19 @@ export function WahaInboundDebugPanel({ ownerId, connectionIds }: { ownerId: str
                       <td className="p-2"><StageBadge label="webhook" ok={stageWebhook} /></td>
                       <td className="p-2">
                         <StageBadge label={stageRecorded ? 'gravado' : 'pendente'} ok={stageRecorded} tone={stageWebhook && !stageRecorded ? 'warn' : 'default'} />
+                      </td>
+                      <td className="p-2">
+                        {r.call ? (
+                          <a
+                            href={`/calls?call_id=${r.call.id}${r.call.wavoip_call_id ? `&wavoip_call_id=${r.call.wavoip_call_id}` : ''}`}
+                            target="_blank" rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-primary hover:underline font-mono"
+                            title={`Abrir detalhes da chamada ${r.call.id}`}
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            {r.call.id.slice(0, 8)}
+                          </a>
+                        ) : '—'}
                       </td>
                       <td className="p-2 max-w-[260px] truncate text-muted-foreground">{r.message?.content || meta.raw_event || '—'}</td>
                     </tr>
