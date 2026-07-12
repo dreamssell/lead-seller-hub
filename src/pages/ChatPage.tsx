@@ -24,6 +24,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
@@ -274,6 +275,13 @@ export default function ChatPage() {
   const [authValidation, setAuthValidation] = useState<{ valid: boolean; reason?: string; loading: boolean }>({ valid: false, loading: true });
   const [activeWhatsAppConn, setActiveWhatsAppConn] = useState<WhatsAppConnection | null>(null);
   const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
+  const [wavoipLineBusy, setWavoipLineBusy] = useState<{
+    busy: boolean;
+    phone?: string | null;
+    since?: string | null;
+    userId?: string | null;
+    tooltip: string;
+  }>({ busy: false, tooltip: 'Linha Wavoip livre' });
   const [whatsappStatus, setWhatsappStatus] = useState<{ connected: boolean; loading: boolean; dbStatus: WhatsAppDbStatus; phone?: string; error?: string }>({
     connected: false,
     loading: true,
@@ -482,6 +490,8 @@ export default function ChatPage() {
             botEnabled: false,
             assignedTo: '',
             phone: c.phone,
+            owner_id: (c as any).owner_id || null,
+            sub_company_id: (c as any).sub_company_id || null,
             avatar_url: (c as any).avatar_url || null,
             email: c.email || null,
             _sortAt: sortAt,
@@ -694,6 +704,59 @@ export default function ChatPage() {
 
   const list = activeChannel ? convs[activeChannel] : [];
   const selectedConv = list.find((c) => c.id === selectedConvId) || (selectedConvId ? null : list[0]);
+
+  useEffect(() => {
+    const owner = activeWhatsAppConn?.owner_id || (selectedConv as any)?.owner_id || wavoip.scope.owner_id;
+    if (!owner) {
+      setWavoipLineBusy({ busy: false, tooltip: 'Linha Wavoip livre' });
+      return;
+    }
+
+    let cancelled = false;
+    const applyRows = (rows: any[] | null | undefined) => {
+      if (cancelled) return;
+      const freshCutoff = Date.now() - 45_000;
+      const row = (rows || []).find((r) => {
+        const hb = Date.parse(r.last_heartbeat_at || r.updated_at || r.since || '');
+        return r.status === 'in_call' && Number.isFinite(hb) && hb >= freshCutoff;
+      });
+      if (!row) {
+        setWavoipLineBusy({ busy: false, tooltip: 'Linha Wavoip livre' });
+        return;
+      }
+      setWavoipLineBusy({
+        busy: true,
+        phone: row.phone,
+        since: row.since,
+        userId: row.user_id,
+        tooltip: `Linha Wavoip ocupada${row.phone ? ` com ${row.phone}` : ''}${row.since ? ` desde ${new Date(row.since).toLocaleTimeString('pt-BR')}` : ''}`,
+      });
+    };
+    const loadLineState = async () => {
+      const since = new Date(Date.now() - 45_000).toISOString();
+      const { data, error } = await (supabase as any)
+        .from('wavoip_line_state')
+        .select('*')
+        .eq('owner_id', owner)
+        .eq('status', 'in_call')
+        .gte('last_heartbeat_at', since)
+        .order('last_heartbeat_at', { ascending: false })
+        .limit(5);
+      if (!error) applyRows(data);
+    };
+
+    loadLineState();
+    const channel = supabase
+      .channel(`wavoip_line_state_${owner}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wavoip_line_state', filter: `owner_id=eq.${owner}` }, loadLineState)
+      .subscribe();
+    const timer = setInterval(loadLineState, 20_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [activeWhatsAppConn?.owner_id, selectedConv?.id, wavoip.scope.owner_id]);
 
   const toggleBot = (id: string) => {
     if (!activeChannel) return;
@@ -1552,77 +1615,79 @@ export default function ChatPage() {
                     </SelectContent>
                   </Select>
 
+                  <TooltipProvider delayDuration={150}>
+                    <div className="flex items-center gap-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm hover:opacity-90 disabled:opacity-60"
+                            aria-label="Ligar por VoIP SIP"
+                            onClick={() => {
+                              if (voip.status !== 'connected') {
+                                toast({
+                                  title: 'VoIP desconectado',
+                                  description: 'Configure o SIP/VoIP em Configurações antes de ligar.',
+                                  variant: 'destructive',
+                                });
+                                return;
+                              }
+                              const target = selectedConv.phone || selectedConv.name;
+                              toast({ title: 'VoIP/SIP', description: `Discando ${target} via trunk SIP` });
+                              voip.makeCall(target);
+                            }}
+                          >
+                            <Headphones className="h-4 w-4" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>VoIP (SIP) · {voip.status === 'connected' ? 'pronto' : 'desconectado'}</TooltipContent>
+                      </Tooltip>
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="p-2 rounded-lg hover:bg-secondary" title="Iniciar chamada">
-                        <Phone className="w-4 h-4 text-muted-foreground" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-60">
-                      <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Ligar para {selectedConv.name}
-                      </DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => {
-                          if (!selectedConv.phone) {
-                            toast({ title: 'Sem número', description: 'Este contato não possui telefone.', variant: 'destructive' });
-                            return;
-                          }
-                          if (!wavoip.config.enabled || wavoip.config.devices.length === 0) {
-                            toast({
-                              title: 'Wavoip não configurado',
-                              description: 'Cadastre um Device Token em Configurações > Wavoip para usar o tronco WhatsApp.',
-                              variant: 'destructive',
-                            });
-                            return;
-                          }
-                          wavoip.callWhatsApp(selectedConv.phone, undefined, {
-                            customerId: selectedConv.id,
-                            contactName: selectedConv.name,
-                            ownerId: (selectedConv as any)?.owner_id ?? activeWhatsAppConn?.owner_id ?? null,
-                            subCompanyId: (selectedConv as any)?.sub_company_id ?? activeWhatsAppConn?.sub_company_id ?? null,
-                          });
-                        }}
-                        className="gap-2"
-                      >
-                        <PhoneCall className="w-4 h-4 text-emerald-500" />
-                        <div className="flex flex-col">
-                          <span className="text-xs font-semibold">WhatsApp (Wavoip)</span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {wavoip.config.enabled && wavoip.config.devices.length > 0
-                              ? `Tronco pronto · ${wavoip.config.devices.length} device(s)`
-                              : 'Tronco não configurado'}
-                          </span>
-                        </div>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          if (voip.status !== 'connected') {
-                            toast({
-                              title: 'VoIP desconectado',
-                              description: 'Configure o SIP/VoIP em Configurações antes de ligar.',
-                              variant: 'destructive',
-                            });
-                            return;
-                          }
-                          const target = selectedConv.phone || selectedConv.name;
-                          toast({ title: 'VoIP/SIP', description: `Discando ${target} via trunk SIP` });
-                          voip.makeCall(target);
-                        }}
-                        className="gap-2"
-                      >
-                        <Headphones className="w-4 h-4 text-primary" />
-                        <div className="flex flex-col">
-                          <span className="text-xs font-semibold">VoIP (SIP)</span>
-                          <span className="text-[10px] text-muted-foreground">
-                            Trunk SIP · {voip.status === 'connected' ? 'pronto' : 'desconectado'}
-                          </span>
-                        </div>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            className={`inline-flex h-9 items-center justify-center gap-1 rounded-lg px-3 text-xs font-semibold shadow-sm hover:opacity-90 ${wavoipLineBusy.busy ? 'bg-destructive text-destructive-foreground' : 'bg-success text-success-foreground'}`}
+                            aria-label="Ligar por Wavoip"
+                            onClick={() => {
+                              if (wavoipLineBusy.busy) {
+                                toast({ title: 'Linha Wavoip ocupada', description: wavoipLineBusy.tooltip, variant: 'destructive' });
+                                return;
+                              }
+                              if (!selectedConv.phone) {
+                                toast({ title: 'Sem número', description: 'Este contato não possui telefone.', variant: 'destructive' });
+                                return;
+                              }
+                              if (!wavoip.config.enabled || wavoip.config.devices.length === 0) {
+                                toast({
+                                  title: 'Wavoip não configurado',
+                                  description: 'Cadastre um Device Token em Configurações > Wavoip para usar o tronco WhatsApp.',
+                                  variant: 'destructive',
+                                });
+                                return;
+                              }
+                              wavoip.callWhatsApp(selectedConv.phone, undefined, {
+                                customerId: selectedConv.id,
+                                contactName: selectedConv.name,
+                                ownerId: (selectedConv as any)?.owner_id ?? activeWhatsAppConn?.owner_id ?? null,
+                                subCompanyId: (selectedConv as any)?.sub_company_id ?? activeWhatsAppConn?.sub_company_id ?? null,
+                              });
+                            }}
+                          >
+                            <PhoneCall className="h-4 w-4" />
+                            Ligar
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {wavoipLineBusy.busy
+                            ? wavoipLineBusy.tooltip
+                            : wavoip.config.enabled && wavoip.config.devices.length > 0
+                              ? `Wavoip pronto · ${wavoip.config.devices.length} device(s)`
+                              : 'Tronco Wavoip não configurado'}
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </TooltipProvider>
                   <Link to="/video-calls" className="p-2 rounded-lg hover:bg-secondary inline-flex" title="Vídeo chamada"><Video className="w-4 h-4 text-muted-foreground" /></Link>
                   <button
                     onClick={() => setSignatureModalOpen(true)}
