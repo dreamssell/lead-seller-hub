@@ -57,7 +57,7 @@ function normalizePhone(from?: string | null): string | null {
 // Classifies the incoming event into one of our three logical buckets, using
 // both the top-level `event` string and the shape of the payload so we work
 // with WEBJS ("message") and GOWS ("gows.MessageEventData") equally well.
-function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'ignore' {
+function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'presence' | 'ignore' {
   const e = event.toLowerCase();
   if (e === 'session.status' || e === 'status.instance') return 'session';
   if (e === 'message.ack' || e === 'ack' || e.endsWith('.receipteventdata')) return 'ack';
@@ -73,6 +73,10 @@ function classify(event: string, body: any): 'message' | 'ack' | 'session' | 're
   if (e === 'message.revoked' || e === 'message.revoke' || e === 'message.revoke_everyone' || e === 'message.revoke_me' || e.endsWith('.revokeeventdata')) return 'revoke';
   const protoType = String(gowsMsg?.protocolMessage?.type || '').toUpperCase();
   if (protoType === 'REVOKE' || protoType === 'MESSAGE_DELETE') return 'revoke';
+  // Etapa 5 — presença (digitando/gravando/online/last seen).
+  //   WEBJS: `presence.update` com { id: chatId, presences: [{ id, isOnline, lastKnownPresence, lastSeen }] }
+  //   GOWS:  gows.PresenceEventData (online/offline) ou gows.ChatPresenceEventData (typing/recording)
+  if (e === 'presence.update' || e.endsWith('.presenceeventdata') || e.endsWith('.chatpresenceeventdata')) return 'presence';
   if (e === 'message' || e === 'message.any') return 'message';
   // GOWS engine emits gows.MessageEventData with body.data.Info / body.data.Message
   if (e.includes('messageeventdata') || e.includes('gows.message')) return 'message';
