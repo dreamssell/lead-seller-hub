@@ -438,6 +438,7 @@ export default function CompanyDetailPage() {
               <TabsTrigger value="audit">Auditoria</TabsTrigger>
               <TabsTrigger value="seat" id="tab-seat">Bloqueios de assentos</TabsTrigger>
               <TabsTrigger value="licenses">Licenças</TabsTrigger>
+              <TabsTrigger value="waha-debug" id="tab-waha-debug">Debug WAHA</TabsTrigger>
             </TabsList>
 
             <TabsContent value="channels" className="mt-4">
