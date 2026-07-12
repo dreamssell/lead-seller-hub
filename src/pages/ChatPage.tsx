@@ -2354,7 +2354,15 @@ export default function ChatPage() {
 
                         {/* Reaction picker — appears on hover (WhatsApp only) */}
                         {activeChannel === 'whatsapp' && m.uaz_msg_id && (
-                          <div className={`absolute -top-3 ${m.sender_type !== 'client' ? '-left-2' : '-right-2'} opacity-0 group-hover:opacity-100 transition-opacity`}>
+                          <div className={`absolute -top-3 ${m.sender_type !== 'client' ? '-left-2' : '-right-2'} opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1`}>
+                            <button
+                              type="button"
+                              onClick={() => { setReplyingTo(m); const ta = document.querySelector<HTMLTextAreaElement>('textarea[data-composer="1"]'); ta?.focus(); }}
+                              className="w-7 h-7 rounded-full bg-background border border-border shadow-sm flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary"
+                              title="Responder à mensagem"
+                            >
+                              <Reply className="w-3.5 h-3.5" />
+                            </button>
                             <Popover>
                               <PopoverTrigger asChild>
                                 <button
