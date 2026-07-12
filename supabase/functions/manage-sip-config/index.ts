@@ -98,20 +98,47 @@ Deno.serve(async (req) => {
   if (userErr || !userData?.user) return fail(401, 'unauthenticated');
   const user = userData.user;
 
-  // Admin gate — every operation on SIP configs requires platform admin role.
-  const { data: isAdmin, error: roleErr } = await userClient.rpc('has_role', {
+  // Admin gate — write/delete/audit require platform admin.
+  // Reads (action=get) are allowed for any authenticated user of the tenant,
+  // so agents/coordinators can register the shared Wavoip trunk from CallsPage.
+  const { data: isAdmin } = await userClient.rpc('has_role', {
     _user_id: user.id,
     _role: 'admin',
   });
-  if (roleErr || isAdmin !== true) return fail(403, 'forbidden');
 
   let body: any;
   try { body = await req.json(); } catch { return fail(400, 'invalid_json'); }
   const action = String(body?.action || '');
   if (!action) return fail(400, 'missing_action');
 
+  if (action !== 'get' && isAdmin !== true) return fail(403, 'forbidden');
+
   const scope = body?.scope || {};
-  const ownerId: string | null = scope.owner_id || user.id;
+  // Non-admins can only fetch their OWN tenant SIP — never accept a caller-supplied owner_id.
+  // Resolve it from user_account_access; fall back to client_companies if not present.
+  const admin0 = createClient(SUPABASE_URL, SERVICE_ROLE);
+  let effectiveOwnerId: string | null = null;
+  if (isAdmin === true) {
+    effectiveOwnerId = scope.owner_id || user.id;
+  } else {
+    const { data: acc } = await admin0
+      .from('user_account_access')
+      .select('owner_id')
+      .eq('user_id', user.id)
+      .limit(1)
+      .maybeSingle();
+    if (acc?.owner_id) effectiveOwnerId = acc.owner_id;
+    if (!effectiveOwnerId) {
+      const { data: cc } = await admin0
+        .from('client_companies')
+        .select('owner_id, auth_user_id')
+        .eq('auth_user_id', user.id)
+        .maybeSingle();
+      if (cc) effectiveOwnerId = cc.auth_user_id === user.id ? user.id : (cc.owner_id || user.id);
+    }
+    if (!effectiveOwnerId) effectiveOwnerId = user.id;
+  }
+  const ownerId: string | null = effectiveOwnerId;
   const subCompanyId: string | null = scope.sub_company_id ?? null;
   const clientCompanyId: string | null = scope.client_company_id ?? null;
 

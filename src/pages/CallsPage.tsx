@@ -229,16 +229,16 @@ export default function CallsPage() {
   const [sipLoading, setSipLoading] = useState(false);
   const [sipAudit, setSipAudit] = useState<Array<{ id: string; action: string; changed_by_email: string | null; created_at: string }>>([]);
 
-  // Load SIP config from secure backend (admin only). Storage purge is handled
-  // by the useSipStoragePurge() hook above so credentials never survive a reload.
+  // Load SIP config from secure backend for ANY authenticated user of the tenant.
+  // Non-admins receive read-only credentials so agents/coordinators can register
+  // the shared Wavoip trunk. Write/delete stay admin-only (enforced in the edge fn).
   useEffect(() => {
-    if (!isOwner) return;
     let cancelled = false;
     (async () => {
       setSipLoading(true);
       try {
         const { fetchSipConfig, listSipAudit } = await import('@/lib/sipConfig');
-        const cfg = await fetchSipConfig();
+        const cfg = await fetchSipConfig({ owner_id: access?.owner_id });
         if (cancelled) return;
         if (cfg) {
           setSipConfig(prev => ({
@@ -253,11 +253,17 @@ export default function CallsPage() {
             autoRecord: cfg.auto_record ?? prev.autoRecord,
           }));
         }
-        const audit = await listSipAudit();
-        if (!cancelled) setSipAudit(audit);
+        // Audit list stays admin-only; skip silently for non-admins.
+        if (isOwner) {
+          try {
+            const audit = await listSipAudit({ owner_id: access?.owner_id });
+            if (!cancelled) setSipAudit(audit);
+          } catch { /* non-admin: expected 403 */ }
+        }
       } catch (e: any) {
         console.warn('SIP fetch failed', e?.message);
-        if (e?.name === 'SipError') {
+        // Only surface real errors to owners; agents shouldn't see permission toasts.
+        if (isOwner && e?.name === 'SipError') {
           toast({
             title: e.status === 403 ? 'Acesso negado' : e.status === 401 ? 'Sessão expirada' : 'Falha ao carregar SIP',
             description: e.message,
@@ -269,17 +275,16 @@ export default function CallsPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [isOwner]);
+  }, [isOwner, access?.owner_id]);
 
   // Auto-registra no Wavoip assim que as credenciais estiverem em memória
-  // (dono da plataforma). Evita nova tentativa quando já está conectado.
+  // (qualquer usuário do tenant — agentes precisam poder ligar).
   useEffect(() => {
-    if (!isOwner) return;
     if (sipStatus !== 'disconnected') return;
     if (!sipConfig.username || !sipConfig.password || !sipConfig.server) return;
     handleTestSip();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOwner, sipConfig.username, sipConfig.password, sipConfig.server]);
+  }, [sipConfig.username, sipConfig.password, sipConfig.server]);
 
 
 

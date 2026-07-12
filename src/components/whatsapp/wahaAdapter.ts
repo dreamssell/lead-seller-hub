@@ -256,6 +256,14 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       .from('customers').select('phone').eq('id', customerId).single();
     if (!customer?.phone) throw new Error('Cliente sem telefone cadastrado.');
 
+    // Validate session is actually WORKING before wasting a base64 upload —
+    // this is why images/audios "aparecem enviados mas não chegam": WAHA answers
+    // 200 to sendImage even when the underlying socket is FAILED/STOPPED.
+    const st = await this.getStatus(conn);
+    if (!st.connected) {
+      throw new Error(`WAHA fora do ar (${st.status || 'desconhecido'}): reconecte a sessão antes de enviar mídia.`);
+    }
+
     const rawPayload = {
       session: this.sessionOf(conn),
       chatId: normalizeChatId(customer.phone),
@@ -281,7 +289,12 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       body: parsed.data,
       timeoutMs: 30_000,
     });
-    return { ok: true, provider: 'waha', message_id: data?.id?._serialized || data?.id || null, raw: data };
+    const messageId = data?.id?._serialized || data?.id || null;
+    if (!messageId) {
+      // WAHA sometimes 200s without an id when the media was silently dropped.
+      throw new Error('WAHA aceitou a mídia mas não retornou message_id — provável falha na sessão. Reconecte e tente novamente.');
+    }
+    return { ok: true, provider: 'waha', message_id: messageId, raw: data };
   }
 
   async sendAudio(conn: WhatsAppConnection, customerId: string, blob: Blob) {
@@ -293,11 +306,19 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       .from('customers').select('phone').eq('id', customerId).single();
     if (!customer?.phone) throw new Error('Cliente sem telefone cadastrado.');
 
+    const st = await this.getStatus(conn);
+    if (!st.connected) {
+      throw new Error(`WAHA fora do ar (${st.status || 'desconhecido'}): reconecte a sessão antes de enviar áudio.`);
+    }
+
+    // WhatsApp voice notes MUST be OGG/Opus. Browsers record audio/webm;codecs=opus by
+    // default, and WAHA returns 200 for webm but the message never reaches the
+    // recipient. Coerce the container hint to audio/ogg so WAHA re-muxes it.
     const rawPayload = {
       session: this.sessionOf(conn),
       chatId: normalizeChatId(customer.phone),
       file: {
-        mimetype: blob.type || 'audio/ogg',
+        mimetype: 'audio/ogg; codecs=opus',
         filename: 'voice.ogg',
         data: await blobToBase64(blob),
       },
@@ -312,7 +333,11 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       body: parsed.data,
       timeoutMs: 30_000,
     });
-    return { ok: true, provider: 'waha', message_id: data?.id?._serialized || data?.id || null, raw: data };
+    const messageId = data?.id?._serialized || data?.id || null;
+    if (!messageId) {
+      throw new Error('WAHA aceitou o áudio mas não retornou message_id — provável falha na sessão. Reconecte e tente novamente.');
+    }
+    return { ok: true, provider: 'waha', message_id: messageId, raw: data };
   }
 
   async syncContacts(_conn: WhatsAppConnection) {

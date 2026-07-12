@@ -642,17 +642,31 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    if (selectedConvId) {
-      async function loadMessages() {
-        const { data } = await supabase
-          .from('chat_messages')
-          .select('*')
-          .eq('customer_id', selectedConvId)
-          .order('created_at', { ascending: true });
-        if (data) setMessages((data || []).map(hydrateChatMessage));
+    if (!selectedConvId) return;
+    let cancelled = false;
+    const convAtStart = selectedConvId;
+    (async () => {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('customer_id', convAtStart)
+        .order('created_at', { ascending: true });
+      // Race guard: only apply if the user hasn't switched conversations meanwhile.
+      if (cancelled || convAtStart !== selectedConvId) return;
+      if (error) {
+        // Never silently clear the transcript on error — that's what caused
+        // "mensagens desaparecem ao trocar de chat" for non-owner users.
+        console.warn('loadMessages error', error);
+        toast({
+          title: 'Não foi possível carregar as mensagens',
+          description: error.message || 'Verifique suas permissões e recarregue o chat.',
+          variant: 'destructive',
+        });
+        return;
       }
-      loadMessages();
-    }
+      setMessages((data || []).map(hydrateChatMessage));
+    })();
+    return () => { cancelled = true; };
   }, [selectedConvId]);
 
   // Autofocus composer when a conversation is selected
