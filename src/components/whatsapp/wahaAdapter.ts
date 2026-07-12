@@ -28,6 +28,9 @@ export const WahaSendTextSchema = z.object({
   session: z.string().min(1),
   chatId: WahaChatIdSchema,
   text: z.string().min(1).max(4096),
+  // Etapa 3 — quote/reply. WAHA accepts `reply_to` = provider messageId
+  // (e.g. `false_5511...@c.us_ABCD1234`). Omitted when not replying.
+  reply_to: z.string().min(1).optional(),
 });
 
 export const WahaSendMediaSchema = z.object({
