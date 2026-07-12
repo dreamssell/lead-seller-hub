@@ -123,7 +123,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             message: `Revalidação falhou: ${error?.message ?? 'user mismatch'}`,
             metadata: { expected_user_id: expected, received_user_id: data?.user?.id ?? null, error: error?.message ?? null },
           });
-          if (error && !data?.user) {
+          const errorMessage = String(error?.message || '').toLowerCase();
+          const looksLikeInvalidSession = /invalid|jwt|token|expired|refresh|session/.test(errorMessage);
+          if (error && !data?.user && !looksLikeInvalidSession) {
             // rede/servidor indisponível — mantém sessão local mas sinaliza
             setAuthStatus('unavailable');
             return;
