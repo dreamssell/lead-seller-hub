@@ -2280,6 +2280,63 @@ export default function ChatPage() {
                         {(m.content && m.content !== '[mídia]') && (
                           <p className="whitespace-pre-wrap break-words">{renderWhatsAppText(m.content)}</p>
                         )}
+
+                        {/* Reactions strip — WhatsApp style */}
+                        {m._reactions && Object.keys(m._reactions).length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {Object.entries(m._reactions as Record<string, any>).map(([who, r]: any) => (
+                              <button
+                                key={who}
+                                type="button"
+                                onClick={() => who === 'me' && handleToggleReaction(m, r.emoji)}
+                                className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs border ${
+                                  m.sender_type !== 'client'
+                                    ? 'bg-primary-foreground/15 border-primary-foreground/25'
+                                    : 'bg-background border-border'
+                                } ${who === 'me' ? 'ring-1 ring-primary/40' : ''}`}
+                                title={who === 'me' ? 'Sua reação — clique para remover' : `Reação de ${r.jid || 'contato'}`}
+                              >
+                                <span className="text-sm leading-none">{r.emoji}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Reaction picker — appears on hover (WhatsApp only) */}
+                        {activeChannel === 'whatsapp' && m.uaz_msg_id && (
+                          <div className={`absolute -top-3 ${m.sender_type !== 'client' ? '-left-2' : '-right-2'} opacity-0 group-hover:opacity-100 transition-opacity`}>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="w-7 h-7 rounded-full bg-background border border-border shadow-sm flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary"
+                                  title="Reagir à mensagem"
+                                >
+                                  <SmilePlus className="w-3.5 h-3.5" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent align="center" side="top" className="w-auto p-1.5">
+                                <div className="flex gap-1">
+                                  {['👍','❤️','😂','😮','😢','🙏'].map((emoji) => {
+                                    const isActive = m._reactions?.me?.emoji === emoji;
+                                    return (
+                                      <button
+                                        key={emoji}
+                                        type="button"
+                                        onClick={() => handleToggleReaction(m, emoji)}
+                                        className={`w-8 h-8 rounded-full text-lg hover:bg-secondary transition ${isActive ? 'bg-primary/15 ring-1 ring-primary/40' : ''}`}
+                                        title={isActive ? 'Remover reação' : `Reagir com ${emoji}`}
+                                      >
+                                        {emoji}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                        )}
+
                         <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
                           <p className="text-[10px]">
                             {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
