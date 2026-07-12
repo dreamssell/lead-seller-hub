@@ -1323,7 +1323,7 @@ export default function ChatPage() {
     } catch {}
   };
 
-  const sendTextThroughActiveChannel = async (customerId: string, text: string) => {
+  const sendTextThroughActiveChannel = async (customerId: string, text: string, replyToProviderId?: string | null) => {
     if (activeChannel === 'whatsapp') {
       if (!activeWhatsAppConn) throw new Error('Conexão ativa não encontrada');
       const adapter = getProviderAdapter(activeWhatsAppConn.provider);
@@ -1333,8 +1333,9 @@ export default function ChatPage() {
         customer_id: customerId,
         text_length: text.length,
         has_text: text.trim().length > 0,
+        reply_to: replyToProviderId || null,
       });
-      return adapter.sendMessage(activeWhatsAppConn, customerId, text);
+      return adapter.sendMessage(activeWhatsAppConn, customerId, text, undefined, replyToProviderId ? { replyTo: replyToProviderId } : undefined);
     }
     await new Promise(r => setTimeout(r, 400));
     return { key: { id: crypto.randomUUID() } };
