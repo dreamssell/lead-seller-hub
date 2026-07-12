@@ -267,3 +267,95 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  mobile-responsive:
+    name: Mobile · responsividade (${{ matrix.device.project }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        device:
+          - { project: mobile-iphone, install: webkit }
+          - { project: mobile-android, install: chromium }
+    env:
+      TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+      TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - name: Install deps
+        run: npm ci || npm install
+      - name: Resolve Playwright version
+        id: pw
+        run: |
+          set -eu
+          V=$(node -p "require('playwright/package.json').version")
+          echo "version=${V}" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers (${{ matrix.device.install }})
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ matrix.device.install }}
+          restore-keys: |
+            playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-
+      - name: Install Playwright deps (cache hit)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps ${{ matrix.device.install }}
+      - name: Install Playwright browsers (cache miss)
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps ${{ matrix.device.install }}
+      - name: Start Vite preview
+        run: |
+          nohup npm run dev >/tmp/vite.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sSf http://localhost:8080 >/dev/null 2>&1; then echo "vite up"; break; fi
+            sleep 1
+          done
+      - name: List selecionados (${{ matrix.device.project }})
+        run: |
+          echo "### Selecionados (${{ matrix.device.project }})" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          npx playwright test e2e/mobile-responsive.spec.ts --project=${{ matrix.device.project }} --list >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Run mobile sweep
+        run: |
+          npx playwright test e2e/mobile-responsive.spec.ts \
+            --project=${{ matrix.device.project }} \
+            --reporter=list,html,json \
+            --output=test-results-mobile
+      - name: Organizar artefatos mobile
+        if: always()
+        run: |
+          set -eu
+          PJ="${{ matrix.device.project }}"
+          OUT="upload/${PJ}"
+          mkdir -p "${OUT}/playwright-report" "${OUT}/screenshots" "${OUT}/traces"
+          [ -d playwright-report ] && cp -R playwright-report/. "${OUT}/playwright-report/" || true
+          [ -d artifacts/mobile/${PJ} ] && cp -R artifacts/mobile/${PJ}/. "${OUT}/screenshots/" || true
+          if [ -d test-results-mobile ]; then
+            find test-results-mobile -type f -name "*.zip" -exec cp {} "${OUT}/traces/" \; || true
+            find test-results-mobile -type f -name "*.png" -exec cp {} "${OUT}/screenshots/" \; || true
+          fi
+          {
+            echo "{"
+            echo "  \"project\": \"${PJ}\","
+            echo "  \"install\": \"${{ matrix.device.install }}\","
+            echo "  \"run_id\": \"${GITHUB_RUN_ID}\","
+            echo "  \"screenshots\": $(ls -1 ${OUT}/screenshots 2>/dev/null | wc -l)"
+            echo "}"
+          } > "${OUT}/manifest.json"
+      - name: Upload artefatos mobile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-${{ matrix.device.project }}
+          path: upload/${{ matrix.device.project }}/
+          if-no-files-found: warn
+          retention-days: 14
+
+
