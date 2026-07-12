@@ -499,5 +499,68 @@ test.describe('Debug WAHA · paginação + gaps + call link + export', () => {
     await expect(pdfConsBtn).toHaveAttribute('aria-busy', 'false');
     await expect(csvBtn).toBeEnabled();
   });
+
+  test('export consolidado com sucesso (200): CSV/PDF trazem sender/hora e agregados esperados', async ({ page }) => {
+    await page.goto(`/owner/company/${COMPANY_ID}`, { waitUntil: 'domcontentloaded' });
+    await page.locator('#tab-waha-debug').click();
+    await expect.poll(() => invocations.length, { timeout: 15_000 }).toBeGreaterThan(0);
+
+    const owner8 = OWNER_ID.slice(0, 8);
+    const csvConsBtn = page.getByTestId('export-csv-consolidado');
+    const pdfConsBtn = page.getByTestId('export-pdf-consolidado');
+
+    // -------- CSV consolidado --------
+    const [csvDl] = await Promise.all([
+      page.waitForEvent('download'),
+      csvConsBtn.click(),
+    ]);
+    const csvName = csvDl.suggestedFilename();
+    expect(csvName.startsWith(`waha-audit-${owner8}-`)).toBe(true);
+    expect(csvName.endsWith('-consolidado.csv')).toBe(true);
+
+    const csvText = (await downloadToBuffer(csvDl)).toString('utf8');
+    const stripped = csvText.replace(/^\uFEFF/, '').trim();
+    const lines = stripped.split('\n');
+    // Header + 1 bucket (mesmo sender `5511@lid` × mesma hora 12:00 nos 2 eventos).
+    expect(lines[0]).toMatch(/hora.*sender.*webhooks.*gravadas.*gaps.*gap_rate_pct.*ultima/);
+    expect(lines.length).toBe(2);
+    const dataRow = lines[1];
+    expect(dataRow).toContain('5511@lid');
+    expect(dataRow).toContain(PAGE1_FIRST.slice(0, 13) + ':00');
+    // Colunas em ordem: hora, sender, webhooks, gravadas, gaps, gap_rate_pct, ultima
+    // webhooks=2 (MSG-1 + MSG-2-GAP), gravadas=1 (só MSG-1 tem chat_message),
+    // gaps=1 (MSG-2-GAP), gap_rate_pct=50, ultima=PAGE1_FIRST.
+    const cells = dataRow.split(',');
+    expect(cells[2]).toBe('2');
+    expect(cells[3]).toBe('1');
+    expect(cells[4]).toBe('1');
+    expect(cells[5]).toBe('50');
+    expect(cells[6]).toContain(PAGE1_FIRST);
+
+    // -------- PDF consolidado --------
+    const [pdfDl] = await Promise.all([
+      page.waitForEvent('download'),
+      pdfConsBtn.click(),
+    ]);
+    const pdfName = pdfDl.suggestedFilename();
+    expect(pdfName.startsWith(`waha-audit-${owner8}-`)).toBe(true);
+    expect(pdfName.endsWith('-consolidado.pdf')).toBe(true);
+
+    const parsed = await pdfParse(await downloadToBuffer(pdfDl));
+    const text = parsed.text;
+    expect(text).toContain('Auditoria WAHA — consolidado por sender/hora');
+    expect(text).toMatch(/Owner .*ordem=desc/);
+    // KPIs específicos do consolidado.
+    expect(text).toContain('Senders únicos');
+    expect(text).toContain('Horas cobertas');
+    expect(text).toContain('Webhooks msg');
+    expect(text).toContain('Gaps totais');
+    // Colunas + linha de dados.
+    expect(text).toContain('sender');
+    expect(text).toContain('gap_rate_pct');
+    expect(text).toContain('5511@lid');
+    expect(text).toMatch(/\b2\b[\s\S]*\b1\b[\s\S]*\b1\b[\s\S]*\b50\b/);
+  });
 });
+
 
