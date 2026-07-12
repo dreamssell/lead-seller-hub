@@ -191,6 +191,9 @@ const hydrateChatMessage = (row: any) => {
     _mediaDuration: row?._mediaDuration || meta.media_duration || null,
     _reactions: (meta.reactions && typeof meta.reactions === 'object') ? meta.reactions : {},
     _quoted: (meta.quoted && typeof meta.quoted === 'object') ? meta.quoted : null,
+    _edited: meta.edited === true || Array.isArray(meta.edits) && meta.edits.length > 0,
+    _editedAt: meta.edited_at || null,
+    _revoked: meta.revoked === true,
   };
 };
 
