@@ -5703,6 +5703,14 @@ export type Database = {
         Args: { p_webhook_id: string }
         Returns: Json
       }
+      get_latest_chat_messages_for_customers: {
+        Args: { _customer_ids: string[] }
+        Returns: {
+          content: string
+          created_at: string
+          customer_id: string
+        }[]
+      }
       get_leads_capture_report: {
         Args: { p_from?: string; p_owner?: string; p_to?: string }
         Returns: {
