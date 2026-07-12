@@ -2282,6 +2282,7 @@ export default function ChatPage() {
                   return (
                     <motion.div
                       key={m.id}
+                      data-msg-id={m.uaz_msg_id || m.id}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       className={`flex ${m.sender_type !== 'client' ? 'justify-end' : 'justify-start'}`}
