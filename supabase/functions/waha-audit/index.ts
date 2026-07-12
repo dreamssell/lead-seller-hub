@@ -128,6 +128,40 @@ Deno.serve(async (req) => {
   } = parsed.data;
   const ownerHash = (await sha256Hex(ownerId)).slice(0, 12);
 
+  // ----- Rate limit (owner_hash + ip) — applied after auth so we can key by owner -----
+  const ip = clientIp(req);
+  const rateKey = `${ownerHash}:${ip}`;
+  const nowMs = Date.now();
+  const rate = rateLimitTake(rateKey, nowMs);
+  const rateHeaders: Record<string, string> = {
+    'X-RateLimit-Limit': String(RATE_LIMIT_MAX),
+    'X-RateLimit-Remaining': String(Math.max(0, rate.remaining)),
+    'X-RateLimit-Reset': String(Math.ceil(rate.resetAt / 1000)),
+  };
+  if (!rate.allowed) {
+    const retryAfter = Math.max(1, Math.ceil((rate.resetAt - nowMs) / 1000));
+    log('warn', 'rate_limited', {
+      owner_hash: ownerHash, caller_hash: callerHash, ip_hash: (await sha256Hex(ip)).slice(0, 12),
+      limit: RATE_LIMIT_MAX, window_ms: RATE_LIMIT_WINDOW_MS, retry_after_s: retryAfter,
+    });
+    try {
+      await admin.from('telemetry_logs').insert({
+        type: 'waha_audit_rate_limited',
+        message: `waha-audit rate limit atingido para owner_hash=${ownerHash}`,
+        metadata: {
+          owner_hash: ownerHash, caller_hash: callerHash,
+          ip_hash: (await sha256Hex(ip)).slice(0, 12),
+          limit: RATE_LIMIT_MAX, window_ms: RATE_LIMIT_WINDOW_MS,
+          retry_after_s: retryAfter, request_id: requestId, source: 'waha-audit',
+        },
+      });
+    } catch { /* best-effort */ }
+    return json({ error: 'rate_limited', retry_after_s: retryAfter }, 429, {
+      ...rateHeaders, 'Retry-After': String(retryAfter),
+    });
+  }
+
+
   // Validate owner_id belongs to a real tenant
   const [{ data: ownerCompany }, { data: ownerSub }] = await Promise.all([
     admin.from('client_companies').select('auth_user_id, name').eq('auth_user_id', ownerId).maybeSingle(),
