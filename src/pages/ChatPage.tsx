@@ -2289,6 +2289,25 @@ export default function ChatPage() {
                       <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm relative group ${
                         m.sender_type !== 'client' ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-secondary text-foreground rounded-bl-md'
                       }`}>
+                        {/* Quoted/reply preview — Etapa 3 */}
+                        {m._quoted && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const el = document.querySelector(`[data-msg-id="${m._quoted.message_id}"]`) as HTMLElement | null;
+                              if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('ring-2','ring-primary/60'); setTimeout(() => el.classList.remove('ring-2','ring-primary/60'), 1200); }
+                            }}
+                            className={`block w-full text-left mb-1.5 px-2 py-1 rounded border-l-2 text-xs opacity-90 hover:opacity-100 ${
+                              m.sender_type !== 'client' ? 'bg-primary-foreground/10 border-primary-foreground/60' : 'bg-background/60 border-primary'
+                            }`}
+                            title="Ir para a mensagem citada"
+                          >
+                            <div className="font-medium text-[10px] uppercase tracking-wider opacity-70">
+                              {m._quoted.from_me ? 'Você' : 'Contato'}
+                            </div>
+                            <div className="truncate">{m._quoted.body || '[mídia]'}</div>
+                          </button>
+                        )}
                         {m._mediaUrl && m._mediaType === 'audio' && (
                           <audio controls preload="metadata" src={m._mediaUrl} className="w-full max-w-[280px] my-1" />
                         )}
