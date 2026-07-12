@@ -1032,6 +1032,46 @@ export default function ChatPage() {
       .catch(() => {});
   }, [selectedConvId, activeChannel, activeWhatsAppConn, convs.whatsapp]);
 
+  // Etapa 5 (WAHA) — ao abrir uma conversa: assina presença do contato (engines
+  // GOWS/NOWEB) e marca as mensagens como lidas (envia recibos ao remetente).
+  useEffect(() => {
+    if (!selectedConvId || activeChannel !== 'whatsapp' || !activeWhatsAppConn) return;
+    if (activeWhatsAppConn.provider !== 'waha') return;
+    const adapter = getProviderAdapter('waha');
+    // Último message_id inbound da conversa (para o "visto" apontar exatamente a mensagem).
+    const lastInbound = [...messages]
+      .reverse()
+      .find((m: any) => m?.sender_type === 'client' && m?.uaz_msg_id);
+    adapter.subscribePresence?.(activeWhatsAppConn, selectedConvId).catch(() => {});
+    adapter.markAsRead?.(activeWhatsAppConn, selectedConvId, lastInbound?.uaz_msg_id ?? null).catch(() => {});
+  }, [selectedConvId, activeChannel, activeWhatsAppConn, messages.length]);
+
+  // Etapa 5 (WAHA) — envia "digitando…" enquanto o usuário compõe (debounce),
+  // e "paused" quando o composer fica vazio ou ocioso por 4s.
+  useEffect(() => {
+    if (activeChannel !== 'whatsapp' || !activeWhatsAppConn || activeWhatsAppConn.provider !== 'waha') return;
+    if (!selectedConvId) return;
+    const adapter = getProviderAdapter('waha');
+    const hasText = messageText.trim().length > 0;
+    if (!hasText) {
+      // Composer vazio: garante estado "paused" (best-effort).
+      adapter.sendTyping?.(activeWhatsAppConn, selectedConvId, 'paused').catch(() => {});
+      return;
+    }
+    // Enquanto há texto, envia "typing" e reenvia a cada 3s (WAHA/WhatsApp expiram ~10s).
+    adapter.sendTyping?.(activeWhatsAppConn, selectedConvId, 'typing').catch(() => {});
+    const refresh = setInterval(() => {
+      adapter.sendTyping?.(activeWhatsAppConn, selectedConvId, 'typing').catch(() => {});
+    }, 3_000);
+    // Idle: se o usuário para de digitar (efeito reroda quando messageText muda),
+    // após 4s sem alterações mandamos "paused".
+    const idle = setTimeout(() => {
+      adapter.sendTyping?.(activeWhatsAppConn, selectedConvId, 'paused').catch(() => {});
+    }, 4_000);
+    return () => { clearInterval(refresh); clearTimeout(idle); };
+  }, [messageText, selectedConvId, activeChannel, activeWhatsAppConn]);
+
+
   const list = activeChannel ? convs[activeChannel] : [];
   const selectedConv = list.find((c) => c.id === selectedConvId) || (selectedConvId ? null : list[0]);
   const selectedConvOwnerId = (selectedConv as any)?.owner_id ?? null;
