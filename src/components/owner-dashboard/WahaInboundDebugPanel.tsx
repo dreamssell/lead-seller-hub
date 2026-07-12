@@ -55,6 +55,12 @@ interface AuditResponse {
     since_iso: string;
   };
   alerts: string[];
+  calls?: Array<{
+    id: string; wavoip_call_id: string | null; phone_number: string | null; contact_name: string | null;
+    direction: string | null; status: string | null; duration_seconds: number | null;
+    started_at: string | null; answered_at: string | null; ended_at: string | null; created_at: string;
+  }>;
+  pagination?: { limit: number; order: 'asc' | 'desc'; next_cursor: string | null };
 }
 
 const dt = (iso: string) => new Date(iso).toLocaleString('pt-BR');
