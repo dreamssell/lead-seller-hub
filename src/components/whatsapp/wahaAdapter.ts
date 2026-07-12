@@ -51,9 +51,18 @@ export const WahaSendVoiceSchema = z.object({
   }),
 });
 
+// WAHA reaction endpoint accepts `reaction: ""` to remove a previous emoji.
+// `messageId` is the provider-native id (e.g. `false_5511...@c.us_ABCD1234`).
+export const WahaSendReactionSchema = z.object({
+  session: z.string().min(1),
+  messageId: z.string().min(1),
+  reaction: z.string().max(8), // single emoji or "" to clear
+});
+
 export type WahaSendTextPayload = z.infer<typeof WahaSendTextSchema>;
 export type WahaSendMediaPayload = z.infer<typeof WahaSendMediaSchema>;
 export type WahaSendVoicePayload = z.infer<typeof WahaSendVoiceSchema>;
+export type WahaSendReactionPayload = z.infer<typeof WahaSendReactionSchema>;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers
