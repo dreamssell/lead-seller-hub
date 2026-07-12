@@ -259,7 +259,9 @@ export default function ChatPage() {
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const { isSupervisor, userId: currentUserId } = useIsSupervisor();
   const { access, accessLoading, reloadAccess } = useAuth();
+  const { isOwner } = usePlatformOwner();
   const activeOwnerId = getActiveOwnerId(access?.owner_id, null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const convsRef = useRef(convs);
   const selectedConvIdRef = useRef<string | null>(selectedConvId);
   const activeOwnerIdRef = useRef<string | null>(activeOwnerId);
