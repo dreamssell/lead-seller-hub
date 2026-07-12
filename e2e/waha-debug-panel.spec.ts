@@ -284,4 +284,88 @@ test.describe('Debug WAHA · paginação + gaps + call link + export', () => {
 
     await testInfo.attach('pdf-empty-text', { body: text, contentType: 'text/plain' });
   });
+
+  test('erro 500 no waha-audit: UI mostra mensagem, exports ficam desabilitados e nenhum arquivo é gerado', async ({ page }) => {
+    // Override o mock padrão do beforeEach: sempre retorna 500.
+    await page.unroute('**/functions/v1/waha-audit');
+    await page.route('**/functions/v1/waha-audit', async (route: Route) => {
+      let body: any = {};
+      try { body = route.request().postDataJSON(); } catch { body = {}; }
+      invocations.push(body);
+      return route.fulfill({
+        status: 500, contentType: 'application/json',
+        body: JSON.stringify({ error: 'internal_error', message: 'boom' }),
+      });
+    });
+
+    await page.goto(`/owner/company/${COMPANY_ID}`, { waitUntil: 'domcontentloaded' });
+    await page.locator('#tab-waha-debug').click();
+    await expect.poll(() => invocations.length, { timeout: 15_000 }).toBeGreaterThan(0);
+
+    // Mensagem de erro renderizada de forma amigável.
+    await expect(page.getByText(/^Erro:/)).toBeVisible();
+
+    // Todos os botões de exportação ficam desabilitados enquanto data === null.
+    for (const name of [/^CSV$/, /^PDF$/, /CSV consolidado/, /PDF consolidado/]) {
+      await expect(page.getByRole('button', { name })).toBeDisabled();
+    }
+
+    // Paginação bloqueada (sem next_cursor e sem stack).
+    await expect(page.getByRole('button', { name: /Próxima/i })).toBeDisabled();
+    await expect(page.getByRole('button', { name: /Anterior/i })).toBeDisabled();
+
+    // Clicar no botão desabilitado (force) não dispara download algum: aguardamos
+    // por 1.5s e o waitForEvent deve estourar timeout.
+    let downloadFired = false;
+    page.on('download', () => { downloadFired = true; });
+    await page.getByRole('button', { name: /^CSV$/ }).click({ force: true }).catch(() => {});
+    await page.getByRole('button', { name: /^PDF$/ }).click({ force: true }).catch(() => {});
+    await page.waitForTimeout(1500);
+    expect(downloadFired, 'nenhum arquivo deve ser gerado após erro 500').toBe(false);
+  });
+
+  test('intercepta body do waha-audit: order/cursor mudam exatamente no toggle de Prev/Next e asc/desc', async ({ page }) => {
+    await page.goto(`/owner/company/${COMPANY_ID}`, { waitUntil: 'domcontentloaded' });
+    await page.locator('#tab-waha-debug').click();
+
+    // #1 primeira request: cursor=null, order=desc.
+    await expect.poll(() => invocations.length, { timeout: 15_000 }).toBeGreaterThan(0);
+    expect(invocations[0].cursor).toBeNull();
+    expect(invocations[0].order).toBe('desc');
+
+    const nextBtn = page.getByRole('button', { name: /Próxima/i });
+    const prevBtn = page.getByRole('button', { name: /Anterior/i });
+
+    // #2 Next → cursor vira o next_cursor da resposta anterior; order preservado.
+    const n1 = invocations.length;
+    await nextBtn.click();
+    await expect.poll(() => invocations.length, { timeout: 10_000 }).toBeGreaterThan(n1);
+    const afterNext = invocations[invocations.length - 1];
+    expect(afterNext.cursor).toBe(PAGE1_LAST);
+    expect(afterNext.order).toBe('desc');
+
+    // #3 Prev → cursor volta a null; order preservado.
+    const n2 = invocations.length;
+    await prevBtn.click();
+    await expect.poll(() => invocations.length, { timeout: 10_000 }).toBeGreaterThan(n2);
+    const afterPrev = invocations[invocations.length - 1];
+    expect(afterPrev.cursor).toBeNull();
+    expect(afterPrev.order).toBe('desc');
+
+    // #4 Toggle ordem → order=asc + cursor RESETADO para null.
+    const n3 = invocations.length;
+    await page.getByRole('button', { name: /Mais recentes|Mais antigos/i }).click();
+    await expect.poll(() => invocations.length, { timeout: 10_000 }).toBeGreaterThan(n3);
+    const afterAsc = invocations[invocations.length - 1];
+    expect(afterAsc.order).toBe('asc');
+    expect(afterAsc.cursor).toBeNull();
+
+    // #5 Toggle novamente → order=desc + cursor ainda null.
+    const n4 = invocations.length;
+    await page.getByRole('button', { name: /Mais recentes|Mais antigos/i }).click();
+    await expect.poll(() => invocations.length, { timeout: 10_000 }).toBeGreaterThan(n4);
+    const afterDesc = invocations[invocations.length - 1];
+    expect(afterDesc.order).toBe('desc');
+    expect(afterDesc.cursor).toBeNull();
+  });
 });
