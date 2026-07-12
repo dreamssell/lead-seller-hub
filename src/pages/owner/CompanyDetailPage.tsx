@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { LicenseManagerDialog } from '@/components/owner-dashboard/LicenseManagerDialog';
+import { WahaInboundDebugPanel } from '@/components/owner-dashboard/WahaInboundDebugPanel';
 import { generateExecutiveReport } from '@/lib/executiveReportPdf';
 import {
   ArrowLeft, Users, MessagesSquare, Phone, TrendingUp, DollarSign,
