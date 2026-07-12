@@ -1469,6 +1469,55 @@ export default function ChatPage() {
     }
   };
 
+  // Etapa 2 — reações. Toggle emoji na mensagem: passa "" para remover.
+  // Aplica optimistic update local e delega ao adapter WAHA.
+  const handleToggleReaction = async (message: any, emoji: string) => {
+    if (!message || activeChannel !== 'whatsapp' || !activeWhatsAppConn) {
+      toast({ title: 'Reações disponíveis apenas no WhatsApp', variant: 'destructive' });
+      return;
+    }
+    const providerMessageId = message.uaz_msg_id;
+    if (!providerMessageId) {
+      toast({ title: 'Não é possível reagir', description: 'Aguarde a mensagem ser confirmada pelo provedor.', variant: 'destructive' });
+      return;
+    }
+    const adapter = getProviderAdapter(activeWhatsAppConn.provider);
+    if (!adapter.sendReaction) {
+      toast({ title: 'Este canal ainda não suporta reações', variant: 'destructive' });
+      return;
+    }
+
+    const prevReactions = { ...(message._reactions || {}) };
+    const currentMine = prevReactions.me?.emoji || '';
+    const nextEmoji = currentMine === emoji ? '' : emoji;
+    const nextReactions = { ...prevReactions };
+    if (nextEmoji) {
+      nextReactions.me = { emoji: nextEmoji, from_me: true, at: new Date().toISOString() };
+    } else {
+      delete nextReactions.me;
+    }
+
+    // Optimistic
+    setMessages(prev => prev.map(m => (m.id === message.id) ? { ...m, _reactions: nextReactions } : m));
+    // Persist locally so refresh mantém o estado enquanto o webhook não chega.
+    try {
+      const meta = getMessageMetadata(message);
+      await supabase.from('chat_messages')
+        .update({ metadata: { ...meta, reactions: nextReactions, last_reaction_at: new Date().toISOString() } })
+        .eq('id', message.id);
+    } catch { /* best-effort */ }
+
+    try {
+      await adapter.sendReaction(activeWhatsAppConn, providerMessageId, nextEmoji, message.customer_id);
+    } catch (err: any) {
+      // Rollback on failure
+      setMessages(prev => prev.map(m => (m.id === message.id) ? { ...m, _reactions: prevReactions } : m));
+      toast({ title: 'Falha ao enviar reação', description: err?.message || String(err), variant: 'destructive' });
+    }
+  };
+
+
+
   const handleSendRich = async (payload: RichPayload) => {
     if (!selectedConvId) return;
     if (!ensureActiveOwnerScope()) throw new Error('Owner ativo inválido para esta conversa.');
