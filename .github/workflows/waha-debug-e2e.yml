@@ -1,10 +1,8 @@
 name: Debug WAHA · E2E (Playwright)
 
 # Roda os testes do painel Debug WAHA. O suite depende de TEST_OWNER_COMPANY_ID
-# (empresa/sub-empresa do owner de teste). O job faz uma checagem preflight:
-#   - Se a secret NÃO estiver definida no repo/ambiente, o job FALHA de propósito
-#     com um erro claro explicando qual secret configurar e onde.
-#   - Se estiver definida, roda apenas `e2e/waha-debug-panel.spec.ts`.
+# (empresa/sub-empresa do owner de teste). O job faz uma checagem preflight
+# estruturada e detecta ausência de secrets sem vazar valores.
 
 on:
   # Execução regular acontece integrada em `.github/workflows/e2e-tests.yml`
@@ -13,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       allow_skip:
-        description: 'Pular (não falhar) quando TEST_OWNER_COMPANY_ID não estiver definido'
+        description: 'Pular (não falhar) quando secrets exigidas não estiverem definidas'
         required: false
         default: 'false'
 
@@ -34,44 +32,124 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Preflight · exigir TEST_OWNER_COMPANY_ID
+      - name: Preflight · secrets estruturado
+        id: preflight
         run: |
           set -eu
-          if [ -z "${TEST_OWNER_COMPANY_ID:-}" ]; then
-            echo "::group::Diagnóstico"
-            echo "TEST_OWNER_COMPANY_ID ausente."
-            echo "Repo/Env atuais no runner:"
-            echo "  GITHUB_REPOSITORY=${GITHUB_REPOSITORY}"
-            echo "  GITHUB_REF=${GITHUB_REF}"
-            echo "  Secrets esperadas: TEST_OWNER_COMPANY_ID, TEST_OWNER_ID (opcional),"
-            echo "                     TEST_USER_EMAIL, TEST_USER_PASSWORD,"
-            echo "                     VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY"
-            echo "::endgroup::"
+          MISSING=()
+          for VAR in TEST_OWNER_COMPANY_ID TEST_USER_EMAIL TEST_USER_PASSWORD VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY; do
+            eval "VAL=\${$VAR:-}"
+            if [ -z "${VAL:-}" ]; then MISSING+=("$VAR"); fi
+          done
+          OPTIONAL_MISSING=()
+          if [ -z "${TEST_OWNER_ID:-}" ]; then OPTIONAL_MISSING+=("TEST_OWNER_ID"); fi
+
+          MISSING_JOIN=$(IFS=,; echo "${MISSING[*]:-}")
+          OPT_JOIN=$(IFS=,; echo "${OPTIONAL_MISSING[*]:-}")
+
+          OWNER_HASH=""
+          if [ -n "${TEST_OWNER_COMPANY_ID:-}" ]; then
+            OWNER_HASH=$(printf '%s' "$TEST_OWNER_COMPANY_ID" | sha256sum | cut -c1-12)
+          fi
+
+          json_arr() {
+            echo "$1" | awk -F, '{out=""; for(i=1;i<=NF;i++){if($i!=""){out=out (out==""?"":",") "\"" $i "\""}} print out}'
+          }
+          MISSING_JSON=$(json_arr "$MISSING_JOIN")
+          OPT_JSON=$(json_arr "$OPT_JOIN")
+
+          printf '{"scope":"waha-debug-e2e.preflight","event":"checked","repo":"%s","ref":"%s","run_id":"%s","event_name":"%s","allow_skip":"%s","missing_required":[%s],"missing_optional":[%s],"owner_hash":"%s"}\n' \
+            "${GITHUB_REPOSITORY}" "${GITHUB_REF}" "${GITHUB_RUN_ID}" "${GITHUB_EVENT_NAME}" "${ALLOW_SKIP}" \
+            "${MISSING_JSON}" "${OPT_JSON}" "${OWNER_HASH}"
+
+          {
+            echo "### Debug WAHA · Preflight (dispatch)"
+            echo ""
+            echo "- allow_skip: \`${ALLOW_SKIP}\`"
+            echo "- missing_required: \`${MISSING_JOIN:-<none>}\`"
+            echo "- missing_optional: \`${OPT_JOIN:-<none>}\`"
+            echo "- owner_hash: \`${OWNER_HASH:-<none>}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            REASON="missing_secrets:${MISSING_JOIN}"
             if [ "${ALLOW_SKIP}" = "true" ]; then
-              echo "::warning::TEST_OWNER_COMPANY_ID ausente e allow_skip=true — pulando job."
+              printf '{"scope":"waha-debug-e2e.preflight","event":"skipped","reason":"%s"}\n' "$REASON"
+              echo "::warning::${REASON} — pulando (allow_skip=true)."
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              echo "skip_reason=${REASON}" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            echo "::error title=Secret ausente::Defina TEST_OWNER_COMPANY_ID em Settings → Secrets → Actions (repo ou environment) apontando para a empresa/sub-empresa do owner de teste. Sem ela o suite Debug WAHA não pode rodar."
+            printf '{"scope":"waha-debug-e2e.preflight","event":"failed","reason":"%s"}\n' "$REASON"
+            echo "::error title=Secrets ausentes::${MISSING_JOIN}. Defina em Settings → Secrets → Actions."
             exit 1
           fi
-          echo "TEST_OWNER_COMPANY_ID presente (len=${#TEST_OWNER_COMPANY_ID}). Prosseguindo."
+
+          printf '{"scope":"waha-debug-e2e.preflight","event":"running","owner_hash":"%s"}\n' "$OWNER_HASH"
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+          echo "owner_hash=${OWNER_HASH}" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
+        if: steps.preflight.outputs.should_run == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
+        if: steps.preflight.outputs.should_run == 'true'
         run: npm ci || npm install
 
-      - name: Install Playwright browsers
+      - name: Resolve Playwright version
+        if: steps.preflight.outputs.should_run == 'true'
+        id: pw
+        run: |
+          set -eu
+          VERSION=$(node -e "const p=require('./package.json');const v=(p.devDependencies&&p.devDependencies['@playwright/test'])||(p.dependencies&&p.dependencies['@playwright/test'])||'';process.stdout.write(v.replace(/[^0-9.]/g,''))")
+          if [ -z "${VERSION}" ]; then
+            VERSION=$(node -p "require('playwright/package.json').version")
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Playwright version resolved: ${VERSION}"
+
+      - name: Cache Playwright browsers
+        if: steps.preflight.outputs.should_run == 'true'
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
+          restore-keys: |
+            playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-
+
+      - name: Install Playwright system deps (cache hit)
+        if: steps.preflight.outputs.should_run == 'true' && steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Install Playwright browsers (cache miss)
+        if: steps.preflight.outputs.should_run == 'true' && steps.pw-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
 
       - name: Run Debug WAHA E2E
-        run: npx playwright test e2e/waha-debug-panel.spec.ts --reporter=list,html
+        if: steps.preflight.outputs.should_run == 'true'
+        env:
+          OWNER_HASH: ${{ steps.preflight.outputs.owner_hash }}
+        run: |
+          printf '{"scope":"waha-debug-e2e.run","event":"start","owner_hash":"%s"}\n' "${OWNER_HASH}"
+          npx playwright test e2e/waha-debug-panel.spec.ts \
+            --reporter=list,html,json \
+            --trace=retain-on-failure \
+            --output=test-results
 
-      - name: Upload Playwright report
+      - name: Record skip reason artifact
+        if: always() && steps.preflight.outputs.should_run != 'true'
+        run: |
+          mkdir -p playwright-report test-results
+          printf '{"skipped":true,"reason":"%s","event":"%s","run_id":"%s"}\n' \
+            "${{ steps.preflight.outputs.skip_reason }}" "${GITHUB_EVENT_NAME}" "${GITHUB_RUN_ID}" \
+            > playwright-report/skip.json
+
+      - name: Upload Playwright report + traces
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -79,4 +157,5 @@ jobs:
           path: |
             playwright-report/
             test-results/
+          if-no-files-found: warn
           retention-days: 14
