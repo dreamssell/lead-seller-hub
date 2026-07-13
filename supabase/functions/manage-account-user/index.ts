@@ -455,6 +455,15 @@ Deno.serve(async (req) => {
       return json({ users, scope });
     }
 
+    // Cargos gerenciais (supervisor/coordenador/diretor) só têm acesso de leitura.
+    if (scope.read_only && action !== "list") {
+      return userError(
+        "Apenas administradores da conta podem alterar usuários.",
+        403,
+        "not_account_admin",
+      );
+    }
+
     // ─── CREATE ────────────────────────────────────────────────────────────
     if (action === "create") {
       const {
