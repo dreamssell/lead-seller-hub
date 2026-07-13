@@ -518,7 +518,7 @@ Deno.serve(async (req) => {
 
       const returned_count = listRows?.length ?? 0;
       const expected_max = seatUsage?.max_users ?? null;
-      const expected_used = seatUsage?.used ?? seatUsage?.current_count ?? returned_count;
+      const expected_used = seatUsage?.current_users ?? seatUsage?.used ?? returned_count;
       const matches = Number(expected_used) === Number(returned_count);
 
       return json({
