@@ -388,8 +388,9 @@ Deno.serve(async (req) => {
     } catch {
       return userError("Corpo da requisição inválido (JSON esperado).", 400, "invalid_json");
     }
-    const action: "create" | "update" | "delete" | "list" = body.action;
+    const action: "create" | "update" | "delete" | "list" | "diagnostics" = body.action;
     if (!action) return userError("Ação obrigatória.", 400, "missing_action");
+
 
     let scope: Scope;
     try {
@@ -478,6 +479,69 @@ Deno.serve(async (req) => {
       });
       return json({ users, scope });
     }
+
+    // ─── DIAGNOSTICS ───────────────────────────────────────────────────────
+    // Confirma que o dono/admin recebe a lista completa de membros para o
+    // owner_id canônico. Compara a contagem retornada pelo list com a fonte
+    // da verdade (user_account_access + RPC de assentos).
+    if (action === "diagnostics") {
+      // 1) Lista bruta no escopo atual
+      let listQ = adminClient
+        .from("user_account_access")
+        .select("user_id, is_account_admin, is_owner", { count: "exact" })
+        .eq("owner_id", scope.owner_id);
+      if (scope.sub_company_id) listQ = listQ.eq("sub_company_id", scope.sub_company_id);
+      else listQ = listQ.is("sub_company_id", null);
+      const { data: listRows, count: listCount, error: listErr } = await listQ;
+      if (listErr) return userError(listErr.message, 400, "diagnostics_list_error");
+
+      // 2) Fonte da verdade: RPC de assentos (mesma usada pelo trigger)
+      let seatUsage: any = null;
+      try {
+        const { data: usage } = await adminClient.rpc("get_member_seat_usage", {
+          p_owner_id: scope.owner_id,
+          p_sub_company_id: scope.sub_company_id,
+        });
+        seatUsage = Array.isArray(usage) ? usage[0] : usage;
+      } catch (_e) { /* opcional */ }
+
+      // 3) Perfis / e-mails do dono e admins para depuração humana
+      const ids = (listRows || []).map((r: any) => r.user_id);
+      const { data: profiles } = ids.length
+        ? await adminClient.from("profiles").select("user_id, email, display_name, is_active").in("user_id", ids)
+        : { data: [] as any[] };
+      const profMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
+
+      const owners = (listRows || []).filter((r: any) => r.is_owner);
+      const admins = (listRows || []).filter((r: any) => r.is_account_admin && !r.is_owner);
+      const members = (listRows || []).filter((r: any) => !r.is_account_admin && !r.is_owner);
+
+      const returned_count = listRows?.length ?? 0;
+      const expected_max = seatUsage?.max_users ?? null;
+      const expected_used = seatUsage?.current_users ?? seatUsage?.used ?? returned_count;
+      const matches = Number(expected_used) === Number(returned_count);
+
+      return json({
+        scope,
+        summary: {
+          owner_id: scope.owner_id,
+          sub_company_id: scope.sub_company_id,
+          returned_count,
+          list_count: listCount ?? returned_count,
+          expected_used,
+          expected_max,
+          matches,
+          plan_slug: seatUsage?.plan_slug ?? null,
+          owners_count: owners.length,
+          admins_count: admins.length,
+          members_count: members.length,
+        },
+        owners: owners.map((r: any) => ({ user_id: r.user_id, ...(profMap.get(r.user_id) || {}) })),
+        admins: admins.map((r: any) => ({ user_id: r.user_id, ...(profMap.get(r.user_id) || {}) })),
+      });
+    }
+
+
 
     // Gerentes (supervisor/coordenador/diretor) podem criar/editar/excluir
     // membros comuns; restrições específicas contra dono/admins ficam nos

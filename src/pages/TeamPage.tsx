@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { motion } from 'framer-motion';
-import { Plus, Bot, UserCheck, MoreVertical, Infinity as InfinityIcon, Loader2, Pencil, Trash2, ShieldCheck, History, Shield, Headset } from 'lucide-react';
+import { Plus, Bot, UserCheck, MoreVertical, Infinity as InfinityIcon, Loader2, Pencil, Trash2, ShieldCheck, History, Shield, Headset, Search, X, CheckCircle2, AlertTriangle, Stethoscope } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -90,6 +90,17 @@ export default function TeamPage() {
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditRows, setAuditRows] = useState<any[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
+
+  // Filtros
+  const [search, setSearch] = useState('');
+  const [filterLevel, setFilterLevel] = useState<'all' | AccessLevel>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+
+  // Diagnóstico (dono/admin)
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagData, setDiagData] = useState<any>(null);
+
 
   const unlimited = isOwner || maxUsers == null;
   const total = members.length;
@@ -347,6 +358,38 @@ export default function TeamPage() {
     return Math.min(100, (total / maxUsers) * 100);
   }, [unlimited, total, maxUsers]);
 
+  const filteredMembers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return members.filter((m) => {
+      const lvl = m.access_level || (m.is_account_admin ? 'administracao' : 'atendimento');
+      if (filterLevel !== 'all' && lvl !== filterLevel) return false;
+      const active = m.profile?.is_active !== false;
+      if (filterStatus === 'active' && !active) return false;
+      if (filterStatus === 'inactive' && active) return false;
+      if (!q) return true;
+      const hay = `${m.profile?.display_name || ''} ${m.profile?.email || ''} ${m.profile?.role_label || ''}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [members, search, filterLevel, filterStatus]);
+
+  const runDiagnostics = async () => {
+    setDiagOpen(true);
+    setDiagLoading(true);
+    setDiagData(null);
+    const { data, error } = await supabase.functions.invoke('manage-account-user', {
+      body: { action: 'diagnostics', sub_company_id: scopeSubId },
+    });
+    if (error) {
+      toast({ title: 'Falha no diagnóstico', description: error.message, variant: 'destructive' });
+      setDiagData({ error: error.message });
+    } else {
+      setDiagData(data);
+    }
+    setDiagLoading(false);
+  };
+
+
+
   return (
     <AppLayout title="Equipe (SDR/Closers)" subtitle="Gerencie seus atendentes e agentes de I.A.">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
@@ -366,6 +409,11 @@ export default function TeamPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {(isOwner || !!access?.is_account_admin) && (
+            <Button variant="outline" onClick={runDiagnostics} data-testid="team-diagnostics-btn">
+              <Stethoscope className="w-4 h-4 mr-2" /> Diagnóstico
+            </Button>
+          )}
           {isManagement && (
             <Button variant="outline" onClick={() => setAuditOpen(true)}>
               <History className="w-4 h-4 mr-2" /> Auditoria
@@ -381,6 +429,55 @@ export default function TeamPage() {
           </Button>
         </div>
       </div>
+
+      {/* Filtros */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[220px] max-w-md">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            data-testid="team-filter-search"
+            placeholder="Buscar por nome, e-mail ou cargo..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 pr-9"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-secondary"
+              aria-label="Limpar busca"
+            >
+              <X className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
+          )}
+        </div>
+        <Select value={filterLevel} onValueChange={(v) => setFilterLevel(v as any)}>
+          <SelectTrigger className="w-[180px]" data-testid="team-filter-level">
+            <SelectValue placeholder="Nível de acesso" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os níveis</SelectItem>
+            <SelectItem value="administracao">Administração</SelectItem>
+            <SelectItem value="supervisao">Supervisão</SelectItem>
+            <SelectItem value="atendimento">Atendimento</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
+          <SelectTrigger className="w-[150px]" data-testid="team-filter-status">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="active">Ativos</SelectItem>
+            <SelectItem value="inactive">Inativos</SelectItem>
+          </SelectContent>
+        </Select>
+        <span className="text-xs text-muted-foreground ml-auto" data-testid="team-filter-count">
+          {filteredMembers.length} de {members.length}
+        </span>
+      </div>
+
 
       {limitReached && (
         <div
@@ -417,9 +514,14 @@ export default function TeamPage() {
         <div className="glass-card p-10 text-center text-muted-foreground">
           Nenhum membro cadastrado ainda. Clique em <b>Adicionar Membro</b> para começar.
         </div>
+      ) : filteredMembers.length === 0 ? (
+        <div className="glass-card p-10 text-center text-muted-foreground">
+          Nenhum membro corresponde aos filtros aplicados.
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {members.map((m, i) => {
+          {filteredMembers.map((m, i) => {
+
             const isAI = /bot|i\.?a\.?|agente/i.test(m.profile?.role_label || '');
             const active = m.profile?.is_active !== false;
             const lvl = levelMeta(m.access_level || (m.is_account_admin ? 'administracao' : 'atendimento'));
@@ -761,6 +863,89 @@ export default function TeamPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Diagnostics dialog (owner/admin only) */}
+      <Dialog open={diagOpen} onOpenChange={setDiagOpen}>
+        <DialogContent className="max-w-lg" data-testid="team-diagnostics-dialog">
+          <DialogHeader>
+            <DialogTitle>Diagnóstico da Equipe</DialogTitle>
+            <DialogDescription>
+              Confirma se a listagem retornada corresponde ao total real de membros vinculados ao seu <b>owner_id</b> canônico.
+            </DialogDescription>
+          </DialogHeader>
+          {diagLoading ? (
+            <div className="py-8 text-center text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Executando verificação...
+            </div>
+          ) : !diagData ? null : diagData.error ? (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              {diagData.error}
+            </div>
+          ) : (() => {
+            const s = diagData.summary || {};
+            const ok = !!s.matches;
+            const shown = `${s.returned_count ?? 0}${s.expected_max ? `/${s.expected_max}` : ''}`;
+            return (
+              <div className="space-y-4">
+                <div className={`rounded-xl border p-4 flex items-start gap-3 ${
+                  ok ? 'border-success/30 bg-success/5' : 'border-amber-500/30 bg-amber-500/5'
+                }`}>
+                  {ok
+                    ? <CheckCircle2 className="w-5 h-5 text-success shrink-0 mt-0.5" />
+                    : <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />}
+                  <div className="text-sm">
+                    <p className="font-semibold" data-testid="team-diagnostics-status">
+                      {ok ? `OK · lista completa (${shown} membros)` : `Divergência detectada (${shown})`}
+                    </p>
+                    <p className="text-muted-foreground text-xs mt-1">
+                      Retornados: <b>{s.returned_count ?? 0}</b> · Esperados (uso real): <b>{s.expected_used ?? '—'}</b>
+                      {s.expected_max != null && <> · Limite do plano: <b>{s.expected_max}</b></>}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="rounded-lg border border-border p-2 text-center">
+                    <p className="text-muted-foreground">Donos</p>
+                    <p className="text-lg font-semibold">{s.owners_count ?? 0}</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-2 text-center">
+                    <p className="text-muted-foreground">Admins</p>
+                    <p className="text-lg font-semibold">{s.admins_count ?? 0}</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-2 text-center">
+                    <p className="text-muted-foreground">Membros</p>
+                    <p className="text-lg font-semibold">{s.members_count ?? 0}</p>
+                  </div>
+                </div>
+                <div className="text-[11px] text-muted-foreground font-mono break-all">
+                  owner_id: {s.owner_id}
+                  {s.sub_company_id ? <> · sub: {s.sub_company_id}</> : ' · escopo: conta principal'}
+                  {s.plan_slug && <> · plano: {s.plan_slug}</>}
+                </div>
+                {(diagData.owners?.length || diagData.admins?.length) ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Dono e administradores</p>
+                    {[...(diagData.owners || []), ...(diagData.admins || [])].map((p: any) => (
+                      <div key={p.user_id} className="text-xs flex items-center justify-between rounded border border-border px-2 py-1">
+                        <span className="truncate">{p.display_name || p.email || p.user_id}</span>
+                        <span className="text-muted-foreground truncate ml-2">{p.email}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={runDiagnostics} disabled={diagLoading}>
+              {diagLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Executar novamente
+            </Button>
+            <Button onClick={() => setDiagOpen(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
+
   );
 }
