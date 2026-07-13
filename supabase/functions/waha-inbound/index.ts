@@ -57,7 +57,7 @@ function normalizePhone(from?: string | null): string | null {
 // Classifies the incoming event into one of our three logical buckets, using
 // both the top-level `event` string and the shape of the payload so we work
 // with WEBJS ("message") and GOWS ("gows.MessageEventData") equally well.
-function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'presence' | 'contact' | 'ignore' {
+function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'presence' | 'contact' | 'label' | 'chat_meta' | 'ignore' {
   const e = event.toLowerCase();
   if (e === 'session.status' || e === 'status.instance') return 'session';
   if (e === 'message.ack' || e === 'ack' || e.endsWith('.receipteventdata')) return 'ack';
@@ -87,6 +87,19 @@ function classify(event: string, body: any): 'message' | 'ack' | 'session' | 're
     e.endsWith('.pictureeventdata') || e.endsWith('.businessnameeventdata') ||
     e.endsWith('.pushnameeventdata') || e.endsWith('.blocklisteventdata')
   ) return 'contact';
+  // Etapa 7 — etiquetas & organização de chats.
+  //   WEBJS: `label.upsert`, `label.deleted`, `label.chat.added`, `label.chat.deleted`.
+  //   GOWS:  gows.LabelEditEventData, gows.LabelAssociationChatEventData.
+  if (
+    e === 'label.upsert' || e === 'label.updated' || e === 'label.deleted' ||
+    e === 'label.chat.added' || e === 'label.chat.deleted' ||
+    e.endsWith('.labelediteventdata') || e.endsWith('.labelassociationchateventdata')
+  ) return 'label';
+  //   Arquivar/silenciar: WEBJS `chat.archive`, `chat.mute`; GOWS ChatSettingEventData.
+  if (
+    e === 'chat.archive' || e === 'chat.unarchive' || e === 'chat.mute' || e === 'chat.unmute' ||
+    e.endsWith('.chatsettingeventdata') || e.endsWith('.archivechateventdata') || e.endsWith('.mutechateventdata')
+  ) return 'chat_meta';
   if (e === 'message' || e === 'message.any') return 'message';
   // GOWS engine emits gows.MessageEventData with body.data.Info / body.data.Message
   if (e.includes('messageeventdata') || e.includes('gows.message')) return 'message';
@@ -624,6 +637,88 @@ Deno.serve(async (req) => {
       return json({ ok: true, contact_error: e?.message || String(e) });
     }
   }
+
+  // ── LABEL EVENTS (Etapa 7) ───────────────────────────────────────────────
+  // Sincroniza a taxonomia de etiquetas do WhatsApp e as associações chat↔label.
+  if (bucket === 'label') {
+    try {
+      const evLower = String(event || '').toLowerCase();
+      const isAssoc = evLower.includes('label.chat') || evLower.endsWith('.labelassociationchateventdata');
+      const isDeleted = evLower === 'label.deleted';
+
+      // Upsert/delete de etiqueta em si.
+      if (!isAssoc) {
+        const lid = String(webPayload?.id || webPayload?.labelId || gowsData?.LabelID || gowsData?.ID || '').trim();
+        const lname = String(webPayload?.name || webPayload?.title || gowsData?.Name || '').slice(0, 120);
+        const lcolor = webPayload?.hexColor || webPayload?.color || gowsData?.Color || null;
+        if (!lid) return json({ ok: true, skipped: 'label_no_id' });
+        if (isDeleted) {
+          await supabase.from('chat_tags').delete()
+            .eq('owner_id', conn.owner_id).eq('waha_label_id', lid);
+          return json({ ok: true, label_deleted: lid });
+        }
+        if (!lname) return json({ ok: true, skipped: 'label_no_name' });
+        await supabase.from('chat_tags').upsert({
+          owner_id: conn.owner_id,
+          sub_company_id: conn.sub_company_id ?? null,
+          waha_label_id: lid, name: lname, color: lcolor,
+          updated_at: new Date().toISOString(),
+        } as any, { onConflict: 'owner_id,waha_label_id' });
+        return json({ ok: true, label_upsert: { id: lid, name: lname } });
+      }
+
+      // Associação chat↔label (added/deleted).
+      const chatIdRaw = webPayload?.chatId || webPayload?.id || gowsData?.JID || gowsData?.Chat || null;
+      const chatPhone = normalizePhone(chatIdRaw);
+      const labelId = String(webPayload?.labelId || gowsData?.LabelID || '').trim();
+      const added = evLower.endsWith('.added') || (gowsData?.Type === 'add');
+      if (!chatPhone || !labelId) return json({ ok: true, skipped: 'assoc_incomplete' });
+      const { data: tag } = await supabase
+        .from('chat_tags').select('id')
+        .eq('owner_id', conn.owner_id).eq('waha_label_id', labelId).maybeSingle();
+      if (!tag?.id) return json({ ok: true, skipped: 'assoc_tag_missing' });
+      const { data: cust } = await supabase
+        .from('customers').select('id, label_ids')
+        .eq('owner_id', conn.owner_id).eq('phone', chatPhone).maybeSingle();
+      if (!cust?.id) return json({ ok: true, skipped: 'assoc_customer_missing' });
+      const current: string[] = Array.isArray((cust as any).label_ids) ? (cust as any).label_ids : [];
+      const next = added
+        ? Array.from(new Set([...current, tag.id]))
+        : current.filter((x) => x !== tag.id);
+      await supabase.from('customers').update({ label_ids: next } as any).eq('id', cust.id);
+      return json({ ok: true, label_assoc: { chatPhone, labelId, added } });
+    } catch (e: any) {
+      return json({ ok: true, label_error: e?.message || String(e) });
+    }
+  }
+
+  // ── CHAT META (arquivar/silenciar) ───────────────────────────────────────
+  if (bucket === 'chat_meta') {
+    try {
+      const chatIdRaw = webPayload?.id || webPayload?.chatId || gowsData?.JID || gowsData?.Chat || null;
+      const cphone = normalizePhone(chatIdRaw);
+      if (!cphone) return json({ ok: true, skipped: 'chat_meta_no_phone' });
+      const evLower = String(event || '').toLowerCase();
+      const patch: Record<string, any> = {};
+      if (evLower === 'chat.archive' || evLower.endsWith('.archivechateventdata')) patch.is_archived = true;
+      if (evLower === 'chat.unarchive') patch.is_archived = false;
+      if (evLower === 'chat.mute' || evLower.endsWith('.mutechateventdata')) {
+        patch.is_muted = true;
+        const until = webPayload?.expiration || gowsData?.MuteEndTime || null;
+        patch.muted_until = until ? new Date(Number(until) * (String(until).length > 12 ? 1 : 1000)).toISOString() : null;
+      }
+      if (evLower === 'chat.unmute') { patch.is_muted = false; patch.muted_until = null; }
+      if (typeof gowsData?.Archived === 'boolean') patch.is_archived = gowsData.Archived;
+      if (typeof gowsData?.Muted === 'boolean') patch.is_muted = gowsData.Muted;
+      if (!Object.keys(patch).length) return json({ ok: true, skipped: 'chat_meta_noop' });
+      await supabase.from('customers').update(patch)
+        .eq('owner_id', conn.owner_id).eq('phone', cphone);
+      return json({ ok: true, chat_meta: { phone: cphone, patch } });
+    } catch (e: any) {
+      return json({ ok: true, chat_meta_error: e?.message || String(e) });
+    }
+  }
+
 
   // ── REVOKE / DELETE ──────────────────────────────────────────────────────
   // WEBJS: message.revoke_everyone { after: { id }, before: {...} } ou payload.id

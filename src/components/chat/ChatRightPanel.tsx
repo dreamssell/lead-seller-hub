@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { StickyNote, Zap, Loader2, Trash2, Plus, X, Send, History as HistoryIcon, Layers, Images, Phone, Mail, MapPin, IdCard, Copy, Video, MessageSquare, Paperclip, Mic, Ban, ShieldCheck, CheckCircle2, RefreshCw, Info } from 'lucide-react';
+import { StickyNote, Zap, Loader2, Trash2, Plus, X, Send, History as HistoryIcon, Layers, Images, Phone, Mail, MapPin, IdCard, Copy, Video, MessageSquare, Paperclip, Mic, Ban, ShieldCheck, CheckCircle2, RefreshCw, Info, Archive, BellOff, Bell, Tag, Check } from 'lucide-react';
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import { toast as sonnerToast } from 'sonner';
 import { toast } from 'sonner';
@@ -46,9 +46,11 @@ interface Props {
 export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }: Props) {
   const [tab, setTab] = useState<'notes' | 'replies' | 'history' | 'crm' | 'media'>('crm');
   const [ownerId, setOwnerId] = useState<string | null>(null);
-  const [profile, setProfile] = useState<{ phone?: string; email?: string; company?: string; channel?: string; created_at?: string; avatar_url?: string | null; address?: string; document?: string; profile_about?: string | null; is_blocked?: boolean; has_whatsapp?: boolean | null; profile_synced_at?: string | null; origin_connection_id?: string | null } | null>(null);
+  const [profile, setProfile] = useState<{ phone?: string; email?: string; company?: string; channel?: string; created_at?: string; avatar_url?: string | null; address?: string; document?: string; profile_about?: string | null; is_blocked?: boolean; has_whatsapp?: boolean | null; profile_synced_at?: string | null; origin_connection_id?: string | null; is_archived?: boolean; is_muted?: boolean; muted_until?: string | null; label_ids?: string[] } | null>(null);
   const [avatarBroken, setAvatarBroken] = useState(false);
-  const [wahaBusy, setWahaBusy] = useState<'block' | 'sync' | 'check' | null>(null);
+  const [wahaBusy, setWahaBusy] = useState<'block' | 'sync' | 'check' | 'archive' | 'mute' | 'labels' | null>(null);
+  const [availableLabels, setAvailableLabels] = useState<Array<{ id: string; name: string; color: string | null }>>([]);
+  const [labelPickerOpen, setLabelPickerOpen] = useState(false);
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [replies, setReplies] = useState<QuickReply[]>([]);
@@ -78,7 +80,7 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
     setAvatarBroken(false);
     supabase
       .from('customers')
-      .select('owner_id, phone, email, company, channel, created_at, avatar_url, address, document, profile_about, is_blocked, has_whatsapp, profile_synced_at, origin_connection_id' as any)
+      .select('owner_id, phone, email, company, channel, created_at, avatar_url, address, document, profile_about, is_blocked, has_whatsapp, profile_synced_at, origin_connection_id, is_archived, is_muted, muted_until, label_ids' as any)
       .eq('id', customerId)
       .maybeSingle()
       .then(({ data }) => {
@@ -99,6 +101,10 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
             has_whatsapp: d.has_whatsapp ?? null,
             profile_synced_at: d.profile_synced_at ?? null,
             origin_connection_id: d.origin_connection_id ?? null,
+            is_archived: !!d.is_archived,
+            is_muted: !!d.is_muted,
+            muted_until: d.muted_until ?? null,
+            label_ids: Array.isArray(d.label_ids) ? d.label_ids : [],
           });
         }
       });
@@ -152,6 +158,64 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
       } else toast.error(`Falha: ${res?.error || res?.skipped || 'desconhecido'}`);
     } finally { setWahaBusy(null); }
   };
+
+  // Etapa 7 — etiquetas, arquivar e silenciar
+  const loadAvailableLabels = async () => {
+    if (!ownerId) return;
+    const { data } = await supabase
+      .from('chat_tags').select('id, name, color')
+      .eq('owner_id', ownerId).order('name');
+    setAvailableLabels((data || []) as any);
+  };
+  useEffect(() => { loadAvailableLabels(); }, [ownerId]);
+  const wahaSyncLabels = async () => {
+    setWahaBusy('labels');
+    try {
+      const conn = await getWahaConn();
+      if (!conn) { toast.info('Etiquetas disponíveis apenas para conexões WAHA.'); return; }
+      const res: any = await getProviderAdapter('waha').syncLabels?.(conn);
+      if (res?.ok) { toast.success(`${res.count ?? 0} etiquetas sincronizadas`); loadAvailableLabels(); }
+      else toast.error(`Falha: ${res?.error || 'desconhecido'}`);
+    } finally { setWahaBusy(null); }
+  };
+  const wahaToggleLabel = async (labelId: string) => {
+    if (!profile) return;
+    const current = profile.label_ids || [];
+    const next = current.includes(labelId) ? current.filter((x) => x !== labelId) : [...current, labelId];
+    setProfile({ ...profile, label_ids: next }); // optimistic
+    const conn = await getWahaConn();
+    if (!conn) {
+      // sem WAHA → grava apenas localmente
+      await supabase.from('customers').update({ label_ids: next } as any).eq('id', customerId);
+      return;
+    }
+    const res: any = await getProviderAdapter('waha').setChatLabels?.(conn, customerId, next);
+    if (!res?.ok) { toast.error(`Falha ao aplicar etiqueta: ${res?.error || 'desconhecido'}`); loadProfile(); }
+  };
+  const wahaToggleArchive = async () => {
+    setWahaBusy('archive');
+    try {
+      const conn = await getWahaConn();
+      if (!conn) { toast.info('Arquivar disponível apenas para conexões WAHA.'); return; }
+      const target = !profile?.is_archived;
+      const res: any = await getProviderAdapter('waha').archiveChat?.(conn, customerId, target);
+      if (res?.ok) { toast.success(target ? 'Conversa arquivada' : 'Conversa restaurada'); loadProfile(); }
+      else toast.error(`Falha: ${res?.error || res?.skipped || 'desconhecido'}`);
+    } finally { setWahaBusy(null); }
+  };
+  const wahaToggleMute = async () => {
+    setWahaBusy('mute');
+    try {
+      const conn = await getWahaConn();
+      if (!conn) { toast.info('Silenciar disponível apenas para conexões WAHA.'); return; }
+      const target = !profile?.is_muted;
+      const until = target ? new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() : null;
+      const res: any = await getProviderAdapter('waha').muteChat?.(conn, customerId, target, until);
+      if (res?.ok) { toast.success(target ? 'Conversa silenciada por 8h' : 'Notificações reativadas'); loadProfile(); }
+      else toast.error(`Falha: ${res?.error || res?.skipped || 'desconhecido'}`);
+    } finally { setWahaBusy(null); }
+  };
+
 
 
 
@@ -420,6 +484,93 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
             {profile.profile_synced_at && (
               <p className="text-[9px] text-muted-foreground">
                 Sincronizado {formatDistanceToNow(new Date(profile.profile_synced_at), { addSuffix: true, locale: ptBR })}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Etapa 7 — Etiquetas, arquivar e silenciar */}
+        {profile?.origin_connection_id && (
+          <div className="mt-2 rounded-lg border border-border bg-secondary/30 p-2.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Tag className="w-3 h-3" /> Organização
+              </span>
+              <button
+                type="button" onClick={wahaSyncLabels} disabled={!!wahaBusy}
+                className="inline-flex items-center gap-1 h-5 px-1.5 rounded text-[9px] border border-border hover:bg-secondary transition disabled:opacity-50"
+                title="Sincronizar etiquetas do WhatsApp"
+              >
+                {wahaBusy === 'labels' ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              </button>
+            </div>
+
+            {/* Etiquetas aplicadas */}
+            <div className="flex flex-wrap gap-1">
+              {(profile.label_ids || []).map((lid) => {
+                const l = availableLabels.find((x) => x.id === lid);
+                if (!l) return null;
+                return (
+                  <span
+                    key={lid}
+                    className="inline-flex items-center gap-1 h-5 px-1.5 rounded text-[10px] border"
+                    style={{ borderColor: l.color || undefined, color: l.color || undefined }}
+                  >
+                    {l.name}
+                    <button type="button" onClick={() => wahaToggleLabel(lid)} className="opacity-70 hover:opacity-100">
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </span>
+                );
+              })}
+              <button
+                type="button" onClick={() => setLabelPickerOpen((v) => !v)}
+                className="inline-flex items-center gap-1 h-5 px-1.5 rounded text-[10px] border border-dashed border-border hover:bg-secondary transition"
+              >
+                <Plus className="w-2.5 h-2.5" /> Etiqueta
+              </button>
+            </div>
+
+            {labelPickerOpen && (
+              <div className="max-h-32 overflow-auto rounded border border-border bg-background/60 p-1 space-y-0.5">
+                {availableLabels.length === 0 && (
+                  <p className="text-[10px] text-muted-foreground px-1.5 py-1">Nenhuma etiqueta. Sincronize com o WhatsApp acima.</p>
+                )}
+                {availableLabels.map((l) => {
+                  const on = (profile.label_ids || []).includes(l.id);
+                  return (
+                    <button
+                      key={l.id} type="button" onClick={() => wahaToggleLabel(l.id)}
+                      className="w-full flex items-center gap-2 text-left px-1.5 py-1 rounded hover:bg-secondary text-[11px]"
+                    >
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: l.color || 'hsl(var(--muted-foreground))' }} />
+                      <span className="flex-1 truncate">{l.name}</span>
+                      {on && <Check className="w-3 h-3 text-primary" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <button
+                type="button" onClick={wahaToggleArchive} disabled={!!wahaBusy}
+                className={`inline-flex items-center gap-1 h-6 px-2 rounded text-[10px] border transition disabled:opacity-50 ${profile.is_archived ? 'border-primary/40 text-primary hover:bg-primary/10' : 'border-border hover:bg-secondary'}`}
+              >
+                {wahaBusy === 'archive' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Archive className="w-3 h-3" />}
+                {profile.is_archived ? 'Restaurar' : 'Arquivar'}
+              </button>
+              <button
+                type="button" onClick={wahaToggleMute} disabled={!!wahaBusy}
+                className={`inline-flex items-center gap-1 h-6 px-2 rounded text-[10px] border transition disabled:opacity-50 ${profile.is_muted ? 'border-amber-500/40 text-amber-600 hover:bg-amber-500/10' : 'border-border hover:bg-secondary'}`}
+              >
+                {wahaBusy === 'mute' ? <Loader2 className="w-3 h-3 animate-spin" /> : profile.is_muted ? <Bell className="w-3 h-3" /> : <BellOff className="w-3 h-3" />}
+                {profile.is_muted ? 'Reativar' : 'Silenciar 8h'}
+              </button>
+            </div>
+            {profile.is_muted && profile.muted_until && (
+              <p className="text-[9px] text-muted-foreground">
+                Silenciado até {new Date(profile.muted_until).toLocaleString('pt-BR')}
               </p>
             )}
           </div>
