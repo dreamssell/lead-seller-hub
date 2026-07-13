@@ -2615,7 +2615,14 @@ export default function ChatPage() {
                               ) : m.status === 'delivered' ? (
                                 <div className="flex -space-x-1.5"><Check className="w-2.5 h-2.5" /><Check className="w-2.5 h-2.5" /></div>
                               ) : m.status === 'read' ? (
-                                <div className="flex -space-x-1.5 text-sky-300"><Check className="w-2.5 h-2.5" /><Check className="w-2.5 h-2.5" /></div>
+                                <div className="flex items-center gap-1 text-sky-300">
+                                  <div className="flex -space-x-1.5"><Check className="w-2.5 h-2.5" /><Check className="w-2.5 h-2.5" /></div>
+                                  {m._confirmedAt && (
+                                    <span className="text-[9px] ml-1 opacity-90">
+                                      Visto {new Date(m._confirmedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  )}
+                                </div>
                               ) : (
                                 <CheckCircle2 className="w-2.5 h-2.5" />
                               )}
