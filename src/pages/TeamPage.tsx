@@ -358,6 +358,38 @@ export default function TeamPage() {
     return Math.min(100, (total / maxUsers) * 100);
   }, [unlimited, total, maxUsers]);
 
+  const filteredMembers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return members.filter((m) => {
+      const lvl = m.access_level || (m.is_account_admin ? 'administracao' : 'atendimento');
+      if (filterLevel !== 'all' && lvl !== filterLevel) return false;
+      const active = m.profile?.is_active !== false;
+      if (filterStatus === 'active' && !active) return false;
+      if (filterStatus === 'inactive' && active) return false;
+      if (!q) return true;
+      const hay = `${m.profile?.display_name || ''} ${m.profile?.email || ''} ${m.profile?.role_label || ''}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [members, search, filterLevel, filterStatus]);
+
+  const runDiagnostics = async () => {
+    setDiagOpen(true);
+    setDiagLoading(true);
+    setDiagData(null);
+    const { data, error } = await supabase.functions.invoke('manage-account-user', {
+      body: { action: 'diagnostics', sub_company_id: scopeSubId },
+    });
+    if (error) {
+      toast({ title: 'Falha no diagnóstico', description: error.message, variant: 'destructive' });
+      setDiagData({ error: error.message });
+    } else {
+      setDiagData(data);
+    }
+    setDiagLoading(false);
+  };
+
+
+
   return (
     <AppLayout title="Equipe (SDR/Closers)" subtitle="Gerencie seus atendentes e agentes de I.A.">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
