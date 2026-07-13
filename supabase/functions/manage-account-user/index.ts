@@ -153,6 +153,7 @@ type Scope = {
   sub_company_id: string | null;
   is_owner: boolean;
   read_only?: boolean;
+  is_manager?: boolean;
 };
 
 async function resolveScope(
