@@ -514,9 +514,14 @@ export default function TeamPage() {
         <div className="glass-card p-10 text-center text-muted-foreground">
           Nenhum membro cadastrado ainda. Clique em <b>Adicionar Membro</b> para começar.
         </div>
+      ) : filteredMembers.length === 0 ? (
+        <div className="glass-card p-10 text-center text-muted-foreground">
+          Nenhum membro corresponde aos filtros aplicados.
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {members.map((m, i) => {
+          {filteredMembers.map((m, i) => {
+
             const isAI = /bot|i\.?a\.?|agente/i.test(m.profile?.role_label || '');
             const active = m.profile?.is_active !== false;
             const lvl = levelMeta(m.access_level || (m.is_account_admin ? 'administracao' : 'atendimento'));
