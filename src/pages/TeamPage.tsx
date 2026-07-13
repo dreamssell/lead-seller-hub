@@ -409,6 +409,11 @@ export default function TeamPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {(isOwner || !!access?.is_account_admin) && (
+            <Button variant="outline" onClick={runDiagnostics} data-testid="team-diagnostics-btn">
+              <Stethoscope className="w-4 h-4 mr-2" /> Diagnóstico
+            </Button>
+          )}
           {isManagement && (
             <Button variant="outline" onClick={() => setAuditOpen(true)}>
               <History className="w-4 h-4 mr-2" /> Auditoria
@@ -424,6 +429,55 @@ export default function TeamPage() {
           </Button>
         </div>
       </div>
+
+      {/* Filtros */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[220px] max-w-md">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            data-testid="team-filter-search"
+            placeholder="Buscar por nome, e-mail ou cargo..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 pr-9"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-secondary"
+              aria-label="Limpar busca"
+            >
+              <X className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
+          )}
+        </div>
+        <Select value={filterLevel} onValueChange={(v) => setFilterLevel(v as any)}>
+          <SelectTrigger className="w-[180px]" data-testid="team-filter-level">
+            <SelectValue placeholder="Nível de acesso" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os níveis</SelectItem>
+            <SelectItem value="administracao">Administração</SelectItem>
+            <SelectItem value="supervisao">Supervisão</SelectItem>
+            <SelectItem value="atendimento">Atendimento</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
+          <SelectTrigger className="w-[150px]" data-testid="team-filter-status">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="active">Ativos</SelectItem>
+            <SelectItem value="inactive">Inativos</SelectItem>
+          </SelectContent>
+        </Select>
+        <span className="text-xs text-muted-foreground ml-auto" data-testid="team-filter-count">
+          {filteredMembers.length} de {members.length}
+        </span>
+      </div>
+
 
       {limitReached && (
         <div
