@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { StickyNote, Zap, Loader2, Trash2, Plus, X, Send, History as HistoryIcon, Layers, Images, Phone, Mail, MapPin, IdCard, Copy, Video, MessageSquare, Paperclip, Mic, Ban, ShieldCheck, CheckCircle2, RefreshCw, Info } from 'lucide-react';
+import { StickyNote, Zap, Loader2, Trash2, Plus, X, Send, History as HistoryIcon, Layers, Images, Phone, Mail, MapPin, IdCard, Copy, Video, MessageSquare, Paperclip, Mic, Ban, ShieldCheck, CheckCircle2, RefreshCw, Info, Archive, BellOff, Bell, Tag, Check } from 'lucide-react';
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import { toast as sonnerToast } from 'sonner';
 import { toast } from 'sonner';
@@ -484,6 +484,93 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
             {profile.profile_synced_at && (
               <p className="text-[9px] text-muted-foreground">
                 Sincronizado {formatDistanceToNow(new Date(profile.profile_synced_at), { addSuffix: true, locale: ptBR })}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Etapa 7 — Etiquetas, arquivar e silenciar */}
+        {profile?.origin_connection_id && (
+          <div className="mt-2 rounded-lg border border-border bg-secondary/30 p-2.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Tag className="w-3 h-3" /> Organização
+              </span>
+              <button
+                type="button" onClick={wahaSyncLabels} disabled={!!wahaBusy}
+                className="inline-flex items-center gap-1 h-5 px-1.5 rounded text-[9px] border border-border hover:bg-secondary transition disabled:opacity-50"
+                title="Sincronizar etiquetas do WhatsApp"
+              >
+                {wahaBusy === 'labels' ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              </button>
+            </div>
+
+            {/* Etiquetas aplicadas */}
+            <div className="flex flex-wrap gap-1">
+              {(profile.label_ids || []).map((lid) => {
+                const l = availableLabels.find((x) => x.id === lid);
+                if (!l) return null;
+                return (
+                  <span
+                    key={lid}
+                    className="inline-flex items-center gap-1 h-5 px-1.5 rounded text-[10px] border"
+                    style={{ borderColor: l.color || undefined, color: l.color || undefined }}
+                  >
+                    {l.name}
+                    <button type="button" onClick={() => wahaToggleLabel(lid)} className="opacity-70 hover:opacity-100">
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </span>
+                );
+              })}
+              <button
+                type="button" onClick={() => setLabelPickerOpen((v) => !v)}
+                className="inline-flex items-center gap-1 h-5 px-1.5 rounded text-[10px] border border-dashed border-border hover:bg-secondary transition"
+              >
+                <Plus className="w-2.5 h-2.5" /> Etiqueta
+              </button>
+            </div>
+
+            {labelPickerOpen && (
+              <div className="max-h-32 overflow-auto rounded border border-border bg-background/60 p-1 space-y-0.5">
+                {availableLabels.length === 0 && (
+                  <p className="text-[10px] text-muted-foreground px-1.5 py-1">Nenhuma etiqueta. Sincronize com o WhatsApp acima.</p>
+                )}
+                {availableLabels.map((l) => {
+                  const on = (profile.label_ids || []).includes(l.id);
+                  return (
+                    <button
+                      key={l.id} type="button" onClick={() => wahaToggleLabel(l.id)}
+                      className="w-full flex items-center gap-2 text-left px-1.5 py-1 rounded hover:bg-secondary text-[11px]"
+                    >
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: l.color || 'hsl(var(--muted-foreground))' }} />
+                      <span className="flex-1 truncate">{l.name}</span>
+                      {on && <Check className="w-3 h-3 text-primary" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <button
+                type="button" onClick={wahaToggleArchive} disabled={!!wahaBusy}
+                className={`inline-flex items-center gap-1 h-6 px-2 rounded text-[10px] border transition disabled:opacity-50 ${profile.is_archived ? 'border-primary/40 text-primary hover:bg-primary/10' : 'border-border hover:bg-secondary'}`}
+              >
+                {wahaBusy === 'archive' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Archive className="w-3 h-3" />}
+                {profile.is_archived ? 'Restaurar' : 'Arquivar'}
+              </button>
+              <button
+                type="button" onClick={wahaToggleMute} disabled={!!wahaBusy}
+                className={`inline-flex items-center gap-1 h-6 px-2 rounded text-[10px] border transition disabled:opacity-50 ${profile.is_muted ? 'border-amber-500/40 text-amber-600 hover:bg-amber-500/10' : 'border-border hover:bg-secondary'}`}
+              >
+                {wahaBusy === 'mute' ? <Loader2 className="w-3 h-3 animate-spin" /> : profile.is_muted ? <Bell className="w-3 h-3" /> : <BellOff className="w-3 h-3" />}
+                {profile.is_muted ? 'Reativar' : 'Silenciar 8h'}
+              </button>
+            </div>
+            {profile.is_muted && profile.muted_until && (
+              <p className="text-[9px] text-muted-foreground">
+                Silenciado até {new Date(profile.muted_until).toLocaleString('pt-BR')}
               </p>
             )}
           </div>
