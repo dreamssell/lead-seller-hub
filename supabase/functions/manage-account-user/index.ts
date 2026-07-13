@@ -226,6 +226,7 @@ async function resolveScope(
         owner_id: chosen.owner_id,
         sub_company_id: chosen.sub_company_id ?? requestedSubId ?? null,
         is_owner: false,
+        read_only: true,
       };
     }
   }
