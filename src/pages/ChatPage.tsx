@@ -790,6 +790,10 @@ export default function ChatPage() {
             sub_company_id: (c as any).sub_company_id || null,
             avatar_url: (c as any).avatar_url || null,
             email: c.email || null,
+            is_archived: !!(c as any).is_archived,
+            is_muted: !!(c as any).is_muted,
+            muted_until: (c as any).muted_until || null,
+            label_ids: Array.isArray((c as any).label_ids) ? (c as any).label_ids : [],
             _sortAt: sortAt,
             _duplicateKey: identity,
           };
