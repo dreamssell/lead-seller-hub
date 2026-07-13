@@ -57,7 +57,7 @@ function normalizePhone(from?: string | null): string | null {
 // Classifies the incoming event into one of our three logical buckets, using
 // both the top-level `event` string and the shape of the payload so we work
 // with WEBJS ("message") and GOWS ("gows.MessageEventData") equally well.
-function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'presence' | 'ignore' {
+function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'presence' | 'contact' | 'ignore' {
   const e = event.toLowerCase();
   if (e === 'session.status' || e === 'status.instance') return 'session';
   if (e === 'message.ack' || e === 'ack' || e.endsWith('.receipteventdata')) return 'ack';
