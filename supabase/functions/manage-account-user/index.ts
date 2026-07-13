@@ -192,8 +192,29 @@ async function resolveScope(
     return { owner_id: callerId, sub_company_id: null, is_owner: true };
   }
 
+  // Quando o usuário tem mais de um escopo (ex.: Davy é dono do próprio login
+  // e admin da conta canônica Mult Seguros), priorize a conta administrada
+  // diferente do próprio user_id. Caso contrário a listagem cai no escopo
+  // pessoal e mostra só o próprio usuário.
+  const adminRow = access.find((a) =>
+    a.is_account_admin &&
+    a.owner_id !== callerId &&
+    (!requestedSubId || a.sub_company_id === requestedSubId)
+  ) ?? access.find((a) =>
+    a.is_account_admin &&
+    (!requestedSubId || a.sub_company_id === requestedSubId)
+  );
+  if (adminRow) {
+    return {
+      owner_id: adminRow.owner_id,
+      sub_company_id: adminRow.sub_company_id ?? requestedSubId ?? null,
+      is_owner: false,
+    };
+  }
+
   // O dono da conta pode já ter uma linha em user_account_access com is_owner=true;
-  // trate-o como escopo total (nunca read_only) antes de qualquer outro branch.
+  // trate-o como escopo total (nunca read_only) depois de checar admins
+  // canônicos, para não mascarar contas empresariais vinculadas ao login.
   const ownerRow = access.find((a: any) =>
     a.is_owner &&
     (!requestedSubId || a.sub_company_id === requestedSubId || a.sub_company_id === null)
@@ -203,18 +224,6 @@ async function resolveScope(
       owner_id: ownerRow.owner_id,
       sub_company_id: ownerRow.sub_company_id ?? requestedSubId ?? null,
       is_owner: true,
-    };
-  }
-
-  const adminRow = access.find((a) =>
-    a.is_account_admin &&
-    (!requestedSubId || a.sub_company_id === requestedSubId)
-  );
-  if (adminRow) {
-    return {
-      owner_id: adminRow.owner_id,
-      sub_company_id: adminRow.sub_company_id ?? requestedSubId ?? null,
-      is_owner: false,
     };
   }
 

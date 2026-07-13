@@ -17,6 +17,7 @@ import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
+import { useIsSupervisor } from '@/hooks/useIsSupervisor';
 import { extractManageUserError } from '@/lib/manageAccountUserErrors';
 import { SEAT_LIMIT_TITLE, SEAT_UPSELL_EMAIL, SEAT_UPSELL_MAILTO, seatLimitDescription } from '@/lib/seatLimitCopy';
 
@@ -49,10 +50,11 @@ const levelMeta = (v?: AccessLevel) => ACCESS_LEVELS.find(l => l.value === v) ||
 export default function TeamPage() {
   const { access, user } = useAuth();
   const { isOwner } = usePlatformOwner();
+  const { isSupervisor } = useIsSupervisor();
   const scopeSubId = access?.sub_company_id ?? null;
 
-  // Management gate: platform owner OR account admin of current scope
-  const isManagement = isOwner || !!access?.is_account_admin;
+  // Management gate: platform owner, account admin, or supervisor/coordenador/diretor of current scope.
+  const isManagement = isOwner || !!access?.is_account_admin || isSupervisor;
 
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
