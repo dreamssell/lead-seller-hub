@@ -374,7 +374,59 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
           )}
         </div>
 
+        {/* Etapa 6 — WhatsApp: sobre, verificação e bloqueio */}
+        {profile?.origin_connection_id && (
+          <div className="mt-3 rounded-lg border border-border bg-secondary/30 p-2.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Info className="w-3 h-3" /> Perfil WhatsApp
+              </span>
+              <div className="flex items-center gap-1">
+                {profile.has_whatsapp === true && (
+                  <span title="Número tem WhatsApp" className="text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="w-3.5 h-3.5" /></span>
+                )}
+                {profile.has_whatsapp === false && (
+                  <span title="Sem WhatsApp" className="text-muted-foreground"><Ban className="w-3.5 h-3.5" /></span>
+                )}
+                {profile.is_blocked && (
+                  <span title="Contato bloqueado" className="text-destructive"><Ban className="w-3.5 h-3.5" /></span>
+                )}
+              </div>
+            </div>
+            {profile.profile_about && (
+              <p className="text-[11px] italic text-foreground/80 leading-snug">"{profile.profile_about}"</p>
+            )}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button" onClick={wahaSync} disabled={!!wahaBusy}
+                className="inline-flex items-center gap-1 h-6 px-2 rounded text-[10px] border border-border hover:bg-secondary transition disabled:opacity-50"
+              >
+                {wahaBusy === 'sync' ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />} Sincronizar
+              </button>
+              <button
+                type="button" onClick={wahaCheckExists} disabled={!!wahaBusy}
+                className="inline-flex items-center gap-1 h-6 px-2 rounded text-[10px] border border-border hover:bg-secondary transition disabled:opacity-50"
+              >
+                {wahaBusy === 'check' ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />} Verificar nº
+              </button>
+              <button
+                type="button" onClick={wahaToggleBlock} disabled={!!wahaBusy}
+                className={`inline-flex items-center gap-1 h-6 px-2 rounded text-[10px] border transition disabled:opacity-50 ${profile.is_blocked ? 'border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10' : 'border-destructive/40 text-destructive hover:bg-destructive/10'}`}
+              >
+                {wahaBusy === 'block' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Ban className="w-3 h-3" />}
+                {profile.is_blocked ? 'Desbloquear' : 'Bloquear'}
+              </button>
+            </div>
+            {profile.profile_synced_at && (
+              <p className="text-[9px] text-muted-foreground">
+                Sincronizado {formatDistanceToNow(new Date(profile.profile_synced_at), { addSuffix: true, locale: ptBR })}
+              </p>
+            )}
+          </div>
+        )}
+
       </div>
+
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="flex-1 flex flex-col">
         <TabsList className="grid grid-cols-6 mx-3 mt-3">
