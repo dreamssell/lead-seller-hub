@@ -96,7 +96,7 @@ export const WahaContactActionSchema = z.object({
 
 export type WahaSendTextPayload = z.infer<typeof WahaSendTextSchema>;
 export type WahaSendMediaPayload = z.infer<typeof WahaSendMediaSchema>;
-export type WahaSendVoicePayload = z.infer<typeof WahaSendVoicePayload extends never ? never : typeof WahaSendVoiceSchema>;
+export type WahaSendVoicePayload = z.infer<typeof WahaSendVoiceSchema>;
 export type WahaSendReactionPayload = z.infer<typeof WahaSendReactionSchema>;
 export type WahaForwardPayload = z.infer<typeof WahaForwardSchema>;
 export type WahaEditPayload = z.infer<typeof WahaEditSchema>;
