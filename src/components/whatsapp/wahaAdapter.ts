@@ -1021,7 +1021,7 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       const data = await wahaFetch(url, token, block ? '/api/contacts/block' : '/api/contacts/unblock', {
         method: 'POST', body: parsed.data, timeoutMs: 8_000, retries: 1,
       });
-      await supabase.from('customers').update({ is_blocked: block }).eq('id', customerId);
+      await supabase.from('customers').update({ is_blocked: block } as any).eq('id', customerId);
       await writeWahaAudit(conn, {
         action, status: 'success', customerId,
         wahaSessionId: parsed.data.session,
