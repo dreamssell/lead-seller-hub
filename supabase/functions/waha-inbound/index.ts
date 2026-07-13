@@ -582,6 +582,49 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── CONTACT / PROFILE UPDATES ────────────────────────────────────────────
+  // Consolidated handler for WAHA events that carry contact metadata
+  // (foto, nome, "sobre", bloqueio). Best-effort — sempre 200 para o WAHA.
+  if (bucket === 'contact') {
+    try {
+      const webChatId: string | undefined =
+        webPayload?.id || webPayload?.contactId || webPayload?.chatId || webPayload?.wid;
+      const gowsJid: string | undefined =
+        gowsData?.JID || gowsData?.From || gowsData?.Chat || gowsData?.Contact;
+      const contactChat = webChatId || gowsJid || null;
+      const contactPhone = normalizePhone(contactChat);
+      if (!contactPhone) return json({ ok: true, skipped: 'contact_no_phone' });
+
+      const patch: Record<string, any> = { profile_synced_at: new Date().toISOString() };
+      const pic = webPayload?.profilePictureUrl || webPayload?.profilePicUrl
+        || webPayload?.picture || gowsData?.PictureURL || gowsData?.PictureId ? (webPayload?.profilePictureUrl || webPayload?.picture || gowsData?.PictureURL || null) : null;
+      if (pic && typeof pic === 'string') patch.avatar_url = pic;
+
+      const about = webPayload?.about ?? webPayload?.status ?? gowsData?.Status ?? null;
+      if (typeof about === 'string' && about.length) patch.profile_about = about;
+
+      const push = webPayload?.pushname || webPayload?.name || webPayload?.notify
+        || gowsData?.PushName || gowsData?.BusinessName || null;
+      if (typeof push === 'string' && push.length) {
+        const { data: current } = await supabase
+          .from('customers').select('name').eq('phone', contactPhone).eq('owner_id', conn.owner_id).maybeSingle();
+        if (!current?.name || /^\+?\d[\d\s-]*$/.test(String(current.name).trim())) patch.name = push;
+      }
+
+      // Bloqueio via WAHA (evento explícito ou blocklist).
+      const evLower = String(event || '').toLowerCase();
+      if (evLower === 'contact.blocked' || evLower.endsWith('.blocklisteventdata') && gowsData?.Action === 'add') patch.is_blocked = true;
+      if (evLower === 'contact.unblocked' || (evLower.endsWith('.blocklisteventdata') && gowsData?.Action === 'remove')) patch.is_blocked = false;
+
+      const { error: updErr } = await supabase
+        .from('customers').update(patch).eq('phone', contactPhone).eq('owner_id', conn.owner_id);
+      if (updErr) return json({ ok: true, contact_update_error: updErr.message });
+      return json({ ok: true, contact: { phone: contactPhone, patch } });
+    } catch (e: any) {
+      return json({ ok: true, contact_error: e?.message || String(e) });
+    }
+  }
+
   // ── REVOKE / DELETE ──────────────────────────────────────────────────────
   // WEBJS: message.revoke_everyone { after: { id }, before: {...} } ou payload.id
   // GOWS:  msgWrap.protocolMessage = { type: 'REVOKE', key: { id } }
