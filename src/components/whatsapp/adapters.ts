@@ -17,6 +17,11 @@ export interface WhatsAppProviderAdapter {
   sendTyping?(conn: WhatsAppConnection, customerId: string, state: 'typing' | 'recording' | 'paused'): Promise<any>;
   markAsRead?(conn: WhatsAppConnection, customerId: string, providerMessageId?: string | null): Promise<any>;
   subscribePresence?(conn: WhatsAppConnection, customerId: string): Promise<any>;
+  // Etapa 6 — contatos e perfil: foto/nome/sobre, bloqueio e check-number.
+  syncContactProfile?(conn: WhatsAppConnection, customerId: string): Promise<any>;
+  blockContact?(conn: WhatsAppConnection, customerId: string): Promise<any>;
+  unblockContact?(conn: WhatsAppConnection, customerId: string): Promise<any>;
+  checkNumberExists?(conn: WhatsAppConnection, phoneOrCustomerId: string): Promise<{ exists: boolean; chatId?: string; raw?: any; error?: string }>;
   syncContacts(conn: WhatsAppConnection): Promise<any>;
 }
 

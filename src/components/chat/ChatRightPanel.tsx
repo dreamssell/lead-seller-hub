@@ -5,7 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { StickyNote, Zap, Loader2, Trash2, Plus, X, Send, History as HistoryIcon, Layers, Images, Phone, Mail, MapPin, IdCard, Copy, Video, MessageSquare, Paperclip, Mic } from 'lucide-react';
+import { StickyNote, Zap, Loader2, Trash2, Plus, X, Send, History as HistoryIcon, Layers, Images, Phone, Mail, MapPin, IdCard, Copy, Video, MessageSquare, Paperclip, Mic, Ban, ShieldCheck, CheckCircle2, RefreshCw, Info } from 'lucide-react';
+import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import { toast as sonnerToast } from 'sonner';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
@@ -45,8 +46,9 @@ interface Props {
 export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }: Props) {
   const [tab, setTab] = useState<'notes' | 'replies' | 'history' | 'crm' | 'media'>('crm');
   const [ownerId, setOwnerId] = useState<string | null>(null);
-  const [profile, setProfile] = useState<{ phone?: string; email?: string; company?: string; channel?: string; created_at?: string; avatar_url?: string | null; address?: string; document?: string } | null>(null);
+  const [profile, setProfile] = useState<{ phone?: string; email?: string; company?: string; channel?: string; created_at?: string; avatar_url?: string | null; address?: string; document?: string; profile_about?: string | null; is_blocked?: boolean; has_whatsapp?: boolean | null; profile_synced_at?: string | null; origin_connection_id?: string | null } | null>(null);
   const [avatarBroken, setAvatarBroken] = useState(false);
+  const [wahaBusy, setWahaBusy] = useState<'block' | 'sync' | 'check' | null>(null);
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [replies, setReplies] = useState<QuickReply[]>([]);
@@ -72,29 +74,84 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
     });
   }, []);
 
-  useEffect(() => {
+  const loadProfile = () => {
     setAvatarBroken(false);
     supabase
       .from('customers')
-      .select('owner_id, phone, email, company, channel, created_at, avatar_url, address, document')
+      .select('owner_id, phone, email, company, channel, created_at, avatar_url, address, document, profile_about, is_blocked, has_whatsapp, profile_synced_at, origin_connection_id' as any)
       .eq('id', customerId)
       .maybeSingle()
       .then(({ data }) => {
         setOwnerId((data as any)?.owner_id || null);
         if (data) {
+          const d = data as any;
           setProfile({
-            phone: (data as any).phone,
-            email: (data as any).email,
-            company: (data as any).company,
-            channel: (data as any).channel,
-            created_at: (data as any).created_at,
-            avatar_url: (data as any).avatar_url || null,
-            address: (data as any).address || null,
-            document: (data as any).document || null,
+            phone: d.phone,
+            email: d.email,
+            company: d.company,
+            channel: d.channel,
+            created_at: d.created_at,
+            avatar_url: d.avatar_url || null,
+            address: d.address || null,
+            document: d.document || null,
+            profile_about: d.profile_about ?? null,
+            is_blocked: !!d.is_blocked,
+            has_whatsapp: d.has_whatsapp ?? null,
+            profile_synced_at: d.profile_synced_at ?? null,
+            origin_connection_id: d.origin_connection_id ?? null,
           });
         }
       });
-  }, [customerId]);
+  };
+  useEffect(() => { loadProfile(); }, [customerId]);
+
+  // Etapa 6 — helpers para chamar o WahaAdapter a partir do painel de perfil.
+  const getWahaConn = async () => {
+    if (!profile?.origin_connection_id) return null;
+    const { data } = await supabase
+      .from('whatsapp_connections')
+      .select('*')
+      .eq('id', profile.origin_connection_id)
+      .maybeSingle();
+    if (!data || (data as any).provider !== 'waha') return null;
+    return data as any;
+  };
+  const wahaSync = async () => {
+    setWahaBusy('sync');
+    try {
+      const conn = await getWahaConn();
+      if (!conn) { toast.info('Perfil WAHA disponível apenas para contatos vinculados a uma conexão WAHA.'); return; }
+      const res: any = await getProviderAdapter('waha').syncContactProfile?.(conn, customerId);
+      if (res?.ok) { toast.success('Perfil sincronizado com o WhatsApp'); loadProfile(); }
+      else toast.error(`Falha ao sincronizar: ${res?.error || res?.skipped || 'desconhecido'}`);
+    } finally { setWahaBusy(null); }
+  };
+  const wahaCheckExists = async () => {
+    setWahaBusy('check');
+    try {
+      const conn = await getWahaConn();
+      if (!conn) { toast.info('Verificação disponível apenas para conexões WAHA.'); return; }
+      const res: any = await getProviderAdapter('waha').checkNumberExists?.(conn, customerId);
+      if (res?.exists) toast.success('Número possui WhatsApp ativo.');
+      else toast.warning(res?.error ? `Falha: ${res.error}` : 'Este número não possui WhatsApp.');
+      loadProfile();
+    } finally { setWahaBusy(null); }
+  };
+  const wahaToggleBlock = async () => {
+    setWahaBusy('block');
+    try {
+      const conn = await getWahaConn();
+      if (!conn) { toast.info('Bloqueio disponível apenas para conexões WAHA.'); return; }
+      const adapter = getProviderAdapter('waha');
+      const res: any = profile?.is_blocked
+        ? await adapter.unblockContact?.(conn, customerId)
+        : await adapter.blockContact?.(conn, customerId);
+      if (res?.ok) {
+        toast.success(profile?.is_blocked ? 'Contato desbloqueado' : 'Contato bloqueado');
+        loadProfile();
+      } else toast.error(`Falha: ${res?.error || res?.skipped || 'desconhecido'}`);
+    } finally { setWahaBusy(null); }
+  };
 
 
 
@@ -317,7 +374,59 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
           )}
         </div>
 
+        {/* Etapa 6 — WhatsApp: sobre, verificação e bloqueio */}
+        {profile?.origin_connection_id && (
+          <div className="mt-3 rounded-lg border border-border bg-secondary/30 p-2.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Info className="w-3 h-3" /> Perfil WhatsApp
+              </span>
+              <div className="flex items-center gap-1">
+                {profile.has_whatsapp === true && (
+                  <span title="Número tem WhatsApp" className="text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="w-3.5 h-3.5" /></span>
+                )}
+                {profile.has_whatsapp === false && (
+                  <span title="Sem WhatsApp" className="text-muted-foreground"><Ban className="w-3.5 h-3.5" /></span>
+                )}
+                {profile.is_blocked && (
+                  <span title="Contato bloqueado" className="text-destructive"><Ban className="w-3.5 h-3.5" /></span>
+                )}
+              </div>
+            </div>
+            {profile.profile_about && (
+              <p className="text-[11px] italic text-foreground/80 leading-snug">"{profile.profile_about}"</p>
+            )}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button" onClick={wahaSync} disabled={!!wahaBusy}
+                className="inline-flex items-center gap-1 h-6 px-2 rounded text-[10px] border border-border hover:bg-secondary transition disabled:opacity-50"
+              >
+                {wahaBusy === 'sync' ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />} Sincronizar
+              </button>
+              <button
+                type="button" onClick={wahaCheckExists} disabled={!!wahaBusy}
+                className="inline-flex items-center gap-1 h-6 px-2 rounded text-[10px] border border-border hover:bg-secondary transition disabled:opacity-50"
+              >
+                {wahaBusy === 'check' ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />} Verificar nº
+              </button>
+              <button
+                type="button" onClick={wahaToggleBlock} disabled={!!wahaBusy}
+                className={`inline-flex items-center gap-1 h-6 px-2 rounded text-[10px] border transition disabled:opacity-50 ${profile.is_blocked ? 'border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10' : 'border-destructive/40 text-destructive hover:bg-destructive/10'}`}
+              >
+                {wahaBusy === 'block' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Ban className="w-3 h-3" />}
+                {profile.is_blocked ? 'Desbloquear' : 'Bloquear'}
+              </button>
+            </div>
+            {profile.profile_synced_at && (
+              <p className="text-[9px] text-muted-foreground">
+                Sincronizado {formatDistanceToNow(new Date(profile.profile_synced_at), { addSuffix: true, locale: ptBR })}
+              </p>
+            )}
+          </div>
+        )}
+
       </div>
+
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="flex-1 flex flex-col">
         <TabsList className="grid grid-cols-6 mx-3 mt-3">

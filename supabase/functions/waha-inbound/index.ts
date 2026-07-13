@@ -57,7 +57,7 @@ function normalizePhone(from?: string | null): string | null {
 // Classifies the incoming event into one of our three logical buckets, using
 // both the top-level `event` string and the shape of the payload so we work
 // with WEBJS ("message") and GOWS ("gows.MessageEventData") equally well.
-function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'presence' | 'ignore' {
+function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'presence' | 'contact' | 'ignore' {
   const e = event.toLowerCase();
   if (e === 'session.status' || e === 'status.instance') return 'session';
   if (e === 'message.ack' || e === 'ack' || e.endsWith('.receipteventdata')) return 'ack';
@@ -77,6 +77,16 @@ function classify(event: string, body: any): 'message' | 'ack' | 'session' | 're
   //   WEBJS: `presence.update` com { id: chatId, presences: [{ id, isOnline, lastKnownPresence, lastSeen }] }
   //   GOWS:  gows.PresenceEventData (online/offline) ou gows.ChatPresenceEventData (typing/recording)
   if (e === 'presence.update' || e.endsWith('.presenceeventdata') || e.endsWith('.chatpresenceeventdata')) return 'presence';
+  // Etapa 6 — contatos & perfil (foto/nome/sobre e block/unblock).
+  //   WEBJS: `contact.changed`, `contact.updated`, `chats.update` (com foto), `contact.blocked`/`contact.unblocked`.
+  //   GOWS:  gows.PictureEventData, gows.BusinessNameEventData, gows.PushNameEventData, gows.BlocklistEventData.
+  if (
+    e === 'contact.update' || e === 'contact.updated' || e === 'contact.changed' ||
+    e === 'contact.blocked' || e === 'contact.unblocked' ||
+    e === 'chats.update' ||
+    e.endsWith('.pictureeventdata') || e.endsWith('.businessnameeventdata') ||
+    e.endsWith('.pushnameeventdata') || e.endsWith('.blocklisteventdata')
+  ) return 'contact';
   if (e === 'message' || e === 'message.any') return 'message';
   // GOWS engine emits gows.MessageEventData with body.data.Info / body.data.Message
   if (e.includes('messageeventdata') || e.includes('gows.message')) return 'message';
@@ -569,6 +579,49 @@ Deno.serve(async (req) => {
       return json({ ok: true, presence: { phone: presencePhone, state, last_seen_at: patch.last_seen_at ?? null } });
     } catch (e: any) {
       return json({ ok: true, presence_error: e?.message || String(e) });
+    }
+  }
+
+  // ── CONTACT / PROFILE UPDATES ────────────────────────────────────────────
+  // Consolidated handler for WAHA events that carry contact metadata
+  // (foto, nome, "sobre", bloqueio). Best-effort — sempre 200 para o WAHA.
+  if (bucket === 'contact') {
+    try {
+      const webChatId: string | undefined =
+        webPayload?.id || webPayload?.contactId || webPayload?.chatId || webPayload?.wid;
+      const gowsJid: string | undefined =
+        gowsData?.JID || gowsData?.From || gowsData?.Chat || gowsData?.Contact;
+      const contactChat = webChatId || gowsJid || null;
+      const contactPhone = normalizePhone(contactChat);
+      if (!contactPhone) return json({ ok: true, skipped: 'contact_no_phone' });
+
+      const patch: Record<string, any> = { profile_synced_at: new Date().toISOString() };
+      const pic = webPayload?.profilePictureUrl || webPayload?.profilePicUrl
+        || webPayload?.picture || gowsData?.PictureURL || gowsData?.PictureId ? (webPayload?.profilePictureUrl || webPayload?.picture || gowsData?.PictureURL || null) : null;
+      if (pic && typeof pic === 'string') patch.avatar_url = pic;
+
+      const about = webPayload?.about ?? webPayload?.status ?? gowsData?.Status ?? null;
+      if (typeof about === 'string' && about.length) patch.profile_about = about;
+
+      const push = webPayload?.pushname || webPayload?.name || webPayload?.notify
+        || gowsData?.PushName || gowsData?.BusinessName || null;
+      if (typeof push === 'string' && push.length) {
+        const { data: current } = await supabase
+          .from('customers').select('name').eq('phone', contactPhone).eq('owner_id', conn.owner_id).maybeSingle();
+        if (!current?.name || /^\+?\d[\d\s-]*$/.test(String(current.name).trim())) patch.name = push;
+      }
+
+      // Bloqueio via WAHA (evento explícito ou blocklist).
+      const evLower = String(event || '').toLowerCase();
+      if (evLower === 'contact.blocked' || evLower.endsWith('.blocklisteventdata') && gowsData?.Action === 'add') patch.is_blocked = true;
+      if (evLower === 'contact.unblocked' || (evLower.endsWith('.blocklisteventdata') && gowsData?.Action === 'remove')) patch.is_blocked = false;
+
+      const { error: updErr } = await supabase
+        .from('customers').update(patch).eq('phone', contactPhone).eq('owner_id', conn.owner_id);
+      if (updErr) return json({ ok: true, contact_update_error: updErr.message });
+      return json({ ok: true, contact: { phone: contactPhone, patch } });
+    } catch (e: any) {
+      return json({ ok: true, contact_error: e?.message || String(e) });
     }
   }
 

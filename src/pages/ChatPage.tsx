@@ -1044,6 +1044,16 @@ export default function ChatPage() {
       .find((m: any) => m?.sender_type === 'client' && m?.uaz_msg_id);
     adapter.subscribePresence?.(activeWhatsAppConn, selectedConvId).catch(() => {});
     adapter.markAsRead?.(activeWhatsAppConn, selectedConvId, lastInbound?.uaz_msg_id ?? null).catch(() => {});
+    // Etapa 6 — sincroniza foto/nome/"sobre" do contato (throttled: 1x a cada 12h).
+    (async () => {
+      try {
+        const { data: cust } = await supabase
+          .from('customers').select('profile_synced_at').eq('id', selectedConvId).single();
+        const last = (cust as any)?.profile_synced_at ? Date.parse((cust as any).profile_synced_at) : 0;
+        if (Date.now() - last < 12 * 60 * 60 * 1000) return;
+        await adapter.syncContactProfile?.(activeWhatsAppConn, selectedConvId);
+      } catch { /* silencioso */ }
+    })();
   }, [selectedConvId, activeChannel, activeWhatsAppConn, messages.length]);
 
   // Etapa 5 (WAHA) — envia "digitando…" enquanto o usuário compõe (debounce),
