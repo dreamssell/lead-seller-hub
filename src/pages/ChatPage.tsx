@@ -1056,30 +1056,56 @@ export default function ChatPage() {
     })();
   }, [selectedConvId, activeChannel, activeWhatsAppConn, messages.length]);
 
-  // Etapa 5 (WAHA) — envia "digitando…" enquanto o usuário compõe (debounce),
-  // e "paused" quando o composer fica vazio ou ocioso por 4s.
+  // Etapa 5 (WAHA) — envia "digitando…" com debounce estável para reduzir flicker.
+  // Estratégia: quando o texto muda de vazio→preenchido, envia 'typing' imediatamente
+  // e mantém um refresh a cada 5s (janela WhatsApp ~10s). Ao ficar 6s sem alteração
+  // ou ao esvaziar, envia 'paused'. Usamos refs para não recriar timers a cada tecla.
+  const typingStateRef = useRef<'idle' | 'typing'>('idle');
+  const typingRefreshRef = useRef<number | null>(null);
+  const typingPauseRef = useRef<number | null>(null);
   useEffect(() => {
-    if (activeChannel !== 'whatsapp' || !activeWhatsAppConn || activeWhatsAppConn.provider !== 'waha') return;
-    if (!selectedConvId) return;
+    if (activeChannel !== 'whatsapp' || !activeWhatsAppConn || activeWhatsAppConn.provider !== 'waha' || !selectedConvId) return;
     const adapter = getProviderAdapter('waha');
     const hasText = messageText.trim().length > 0;
+
+    const clearTimers = () => {
+      if (typingRefreshRef.current) { clearInterval(typingRefreshRef.current); typingRefreshRef.current = null; }
+      if (typingPauseRef.current) { clearTimeout(typingPauseRef.current); typingPauseRef.current = null; }
+    };
+
     if (!hasText) {
-      // Composer vazio: garante estado "paused" (best-effort).
-      adapter.sendTyping?.(activeWhatsAppConn, selectedConvId, 'paused').catch(() => {});
+      if (typingStateRef.current === 'typing') {
+        typingStateRef.current = 'idle';
+        adapter.sendTyping?.(activeWhatsAppConn, selectedConvId, 'paused').catch(() => {});
+      }
+      clearTimers();
       return;
     }
-    // Enquanto há texto, envia "typing" e reenvia a cada 3s (WAHA/WhatsApp expiram ~10s).
-    adapter.sendTyping?.(activeWhatsAppConn, selectedConvId, 'typing').catch(() => {});
-    const refresh = setInterval(() => {
+
+    if (typingStateRef.current !== 'typing') {
+      typingStateRef.current = 'typing';
       adapter.sendTyping?.(activeWhatsAppConn, selectedConvId, 'typing').catch(() => {});
-    }, 3_000);
-    // Idle: se o usuário para de digitar (efeito reroda quando messageText muda),
-    // após 4s sem alterações mandamos "paused".
-    const idle = setTimeout(() => {
+      typingRefreshRef.current = window.setInterval(() => {
+        adapter.sendTyping?.(activeWhatsAppConn, selectedConvId, 'typing').catch(() => {});
+      }, 5_000);
+    }
+
+    if (typingPauseRef.current) clearTimeout(typingPauseRef.current);
+    typingPauseRef.current = window.setTimeout(() => {
+      typingStateRef.current = 'idle';
       adapter.sendTyping?.(activeWhatsAppConn, selectedConvId, 'paused').catch(() => {});
-    }, 4_000);
-    return () => { clearInterval(refresh); clearTimeout(idle); };
+      if (typingRefreshRef.current) { clearInterval(typingRefreshRef.current); typingRefreshRef.current = null; }
+    }, 6_000);
+
+    return () => { /* mantém timers ativos enquanto o efeito reroda a cada tecla */ };
   }, [messageText, selectedConvId, activeChannel, activeWhatsAppConn]);
+
+  // Ao trocar de conversa, força reset do estado local de typing.
+  useEffect(() => {
+    typingStateRef.current = 'idle';
+    if (typingRefreshRef.current) { clearInterval(typingRefreshRef.current); typingRefreshRef.current = null; }
+    if (typingPauseRef.current) { clearTimeout(typingPauseRef.current); typingPauseRef.current = null; }
+  }, [selectedConvId]);
 
 
   const list = activeChannel ? convs[activeChannel] : [];
