@@ -194,12 +194,42 @@ async function resolveScope(
     a.is_account_admin &&
     (!requestedSubId || a.sub_company_id === requestedSubId)
   );
-  if (!adminRow) throw new Error("not_account_admin");
-  return {
-    owner_id: adminRow.owner_id,
-    sub_company_id: adminRow.sub_company_id ?? requestedSubId ?? null,
-    is_owner: false,
-  };
+  if (adminRow) {
+    return {
+      owner_id: adminRow.owner_id,
+      sub_company_id: adminRow.sub_company_id ?? requestedSubId ?? null,
+      is_owner: false,
+    };
+  }
+
+  // Também permite gerência (supervisor / coordenador / diretor) ver e gerenciar
+  // a equipe do seu owner_id — apenas via signature role, sem depender de
+  // is_account_admin (que ficava restrito ao dono).
+  const scopeCandidates = access.filter((a) =>
+    !requestedSubId || a.sub_company_id === requestedSubId
+  );
+  if (scopeCandidates.length > 0) {
+    const ownerIds = Array.from(new Set(scopeCandidates.map((a) => a.owner_id)));
+    const { data: sigRoles } = await adminClient
+      .from("user_signature_roles")
+      .select("owner_id, sub_company_id, role")
+      .eq("user_id", callerId)
+      .in("owner_id", ownerIds)
+      .in("role", ["supervisor", "coordenador", "diretor"]);
+    const match = (sigRoles || []).find((s: any) =>
+      !requestedSubId || s.sub_company_id === requestedSubId || s.sub_company_id === null
+    );
+    if (match) {
+      const chosen = scopeCandidates.find((a) => a.owner_id === match.owner_id) ?? scopeCandidates[0];
+      return {
+        owner_id: chosen.owner_id,
+        sub_company_id: chosen.sub_company_id ?? requestedSubId ?? null,
+        is_owner: false,
+      };
+    }
+  }
+
+  throw new Error("not_account_admin");
 }
 
 async function applyAccessLevel(
