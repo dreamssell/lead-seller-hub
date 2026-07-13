@@ -50,7 +50,7 @@ import { TransferConversationDialog } from '@/components/chat/TransferConversati
 import { useIsSupervisor } from '@/hooks/useIsSupervisor';
 import { normalizeChatSendError, NormalizedChatError } from '@/lib/chatErrorMapper';
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
-import { Plus } from 'lucide-react';
+import { Plus, Archive, BellOff, Bell, Tag } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { applyConversationMessagesAfterSwitch, canUseTenantRecord, getActiveOwnerId } from '@/lib/chatTenantScope';
@@ -78,7 +78,7 @@ const channels: Array<{
 
 
 
-type ConvItem = { id: string; name: string; msg: string; time: string; online: boolean; botEnabled: boolean; assignedTo: string; phone?: string; avatar_url?: string | null; email?: string | null; presence?: string | null; presenceLabel?: string; lastSeenAt?: string | null; owner_id?: string | null; sub_company_id?: string | null };
+type ConvItem = { id: string; name: string; msg: string; time: string; online: boolean; botEnabled: boolean; assignedTo: string; phone?: string; avatar_url?: string | null; email?: string | null; presence?: string | null; presenceLabel?: string; lastSeenAt?: string | null; owner_id?: string | null; sub_company_id?: string | null; is_archived?: boolean; is_muted?: boolean; muted_until?: string | null; label_ids?: string[] };
 const conversationsByChannel: Record<ChannelKey, Array<ConvItem>> = {
   whatsapp: [],
   instagram: [],
@@ -418,6 +418,29 @@ export default function ChatPage() {
     sort: 'desc'
   });
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+
+  // Filtros da lista de conversas (labels/arquivadas/silenciadas)
+  const [chatListFilters, setChatListFilters] = useState<{ labels: string[]; archived: 'exclude' | 'only' | 'all'; muted: 'exclude' | 'only' | 'all' }>({
+    labels: [], archived: 'exclude', muted: 'all'
+  });
+  const [availableTags, setAvailableTags] = useState<Array<{ id: string; name: string; color: string | null }>>([]);
+  useEffect(() => {
+    if (!activeOwnerId) return;
+    supabase.from('chat_tags').select('id, name, color').eq('owner_id', activeOwnerId).order('name')
+      .then(({ data }) => setAvailableTags((data || []) as any));
+  }, [activeOwnerId]);
+
+  // Auto-unmute: a cada 60s varre conversas e desmuta as com muted_until expirado.
+  useEffect(() => {
+    const t = setInterval(async () => {
+      const now = Date.now();
+      const expired = Object.values(convsRef.current).flat().filter((c: any) => c?.is_muted && c?.muted_until && new Date(c.muted_until).getTime() <= now);
+      for (const c of expired) {
+        await supabase.from('customers').update({ is_muted: false, muted_until: null } as any).eq('id', (c as any).id);
+      }
+    }, 60_000);
+    return () => clearInterval(t);
+  }, []);
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const voip = useVoip();
   const wavoip = useWavoipWebphone();
@@ -790,6 +813,10 @@ export default function ChatPage() {
             sub_company_id: (c as any).sub_company_id || null,
             avatar_url: (c as any).avatar_url || null,
             email: c.email || null,
+            is_archived: !!(c as any).is_archived,
+            is_muted: !!(c as any).is_muted,
+            muted_until: (c as any).muted_until || null,
+            label_ids: Array.isArray((c as any).label_ids) ? (c as any).label_ids : [],
             _sortAt: sortAt,
             _duplicateKey: identity,
           };
@@ -917,7 +944,7 @@ export default function ChatPage() {
           (Object.keys(next) as ChannelKey[]).forEach(k => {
             next[k] = next[k].map((conv: any) =>
               conv.id === c.id
-                ? { ...conv, online: pres.online, presenceLabel: pres.label, presence: c.presence, lastSeenAt: c.last_seen_at }
+                ? { ...conv, online: pres.online, presenceLabel: pres.label, presence: c.presence, lastSeenAt: c.last_seen_at, is_archived: !!c.is_archived, is_muted: !!c.is_muted, muted_until: c.muted_until || null, label_ids: Array.isArray(c.label_ids) ? c.label_ids : conv.label_ids }
                 : conv
             );
           });
@@ -1056,30 +1083,56 @@ export default function ChatPage() {
     })();
   }, [selectedConvId, activeChannel, activeWhatsAppConn, messages.length]);
 
-  // Etapa 5 (WAHA) — envia "digitando…" enquanto o usuário compõe (debounce),
-  // e "paused" quando o composer fica vazio ou ocioso por 4s.
+  // Etapa 5 (WAHA) — envia "digitando…" com debounce estável para reduzir flicker.
+  // Estratégia: quando o texto muda de vazio→preenchido, envia 'typing' imediatamente
+  // e mantém um refresh a cada 5s (janela WhatsApp ~10s). Ao ficar 6s sem alteração
+  // ou ao esvaziar, envia 'paused'. Usamos refs para não recriar timers a cada tecla.
+  const typingStateRef = useRef<'idle' | 'typing'>('idle');
+  const typingRefreshRef = useRef<number | null>(null);
+  const typingPauseRef = useRef<number | null>(null);
   useEffect(() => {
-    if (activeChannel !== 'whatsapp' || !activeWhatsAppConn || activeWhatsAppConn.provider !== 'waha') return;
-    if (!selectedConvId) return;
+    if (activeChannel !== 'whatsapp' || !activeWhatsAppConn || activeWhatsAppConn.provider !== 'waha' || !selectedConvId) return;
     const adapter = getProviderAdapter('waha');
     const hasText = messageText.trim().length > 0;
+
+    const clearTimers = () => {
+      if (typingRefreshRef.current) { clearInterval(typingRefreshRef.current); typingRefreshRef.current = null; }
+      if (typingPauseRef.current) { clearTimeout(typingPauseRef.current); typingPauseRef.current = null; }
+    };
+
     if (!hasText) {
-      // Composer vazio: garante estado "paused" (best-effort).
-      adapter.sendTyping?.(activeWhatsAppConn, selectedConvId, 'paused').catch(() => {});
+      if (typingStateRef.current === 'typing') {
+        typingStateRef.current = 'idle';
+        adapter.sendTyping?.(activeWhatsAppConn, selectedConvId, 'paused').catch(() => {});
+      }
+      clearTimers();
       return;
     }
-    // Enquanto há texto, envia "typing" e reenvia a cada 3s (WAHA/WhatsApp expiram ~10s).
-    adapter.sendTyping?.(activeWhatsAppConn, selectedConvId, 'typing').catch(() => {});
-    const refresh = setInterval(() => {
+
+    if (typingStateRef.current !== 'typing') {
+      typingStateRef.current = 'typing';
       adapter.sendTyping?.(activeWhatsAppConn, selectedConvId, 'typing').catch(() => {});
-    }, 3_000);
-    // Idle: se o usuário para de digitar (efeito reroda quando messageText muda),
-    // após 4s sem alterações mandamos "paused".
-    const idle = setTimeout(() => {
+      typingRefreshRef.current = window.setInterval(() => {
+        adapter.sendTyping?.(activeWhatsAppConn, selectedConvId, 'typing').catch(() => {});
+      }, 5_000);
+    }
+
+    if (typingPauseRef.current) clearTimeout(typingPauseRef.current);
+    typingPauseRef.current = window.setTimeout(() => {
+      typingStateRef.current = 'idle';
       adapter.sendTyping?.(activeWhatsAppConn, selectedConvId, 'paused').catch(() => {});
-    }, 4_000);
-    return () => { clearInterval(refresh); clearTimeout(idle); };
+      if (typingRefreshRef.current) { clearInterval(typingRefreshRef.current); typingRefreshRef.current = null; }
+    }, 6_000);
+
+    return () => { /* mantém timers ativos enquanto o efeito reroda a cada tecla */ };
   }, [messageText, selectedConvId, activeChannel, activeWhatsAppConn]);
+
+  // Ao trocar de conversa, força reset do estado local de typing.
+  useEffect(() => {
+    typingStateRef.current = 'idle';
+    if (typingRefreshRef.current) { clearInterval(typingRefreshRef.current); typingRefreshRef.current = null; }
+    if (typingPauseRef.current) { clearTimeout(typingPauseRef.current); typingPauseRef.current = null; }
+  }, [selectedConvId]);
 
 
   const list = activeChannel ? convs[activeChannel] : [];
@@ -2135,11 +2188,83 @@ export default function ChatPage() {
                     </PopoverContent>
                   </Popover>
                 )}
+                {activeChannel === 'whatsapp' && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button title="Filtrar conversas" className="p-1 hover:bg-background/50 rounded relative">
+                        <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+                        {(chatListFilters.labels.length > 0 || chatListFilters.archived !== 'exclude' || chatListFilters.muted !== 'all') && (
+                          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+                        )}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-3 space-y-3" align="end">
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground">Arquivadas</p>
+                        <Select value={chatListFilters.archived} onValueChange={(v) => setChatListFilters(p => ({ ...p, archived: v as any }))}>
+                          <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="exclude">Ocultar arquivadas</SelectItem>
+                            <SelectItem value="only">Apenas arquivadas</SelectItem>
+                            <SelectItem value="all">Mostrar todas</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground">Silenciadas</p>
+                        <Select value={chatListFilters.muted} onValueChange={(v) => setChatListFilters(p => ({ ...p, muted: v as any }))}>
+                          <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todas</SelectItem>
+                            <SelectItem value="only">Apenas silenciadas</SelectItem>
+                            <SelectItem value="exclude">Ocultar silenciadas</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground">Etiquetas</p>
+                        {availableTags.length === 0 && <p className="text-[10px] text-muted-foreground italic">Nenhuma etiqueta cadastrada.</p>}
+                        <div className="max-h-40 overflow-auto space-y-0.5">
+                          {availableTags.map(t => {
+                            const on = chatListFilters.labels.includes(t.id);
+                            return (
+                              <button key={t.id} type="button"
+                                onClick={() => setChatListFilters(p => ({ ...p, labels: on ? p.labels.filter(x => x !== t.id) : [...p.labels, t.id] }))}
+                                className="w-full flex items-center gap-2 px-1.5 py-1 rounded hover:bg-secondary text-[11px]"
+                              >
+                                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: t.color || 'hsl(var(--muted-foreground))' }} />
+                                <span className="flex-1 truncate text-left">{t.name}</span>
+                                {on && <Check className="w-3 h-3 text-primary" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      {(chatListFilters.labels.length > 0 || chatListFilters.archived !== 'exclude' || chatListFilters.muted !== 'all') && (
+                        <button onClick={() => setChatListFilters({ labels: [], archived: 'exclude', muted: 'all' })} className="w-full h-7 text-[11px] rounded border border-border hover:bg-secondary">Limpar filtros</button>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                )}
               </div>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">
-            {list.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map((c) => (
+            {list.filter(c => {
+              const q = searchTerm.toLowerCase();
+              if (q && !(c.name.toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q) || (c.msg || '').toLowerCase().includes(q))) return false;
+              const arch = (c as any).is_archived;
+              if (chatListFilters.archived === 'exclude' && arch) return false;
+              if (chatListFilters.archived === 'only' && !arch) return false;
+              const muted = (c as any).is_muted;
+              if (chatListFilters.muted === 'exclude' && muted) return false;
+              if (chatListFilters.muted === 'only' && !muted) return false;
+              if (chatListFilters.labels.length > 0) {
+                const ids: string[] = (c as any).label_ids || [];
+                if (!chatListFilters.labels.every(id => ids.includes(id))) return false;
+              }
+              return true;
+            }).map((c) => (
               <button
                 key={c.id}
                 onClick={() => setSelectedConvId(c.id)}
@@ -2154,16 +2279,38 @@ export default function ChatPage() {
                   {c.online && <Circle className="w-3 h-3 text-success fill-success absolute -bottom-0.5 -right-0.5" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-foreground truncate">{c.name}</p>
-                    <span className="text-[10px] text-muted-foreground">{c.time}</span>
+                  <div className="flex items-center justify-between gap-1">
+                    <p className="text-sm font-medium text-foreground truncate flex items-center gap-1">
+                      {c.name}
+                      {(c as any).is_muted && <BellOff className="w-3 h-3 text-amber-500 shrink-0" />}
+                      {(c as any).is_archived && <Archive className="w-3 h-3 text-muted-foreground shrink-0" />}
+                    </p>
+                    <span className="text-[10px] text-muted-foreground shrink-0">{c.time}</span>
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{c.msg}</p>
                   <div className="flex items-center gap-1 mt-1 flex-wrap">
-                    {(c as any).presenceLabel && (
-                      <Badge variant="outline" className={`text-[9px] py-0 px-1.5 h-4 ${c.online ? 'text-success border-success/40' : 'text-muted-foreground'}`}>
-                        {(c as any).presenceLabel}
-                      </Badge>
+                    {(c as any).presenceLabel && (() => {
+                      const p = String((c as any).presence || '').toLowerCase();
+                      const isTyping = p === 'composing';
+                      const isRecording = p === 'recording';
+                      const cls = isTyping
+                        ? 'text-primary border-primary/40 animate-pulse'
+                        : isRecording
+                          ? 'text-emerald-600 border-emerald-500/40 animate-pulse'
+                          : c.online ? 'text-success border-success/40' : 'text-muted-foreground';
+                      return (
+                        <Badge variant="outline" className={`text-[9px] py-0 px-1.5 h-4 ${cls}`}>
+                          {(c as any).presenceLabel}
+                        </Badge>
+                      );
+                    })()}
+                    {(c as any).label_ids && (c as any).label_ids.length > 0 && availableTags.length > 0 && (
+                      <span className="inline-flex items-center gap-0.5">
+                        {(c as any).label_ids.slice(0, 3).map((lid: string) => {
+                          const t = availableTags.find(x => x.id === lid); if (!t) return null;
+                          return <span key={lid} className="w-1.5 h-1.5 rounded-full" style={{ background: t.color || 'hsl(var(--muted-foreground))' }} title={t.name} />;
+                        })}
+                      </span>
                     )}
                     {c.botEnabled ? (
                       <Badge variant="secondary" className="text-[9px] py-0 px-1.5 h-4 gap-0.5">
@@ -2589,7 +2736,14 @@ export default function ChatPage() {
                               ) : m.status === 'delivered' ? (
                                 <div className="flex -space-x-1.5"><Check className="w-2.5 h-2.5" /><Check className="w-2.5 h-2.5" /></div>
                               ) : m.status === 'read' ? (
-                                <div className="flex -space-x-1.5 text-sky-300"><Check className="w-2.5 h-2.5" /><Check className="w-2.5 h-2.5" /></div>
+                                <div className="flex items-center gap-1 text-sky-300">
+                                  <div className="flex -space-x-1.5"><Check className="w-2.5 h-2.5" /><Check className="w-2.5 h-2.5" /></div>
+                                  {m._confirmedAt && (
+                                    <span className="text-[9px] ml-1 opacity-90">
+                                      Visto {new Date(m._confirmedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  )}
+                                </div>
                               ) : (
                                 <CheckCircle2 className="w-2.5 h-2.5" />
                               )}

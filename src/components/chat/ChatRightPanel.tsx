@@ -5,7 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { StickyNote, Zap, Loader2, Trash2, Plus, X, Send, History as HistoryIcon, Layers, Images, Phone, Mail, MapPin, IdCard, Copy, Video, MessageSquare, Paperclip, Mic, Ban, ShieldCheck, CheckCircle2, RefreshCw, Info, Archive, BellOff, Bell, Tag, Check } from 'lucide-react';
+import { StickyNote, Zap, Loader2, Trash2, Plus, X, Send, History as HistoryIcon, Layers, Images, Phone, Mail, MapPin, IdCard, Copy, Video, MessageSquare, Paperclip, Mic, Ban, ShieldCheck, CheckCircle2, RefreshCw, Info, Archive, BellOff, Bell, Tag, Check, Clock } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import { toast as sonnerToast } from 'sonner';
 import { toast } from 'sonner';
@@ -203,18 +204,44 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
       else toast.error(`Falha: ${res?.error || res?.skipped || 'desconhecido'}`);
     } finally { setWahaBusy(null); }
   };
-  const wahaToggleMute = async () => {
+  const wahaSetMute = async (hours: number | null) => {
     setWahaBusy('mute');
     try {
       const conn = await getWahaConn();
       if (!conn) { toast.info('Silenciar disponível apenas para conexões WAHA.'); return; }
-      const target = !profile?.is_muted;
-      const until = target ? new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() : null;
+      const target = hours !== null;
+      const until = target ? new Date(Date.now() + hours! * 60 * 60 * 1000).toISOString() : null;
       const res: any = await getProviderAdapter('waha').muteChat?.(conn, customerId, target, until);
-      if (res?.ok) { toast.success(target ? 'Conversa silenciada por 8h' : 'Notificações reativadas'); loadProfile(); }
-      else toast.error(`Falha: ${res?.error || res?.skipped || 'desconhecido'}`);
+      if (res?.ok) {
+        toast.success(target ? `Conversa silenciada por ${hours}h` : 'Notificações reativadas');
+        loadProfile();
+      } else toast.error(`Falha: ${res?.error || res?.skipped || 'desconhecido'}`);
     } finally { setWahaBusy(null); }
   };
+
+  // Auto-unmute quando muted_until expira + tick a cada 30s p/ atualizar o countdown na UI
+  const [muteTick, setMuteTick] = useState(0);
+  useEffect(() => {
+    if (!profile?.is_muted || !profile.muted_until) return;
+    const check = () => {
+      setMuteTick((t) => t + 1);
+      if (profile.muted_until && new Date(profile.muted_until).getTime() <= Date.now()) {
+        wahaSetMute(null);
+      }
+    };
+    const t = setInterval(check, 30_000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.is_muted, profile?.muted_until]);
+
+  const muteRemaining = (() => {
+    if (!profile?.is_muted || !profile.muted_until) return null;
+    const ms = new Date(profile.muted_until).getTime() - Date.now();
+    if (ms <= 0) return 'expirando…';
+    const h = Math.floor(ms / 3_600_000);
+    const m = Math.floor((ms % 3_600_000) / 60_000);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  })();
 
 
 
@@ -560,17 +587,35 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
                 {wahaBusy === 'archive' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Archive className="w-3 h-3" />}
                 {profile.is_archived ? 'Restaurar' : 'Arquivar'}
               </button>
-              <button
-                type="button" onClick={wahaToggleMute} disabled={!!wahaBusy}
-                className={`inline-flex items-center gap-1 h-6 px-2 rounded text-[10px] border transition disabled:opacity-50 ${profile.is_muted ? 'border-amber-500/40 text-amber-600 hover:bg-amber-500/10' : 'border-border hover:bg-secondary'}`}
-              >
-                {wahaBusy === 'mute' ? <Loader2 className="w-3 h-3 animate-spin" /> : profile.is_muted ? <Bell className="w-3 h-3" /> : <BellOff className="w-3 h-3" />}
-                {profile.is_muted ? 'Reativar' : 'Silenciar 8h'}
-              </button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button" disabled={!!wahaBusy}
+                    className={`inline-flex items-center gap-1 h-6 px-2 rounded text-[10px] border transition disabled:opacity-50 ${profile.is_muted ? 'border-amber-500/40 text-amber-600 hover:bg-amber-500/10' : 'border-border hover:bg-secondary'}`}
+                  >
+                    {wahaBusy === 'mute' ? <Loader2 className="w-3 h-3 animate-spin" /> : profile.is_muted ? <Bell className="w-3 h-3" /> : <BellOff className="w-3 h-3" />}
+                    {profile.is_muted ? `Silenciado · ${muteRemaining}` : 'Silenciar'}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-44 p-1.5 space-y-0.5">
+                  {profile.is_muted ? (
+                    <button onClick={() => wahaSetMute(null)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-secondary text-[11px]">
+                      <Bell className="w-3 h-3" /> Reativar agora
+                    </button>
+                  ) : (
+                    [1, 4, 8, 24].map((h) => (
+                      <button key={h} onClick={() => wahaSetMute(h)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-secondary text-[11px]">
+                        <Clock className="w-3 h-3" /> Silenciar por {h}h
+                      </button>
+                    ))
+                  )}
+                </PopoverContent>
+              </Popover>
             </div>
             {profile.is_muted && profile.muted_until && (
-              <p className="text-[9px] text-muted-foreground">
-                Silenciado até {new Date(profile.muted_until).toLocaleString('pt-BR')}
+              <p className="text-[9px] text-muted-foreground" title={`Ativo até ${new Date(profile.muted_until).toLocaleString('pt-BR')}`}>
+                <span className="sr-only">{muteTick}</span>
+                Silenciado até {new Date(profile.muted_until).toLocaleString('pt-BR')} ({muteRemaining} restante)
               </p>
             )}
           </div>
