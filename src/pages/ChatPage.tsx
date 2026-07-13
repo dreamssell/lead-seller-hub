@@ -78,7 +78,7 @@ const channels: Array<{
 
 
 
-type ConvItem = { id: string; name: string; msg: string; time: string; online: boolean; botEnabled: boolean; assignedTo: string; phone?: string; avatar_url?: string | null; email?: string | null; presence?: string | null; presenceLabel?: string; lastSeenAt?: string | null; owner_id?: string | null; sub_company_id?: string | null };
+type ConvItem = { id: string; name: string; msg: string; time: string; online: boolean; botEnabled: boolean; assignedTo: string; phone?: string; avatar_url?: string | null; email?: string | null; presence?: string | null; presenceLabel?: string; lastSeenAt?: string | null; owner_id?: string | null; sub_company_id?: string | null; is_archived?: boolean; is_muted?: boolean; muted_until?: string | null; label_ids?: string[] };
 const conversationsByChannel: Record<ChannelKey, Array<ConvItem>> = {
   whatsapp: [],
   instagram: [],
