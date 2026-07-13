@@ -863,6 +863,89 @@ export default function TeamPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Diagnostics dialog (owner/admin only) */}
+      <Dialog open={diagOpen} onOpenChange={setDiagOpen}>
+        <DialogContent className="max-w-lg" data-testid="team-diagnostics-dialog">
+          <DialogHeader>
+            <DialogTitle>Diagnóstico da Equipe</DialogTitle>
+            <DialogDescription>
+              Confirma se a listagem retornada corresponde ao total real de membros vinculados ao seu <b>owner_id</b> canônico.
+            </DialogDescription>
+          </DialogHeader>
+          {diagLoading ? (
+            <div className="py-8 text-center text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Executando verificação...
+            </div>
+          ) : !diagData ? null : diagData.error ? (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              {diagData.error}
+            </div>
+          ) : (() => {
+            const s = diagData.summary || {};
+            const ok = !!s.matches;
+            const shown = `${s.returned_count ?? 0}${s.expected_max ? `/${s.expected_max}` : ''}`;
+            return (
+              <div className="space-y-4">
+                <div className={`rounded-xl border p-4 flex items-start gap-3 ${
+                  ok ? 'border-success/30 bg-success/5' : 'border-amber-500/30 bg-amber-500/5'
+                }`}>
+                  {ok
+                    ? <CheckCircle2 className="w-5 h-5 text-success shrink-0 mt-0.5" />
+                    : <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />}
+                  <div className="text-sm">
+                    <p className="font-semibold" data-testid="team-diagnostics-status">
+                      {ok ? `OK · lista completa (${shown} membros)` : `Divergência detectada (${shown})`}
+                    </p>
+                    <p className="text-muted-foreground text-xs mt-1">
+                      Retornados: <b>{s.returned_count ?? 0}</b> · Esperados (uso real): <b>{s.expected_used ?? '—'}</b>
+                      {s.expected_max != null && <> · Limite do plano: <b>{s.expected_max}</b></>}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="rounded-lg border border-border p-2 text-center">
+                    <p className="text-muted-foreground">Donos</p>
+                    <p className="text-lg font-semibold">{s.owners_count ?? 0}</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-2 text-center">
+                    <p className="text-muted-foreground">Admins</p>
+                    <p className="text-lg font-semibold">{s.admins_count ?? 0}</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-2 text-center">
+                    <p className="text-muted-foreground">Membros</p>
+                    <p className="text-lg font-semibold">{s.members_count ?? 0}</p>
+                  </div>
+                </div>
+                <div className="text-[11px] text-muted-foreground font-mono break-all">
+                  owner_id: {s.owner_id}
+                  {s.sub_company_id ? <> · sub: {s.sub_company_id}</> : ' · escopo: conta principal'}
+                  {s.plan_slug && <> · plano: {s.plan_slug}</>}
+                </div>
+                {(diagData.owners?.length || diagData.admins?.length) ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Dono e administradores</p>
+                    {[...(diagData.owners || []), ...(diagData.admins || [])].map((p: any) => (
+                      <div key={p.user_id} className="text-xs flex items-center justify-between rounded border border-border px-2 py-1">
+                        <span className="truncate">{p.display_name || p.email || p.user_id}</span>
+                        <span className="text-muted-foreground truncate ml-2">{p.email}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={runDiagnostics} disabled={diagLoading}>
+              {diagLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Executar novamente
+            </Button>
+            <Button onClick={() => setDiagOpen(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
+
   );
 }
