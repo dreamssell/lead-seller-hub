@@ -929,6 +929,145 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
     }
   }
 
+  // ── Etapa 6 — Contatos & Perfil ─────────────────────────────────────────
+  // WAHA endpoints (docs: https://waha.devlike.pro/docs/how-to/contacts/):
+  //   GET  /api/contacts/profile-picture?session=&contactId=
+  //   GET  /api/contacts/about?session=&contactId=
+  //   GET  /api/contacts?session=&contactId=            (nome/pushname)
+  //   POST /api/contacts/block                          { session, contactId }
+  //   POST /api/contacts/unblock                        { session, contactId }
+  //   GET  /api/contacts/check-exists?session=&phone=
+  private async _resolveContactId(customerId: string): Promise<{ chatId: string; phone: string } | null> {
+    const { data } = await supabase.from('customers').select('phone').eq('id', customerId).single();
+    if (!data?.phone) return null;
+    return { chatId: normalizeChatId(data.phone), phone: String(data.phone) };
+  }
+
+  async syncContactProfile(conn: WhatsAppConnection, customerId: string) {
+    const url = normalizeUrl(conn.metadata?.url);
+    const token = conn.metadata?.token || '';
+    if (!url) return { ok: false, skipped: 'unconfigured' };
+    const resolved = await this._resolveContactId(customerId);
+    if (!resolved) return { ok: false, skipped: 'no_phone' };
+    const session = this.sessionOf(conn);
+    const q = `session=${encodeURIComponent(session)}&contactId=${encodeURIComponent(resolved.chatId)}`;
+
+    const patch: Record<string, any> = { profile_synced_at: new Date().toISOString() };
+    const raw: Record<string, any> = {};
+
+    // Foto — falha silenciosamente quando o contato oculta a foto.
+    try {
+      const pic: any = await wahaFetch(url, token, `/api/contacts/profile-picture?${q}`, {
+        method: 'GET', timeoutMs: 6_000, retries: 0,
+      });
+      const picUrl = pic?.profilePictureURL || pic?.url || pic?.eurl || null;
+      if (picUrl) patch.avatar_url = picUrl;
+      raw.picture = pic;
+    } catch (e: any) { raw.picture_error = e?.message || String(e); }
+
+    // "Sobre" (status text).
+    try {
+      const about: any = await wahaFetch(url, token, `/api/contacts/about?${q}`, {
+        method: 'GET', timeoutMs: 6_000, retries: 0,
+      });
+      const text = about?.about ?? about?.status ?? null;
+      if (typeof text === 'string') patch.profile_about = text;
+      raw.about = about;
+    } catch (e: any) { raw.about_error = e?.message || String(e); }
+
+    // Nome (pushname) — não sobrescreve nomes manuais; apenas se ainda estiver como número.
+    try {
+      const info: any = await wahaFetch(url, token, `/api/contacts?${q}`, {
+        method: 'GET', timeoutMs: 6_000, retries: 0,
+      });
+      const push = info?.pushname || info?.name || info?.notify || null;
+      raw.info = info;
+      if (push) {
+        const { data: current } = await supabase
+          .from('customers').select('name').eq('id', customerId).single();
+        const looksLikePhoneOnly = !current?.name || /^\+?\d[\d\s-]*$/.test(String(current.name).trim());
+        if (looksLikePhoneOnly) patch.name = push;
+      }
+    } catch (e: any) { raw.info_error = e?.message || String(e); }
+
+    const { error } = await supabase.from('customers').update(patch).eq('id', customerId);
+    if (error) return { ok: false, error: error.message, raw };
+    return { ok: true, provider: 'waha', patch, raw };
+  }
+
+  async blockContact(conn: WhatsAppConnection, customerId: string) {
+    return this._blockUnblock(conn, customerId, true);
+  }
+  async unblockContact(conn: WhatsAppConnection, customerId: string) {
+    return this._blockUnblock(conn, customerId, false);
+  }
+  private async _blockUnblock(conn: WhatsAppConnection, customerId: string, block: boolean) {
+    const url = normalizeUrl(conn.metadata?.url);
+    const token = conn.metadata?.token || '';
+    if (!url) return { ok: false, skipped: 'unconfigured' };
+    const resolved = await this._resolveContactId(customerId);
+    if (!resolved) return { ok: false, skipped: 'no_phone' };
+    const rawPayload = { session: this.sessionOf(conn), contactId: resolved.chatId };
+    const parsed = WahaContactActionSchema.safeParse(rawPayload);
+    if (!parsed.success) return { ok: false, skipped: 'invalid_payload' };
+
+    const action = block ? 'block_contact' : 'unblock_contact';
+    await writeWahaAudit(conn, {
+      action, status: 'started', customerId,
+      wahaSessionId: parsed.data.session,
+      payload: { contactId: parsed.data.contactId },
+    });
+    try {
+      const data = await wahaFetch(url, token, block ? '/api/contacts/block' : '/api/contacts/unblock', {
+        method: 'POST', body: parsed.data, timeoutMs: 8_000, retries: 1,
+      });
+      await supabase.from('customers').update({ is_blocked: block }).eq('id', customerId);
+      await writeWahaAudit(conn, {
+        action, status: 'success', customerId,
+        wahaSessionId: parsed.data.session,
+        payload: { contactId: parsed.data.contactId, raw: data },
+      });
+      return { ok: true, provider: 'waha', blocked: block, raw: data };
+    } catch (e: any) {
+      await writeWahaAudit(conn, {
+        action, status: 'error', customerId,
+        wahaSessionId: parsed.data.session,
+        errorMessage: e?.message || String(e),
+        payload: { contactId: parsed.data.contactId },
+      });
+      return { ok: false, error: e?.message || String(e) };
+    }
+  }
+
+  async checkNumberExists(conn: WhatsAppConnection, phoneOrCustomerId: string) {
+    const url = normalizeUrl(conn.metadata?.url);
+    const token = conn.metadata?.token || '';
+    if (!url) return { exists: false, error: 'unconfigured' };
+    // Aceita telefone bruto OU um customerId. Se vier no formato UUID, resolve.
+    let phone = phoneOrCustomerId;
+    if (/^[0-9a-f-]{36}$/i.test(phoneOrCustomerId)) {
+      const resolved = await this._resolveContactId(phoneOrCustomerId);
+      if (!resolved) return { exists: false, error: 'no_phone' };
+      phone = resolved.phone;
+    }
+    const digits = String(phone).replace(/\D/g, '');
+    if (!digits) return { exists: false, error: 'invalid_phone' };
+    const session = this.sessionOf(conn);
+    try {
+      const data: any = await wahaFetch(url, token,
+        `/api/contacts/check-exists?session=${encodeURIComponent(session)}&phone=${encodeURIComponent(digits)}`,
+        { method: 'GET', timeoutMs: 6_000, retries: 1 });
+      const exists = Boolean(data?.numberExists ?? data?.exists ?? data?._serialized);
+      const chatId = data?.chatId?._serialized || data?.chatId || null;
+      // Persiste o resultado no cadastro, se localizarmos o contato pelo telefone.
+      await supabase.from('customers').update({ has_whatsapp: exists })
+        .eq('phone', digits);
+      return { exists, chatId, raw: data };
+    } catch (e: any) {
+      return { exists: false, error: e?.message || String(e) };
+    }
+  }
+
   async syncContacts(_conn: WhatsAppConnection) {
     return { success: true };
   }
