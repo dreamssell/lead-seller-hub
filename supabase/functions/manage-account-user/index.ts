@@ -169,7 +169,7 @@ async function resolveScope(
 
   const { data: access } = await adminClient
     .from("user_account_access")
-    .select("owner_id, sub_company_id, is_account_admin")
+    .select("owner_id, sub_company_id, is_account_admin, is_owner")
     .eq("user_id", callerId);
 
   if (!access || access.length === 0 || isOwnerOfSubs) {
@@ -189,6 +189,20 @@ async function resolveScope(
       };
     }
     return { owner_id: callerId, sub_company_id: null, is_owner: true };
+  }
+
+  // O dono da conta pode já ter uma linha em user_account_access com is_owner=true;
+  // trate-o como escopo total (nunca read_only) antes de qualquer outro branch.
+  const ownerRow = access.find((a: any) =>
+    a.is_owner &&
+    (!requestedSubId || a.sub_company_id === requestedSubId || a.sub_company_id === null)
+  );
+  if (ownerRow) {
+    return {
+      owner_id: ownerRow.owner_id,
+      sub_company_id: ownerRow.sub_company_id ?? requestedSubId ?? null,
+      is_owner: true,
+    };
   }
 
   const adminRow = access.find((a) =>
