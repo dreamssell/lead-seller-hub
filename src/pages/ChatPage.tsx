@@ -50,7 +50,7 @@ import { TransferConversationDialog } from '@/components/chat/TransferConversati
 import { useIsSupervisor } from '@/hooks/useIsSupervisor';
 import { normalizeChatSendError, NormalizedChatError } from '@/lib/chatErrorMapper';
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
-import { Plus } from 'lucide-react';
+import { Plus, Archive, BellOff, Bell, Tag } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { applyConversationMessagesAfterSwitch, canUseTenantRecord, getActiveOwnerId } from '@/lib/chatTenantScope';
