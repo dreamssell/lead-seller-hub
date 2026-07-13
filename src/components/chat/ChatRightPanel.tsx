@@ -204,18 +204,44 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
       else toast.error(`Falha: ${res?.error || res?.skipped || 'desconhecido'}`);
     } finally { setWahaBusy(null); }
   };
-  const wahaToggleMute = async () => {
+  const wahaSetMute = async (hours: number | null) => {
     setWahaBusy('mute');
     try {
       const conn = await getWahaConn();
       if (!conn) { toast.info('Silenciar disponível apenas para conexões WAHA.'); return; }
-      const target = !profile?.is_muted;
-      const until = target ? new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() : null;
+      const target = hours !== null;
+      const until = target ? new Date(Date.now() + hours! * 60 * 60 * 1000).toISOString() : null;
       const res: any = await getProviderAdapter('waha').muteChat?.(conn, customerId, target, until);
-      if (res?.ok) { toast.success(target ? 'Conversa silenciada por 8h' : 'Notificações reativadas'); loadProfile(); }
-      else toast.error(`Falha: ${res?.error || res?.skipped || 'desconhecido'}`);
+      if (res?.ok) {
+        toast.success(target ? `Conversa silenciada por ${hours}h` : 'Notificações reativadas');
+        loadProfile();
+      } else toast.error(`Falha: ${res?.error || res?.skipped || 'desconhecido'}`);
     } finally { setWahaBusy(null); }
   };
+
+  // Auto-unmute quando muted_until expira + tick a cada 30s p/ atualizar o countdown na UI
+  const [muteTick, setMuteTick] = useState(0);
+  useEffect(() => {
+    if (!profile?.is_muted || !profile.muted_until) return;
+    const check = () => {
+      setMuteTick((t) => t + 1);
+      if (profile.muted_until && new Date(profile.muted_until).getTime() <= Date.now()) {
+        wahaSetMute(null);
+      }
+    };
+    const t = setInterval(check, 30_000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.is_muted, profile?.muted_until]);
+
+  const muteRemaining = (() => {
+    if (!profile?.is_muted || !profile.muted_until) return null;
+    const ms = new Date(profile.muted_until).getTime() - Date.now();
+    if (ms <= 0) return 'expirando…';
+    const h = Math.floor(ms / 3_600_000);
+    const m = Math.floor((ms % 3_600_000) / 60_000);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  })();
 
 
 
