@@ -587,17 +587,35 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
                 {wahaBusy === 'archive' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Archive className="w-3 h-3" />}
                 {profile.is_archived ? 'Restaurar' : 'Arquivar'}
               </button>
-              <button
-                type="button" onClick={wahaToggleMute} disabled={!!wahaBusy}
-                className={`inline-flex items-center gap-1 h-6 px-2 rounded text-[10px] border transition disabled:opacity-50 ${profile.is_muted ? 'border-amber-500/40 text-amber-600 hover:bg-amber-500/10' : 'border-border hover:bg-secondary'}`}
-              >
-                {wahaBusy === 'mute' ? <Loader2 className="w-3 h-3 animate-spin" /> : profile.is_muted ? <Bell className="w-3 h-3" /> : <BellOff className="w-3 h-3" />}
-                {profile.is_muted ? 'Reativar' : 'Silenciar 8h'}
-              </button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button" disabled={!!wahaBusy}
+                    className={`inline-flex items-center gap-1 h-6 px-2 rounded text-[10px] border transition disabled:opacity-50 ${profile.is_muted ? 'border-amber-500/40 text-amber-600 hover:bg-amber-500/10' : 'border-border hover:bg-secondary'}`}
+                  >
+                    {wahaBusy === 'mute' ? <Loader2 className="w-3 h-3 animate-spin" /> : profile.is_muted ? <Bell className="w-3 h-3" /> : <BellOff className="w-3 h-3" />}
+                    {profile.is_muted ? `Silenciado · ${muteRemaining}` : 'Silenciar'}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-44 p-1.5 space-y-0.5">
+                  {profile.is_muted ? (
+                    <button onClick={() => wahaSetMute(null)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-secondary text-[11px]">
+                      <Bell className="w-3 h-3" /> Reativar agora
+                    </button>
+                  ) : (
+                    [1, 4, 8, 24].map((h) => (
+                      <button key={h} onClick={() => wahaSetMute(h)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-secondary text-[11px]">
+                        <Clock className="w-3 h-3" /> Silenciar por {h}h
+                      </button>
+                    ))
+                  )}
+                </PopoverContent>
+              </Popover>
             </div>
             {profile.is_muted && profile.muted_until && (
-              <p className="text-[9px] text-muted-foreground">
-                Silenciado até {new Date(profile.muted_until).toLocaleString('pt-BR')}
+              <p className="text-[9px] text-muted-foreground" title={`Ativo até ${new Date(profile.muted_until).toLocaleString('pt-BR')}`}>
+                <span className="sr-only">{muteTick}</span>
+                Silenciado até {new Date(profile.muted_until).toLocaleString('pt-BR')} ({muteRemaining} restante)
               </p>
             )}
           </div>
