@@ -388,8 +388,9 @@ Deno.serve(async (req) => {
     } catch {
       return userError("Corpo da requisição inválido (JSON esperado).", 400, "invalid_json");
     }
-    const action: "create" | "update" | "delete" | "list" = body.action;
+    const action: "create" | "update" | "delete" | "list" | "diagnostics" = body.action;
     if (!action) return userError("Ação obrigatória.", 400, "missing_action");
+
 
     let scope: Scope;
     try {
