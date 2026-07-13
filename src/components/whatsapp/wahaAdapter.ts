@@ -990,7 +990,7 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       }
     } catch (e: any) { raw.info_error = e?.message || String(e); }
 
-    const { error } = await supabase.from('customers').update(patch).eq('id', customerId);
+    const { error } = await supabase.from('customers').update(patch as any).eq('id', customerId);
     if (error) return { ok: false, error: error.message, raw };
     return { ok: true, provider: 'waha', patch, raw };
   }
