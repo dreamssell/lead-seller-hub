@@ -22,6 +22,11 @@ export interface WhatsAppProviderAdapter {
   blockContact?(conn: WhatsAppConnection, customerId: string): Promise<any>;
   unblockContact?(conn: WhatsAppConnection, customerId: string): Promise<any>;
   checkNumberExists?(conn: WhatsAppConnection, phoneOrCustomerId: string): Promise<{ exists: boolean; chatId?: string; raw?: any; error?: string }>;
+  // Etapa 7 — etiquetas e organização de chats (arquivar / silenciar).
+  syncLabels?(conn: WhatsAppConnection): Promise<{ ok: boolean; count?: number; error?: string }>;
+  setChatLabels?(conn: WhatsAppConnection, customerId: string, labelIds: string[]): Promise<any>;
+  archiveChat?(conn: WhatsAppConnection, customerId: string, archived: boolean): Promise<any>;
+  muteChat?(conn: WhatsAppConnection, customerId: string, muted: boolean, until?: string | null): Promise<any>;
   syncContacts(conn: WhatsAppConnection): Promise<any>;
 }
 

@@ -94,6 +94,17 @@ export const WahaContactActionSchema = z.object({
   contactId: WahaChatIdSchema,
 });
 
+// Etapa 7 — etiquetas e organização de chats.
+export const WahaSetLabelsSchema = z.object({
+  session: z.string().min(1),
+  chatId: WahaChatIdSchema,
+  labels: z.array(z.string().min(1)).max(20),
+});
+export const WahaChatActionSchema = z.object({
+  session: z.string().min(1),
+  chatId: WahaChatIdSchema,
+});
+
 export type WahaSendTextPayload = z.infer<typeof WahaSendTextSchema>;
 export type WahaSendMediaPayload = z.infer<typeof WahaSendMediaSchema>;
 export type WahaSendVoicePayload = z.infer<typeof WahaSendVoiceSchema>;
@@ -1065,6 +1076,161 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       return { exists, chatId, raw: data };
     } catch (e: any) {
       return { exists: false, error: e?.message || String(e) };
+    }
+  }
+
+  // ── Etapa 7 — Etiquetas & Organização de chats ─────────────────────────
+  async syncLabels(conn: WhatsAppConnection) {
+    const url = normalizeUrl(conn.metadata?.url);
+    const token = conn.metadata?.token || '';
+    if (!url) return { ok: false, error: 'unconfigured' };
+    const session = this.sessionOf(conn);
+    try {
+      const data: any = await wahaFetch(url, token, `/api/${encodeURIComponent(session)}/labels`, {
+        method: 'GET', timeoutMs: 8_000, retries: 1,
+      });
+      const list: any[] = Array.isArray(data) ? data : Array.isArray(data?.labels) ? data.labels : [];
+      if (!list.length) return { ok: true, count: 0 };
+      const rows = list.map((l) => ({
+        owner_id: conn.owner_id,
+        sub_company_id: conn.sub_company_id ?? null,
+        waha_label_id: String(l?.id ?? l?.labelId ?? ''),
+        name: String(l?.name ?? l?.title ?? '').slice(0, 120),
+        color: l?.hexColor || l?.color || l?.colorHex || null,
+        updated_at: new Date().toISOString(),
+      })).filter(r => r.waha_label_id && r.name);
+      if (!rows.length) return { ok: true, count: 0 };
+      const { error } = await supabase
+        .from('chat_tags')
+        .upsert(rows as any, { onConflict: 'owner_id,waha_label_id' });
+      if (error) return { ok: false, error: error.message };
+      return { ok: true, count: rows.length };
+    } catch (e: any) {
+      return { ok: false, error: e?.message || String(e) };
+    }
+  }
+
+  async setChatLabels(conn: WhatsAppConnection, customerId: string, labelIds: string[]) {
+    const url = normalizeUrl(conn.metadata?.url);
+    const token = conn.metadata?.token || '';
+    if (!url) return { ok: false, skipped: 'unconfigured' };
+    const resolved = await this._resolveContactId(customerId);
+    if (!resolved) return { ok: false, skipped: 'no_phone' };
+    // Traduz UUIDs internos das etiquetas → waha_label_id nativo.
+    const { data: tagRows } = await supabase
+      .from('chat_tags').select('id, waha_label_id')
+      .in('id', labelIds.length ? labelIds : ['00000000-0000-0000-0000-000000000000']);
+    const wahaIds = (tagRows || [])
+      .map((r: any) => r.waha_label_id).filter((v: any) => typeof v === 'string' && v.length);
+    const rawPayload = { session: this.sessionOf(conn), chatId: resolved.chatId, labels: wahaIds };
+    const parsed = WahaSetLabelsSchema.safeParse(rawPayload);
+    if (!parsed.success) return { ok: false, skipped: 'invalid_payload' };
+
+    await writeWahaAudit(conn, {
+      action: 'set_chat_labels', status: 'started', customerId,
+      wahaSessionId: parsed.data.session,
+      payload: { chatId: parsed.data.chatId, labelCount: wahaIds.length },
+    });
+    try {
+      const data = await wahaFetch(url, token,
+        `/api/${encodeURIComponent(parsed.data.session)}/labels/chats/${encodeURIComponent(parsed.data.chatId)}`,
+        { method: 'PUT', body: { labels: parsed.data.labels }, timeoutMs: 8_000, retries: 1 });
+      await supabase.from('customers')
+        .update({ label_ids: labelIds } as any).eq('id', customerId);
+      await writeWahaAudit(conn, {
+        action: 'set_chat_labels', status: 'success', customerId,
+        wahaSessionId: parsed.data.session,
+        payload: { chatId: parsed.data.chatId, raw: data },
+      });
+      return { ok: true, provider: 'waha', labels: labelIds, raw: data };
+    } catch (e: any) {
+      await writeWahaAudit(conn, {
+        action: 'set_chat_labels', status: 'error', customerId,
+        wahaSessionId: parsed.data.session,
+        errorMessage: e?.message || String(e),
+      });
+      return { ok: false, error: e?.message || String(e) };
+    }
+  }
+
+  async archiveChat(conn: WhatsAppConnection, customerId: string, archived: boolean) {
+    return this._chatFlag(conn, customerId, archived, 'archive');
+  }
+  async muteChat(conn: WhatsAppConnection, customerId: string, muted: boolean, until?: string | null) {
+    const url = normalizeUrl(conn.metadata?.url);
+    const token = conn.metadata?.token || '';
+    if (!url) return { ok: false, skipped: 'unconfigured' };
+    const resolved = await this._resolveContactId(customerId);
+    if (!resolved) return { ok: false, skipped: 'no_phone' };
+    const session = this.sessionOf(conn);
+    const rawPayload = { session, chatId: resolved.chatId };
+    const parsed = WahaChatActionSchema.safeParse(rawPayload);
+    if (!parsed.success) return { ok: false, skipped: 'invalid_payload' };
+
+    const action = muted ? 'mute_chat' : 'unmute_chat';
+    await writeWahaAudit(conn, {
+      action, status: 'started', customerId, wahaSessionId: session,
+      payload: { chatId: parsed.data.chatId, until: until ?? null },
+    });
+    try {
+      const body: any = muted
+        ? { expiration: until ? Math.floor((new Date(until).getTime() - Date.now()) / 1000) : 8 * 60 * 60 }
+        : {};
+      const data = await wahaFetch(url, token,
+        `/api/${encodeURIComponent(session)}/chats/${encodeURIComponent(parsed.data.chatId)}/${muted ? 'mute' : 'unmute'}`,
+        { method: 'POST', body, timeoutMs: 8_000, retries: 1 });
+      await supabase.from('customers')
+        .update({ is_muted: muted, muted_until: muted ? (until ?? null) : null } as any)
+        .eq('id', customerId);
+      await writeWahaAudit(conn, {
+        action, status: 'success', customerId, wahaSessionId: session,
+        payload: { chatId: parsed.data.chatId, raw: data },
+      });
+      return { ok: true, provider: 'waha', muted, raw: data };
+    } catch (e: any) {
+      await writeWahaAudit(conn, {
+        action, status: 'error', customerId, wahaSessionId: session,
+        errorMessage: e?.message || String(e),
+      });
+      return { ok: false, error: e?.message || String(e) };
+    }
+  }
+
+  private async _chatFlag(conn: WhatsAppConnection, customerId: string, on: boolean, kind: 'archive') {
+    const url = normalizeUrl(conn.metadata?.url);
+    const token = conn.metadata?.token || '';
+    if (!url) return { ok: false, skipped: 'unconfigured' };
+    const resolved = await this._resolveContactId(customerId);
+    if (!resolved) return { ok: false, skipped: 'no_phone' };
+    const session = this.sessionOf(conn);
+    const rawPayload = { session, chatId: resolved.chatId };
+    const parsed = WahaChatActionSchema.safeParse(rawPayload);
+    if (!parsed.success) return { ok: false, skipped: 'invalid_payload' };
+
+    const action = on ? `${kind}_chat` : `un${kind}_chat`;
+    await writeWahaAudit(conn, {
+      action, status: 'started', customerId, wahaSessionId: session,
+      payload: { chatId: parsed.data.chatId },
+    });
+    try {
+      const data = await wahaFetch(url, token,
+        `/api/${encodeURIComponent(session)}/chats/${encodeURIComponent(parsed.data.chatId)}/${on ? kind : `un${kind}`}`,
+        { method: 'POST', body: {}, timeoutMs: 8_000, retries: 1 });
+      const patch: any = kind === 'archive' ? { is_archived: on } : {};
+      if (Object.keys(patch).length) {
+        await supabase.from('customers').update(patch).eq('id', customerId);
+      }
+      await writeWahaAudit(conn, {
+        action, status: 'success', customerId, wahaSessionId: session,
+        payload: { chatId: parsed.data.chatId, raw: data },
+      });
+      return { ok: true, provider: 'waha', [kind]: on, raw: data };
+    } catch (e: any) {
+      await writeWahaAudit(conn, {
+        action, status: 'error', customerId, wahaSessionId: session,
+        errorMessage: e?.message || String(e),
+      });
+      return { ok: false, error: e?.message || String(e) };
     }
   }
 
