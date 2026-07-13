@@ -1053,6 +1053,31 @@ Deno.serve(async (req) => {
         return userError("Este usuário não pertence ao seu escopo.", 403, "not_in_scope");
       }
 
+      // Gerentes não podem excluir o dono da conta nem outros administradores.
+      if (scope.is_manager) {
+        const { data: targetAccess } = await adminClient
+          .from("user_account_access")
+          .select("is_owner, is_account_admin")
+          .eq("user_id", user_id)
+          .eq("owner_id", scope.owner_id)
+          .maybeSingle();
+        if (targetAccess?.is_owner) {
+          return userError(
+            "Você não pode excluir o dono da conta.",
+            403,
+            "manager_cannot_delete_owner",
+          );
+        }
+        if (targetAccess?.is_account_admin) {
+          return userError(
+            "Somente o dono da conta pode excluir administradores.",
+            403,
+            "manager_cannot_delete_admin",
+          );
+        }
+      }
+
+
       const { data: beforeProfile } = await adminClient.from("profiles").select(
         "display_name, email",
       ).eq("user_id", user_id).maybeSingle();
