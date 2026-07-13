@@ -494,6 +494,14 @@ Deno.serve(async (req) => {
         (["atendimento", "supervisao", "administracao"].includes(access_level))
           ? access_level
           : (is_account_admin ? "administracao" : "atendimento");
+      // Gerentes (supervisor/coordenador/diretor) não podem promover a Administração.
+      if (scope.is_manager && level === "administracao") {
+        return userError(
+          "Somente o dono da conta pode criar administradores.",
+          403,
+          "manager_cannot_grant_admin",
+        );
+      }
       const normalizedEmail = String(email || "").trim().toLowerCase();
       const normalizedRole = typeof role_label === "string" ? role_label.trim() : "";
       if (!normalizedEmail || !name || !password || password.length < 6) {
