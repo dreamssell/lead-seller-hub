@@ -91,6 +91,17 @@ export default function TeamPage() {
   const [auditRows, setAuditRows] = useState<any[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
 
+  // Filtros
+  const [search, setSearch] = useState('');
+  const [filterLevel, setFilterLevel] = useState<'all' | AccessLevel>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+
+  // Diagnóstico (dono/admin)
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagData, setDiagData] = useState<any>(null);
+
+
   const unlimited = isOwner || maxUsers == null;
   const total = members.length;
   const limitReached = !unlimited && total >= (maxUsers ?? 0);
