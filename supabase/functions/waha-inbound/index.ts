@@ -77,6 +77,16 @@ function classify(event: string, body: any): 'message' | 'ack' | 'session' | 're
   //   WEBJS: `presence.update` com { id: chatId, presences: [{ id, isOnline, lastKnownPresence, lastSeen }] }
   //   GOWS:  gows.PresenceEventData (online/offline) ou gows.ChatPresenceEventData (typing/recording)
   if (e === 'presence.update' || e.endsWith('.presenceeventdata') || e.endsWith('.chatpresenceeventdata')) return 'presence';
+  // Etapa 6 — contatos & perfil (foto/nome/sobre e block/unblock).
+  //   WEBJS: `contact.changed`, `contact.updated`, `chats.update` (com foto), `contact.blocked`/`contact.unblocked`.
+  //   GOWS:  gows.PictureEventData, gows.BusinessNameEventData, gows.PushNameEventData, gows.BlocklistEventData.
+  if (
+    e === 'contact.update' || e === 'contact.updated' || e === 'contact.changed' ||
+    e === 'contact.blocked' || e === 'contact.unblocked' ||
+    e === 'chats.update' ||
+    e.endsWith('.pictureeventdata') || e.endsWith('.businessnameeventdata') ||
+    e.endsWith('.pushnameeventdata') || e.endsWith('.blocklisteventdata')
+  ) return 'contact';
   if (e === 'message' || e === 'message.any') return 'message';
   // GOWS engine emits gows.MessageEventData with body.data.Info / body.data.Message
   if (e.includes('messageeventdata') || e.includes('gows.message')) return 'message';
