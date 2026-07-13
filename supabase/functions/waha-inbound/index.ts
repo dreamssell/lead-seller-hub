@@ -57,7 +57,7 @@ function normalizePhone(from?: string | null): string | null {
 // Classifies the incoming event into one of our three logical buckets, using
 // both the top-level `event` string and the shape of the payload so we work
 // with WEBJS ("message") and GOWS ("gows.MessageEventData") equally well.
-function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'presence' | 'contact' | 'ignore' {
+function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'presence' | 'contact' | 'label' | 'chat_meta' | 'ignore' {
   const e = event.toLowerCase();
   if (e === 'session.status' || e === 'status.instance') return 'session';
   if (e === 'message.ack' || e === 'ack' || e.endsWith('.receipteventdata')) return 'ack';
@@ -87,6 +87,19 @@ function classify(event: string, body: any): 'message' | 'ack' | 'session' | 're
     e.endsWith('.pictureeventdata') || e.endsWith('.businessnameeventdata') ||
     e.endsWith('.pushnameeventdata') || e.endsWith('.blocklisteventdata')
   ) return 'contact';
+  // Etapa 7 — etiquetas & organização de chats.
+  //   WEBJS: `label.upsert`, `label.deleted`, `label.chat.added`, `label.chat.deleted`.
+  //   GOWS:  gows.LabelEditEventData, gows.LabelAssociationChatEventData.
+  if (
+    e === 'label.upsert' || e === 'label.updated' || e === 'label.deleted' ||
+    e === 'label.chat.added' || e === 'label.chat.deleted' ||
+    e.endsWith('.labelediteventdata') || e.endsWith('.labelassociationchateventdata')
+  ) return 'label';
+  //   Arquivar/silenciar: WEBJS `chat.archive`, `chat.mute`; GOWS ChatSettingEventData.
+  if (
+    e === 'chat.archive' || e === 'chat.unarchive' || e === 'chat.mute' || e === 'chat.unmute' ||
+    e.endsWith('.chatsettingeventdata') || e.endsWith('.archivechateventdata') || e.endsWith('.mutechateventdata')
+  ) return 'chat_meta';
   if (e === 'message' || e === 'message.any') return 'message';
   // GOWS engine emits gows.MessageEventData with body.data.Info / body.data.Message
   if (e.includes('messageeventdata') || e.includes('gows.message')) return 'message';
