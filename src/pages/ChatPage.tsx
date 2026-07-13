@@ -418,6 +418,29 @@ export default function ChatPage() {
     sort: 'desc'
   });
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+
+  // Filtros da lista de conversas (labels/arquivadas/silenciadas)
+  const [chatListFilters, setChatListFilters] = useState<{ labels: string[]; archived: 'exclude' | 'only' | 'all'; muted: 'exclude' | 'only' | 'all' }>({
+    labels: [], archived: 'exclude', muted: 'all'
+  });
+  const [availableTags, setAvailableTags] = useState<Array<{ id: string; name: string; color: string | null }>>([]);
+  useEffect(() => {
+    if (!activeOwnerId) return;
+    supabase.from('chat_tags').select('id, name, color').eq('owner_id', activeOwnerId).order('name')
+      .then(({ data }) => setAvailableTags((data || []) as any));
+  }, [activeOwnerId]);
+
+  // Auto-unmute: a cada 60s varre conversas e desmuta as com muted_until expirado.
+  useEffect(() => {
+    const t = setInterval(async () => {
+      const now = Date.now();
+      const expired = Object.values(convsRef.current).flat().filter((c: any) => c?.is_muted && c?.muted_until && new Date(c.muted_until).getTime() <= now);
+      for (const c of expired) {
+        await supabase.from('customers').update({ is_muted: false, muted_until: null } as any).eq('id', (c as any).id);
+      }
+    }, 60_000);
+    return () => clearInterval(t);
+  }, []);
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const voip = useVoip();
   const wavoip = useWavoipWebphone();
