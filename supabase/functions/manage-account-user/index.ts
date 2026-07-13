@@ -785,6 +785,19 @@ Deno.serve(async (req) => {
         }
       }
 
+      const { data: beforeProfile } = await adminClient.from("profiles").select(
+        "display_name, role_label, phone, is_active, email",
+      ).eq("user_id", user_id).maybeSingle();
+
+      // Compute previous access_level from current signature roles + is_account_admin
+      let beforeSigQ = adminClient
+        .from("user_signature_roles")
+        .select("role")
+        .eq("user_id", user_id)
+        .eq("owner_id", scope.owner_id);
+      if (scope.sub_company_id) {
+        beforeSigQ = beforeSigQ.eq("sub_company_id", scope.sub_company_id);
+      } else beforeSigQ = beforeSigQ.is("sub_company_id", null);
       const { data: beforeSigs } = await beforeSigQ;
       const hadSupervisor = (beforeSigs || []).some((s: any) =>
         ["supervisor", "coordenador", "diretor"].includes(s.role)
