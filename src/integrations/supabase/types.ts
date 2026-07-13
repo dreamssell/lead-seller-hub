@@ -1469,7 +1469,9 @@ export type Database = {
           document: string | null
           email: string | null
           first_response_at: string | null
+          has_whatsapp: boolean | null
           id: string
+          is_blocked: boolean
           last_seen_at: string | null
           name: string
           notes: string | null
@@ -1479,6 +1481,8 @@ export type Database = {
           presence: string | null
           presence_updated_at: string | null
           priority: string
+          profile_about: string | null
+          profile_synced_at: string | null
           queue_id: string | null
           resolved_at: string | null
           sla_first_response_due_at: string | null
@@ -1501,7 +1505,9 @@ export type Database = {
           document?: string | null
           email?: string | null
           first_response_at?: string | null
+          has_whatsapp?: boolean | null
           id?: string
+          is_blocked?: boolean
           last_seen_at?: string | null
           name: string
           notes?: string | null
@@ -1511,6 +1517,8 @@ export type Database = {
           presence?: string | null
           presence_updated_at?: string | null
           priority?: string
+          profile_about?: string | null
+          profile_synced_at?: string | null
           queue_id?: string | null
           resolved_at?: string | null
           sla_first_response_due_at?: string | null
@@ -1533,7 +1541,9 @@ export type Database = {
           document?: string | null
           email?: string | null
           first_response_at?: string | null
+          has_whatsapp?: boolean | null
           id?: string
+          is_blocked?: boolean
           last_seen_at?: string | null
           name?: string
           notes?: string | null
@@ -1543,6 +1553,8 @@ export type Database = {
           presence?: string | null
           presence_updated_at?: string | null
           priority?: string
+          profile_about?: string | null
+          profile_synced_at?: string | null
           queue_id?: string | null
           resolved_at?: string | null
           sla_first_response_due_at?: string | null
