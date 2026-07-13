@@ -757,6 +757,9 @@ export type Database = {
           id: string
           name: string
           owner_id: string
+          sub_company_id: string | null
+          updated_at: string
+          waha_label_id: string | null
         }
         Insert: {
           color?: string
@@ -764,6 +767,9 @@ export type Database = {
           id?: string
           name: string
           owner_id: string
+          sub_company_id?: string | null
+          updated_at?: string
+          waha_label_id?: string | null
         }
         Update: {
           color?: string
@@ -771,6 +777,9 @@ export type Database = {
           id?: string
           name?: string
           owner_id?: string
+          sub_company_id?: string | null
+          updated_at?: string
+          waha_label_id?: string | null
         }
         Relationships: []
       }
@@ -1471,8 +1480,12 @@ export type Database = {
           first_response_at: string | null
           has_whatsapp: boolean | null
           id: string
+          is_archived: boolean
           is_blocked: boolean
+          is_muted: boolean
+          label_ids: string[]
           last_seen_at: string | null
+          muted_until: string | null
           name: string
           notes: string | null
           origin_connection_id: string | null
@@ -1507,8 +1520,12 @@ export type Database = {
           first_response_at?: string | null
           has_whatsapp?: boolean | null
           id?: string
+          is_archived?: boolean
           is_blocked?: boolean
+          is_muted?: boolean
+          label_ids?: string[]
           last_seen_at?: string | null
+          muted_until?: string | null
           name: string
           notes?: string | null
           origin_connection_id?: string | null
@@ -1543,8 +1560,12 @@ export type Database = {
           first_response_at?: string | null
           has_whatsapp?: boolean | null
           id?: string
+          is_archived?: boolean
           is_blocked?: boolean
+          is_muted?: boolean
+          label_ids?: string[]
           last_seen_at?: string | null
+          muted_until?: string | null
           name?: string
           notes?: string | null
           origin_connection_id?: string | null
