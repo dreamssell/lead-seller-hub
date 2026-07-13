@@ -1060,7 +1060,7 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       const exists = Boolean(data?.numberExists ?? data?.exists ?? data?._serialized);
       const chatId = data?.chatId?._serialized || data?.chatId || null;
       // Persiste o resultado no cadastro, se localizarmos o contato pelo telefone.
-      await supabase.from('customers').update({ has_whatsapp: exists })
+      await supabase.from('customers').update({ has_whatsapp: exists } as any)
         .eq('phone', digits);
       return { exists, chatId, raw: data };
     } catch (e: any) {
