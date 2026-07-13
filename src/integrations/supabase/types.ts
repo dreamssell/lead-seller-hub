@@ -5831,6 +5831,10 @@ export type Database = {
           unread_count: number
         }[]
       }
+      is_account_manager: {
+        Args: { _owner_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_signature_leader: {
         Args: { p_sub_company_id: string }
         Returns: boolean
