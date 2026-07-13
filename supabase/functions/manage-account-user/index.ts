@@ -153,6 +153,7 @@ type Scope = {
   sub_company_id: string | null;
   is_owner: boolean;
   read_only?: boolean;
+  is_manager?: boolean;
 };
 
 async function resolveScope(
@@ -240,7 +241,7 @@ async function resolveScope(
         owner_id: chosen.owner_id,
         sub_company_id: chosen.sub_company_id ?? requestedSubId ?? null,
         is_owner: false,
-        read_only: true,
+        is_manager: true,
       };
     }
   }
@@ -469,7 +470,9 @@ Deno.serve(async (req) => {
       return json({ users, scope });
     }
 
-    // Cargos gerenciais (supervisor/coordenador/diretor) só têm acesso de leitura.
+    // Gerentes (supervisor/coordenador/diretor) podem criar/editar/excluir
+    // membros comuns; restrições específicas contra dono/admins ficam nos
+    // próprios handlers de create/update/delete abaixo.
     if (scope.read_only && action !== "list") {
       return userError(
         "Apenas administradores da conta podem alterar usuários.",
@@ -493,6 +496,14 @@ Deno.serve(async (req) => {
         (["atendimento", "supervisao", "administracao"].includes(access_level))
           ? access_level
           : (is_account_admin ? "administracao" : "atendimento");
+      // Gerentes (supervisor/coordenador/diretor) não podem promover a Administração.
+      if (scope.is_manager && level === "administracao") {
+        return userError(
+          "Somente o dono da conta pode criar administradores.",
+          403,
+          "manager_cannot_grant_admin",
+        );
+      }
       const normalizedEmail = String(email || "").trim().toLowerCase();
       const normalizedRole = typeof role_label === "string" ? role_label.trim() : "";
       if (!normalizedEmail || !name || !password || password.length < 6) {
@@ -739,6 +750,41 @@ Deno.serve(async (req) => {
       const target = await getScopedAccess(adminClient, user_id, scope);
       if (!target) {
         return userError("Este usuário não pertence ao seu escopo.", 403, "not_in_scope");
+      }
+
+      // Gerentes não podem editar o dono nem outros administradores,
+      // e não podem promover/rebaixar administradores.
+      if (scope.is_manager) {
+        const { data: targetAccess } = await adminClient
+          .from("user_account_access")
+          .select("is_owner, is_account_admin")
+          .eq("user_id", user_id)
+          .eq("owner_id", scope.owner_id)
+          .maybeSingle();
+        if (targetAccess?.is_owner) {
+          return userError(
+            "Você não pode editar o dono da conta.",
+            403,
+            "manager_cannot_edit_owner",
+          );
+        }
+        if (targetAccess?.is_account_admin) {
+          return userError(
+            "Somente o dono da conta pode editar administradores.",
+            403,
+            "manager_cannot_edit_admin",
+          );
+        }
+        if (
+          (Array.isArray(access_level) ? false : access_level === "administracao") ||
+          is_account_admin === true
+        ) {
+          return userError(
+            "Somente o dono da conta pode conceder Administração.",
+            403,
+            "manager_cannot_grant_admin",
+          );
+        }
       }
 
       const { data: beforeProfile } = await adminClient.from("profiles").select(
@@ -1006,6 +1052,31 @@ Deno.serve(async (req) => {
       if (!target) {
         return userError("Este usuário não pertence ao seu escopo.", 403, "not_in_scope");
       }
+
+      // Gerentes não podem excluir o dono da conta nem outros administradores.
+      if (scope.is_manager) {
+        const { data: targetAccess } = await adminClient
+          .from("user_account_access")
+          .select("is_owner, is_account_admin")
+          .eq("user_id", user_id)
+          .eq("owner_id", scope.owner_id)
+          .maybeSingle();
+        if (targetAccess?.is_owner) {
+          return userError(
+            "Você não pode excluir o dono da conta.",
+            403,
+            "manager_cannot_delete_owner",
+          );
+        }
+        if (targetAccess?.is_account_admin) {
+          return userError(
+            "Somente o dono da conta pode excluir administradores.",
+            403,
+            "manager_cannot_delete_admin",
+          );
+        }
+      }
+
 
       const { data: beforeProfile } = await adminClient.from("profiles").select(
         "display_name, email",
