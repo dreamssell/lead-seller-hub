@@ -750,19 +750,41 @@ Deno.serve(async (req) => {
         return userError("Este usuário não pertence ao seu escopo.", 403, "not_in_scope");
       }
 
-      const { data: beforeProfile } = await adminClient.from("profiles").select(
-        "display_name, role_label, phone, is_active, email",
-      ).eq("user_id", user_id).maybeSingle();
+      // Gerentes não podem editar o dono nem outros administradores,
+      // e não podem promover/rebaixar administradores.
+      if (scope.is_manager) {
+        const { data: targetAccess } = await adminClient
+          .from("user_account_access")
+          .select("is_owner, is_account_admin")
+          .eq("user_id", user_id)
+          .eq("owner_id", scope.owner_id)
+          .maybeSingle();
+        if (targetAccess?.is_owner) {
+          return userError(
+            "Você não pode editar o dono da conta.",
+            403,
+            "manager_cannot_edit_owner",
+          );
+        }
+        if (targetAccess?.is_account_admin) {
+          return userError(
+            "Somente o dono da conta pode editar administradores.",
+            403,
+            "manager_cannot_edit_admin",
+          );
+        }
+        if (
+          (Array.isArray(access_level) ? false : access_level === "administracao") ||
+          is_account_admin === true
+        ) {
+          return userError(
+            "Somente o dono da conta pode conceder Administração.",
+            403,
+            "manager_cannot_grant_admin",
+          );
+        }
+      }
 
-      // Compute previous access_level from current signature roles + is_account_admin
-      let beforeSigQ = adminClient
-        .from("user_signature_roles")
-        .select("role")
-        .eq("user_id", user_id)
-        .eq("owner_id", scope.owner_id);
-      if (scope.sub_company_id) {
-        beforeSigQ = beforeSigQ.eq("sub_company_id", scope.sub_company_id);
-      } else beforeSigQ = beforeSigQ.is("sub_company_id", null);
       const { data: beforeSigs } = await beforeSigQ;
       const hadSupervisor = (beforeSigs || []).some((s: any) =>
         ["supervisor", "coordenador", "diretor"].includes(s.role)
