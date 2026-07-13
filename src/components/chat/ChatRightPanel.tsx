@@ -74,29 +74,84 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
     });
   }, []);
 
-  useEffect(() => {
+  const loadProfile = () => {
     setAvatarBroken(false);
     supabase
       .from('customers')
-      .select('owner_id, phone, email, company, channel, created_at, avatar_url, address, document')
+      .select('owner_id, phone, email, company, channel, created_at, avatar_url, address, document, profile_about, is_blocked, has_whatsapp, profile_synced_at, origin_connection_id' as any)
       .eq('id', customerId)
       .maybeSingle()
       .then(({ data }) => {
         setOwnerId((data as any)?.owner_id || null);
         if (data) {
+          const d = data as any;
           setProfile({
-            phone: (data as any).phone,
-            email: (data as any).email,
-            company: (data as any).company,
-            channel: (data as any).channel,
-            created_at: (data as any).created_at,
-            avatar_url: (data as any).avatar_url || null,
-            address: (data as any).address || null,
-            document: (data as any).document || null,
+            phone: d.phone,
+            email: d.email,
+            company: d.company,
+            channel: d.channel,
+            created_at: d.created_at,
+            avatar_url: d.avatar_url || null,
+            address: d.address || null,
+            document: d.document || null,
+            profile_about: d.profile_about ?? null,
+            is_blocked: !!d.is_blocked,
+            has_whatsapp: d.has_whatsapp ?? null,
+            profile_synced_at: d.profile_synced_at ?? null,
+            origin_connection_id: d.origin_connection_id ?? null,
           });
         }
       });
-  }, [customerId]);
+  };
+  useEffect(() => { loadProfile(); }, [customerId]);
+
+  // Etapa 6 — helpers para chamar o WahaAdapter a partir do painel de perfil.
+  const getWahaConn = async () => {
+    if (!profile?.origin_connection_id) return null;
+    const { data } = await supabase
+      .from('whatsapp_connections')
+      .select('*')
+      .eq('id', profile.origin_connection_id)
+      .maybeSingle();
+    if (!data || (data as any).provider !== 'waha') return null;
+    return data as any;
+  };
+  const wahaSync = async () => {
+    setWahaBusy('sync');
+    try {
+      const conn = await getWahaConn();
+      if (!conn) { toast.info('Perfil WAHA disponível apenas para contatos vinculados a uma conexão WAHA.'); return; }
+      const res: any = await getProviderAdapter('waha').syncContactProfile?.(conn, customerId);
+      if (res?.ok) { toast.success('Perfil sincronizado com o WhatsApp'); loadProfile(); }
+      else toast.error(`Falha ao sincronizar: ${res?.error || res?.skipped || 'desconhecido'}`);
+    } finally { setWahaBusy(null); }
+  };
+  const wahaCheckExists = async () => {
+    setWahaBusy('check');
+    try {
+      const conn = await getWahaConn();
+      if (!conn) { toast.info('Verificação disponível apenas para conexões WAHA.'); return; }
+      const res: any = await getProviderAdapter('waha').checkNumberExists?.(conn, customerId);
+      if (res?.exists) toast.success('Número possui WhatsApp ativo.');
+      else toast.warning(res?.error ? `Falha: ${res.error}` : 'Este número não possui WhatsApp.');
+      loadProfile();
+    } finally { setWahaBusy(null); }
+  };
+  const wahaToggleBlock = async () => {
+    setWahaBusy('block');
+    try {
+      const conn = await getWahaConn();
+      if (!conn) { toast.info('Bloqueio disponível apenas para conexões WAHA.'); return; }
+      const adapter = getProviderAdapter('waha');
+      const res: any = profile?.is_blocked
+        ? await adapter.unblockContact?.(conn, customerId)
+        : await adapter.blockContact?.(conn, customerId);
+      if (res?.ok) {
+        toast.success(profile?.is_blocked ? 'Contato desbloqueado' : 'Contato bloqueado');
+        loadProfile();
+      } else toast.error(`Falha: ${res?.error || res?.skipped || 'desconhecido'}`);
+    } finally { setWahaBusy(null); }
+  };
 
 
 
