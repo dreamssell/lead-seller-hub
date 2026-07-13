@@ -470,7 +470,9 @@ Deno.serve(async (req) => {
       return json({ users, scope });
     }
 
-    // Cargos gerenciais (supervisor/coordenador/diretor) só têm acesso de leitura.
+    // Gerentes (supervisor/coordenador/diretor) podem criar/editar/excluir
+    // membros comuns; restrições específicas contra dono/admins ficam nos
+    // próprios handlers de create/update/delete abaixo.
     if (scope.read_only && action !== "list") {
       return userError(
         "Apenas administradores da conta podem alterar usuários.",
