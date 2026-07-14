@@ -588,6 +588,41 @@ export type Database = {
           },
         ]
       }
+      chat_drafts: {
+        Row: {
+          content: string
+          created_at: string
+          customer_id: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          customer_id: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          customer_id?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_drafts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_message_deadletter: {
         Row: {
           attempts: number
@@ -3150,6 +3185,8 @@ export type Database = {
           is_active: boolean | null
           phone: string | null
           role_label: string | null
+          signature: string | null
+          signature_enabled: boolean
           updated_at: string
           user_id: string
         }
@@ -3162,6 +3199,8 @@ export type Database = {
           is_active?: boolean | null
           phone?: string | null
           role_label?: string | null
+          signature?: string | null
+          signature_enabled?: boolean
           updated_at?: string
           user_id: string
         }
@@ -3174,6 +3213,8 @@ export type Database = {
           is_active?: boolean | null
           phone?: string | null
           role_label?: string | null
+          signature?: string | null
+          signature_enabled?: boolean
           updated_at?: string
           user_id?: string
         }
