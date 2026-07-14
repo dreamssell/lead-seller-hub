@@ -32,7 +32,9 @@ export function FormatToolbar({ textareaRef, value, onChange, onAfterAction }: P
       const ns = before.length + c.length;
       ta.setSelectionRange(ns, ns + sel.length);
     });
+    onAfterAction?.();
   };
+
 
   const insertEmoji = (em: string) => {
     const ta = textareaRef.current;
