@@ -242,21 +242,42 @@ export function ChatComposer({
 
         <div className="flex items-end gap-2 mt-1">
           <div className="flex items-center">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-xl">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Popover open={fmtOpen} onOpenChange={setFmtOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-10 w-10 rounded-xl"
+                      aria-label="Formatação e emojis"
+                      aria-haspopup="menu"
+                      aria-expanded={fmtOpen}
+                    >
                       <MoreHorizontal className="w-4 h-4" />
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Formatação e emojis</TooltipContent>
-                </Tooltip>
-              </PopoverTrigger>
-              <PopoverContent align="start" side="top" className="w-auto p-1">
-                <FormatToolbar textareaRef={taRef} value={text} onChange={onChangeText} />
-              </PopoverContent>
-            </Popover>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="start"
+                    side="top"
+                    className="w-auto p-1"
+                    role="menu"
+                    aria-label="Opções de formatação"
+                    onCloseAutoFocus={(e) => { e.preventDefault(); taRef.current?.focus(); }}
+                  >
+                    <FormatToolbar
+                      textareaRef={taRef}
+                      value={text}
+                      onChange={onChangeText}
+                      onAfterAction={() => setFmtOpen(false)}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </TooltipTrigger>
+              <TooltipContent>Formatação e emojis (negrito, itálico, emoji)</TooltipContent>
+            </Tooltip>
+
             <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => handleFiles(e.target.files)} />
             <Tooltip>
               <TooltipTrigger asChild>
