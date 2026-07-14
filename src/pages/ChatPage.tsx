@@ -775,13 +775,25 @@ export default function ChatPage() {
       addDebugLog('error', '[Inbound] Falha na gravação/leitura de mensagens', error);
       return false;
     }
-    const hydrated = (data || []).map(hydrateChatMessage);
+    const fetched = (data || []).map(hydrateChatMessage);
+    // Merge com cache quando fizemos delta; senão, é full replace.
+    const cachedItems = (cached?.items || []).map(hydrateChatMessage);
+    const byId = new Map<string, any>();
+    (deltaFrom ? cachedItems : []).concat(fetched).forEach((m: any) => {
+      const k = String(m.id || m.client_msg_id || `${m.created_at}:${m.content || ''}`);
+      byId.set(k, m);
+    });
+    const hydrated = Array.from(byId.values()).sort((a, b) =>
+      Date.parse(String(a.created_at || 0)) - Date.parse(String(b.created_at || 0))
+    );
     setMessages((prev) => applyConversationMessagesAfterSwitch({
       currentConversationId: selectedConvIdRef.current,
       requestedConversationId: conversationId,
       previousMessages: prev,
       loadedMessages: hydrated,
     }));
+    // Grava snapshot atualizado no cache local (fire-and-forget).
+    void setCachedMessages(activeOwnerIdRef.current, conversationId, hydrated);
     const last = hydrated[hydrated.length - 1];
     setInboundDebug((prev) => ({
       ...prev,
