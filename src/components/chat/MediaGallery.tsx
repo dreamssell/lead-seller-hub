@@ -56,7 +56,13 @@ export function MediaGallery({ customerId }: Props) {
     return () => { cancelled = true; };
   }, [customerId]);
 
-  const filtered = useMemo(() => filter === 'all' ? rows : rows.filter(r => r.kind === filter), [rows, filter]);
+  const filtered = useMemo(() => {
+    const base = filter === 'all' ? rows : rows.filter(r => r.kind === filter);
+    return [...base].sort((a, b) => {
+      const t = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      return sortDesc ? -t : t;
+    });
+  }, [rows, filter, sortDesc]);
 
   const counts = useMemo(() => ({
     all: rows.length,
