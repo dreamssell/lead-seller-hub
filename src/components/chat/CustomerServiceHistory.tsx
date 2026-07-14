@@ -116,9 +116,17 @@ export function CustomerServiceHistory({ customerId }: Props) {
         supabase.from('conversation_assignments')
           .select('id,from_user_id,to_user_id,reason,created_at')
           .eq('customer_id', customerId).order('created_at', { ascending: true }).limit(100),
-        (supabase as any).from('call_history')
-          .select('id,direction,status,duration_seconds,started_at,phone_number,channel,connection_label,user_id')
-          .eq('customer_id', customerId).order('started_at', { ascending: true }).limit(50),
+        (async () => {
+          const digits = String((cust as any)?.phone || '').replace(/\D/g, '');
+          const suffix = digits.slice(-8);
+          const q = (supabase as any).from('call_history')
+            .select('id,direction,status,duration_seconds,started_at,phone_number,channel,connection_label,user_id')
+            .order('started_at', { ascending: true }).limit(50);
+          const filter = suffix
+            ? q.or(`customer_id.eq.${customerId},phone_number.ilike.%${suffix}`)
+            : q.eq('customer_id', customerId);
+          return await filter;
+        })(),
         leadIds.length
           ? supabase.from('lead_events')
               .select('id,lead_id,type,from_stage_name,to_stage_name,channel,source,created_at,user_id')
