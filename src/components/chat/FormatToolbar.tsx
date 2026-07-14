@@ -43,7 +43,9 @@ export function FormatToolbar({ textareaRef, value, onChange, onAfterAction }: P
     const next = value.slice(0, s) + em + value.slice(s);
     onChange(next);
     requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(s + em.length, s + em.length); });
+    onAfterAction?.();
   };
+
 
   return (
     <div className="flex items-center gap-0.5 px-1">
