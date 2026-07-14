@@ -72,6 +72,8 @@ export function ChatComposer({
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
   const [slashKey, setSlashKey] = useState<{ seq: number; key: 'up' | 'down' | 'enter' | null }>({ seq: 0, key: null });
+  const [fmtOpen, setFmtOpen] = useState(false);
+
 
   useEffect(() => {
     if (externalAttachment) {
@@ -135,6 +137,7 @@ export function ChatComposer({
 
   const submit = async () => {
     if (sending || disabled) return;
+    setFmtOpen(false);
     if (attachment && onSendMedia) {
       setSending(true);
       try { await onSendMedia(attachment, withSignature(caption || text)); resetAfterSend(); }
@@ -155,6 +158,24 @@ export function ChatComposer({
     setAttachment((a) => { if (a?.previewUrl) URL.revokeObjectURL(a.previewUrl); return null; });
   };
 
+  const wrapFormat = (fmt: 'bold' | 'italic' | 'strike' | 'mono') => {
+    const ta = taRef.current;
+    if (!ta) return;
+    const map = { bold: '*', italic: '_', strike: '~', mono: '`' } as const;
+    const c = map[fmt];
+    const s = ta.selectionStart ?? text.length;
+    const e = ta.selectionEnd ?? text.length;
+    const before = text.slice(0, s);
+    const sel = text.slice(s, e) || (fmt === 'bold' ? 'negrito' : fmt === 'italic' ? 'itálico' : fmt === 'strike' ? 'tachado' : 'código');
+    const after = text.slice(e);
+    onChangeText(`${before}${c}${sel}${c}${after}`);
+    requestAnimationFrame(() => {
+      ta.focus();
+      const ns = before.length + c.length;
+      ta.setSelectionRange(ns, ns + sel.length);
+    });
+  };
+
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Etapa 9 — navegação da lista de /atalhos
     if (slashOpen) {
@@ -165,11 +186,21 @@ export function ChatComposer({
       }
       if (e.key === 'Escape') { e.preventDefault(); setSlashOpen(false); return; }
     }
+    // Atalhos de formatação (Ctrl/Cmd + B/I/S/M)
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && !e.shiftKey && !e.altKey) {
+      const k = e.key.toLowerCase();
+      if (k === 'b') { e.preventDefault(); wrapFormat('bold'); return; }
+      if (k === 'i') { e.preventDefault(); wrapFormat('italic'); return; }
+      if (k === 's') { e.preventDefault(); wrapFormat('strike'); return; }
+      if (k === 'm') { e.preventDefault(); wrapFormat('mono'); return; }
+    }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); return; }
     if (e.key === 'Escape') {
       if (attachment) { resetAfterSend(); }
     }
   };
+
 
   const variables = { nome: contactName || '', empresa: 'Lead Seller' };
 
@@ -211,21 +242,42 @@ export function ChatComposer({
 
         <div className="flex items-end gap-2 mt-1">
           <div className="flex items-center">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-xl">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Popover open={fmtOpen} onOpenChange={setFmtOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-10 w-10 rounded-xl"
+                      aria-label="Formatação e emojis"
+                      aria-haspopup="menu"
+                      aria-expanded={fmtOpen}
+                    >
                       <MoreHorizontal className="w-4 h-4" />
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Formatação e emojis</TooltipContent>
-                </Tooltip>
-              </PopoverTrigger>
-              <PopoverContent align="start" side="top" className="w-auto p-1">
-                <FormatToolbar textareaRef={taRef} value={text} onChange={onChangeText} />
-              </PopoverContent>
-            </Popover>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="start"
+                    side="top"
+                    className="w-auto p-1"
+                    role="menu"
+                    aria-label="Opções de formatação"
+                    onCloseAutoFocus={(e) => { e.preventDefault(); taRef.current?.focus(); }}
+                  >
+                    <FormatToolbar
+                      textareaRef={taRef}
+                      value={text}
+                      onChange={onChangeText}
+                      onAfterAction={() => setFmtOpen(false)}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </TooltipTrigger>
+              <TooltipContent>Formatação e emojis (negrito, itálico, emoji)</TooltipContent>
+            </Tooltip>
+
             <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => handleFiles(e.target.files)} />
             <Tooltip>
               <TooltipTrigger asChild>

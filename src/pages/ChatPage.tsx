@@ -3284,37 +3284,11 @@ export default function ChatPage() {
       <MediaDropzone
         active={!!selectedConvId}
         maxFiles={30}
-        onDrop={async (files) => {
-          if (!files.length) return;
-          if (files.length === 1) {
-            setExternalAttachment(files[0]);
-            return;
-          }
-          sonnerToast.message(`Enviando ${files.length} arquivos...`);
-          let ok = 0;
-          let fail = 0;
-          for (const f of files) {
-            if (f.size > 20 * 1024 * 1024) {
-              sonnerToast.error(`"${f.name}" excede 20 MB`);
-
-              fail++;
-              continue;
-            }
-            const kind: 'image' | 'video' | 'audio' | 'document' =
-              f.type.startsWith('image/') ? 'image'
-              : f.type.startsWith('video/') ? 'video'
-              : f.type.startsWith('audio/') ? 'audio'
-              : 'document';
-            try {
-              await handleSendMedia({ file: f, previewUrl: null, kind }, '');
-              ok++;
-            } catch {
-              fail++;
-            }
-          }
-          sonnerToast.success(`${ok} enviados${fail ? ` · ${fail} falharam` : ''}`);
+        onSendFile={async (file, kind) => {
+          await handleSendMedia({ file, previewUrl: null, kind }, '');
         }}
       />
+
 
       {lightboxUrl && (() => {
         const imgs: MediaItem[] = messages

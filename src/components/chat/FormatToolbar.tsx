@@ -11,9 +11,11 @@ interface Props {
   textareaRef: React.RefObject<HTMLTextAreaElement>;
   value: string;
   onChange: (v: string) => void;
+  onAfterAction?: () => void;
 }
 
-export function FormatToolbar({ textareaRef, value, onChange }: Props) {
+export function FormatToolbar({ textareaRef, value, onChange, onAfterAction }: Props) {
+
   const wrap = (fmt: Fmt) => {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -30,7 +32,9 @@ export function FormatToolbar({ textareaRef, value, onChange }: Props) {
       const ns = before.length + c.length;
       ta.setSelectionRange(ns, ns + sel.length);
     });
+    onAfterAction?.();
   };
+
 
   const insertEmoji = (em: string) => {
     const ta = textareaRef.current;
@@ -39,7 +43,9 @@ export function FormatToolbar({ textareaRef, value, onChange }: Props) {
     const next = value.slice(0, s) + em + value.slice(s);
     onChange(next);
     requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(s + em.length, s + em.length); });
+    onAfterAction?.();
   };
+
 
   return (
     <div className="flex items-center gap-0.5 px-1">
