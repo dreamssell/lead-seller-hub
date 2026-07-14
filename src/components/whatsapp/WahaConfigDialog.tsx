@@ -557,3 +557,12 @@ function ToggleField({ label, checked, onChange }: { label: string; checked: boo
     </div>
   );
 }
+
+function SummaryCell({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
+  return (
+    <div className="rounded-md border border-border/50 bg-background/60 p-2">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className={`tabular-nums ${strong ? 'text-base font-bold text-foreground' : 'text-sm font-semibold text-foreground'}`}>{value}</div>
+    </div>
+  );
+}
