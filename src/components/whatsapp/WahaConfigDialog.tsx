@@ -2,7 +2,7 @@
 // Standalone: does not import from UAZ/Evolution/Wavoip code. Safe to edit or
 // remove without impacting other providers.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Copy, Loader2, ExternalLink, Wifi, PlusCircle, Trash2, LogOut, ListRestart, DownloadCloud, FlaskConical } from 'lucide-react';
+import { Copy, Loader2, ExternalLink, Wifi, PlusCircle, Trash2, LogOut, ListRestart, DownloadCloud, FlaskConical, History, PlayCircle } from 'lucide-react';
 import { WahaConfigSchema, readWahaConfig, buildWahaWebhookUrl, type WahaConfig } from './wahaConfig';
 import { WahaImportProgressDialog } from './WahaImportProgressDialog';
 import type { WhatsAppConnection } from './types';
