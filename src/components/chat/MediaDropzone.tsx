@@ -556,6 +556,11 @@ export function MediaDropzone({
                 <Plus className="w-4 h-4 mr-1" /> Adicionar
               </Button>
               <div className="flex items-center gap-2">
+                {items.some(i => i.status === 'error' || i.status === 'canceled') && !sending && (
+                  <Button type="button" variant="outline" size="sm" onClick={retryFailed}>
+                    <RotateCcw className="w-4 h-4 mr-1" /> Reenviar falhas
+                  </Button>
+                )}
                 {sending ? (
                   <Button type="button" variant="outline" size="sm" onClick={cancelSending}>
                     Cancelar envio
