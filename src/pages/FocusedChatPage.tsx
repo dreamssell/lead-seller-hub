@@ -449,6 +449,49 @@ export default function FocusedChatPage() {
     }
   };
 
+  /**
+   * Salta para uma mensagem específica retornada pela busca completa.
+   * Carrega uma "janela" de contexto (antes + depois) sem quebrar a paginação:
+   * mensagens mais antigas continuam disponíveis via botão "Carregar antigas".
+   */
+  const handleJumpToMessage = useCallback(async (hit: MessageSearchHit) => {
+    if (!hit.customer_id) return;
+    if (selected !== hit.customer_id) setSelected(hit.customer_id);
+    const [{ data: before }, { data: after }] = await Promise.all([
+      supabase.from('chat_messages').select('*')
+        .eq('customer_id', hit.customer_id)
+        .lte('created_at', hit.created_at)
+        .order('created_at', { ascending: false })
+        .limit(40),
+      supabase.from('chat_messages').select('*')
+        .eq('customer_id', hit.customer_id)
+        .gt('created_at', hit.created_at)
+        .order('created_at', { ascending: true })
+        .limit(20),
+    ]);
+    const beforeAsc = ((before as Msg[]) || []).slice().reverse();
+    const window = [...beforeAsc, ...((after as Msg[]) || [])];
+    const byId = new Map<string, Msg>();
+    window.forEach(m => byId.set(m.id, m));
+    const merged = Array.from(byId.values()).sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+    setHasMoreOlder(true);
+    setMsgs(merged);
+    setPendingScrollId(hit.id);
+  }, [selected]);
+
+  // Efetiva o scroll para a mensagem alvo após o virtualizer medir.
+  useEffect(() => {
+    if (!pendingScrollId) return;
+    const idx = msgs.findIndex(m => m.id === pendingScrollId);
+    if (idx < 0) return;
+    const id = window.setTimeout(() => {
+      try { virtualizer.scrollToIndex(idx, { align: 'center' }); } catch {}
+      setPendingScrollId(null);
+    }, 40);
+    return () => window.clearTimeout(id);
+  }, [pendingScrollId, msgs, virtualizer]);
+
+
   return (
     <TooltipProvider delayDuration={200}>
       <div className="h-screen w-screen flex flex-col bg-background overflow-hidden">
