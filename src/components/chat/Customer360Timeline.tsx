@@ -1,27 +1,21 @@
+// CRM 360 — apenas EVENTOS do cliente (agendamentos, notas, assinaturas,
+// mudanças de etapa do funil). Não inclui histórico de ligações nem origem
+// do lead — isso vai na aba "Histórico de Atendimento".
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Loader2, UserPlus, ArrowRightLeft, StickyNote, FileSignature,
-  MessageSquare, Layers, Sparkles, Clock, CheckCircle2, XCircle, Loader,
-  PhoneCall, PhoneIncoming, PhoneMissed, Send,
+  Loader2, ArrowRightLeft, StickyNote, FileSignature,
+  Layers, Clock, CheckCircle2, XCircle, Loader, Send,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface Props { customerId: string }
 
-type Kind =
-  | 'lead_origin'
-  | 'lead_event'
-  | 'note'
-  | 'signature'
-  | 'assignment'
-  | 'followup'
-  | 'call'
-  | 'message';
+type Kind = 'lead_event' | 'note' | 'signature' | 'followup';
 
 interface TimelineItem {
   id: string;
@@ -30,32 +24,24 @@ interface TimelineItem {
   body?: string;
   at: string;
   meta?: string;
-  status?: 'scheduled' | 'processing' | 'sent' | 'failed' | 'cancelled' | string;
+  status?: string;
   details?: { label: string; value: string }[];
 }
 
 const PAGE = 25;
 
 const ICONS: Record<Kind, any> = {
-  lead_origin: Sparkles,
   lead_event: ArrowRightLeft,
   note: StickyNote,
   signature: FileSignature,
-  assignment: UserPlus,
   followup: Send,
-  call: PhoneCall,
-  message: MessageSquare,
 };
 
 const COLORS: Record<Kind, string> = {
-  lead_origin: 'text-fuchsia-500 bg-fuchsia-500/10',
   lead_event: 'text-blue-500 bg-blue-500/10',
   note: 'text-amber-500 bg-amber-500/10',
   signature: 'text-emerald-500 bg-emerald-500/10',
-  assignment: 'text-cyan-500 bg-cyan-500/10',
   followup: 'text-indigo-500 bg-indigo-500/10',
-  call: 'text-rose-500 bg-rose-500/10',
-  message: 'text-muted-foreground bg-muted',
 };
 
 const STATUS_META: Record<string, { label: string; icon: any; className: string }> = {
@@ -65,11 +51,31 @@ const STATUS_META: Record<string, { label: string; icon: any; className: string 
   failed: { label: 'Falhou', icon: XCircle, className: 'text-red-600 border-red-500/40 bg-red-500/10' },
   error: { label: 'Erro', icon: XCircle, className: 'text-red-600 border-red-500/40 bg-red-500/10' },
   cancelled: { label: 'Cancelado', icon: XCircle, className: 'text-muted-foreground border-border bg-muted' },
+  pending: { label: 'Pendente', icon: Clock, className: 'text-amber-600 border-amber-500/40 bg-amber-500/10' },
+  signed: { label: 'Assinado', icon: CheckCircle2, className: 'text-emerald-600 border-emerald-500/40 bg-emerald-500/10' },
+  completed: { label: 'Concluído', icon: CheckCircle2, className: 'text-emerald-600 border-emerald-500/40 bg-emerald-500/10' },
+  expired: { label: 'Expirado', icon: XCircle, className: 'text-muted-foreground border-border bg-muted' },
 };
 
 function fmtDT(iso: string) {
   try { return format(new Date(iso), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }); }
   catch { return iso; }
+}
+
+function translateLeadEvent(type: string): string {
+  const map: Record<string, string> = {
+    stage_changed: 'Mudança de etapa',
+    created: 'Lead criado',
+    updated: 'Lead atualizado',
+    assigned: 'Lead atribuído',
+    reassigned: 'Lead reatribuído',
+    lost: 'Lead perdido',
+    won: 'Lead ganho',
+    contacted: 'Contato realizado',
+    qualified: 'Lead qualificado',
+    note_added: 'Nota adicionada',
+  };
+  return map[type] || type;
 }
 
 export function Customer360Timeline({ customerId }: Props) {
@@ -83,51 +89,31 @@ export function Customer360Timeline({ customerId }: Props) {
     const from = pageIdx * PAGE;
     const to = from + PAGE - 1;
 
-    // Localiza leads vinculados ao customer para eventos de funil
     const { data: leadsData } = await supabase
       .from('leads')
-      .select('id,name,source,channel,created_at,pipeline_id,stage_id')
+      .select('id')
       .eq('customer_id', customerId);
     const leadIds = (leadsData || []).map((l: any) => l.id);
 
     const leadEventsQuery = leadIds.length
       ? supabase.from('lead_events')
-          .select('id,type,from_stage_name,to_stage_name,channel,source,created_at,metadata')
+          .select('id,type,from_stage_name,to_stage_name,channel,source,created_at')
           .in('lead_id', leadIds)
           .order('created_at', { ascending: false })
           .range(from, to)
       : Promise.resolve({ data: [], error: null } as any);
 
-    const [notes, sigs, assigns, followups, calls, events] = await Promise.all([
+    const [notes, sigs, followups, events] = await Promise.all([
       supabase.from('customer_notes').select('id,content,author_name,created_at').eq('customer_id', customerId).order('created_at', { ascending: false }).range(from, to),
       supabase.from('signature_documents').select('id,description,status,created_at,lead_id')
         .in('lead_id', leadIds.length ? leadIds : ['00000000-0000-0000-0000-000000000000'])
         .order('created_at', { ascending: false }).range(from, to)
         .then(r => r, () => ({ data: [], error: null } as any)),
-      supabase.from('conversation_assignments').select('id,reason,to_user_id,to_queue_id,created_at').eq('customer_id', customerId).order('created_at', { ascending: false }).range(from, to),
       supabase.from('auto_followups').select('id,status,scheduled_for,sent_at,cancelled_reason,message_template,created_at,updated_at').eq('customer_id', customerId).order('created_at', { ascending: false }).range(from, to),
-      supabase.from('call_history').select('id,direction,status,duration_seconds,started_at,ended_at,contact_name,phone_number,recording_url').eq('customer_id', customerId).order('started_at', { ascending: false }).range(from, to),
       leadEventsQuery,
     ]);
 
     const arr: TimelineItem[] = [];
-
-    // Origem do lead (primeira página)
-    if (pageIdx === 0) {
-      (leadsData || []).forEach((l: any) => {
-        arr.push({
-          id: 'lo' + l.id,
-          kind: 'lead_origin',
-          at: l.created_at,
-          title: `Lead criado: ${l.name}`,
-          meta: l.channel || l.source || undefined,
-          details: [
-            l.source ? { label: 'Origem', value: l.source } : null,
-            l.channel ? { label: 'Canal', value: l.channel } : null,
-          ].filter(Boolean) as any,
-        });
-      });
-    }
 
     (events.data || []).forEach((e: any) => {
       const isStage = e.type === 'stage_changed';
@@ -137,7 +123,7 @@ export function Customer360Timeline({ customerId }: Props) {
         at: e.created_at,
         title: isStage
           ? `Etapa: ${e.from_stage_name || '—'} → ${e.to_stage_name || '—'}`
-          : (e.type || 'Evento do lead'),
+          : translateLeadEvent(e.type),
         meta: e.channel || e.source || undefined,
       });
     });
@@ -160,46 +146,21 @@ export function Customer360Timeline({ customerId }: Props) {
       });
     });
 
-    (calls.data || []).forEach((c: any) => {
-      const dur = c.duration_seconds || 0;
-      const mm = Math.floor(dur / 60).toString().padStart(2, '0');
-      const ss = (dur % 60).toString().padStart(2, '0');
-      arr.push({
-        id: 'c' + c.id,
-        kind: 'call',
-        at: c.started_at,
-        title: c.direction === 'inbound' ? 'Chamada recebida' : 'Chamada realizada',
-        meta: c.status,
-        details: [
-          { label: 'Número', value: c.phone_number },
-          { label: 'Duração', value: `${mm}:${ss}` },
-          c.ended_at ? { label: 'Finalizada', value: fmtDT(c.ended_at) } : null,
-          c.recording_url ? { label: 'Gravação', value: 'Disponível' } : null,
-        ].filter(Boolean) as any,
-      });
-    });
-
     (notes.data || []).forEach((n: any) => arr.push({
       id: 'n' + n.id, kind: 'note', at: n.created_at,
       title: `Nota de ${n.author_name || 'atendente'}`, body: n.content,
     }));
     (sigs.data || []).forEach((s: any) => arr.push({
       id: 's' + s.id, kind: 'signature', at: s.created_at,
-      title: s.description || 'Documento de assinatura', meta: s.status,
-    }));
-    (assigns.data || []).forEach((a: any) => arr.push({
-      id: 'a' + a.id, kind: 'assignment', at: a.created_at,
-      title: a.to_user_id ? 'Transferido para colega' : 'Movido para fila',
-      body: a.reason || undefined,
+      title: s.description || 'Documento de assinatura',
+      status: s.status,
     }));
 
     const got =
       (events.data?.length || 0) +
       (notes.data?.length || 0) +
       (sigs.data?.length || 0) +
-      (assigns.data?.length || 0) +
-      (followups.data?.length || 0) +
-      (calls.data?.length || 0);
+      (followups.data?.length || 0);
 
     arr.sort((a, b) => +new Date(b.at) - +new Date(a.at));
     return { arr, exhausted: got < PAGE };
@@ -214,7 +175,6 @@ export function Customer360Timeline({ customerId }: Props) {
       setItems(arr); setHasMore(!exhausted); setLoading(false);
     })();
 
-    // Realtime: reflete mudanças de status dos agendamentos ao vivo
     const ch = supabase
       .channel(`c360-${customerId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'auto_followups', filter: `customer_id=eq.${customerId}` }, () => {
@@ -248,7 +208,7 @@ export function Customer360Timeline({ customerId }: Props) {
     return (
       <div className="text-center py-8 px-3">
         <Layers className="w-8 h-8 mx-auto text-muted-foreground/50 mb-2" />
-        <p className="text-xs text-muted-foreground italic">Sem eventos para este cliente ainda.</p>
+        <p className="text-xs text-muted-foreground italic">Nenhum evento registrado ainda.</p>
       </div>
     );
   }
