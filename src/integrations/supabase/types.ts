@@ -709,6 +709,51 @@ export type Database = {
           },
         ]
       }
+      chat_pinned_messages: {
+        Row: {
+          created_at: string
+          customer_id: string
+          id: string
+          message_id: string
+          owner_id: string
+          pinned_by: string
+          sub_company_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          id?: string
+          message_id: string
+          owner_id: string
+          pinned_by: string
+          sub_company_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          id?: string
+          message_id?: string
+          owner_id?: string
+          pinned_by?: string
+          sub_company_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_pinned_messages_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_pinned_messages_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: true
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_queues: {
         Row: {
           business_hours: Json
@@ -746,6 +791,48 @@ export type Database = {
             columns: ["sla_policy_id"]
             isOneToOne: false
             referencedRelation: "sla_policies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_starred_messages: {
+        Row: {
+          created_at: string
+          customer_id: string
+          id: string
+          message_id: string
+          owner_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          id?: string
+          message_id: string
+          owner_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          id?: string
+          message_id?: string
+          owner_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_starred_messages_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_starred_messages_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
             referencedColumns: ["id"]
           },
         ]
