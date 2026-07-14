@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, KeyboardEvent, ReactNode } from 'react';
-import { Send, Paperclip, X, Loader2, FileText, AudioLines, CalendarClock, PenLine } from 'lucide-react';
+import { Send, Paperclip, X, Loader2, FileText, AudioLines, CalendarClock, PenLine, MoreHorizontal } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { FormatToolbar } from './FormatToolbar';
@@ -208,10 +209,23 @@ export function ChatComposer({
 
         <QuickReplyPopover open={slashOpen} query={slashQuery} onPick={insertSlashPick} variables={variables} externalKey={slashKey} />
 
-        <FormatToolbar textareaRef={taRef} value={text} onChange={onChangeText} />
-
         <div className="flex items-end gap-2 mt-1">
           <div className="flex items-center">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-xl">
+                      <MoreHorizontal className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Formatação e emojis</TooltipContent>
+                </Tooltip>
+              </PopoverTrigger>
+              <PopoverContent align="start" side="top" className="w-auto p-1">
+                <FormatToolbar textareaRef={taRef} value={text} onChange={onChangeText} />
+              </PopoverContent>
+            </Popover>
             <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => handleFiles(e.target.files)} />
             <Tooltip>
               <TooltipTrigger asChild>
