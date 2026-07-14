@@ -3055,6 +3055,10 @@ export default function ChatPage() {
                 disabled={!ownerScopeOk || accessLoading || !activeOwnerId}
                 externalAttachment={externalAttachment}
                 onConsumeExternalAttachment={() => setExternalAttachment(null)}
+                onScheduleClick={() => setScheduleOpen(true)}
+                signature={signatureText}
+                signatureEnabled={signatureEnabled}
+                onToggleSignature={handleToggleSignature}
                 extras={
                   <RichSendMenu
                     customerId={selectedConvId!}
@@ -3063,6 +3067,15 @@ export default function ChatPage() {
                   />
                 }
               />
+              {selectedConvId && (selectedConv as any)?.owner_id && (
+                <ScheduleMessageDialog
+                  open={scheduleOpen}
+                  onOpenChange={setScheduleOpen}
+                  customerId={selectedConvId}
+                  ownerId={(selectedConv as any).owner_id}
+                  defaultText={messageText}
+                />
+              )}
             </>
           )}
         </div>
