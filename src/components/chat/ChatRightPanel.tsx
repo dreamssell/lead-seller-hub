@@ -68,7 +68,8 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
 
   // Nome: 2-120 chars, permite letras (acentos), números, espaços e . - ' _ & ( ) /
   const NAME_REGEX = /^[\p{L}\p{N}\s.\-'_&()\/]+$/u;
-  const validateContactName = (raw: string): { ok: true; value: string } | { ok: false; message: string } => {
+  type NameCheck = { ok: true; value: string } | { ok: false; message: string };
+  const validateContactName = (raw: string): NameCheck => {
     const value = raw.replace(/\s+/g, ' ').trim();
     if (!value) return { ok: false, message: 'O nome não pode ficar vazio.' };
     if (value.length < 2) return { ok: false, message: 'O nome deve ter pelo menos 2 caracteres.' };
