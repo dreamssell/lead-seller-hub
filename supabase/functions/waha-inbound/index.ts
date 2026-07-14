@@ -998,6 +998,32 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Outbound-echo dedup: when the platform sends a message via UAZ we insert
+  // the row locally with a client_msg_id but no uaz_msg_id. WAHA then echoes
+  // that same message back with IsFromMe=true and the canonical HASH. Instead
+  // of creating a second row, backfill uaz_msg_id onto the existing outbound
+  // record so the chat stays clean.
+  if (fromMeFlag && providerMsgId) {
+    const { data: echo } = await supabase
+      .from('chat_messages')
+      .select('id')
+      .eq('customer_id', customerId)
+      .eq('sender_type', 'agent')
+      .eq('content', content)
+      .is('uaz_msg_id', null)
+      .gte('created_at', new Date(Date.now() - 5 * 60_000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (echo?.id) {
+      await supabase
+        .from('chat_messages')
+        .update({ uaz_msg_id: providerMsgId })
+        .eq('id', echo.id);
+      return json({ ok: true, echo_merged: true, message_id: providerMsgId, chat_message_id: echo.id });
+    }
+  }
+
   const { data: insertedMsg, error: msgErr } = await supabase.from('chat_messages').insert({
     customer_id: customerId,
     sender_type: fromMeFlag ? 'agent' : 'client',
