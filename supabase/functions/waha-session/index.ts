@@ -55,11 +55,22 @@ function sessionHasOurWebhook(sessionData: any, connectionId: string): boolean {
   return Array.isArray(hooks) && hooks.some((h) => String(h?.url ?? "").trim() === target);
 }
 
+// Same canonical dedup rule as waha-inbound: collapse `@c.us`/`@lid` variants
+// of the same WhatsApp message id onto their shared HASH suffix so backfill
+// jobs don't create duplicated chat_messages rows.
+function canonicalMsgId(raw: string): string {
+  const parts = raw.split('_');
+  const tail = parts[parts.length - 1];
+  if (parts.length >= 3 && /^[A-F0-9]{16,}$/i.test(tail)) return tail.toUpperCase();
+  return raw;
+}
 function extractId(id: any): string | null {
+  let raw: string | null = null;
   if (!id) return null;
-  if (typeof id === "string") return id;
-  if (typeof id === "object" && typeof id._serialized === "string") return id._serialized;
-  return null;
+  if (typeof id === "string") raw = id;
+  else if (typeof id === "object" && typeof id._serialized === "string") raw = id._serialized;
+  if (!raw) return null;
+  return canonicalMsgId(raw);
 }
 
 function normalizePhone(from?: string | null): string | null {
