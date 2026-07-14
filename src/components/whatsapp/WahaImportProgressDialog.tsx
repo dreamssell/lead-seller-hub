@@ -377,12 +377,45 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
             </div>
 
             {run.error_message && (
-              <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2.5 text-xs text-destructive flex items-start gap-2">
-                <AlertOctagon className="w-4 h-4 mt-0.5 shrink-0" />
-                <div>
-                  <div className="font-semibold">Job encerrado com erro</div>
-                  <div className="font-mono break-all">{run.error_message}</div>
+              <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2.5 text-xs text-destructive space-y-2">
+                <div className="flex items-start gap-2">
+                  <AlertOctagon className="w-4 h-4 mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold">Job encerrado com erro</div>
+                    <div className="font-mono break-all">{run.error_message}</div>
+                    {autoRetryCount > 0 && (
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        Continuações automáticas usadas: {autoRetryCount}
+                      </div>
+                    )}
+                  </div>
                 </div>
+                {canResume && (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    disabled={resuming}
+                    onClick={resumeRun}
+                    className="gap-1.5"
+                    title="Retoma do último chat processado. Dedup por provider_msg_id garante que nada será duplicado."
+                  >
+                    {resuming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                    Retomar do último ponto
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {!run.error_message && canResume && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5 text-xs flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                  <Ban className="w-4 h-4" />
+                  Job {run.status === 'cancelled' ? 'cancelado' : 'interrompido'} em {run.chats_processed}/{run.chats_total} chats.
+                </div>
+                <Button size="sm" variant="default" disabled={resuming} onClick={resumeRun} className="gap-1.5">
+                  {resuming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                  Retomar
+                </Button>
               </div>
             )}
 
@@ -392,40 +425,79 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
                   <AlertOctagon className="w-4 h-4 text-amber-500" />
                   Itens com falha
                   <Badge variant="secondary" className="tabular-nums">{failedCount}</Badge>
+                  {failureGroups.length > 1 && (
+                    <span className="text-[10px] text-muted-foreground font-normal">
+                      · {failureGroups.length} motivos distintos
+                    </span>
+                  )}
                 </div>
                 <Button
                   size="sm"
                   variant={failedCount > 0 ? 'default' : 'outline'}
                   disabled={retrying || isRunning || failedCount === 0}
-                  onClick={runRetry}
+                  onClick={() => runRetry()}
                   className="gap-1.5"
                 >
                   {retrying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                  Reprocessar {failedCount > 0 ? `(${failedCount})` : ''}
+                  Reprocessar tudo {failedCount > 0 ? `(${failedCount})` : ''}
                 </Button>
               </div>
 
               {failedCount === 0 ? (
                 <div className="text-xs text-muted-foreground italic">Nenhuma falha registrada.</div>
               ) : (
-                <ScrollArea className="h-56 rounded-md border">
+                <ScrollArea className="h-72 rounded-md border">
                   <ul className="divide-y">
-                    {run.failed_items.map((f, i) => (
-                      <li key={i} className="p-2 text-[11px] space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-[10px]">
-                            {STAGE_LABEL[f.stage ?? ''] ?? f.stage ?? 'Falha'}
-                          </Badge>
-                          {f.phone && <span className="font-mono text-muted-foreground">{f.phone}</span>}
-                          {f.chat_id && !f.phone && <span className="font-mono text-muted-foreground truncate">{f.chat_id}</span>}
-                          <span className="ml-auto text-muted-foreground">{fmtDate(f.at ?? null)}</span>
-                        </div>
-                        <div className="text-destructive font-mono break-all">{f.reason}</div>
-                        {f.provider_msg_id && (
-                          <div className="text-muted-foreground font-mono truncate">msg: {f.provider_msg_id}</div>
-                        )}
-                      </li>
-                    ))}
+                    {failureGroups.map((g) => {
+                      const key = g.key;
+                      const expanded = !!expandedGroups[key];
+                      const stageLabel = STAGE_LABEL[g.stage] ?? g.stage;
+                      const busy = batchRetryingKey === key;
+                      return (
+                        <li key={key} className="p-2 space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedGroups((s) => ({ ...s, [key]: !expanded }))}
+                              className="flex items-center gap-1.5 text-left flex-1 min-w-0 hover:text-primary transition-colors"
+                            >
+                              {expanded ? <ChevronDown className="w-3.5 h-3.5 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
+                              <Badge variant="outline" className="text-[10px] shrink-0">{stageLabel}</Badge>
+                              <span className="text-[11px] text-destructive font-mono truncate flex-1">{g.reason}</span>
+                              <Badge variant="secondary" className="text-[10px] tabular-nums shrink-0">{g.items.length}</Badge>
+                            </button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy || isRunning || retrying}
+                              onClick={() => runRetry({ stage: g.stage, reason: g.reason, label: `${g.items.length} itens · ${stageLabel}` })}
+                              className="h-7 gap-1.5 text-[11px]"
+                              title="Reprocessa apenas os chats que falharam com este motivo."
+                            >
+                              {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                              Reprocessar este motivo
+                            </Button>
+                          </div>
+                          {expanded && (
+                            <ul className="pl-5 space-y-0.5">
+                              {g.items.slice(0, 50).map((f, i) => (
+                                <li key={i} className="text-[10px] flex items-center gap-2">
+                                  {f.phone && <span className="font-mono text-muted-foreground">{f.phone}</span>}
+                                  {f.chat_id && !f.phone && <span className="font-mono text-muted-foreground truncate max-w-[180px]">{f.chat_id}</span>}
+                                  {f.provider_msg_id && <span className="font-mono text-muted-foreground truncate max-w-[180px]">msg: {f.provider_msg_id}</span>}
+                                  <span className="ml-auto text-muted-foreground">{fmtDate(f.at ?? null)}</span>
+                                </li>
+                              ))}
+                              {g.items.length > 50 && (
+                                <li className="text-[10px] text-muted-foreground italic">
+                                  … +{g.items.length - 50} itens (exporte CSV para ver todos)
+                                </li>
+                              )}
+                            </ul>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </ScrollArea>
               )}
