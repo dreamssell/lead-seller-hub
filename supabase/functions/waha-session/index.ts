@@ -484,6 +484,8 @@ Deno.serve(async (req) => {
 
       try {
         for (const chat of chats) {
+          if (await checkCancel()) break;
+
           const chatIdRaw: string | undefined =
             (typeof chat?.id === "string" ? chat.id : chat?.id?._serialized) ||
             chat?.chatId || chat?.remoteJid;
@@ -506,7 +508,7 @@ Deno.serve(async (req) => {
             continue;
           }
 
-          // Upsert customer.
+          // Upsert customer (skipped entirely on dry-run — just count).
           let customerId: string | null = null;
           {
             const { data: existing } = await supabaseAdmin
@@ -514,6 +516,13 @@ Deno.serve(async (req) => {
               .eq("phone", phone).eq("owner_id", conn.owner_id).maybeSingle();
             if (existing?.id) {
               customerId = existing.id;
+            } else if (dryRun) {
+              // Count phone once — we won't create it, but need a sentinel id.
+              if (!wouldCreatePhones.has(phone)) {
+                wouldCreatePhones.add(phone);
+                customersCreated++;
+              }
+              customerId = "dry-run";
             } else {
               const displayName = (typeof chat?.name === "string" && chat.name.trim())
                 || (typeof chat?.pushname === "string" && chat.pushname.trim())
@@ -588,6 +597,12 @@ Deno.serve(async (req) => {
               .maybeSingle();
             if (dup) { skipped++; continue; }
 
+            if (dryRun) {
+              // Would insert — count, but do not write.
+              inserted++;
+              continue;
+            }
+
             const { error: msgErr } = await supabaseAdmin.from("chat_messages").insert({
               customer_id: customerId,
               sender_type: fromMe ? "agent" : "client",
@@ -616,8 +631,12 @@ Deno.serve(async (req) => {
           await updateProgress(false, chatLabel);
         }
 
+        const finalStatus = cancelRequested
+          ? "cancelled"
+          : (dryRun ? "completed_dry_run" : "completed");
+
         await supabaseAdmin.from("waha_import_runs").update({
-          status: "completed",
+          status: finalStatus,
           chats_processed: chatsSeen,
           current_chat_label: null,
           messages_considered: considered,
@@ -628,9 +647,12 @@ Deno.serve(async (req) => {
           finished_at: new Date().toISOString(),
         }).eq("id", runId);
 
-        await logEvent(action, "success", { run_id: runId, chatsSeen, considered, inserted, skipped, customersCreated, failed_count: failedItems.length });
+        await logEvent(action, cancelRequested ? "cancelled" : "success", {
+          run_id: runId, dry_run: dryRun, chatsSeen, considered, inserted, skipped, customersCreated, failed_count: failedItems.length,
+        });
         return json({
           ok: true, action, run_id: runId, connection_id: conn.id, owner_id: conn.owner_id,
+          dry_run: dryRun, cancelled: cancelRequested, status: finalStatus,
           chatsSeen, considered, inserted, skipped, customersCreated,
           failed_count: failedItems.length,
           failed_items: failedItems.slice(0, 10),
