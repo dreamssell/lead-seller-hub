@@ -33,7 +33,7 @@ import { MediaGallery } from '@/components/chat/MediaGallery';
 import { StarredMessagesPanel } from '@/components/chat/StarredMessagesPanel';
 import { AIInsightsPanel } from '@/components/chat/AIInsightsPanel';
 import { Customer360Timeline } from '@/components/chat/Customer360Timeline';
-import { InChatSearchBar } from '@/components/chat/InChatSearchBar';
+
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import type { WhatsAppConnection } from '@/components/whatsapp/types';
 
