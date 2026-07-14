@@ -19,12 +19,14 @@ export const WahaConfigSchema = z.object({
   session: z.string().min(1).default('default'),
   app_id: z.string().optional().default(''),
 
-  // Chatwoot-compat block (kept for parity with WAHA VPS panel)
+  // Chatwoot-compat block — OPTIONAL. Só é usado se o cliente também rodar o
+  // bridge Chatwoot; a maioria dos setups (backfill/simulação/mensageria pura)
+  // não precisa desses campos, portanto não bloqueamos o "Salvar".
   chatwoot_url: z.string().optional().default('https://app.chatwoot.com'),
-  chatwoot_account_id: z.string().min(1, 'Account ID obrigatório'),
-  chatwoot_account_token: z.string().min(1, 'Account Token obrigatório'),
-  chatwoot_inbox_id: z.string().min(1, 'Inbox ID obrigatório'),
-  chatwoot_inbox_identifier: z.string().min(1, 'Inbox Identifier obrigatório'),
+  chatwoot_account_id: z.string().optional().default(''),
+  chatwoot_account_token: z.string().optional().default(''),
+  chatwoot_inbox_id: z.string().optional().default(''),
+  chatwoot_inbox_identifier: z.string().optional().default(''),
 
   // Conversation behaviour
   conversation_behavior: WahaConversationBehavior.default('reuse_open'),
