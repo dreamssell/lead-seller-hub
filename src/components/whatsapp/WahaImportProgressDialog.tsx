@@ -123,7 +123,27 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
 
   const isRunning = run?.status === 'running' || run?.status === 'cancel_requested';
   const isDryRun = run?.params?.dry_run === true;
+  const canResume = run?.status === 'failed' || run?.status === 'cancelled';
+  const autoRetryCount = run?.params?.auto_retry_count ?? 0;
   const failedCount = run?.failed_items?.length ?? 0;
+
+  // Group failures by (stage, reason) so the user sees "5 chats falharam ao
+  // buscar mensagens (HTTP 502)" instead of a flat 500-line list. Groups are
+  // sorted by count desc; each group can be expanded and reprocessed alone.
+  const failureGroups = useMemo(() => {
+    const map = new Map<string, { stage: string; reason: string; items: WahaImportRun['failed_items'] }>();
+    for (const item of run?.failed_items ?? []) {
+      const stage = item.stage ?? 'unknown';
+      const reason = item.reason ?? '(sem motivo)';
+      const key = `${stage}::${reason}`;
+      const g = map.get(key) ?? { stage, reason, items: [] };
+      g.items.push(item);
+      map.set(key, g);
+    }
+    return Array.from(map.entries())
+      .map(([key, g]) => ({ key, ...g }))
+      .sort((a, b) => b.items.length - a.items.length);
+  }, [run?.failed_items]);
 
   const cancelRun = async () => {
     if (!runId) return;
