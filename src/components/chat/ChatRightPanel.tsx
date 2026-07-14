@@ -66,10 +66,23 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
   const [nameDraft, setNameDraft] = useState('');
   const [savingName, setSavingName] = useState(false);
 
+  // Nome: 2-120 chars, permite letras (acentos), números, espaços e . - ' _ & ( ) /
+  const NAME_REGEX = /^[\p{L}\p{N}\s.\-'_&()\/]+$/u;
+  const validateContactName = (raw: string): { ok: true; value: string } | { ok: false; message: string } => {
+    const value = raw.replace(/\s+/g, ' ').trim();
+    if (!value) return { ok: false, message: 'O nome não pode ficar vazio.' };
+    if (value.length < 2) return { ok: false, message: 'O nome deve ter pelo menos 2 caracteres.' };
+    if (value.length > 120) return { ok: false, message: 'O nome deve ter no máximo 120 caracteres.' };
+    if (/[<>{}\\`]/.test(value)) return { ok: false, message: 'O nome contém caracteres inválidos.' };
+    if (!NAME_REGEX.test(value)) return { ok: false, message: 'Use apenas letras, números e pontuação simples.' };
+    return { ok: true, value };
+  };
+
   const saveName = async () => {
-    const next = nameDraft.trim();
-    if (!next || next === customerName) { setEditingName(false); return; }
-    if (next.length > 120) { toast.error('Nome deve ter no máximo 120 caracteres.'); return; }
+    const check = validateContactName(nameDraft);
+    if (!check.ok) { toast.error(check.message); return; }
+    const next = check.value;
+    if (next === customerName) { setEditingName(false); return; }
     setSavingName(true);
     const { error } = await supabase.from('customers').update({ name: next } as any).eq('id', customerId);
     setSavingName(false);
