@@ -1012,8 +1012,21 @@ Deno.serve(async (req) => {
     },
   }).select('id').single();
   if (msgErr?.code === '23505') {
+    // Unique-violation on uaz_msg_id → we already inserted this exact provider
+    // message before (parallel webhook or a same-second retry). Log the hit so
+    // duplicated deliveries are traceable per (webhook, providerMsgId).
+    if (providerMsgId) {
+      await supabase.from('webhook_idempotency_hits').insert({
+        webhook_id: connectionId,
+        idempotency_key: `waha:msg:${providerMsgId}`,
+        source: 'waha-inbound',
+        reason: 'unique_violation_uaz_msg_id',
+        metadata: { event, session, from_me: fromMeFlag, phone, customer_id: customerId },
+      });
+    }
     return json({ ok: true, idempotent: true, message_id: providerMsgId, phone });
   }
+
   if (msgErr) return json({ error: 'message_insert_failed', detail: msgErr.message }, 500);
 
   if (eventLogId && insertedMsg?.id) {
