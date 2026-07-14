@@ -2,7 +2,7 @@
 // Standalone: does not import from UAZ/Evolution/Wavoip code. Safe to edit or
 // remove without impacting other providers.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Copy, Loader2, ExternalLink, Wifi, PlusCircle, Trash2, LogOut, ListRestart, DownloadCloud, FlaskConical } from 'lucide-react';
+import { Copy, Loader2, ExternalLink, Wifi, PlusCircle, Trash2, LogOut, ListRestart, DownloadCloud, FlaskConical, History, PlayCircle } from 'lucide-react';
 import { WahaConfigSchema, readWahaConfig, buildWahaWebhookUrl, type WahaConfig } from './wahaConfig';
 import { WahaImportProgressDialog } from './WahaImportProgressDialog';
 import type { WhatsAppConnection } from './types';
@@ -32,9 +32,37 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
   const [testing, setTesting] = useState(false);
   const [busyAction, setBusyAction] = useState<null | 'create' | 'delete' | 'logout' | 'list' | 'backfill' | 'simulate'>(null);
   const [remoteSessions, setRemoteSessions] = useState<any[] | null>(null);
-  const [backfillResult, setBackfillResult] = useState<null | { chatsSeen: number; inserted: number; skipped: number; customersCreated: number; dryRun: boolean }>(null);
+  const [backfillResult, setBackfillResult] = useState<null | { chatsSeen: number; inserted: number; skipped: number; customersCreated: number; dryRun: boolean; failedCount: number; runId: string | null }>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [showProgress, setShowProgress] = useState(false);
+  const [lastRun, setLastRun] = useState<null | { id: string; status: string; dry_run: boolean; started_at: string; inserted: number; chats: number; failed: number }>(null);
+
+  // Load latest run for this connection whenever the dialog opens so the user
+  // can revisit the last simulation/import without re-running anything.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('waha_import_runs')
+        .select('id,status,params,started_at,messages_inserted,chats_processed,failed_items')
+        .eq('connection_id', conn.id)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled || !data) return;
+      setLastRun({
+        id: data.id,
+        status: data.status,
+        dry_run: (data.params as any)?.dry_run === true,
+        started_at: data.started_at,
+        inserted: data.messages_inserted ?? 0,
+        chats: data.chats_processed ?? 0,
+        failed: Array.isArray(data.failed_items) ? data.failed_items.length : 0,
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [open, conn.id, showProgress]);
 
 
   const functionsBase = (import.meta as any).env?.VITE_SUPABASE_URL
@@ -194,6 +222,8 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
         skipped: data.skipped ?? 0,
         customersCreated: data.customersCreated ?? 0,
         dryRun,
+        failedCount: data.failed_count ?? 0,
+        runId: data.run_id ?? null,
       });
       const cancelledMsg = data.cancelled ? ' · CANCELADO' : '';
       toast.success(
@@ -407,14 +437,57 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
                 {busyAction === 'backfill' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DownloadCloud className="w-3.5 h-3.5" />}
                 Importar histórico do WAHA
               </Button>
+              {lastRun && (
+                <Button
+                  size="sm" variant="ghost"
+                  disabled={busyAction !== null}
+                  onClick={() => { setActiveRunId(lastRun.id); setShowProgress(true); }}
+                  className="gap-1"
+                  title="Reabre o último run com todos os números e falhas — sem reexecutar."
+                >
+                  <History className="w-3.5 h-3.5" />
+                  Ver último {lastRun.dry_run ? 'simulação' : 'import'} ({lastRun.inserted}/{lastRun.chats})
+                </Button>
+              )}
             </div>
             {backfillResult && (
-              <div className={`rounded-md border p-2 text-[11px] ${backfillResult.dryRun
-                ? 'border-sky-500/30 bg-sky-500/5 text-sky-700 dark:text-sky-400'
-                : 'border-teal-500/30 bg-teal-500/5 text-teal-700 dark:text-teal-400'}`}>
-                {backfillResult.dryRun ? 'Simulação concluída: ' : 'Importação concluída: '}
-                <b>{backfillResult.inserted}</b> mensagens {backfillResult.dryRun ? 'seriam importadas' : 'novas'} em {backfillResult.chatsSeen} chats
-                ({backfillResult.customersCreated} contatos {backfillResult.dryRun ? 'seriam criados' : 'criados'} · {backfillResult.skipped} ignorados por já existirem).
+              <div className={`rounded-md border p-3 text-[12px] space-y-2 ${backfillResult.dryRun
+                ? 'border-sky-500/30 bg-sky-500/5'
+                : 'border-teal-500/30 bg-teal-500/5'}`}>
+                <div className={`flex items-center gap-2 font-semibold ${backfillResult.dryRun ? 'text-sky-700 dark:text-sky-400' : 'text-teal-700 dark:text-teal-400'}`}>
+                  {backfillResult.dryRun ? <FlaskConical className="w-4 h-4" /> : <DownloadCloud className="w-4 h-4" />}
+                  {backfillResult.dryRun ? 'Resumo da simulação (nada foi gravado)' : 'Importação concluída'}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+                  <SummaryCell label={backfillResult.dryRun ? 'Seriam inseridas' : 'Inseridas'} value={backfillResult.inserted} strong />
+                  <SummaryCell label="Ignoradas (já existem)" value={backfillResult.skipped} />
+                  <SummaryCell label={backfillResult.dryRun ? 'Contatos novos previstos' : 'Contatos novos'} value={backfillResult.customersCreated} />
+                  <SummaryCell label="Chats analisados" value={backfillResult.chatsSeen} />
+                </div>
+                {backfillResult.failedCount > 0 && (
+                  <div className="text-[11px] text-amber-700 dark:text-amber-400">
+                    ⚠ {backfillResult.failedCount} item(ns) com falha — abra o detalhe para reprocessar.
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {backfillResult.runId && (
+                    <Button size="sm" variant="outline" className="gap-1"
+                      onClick={() => { setActiveRunId(backfillResult.runId); setShowProgress(true); }}>
+                      <History className="w-3.5 h-3.5" /> Ver detalhes e exportar CSV
+                    </Button>
+                  )}
+                  {backfillResult.dryRun && backfillResult.inserted > 0 && (
+                    <Button size="sm" className="gap-1"
+                      disabled={busyAction !== null}
+                      onClick={() => {
+                        if (window.confirm(`Confirmar a importação real de aproximadamente ${backfillResult.inserted} mensagens?`)) {
+                          runBackfillFromServer(false);
+                        }
+                      }}>
+                      <PlayCircle className="w-3.5 h-3.5" /> Iniciar importação real
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
             {remoteSessions && (
@@ -481,6 +554,15 @@ function ToggleField({ label, checked, onChange }: { label: string; checked: boo
     <div className="flex items-center justify-between rounded-md border border-border/50 px-3 py-2">
       <span className="text-xs">{label}</span>
       <Switch checked={checked} onCheckedChange={onChange} />
+    </div>
+  );
+}
+
+function SummaryCell({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
+  return (
+    <div className="rounded-md border border-border/50 bg-background/60 p-2">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className={`tabular-nums ${strong ? 'text-base font-bold text-foreground' : 'text-sm font-semibold text-foreground'}`}>{value}</div>
     </div>
   );
 }

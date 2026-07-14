@@ -11,9 +11,14 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, RefreshCw, AlertOctagon, CheckCircle2, XCircle, PlayCircle, StopCircle, FlaskConical, Ban } from 'lucide-react';
+import { Loader2, RefreshCw, AlertOctagon, CheckCircle2, XCircle, PlayCircle, StopCircle, FlaskConical, Ban, FileDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { downloadCsv } from '@/lib/ceoExport';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import type { WhatsAppConnection } from './types';
 
 export interface WahaImportRun {
@@ -119,7 +124,6 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
 
   const cancelRun = async () => {
     if (!runId) return;
-    if (!window.confirm('Cancelar a importação em andamento? O que já foi importado será mantido.')) return;
     setCancelling(true);
     const toastId = toast.loading('Solicitando cancelamento…');
     try {
@@ -137,6 +141,43 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
       setCancelling(false);
     }
   };
+
+  const exportCsv = () => {
+    if (!run) return;
+    const kind = isDryRun ? 'simulacao' : 'importacao';
+    const stamp = new Date(run.started_at).toISOString().slice(0, 19).replace(/[:T]/g, '-');
+
+    const stats = [{
+      run_id: run.id,
+      tipo: isDryRun ? 'Simulação (dry-run)' : 'Importação real',
+      status: run.status,
+      iniciado_em: fmtDate(run.started_at),
+      finalizado_em: fmtDate(run.finished_at),
+      chats_total: run.chats_total,
+      chats_processados: run.chats_processed,
+      mensagens_consideradas: run.messages_considered,
+      mensagens_inseridas: run.messages_inserted,
+      mensagens_ignoradas: run.messages_skipped,
+      contatos_criados: run.customers_created,
+      falhas: run.failed_items?.length ?? 0,
+      erro: run.error_message ?? '',
+    }];
+    downloadCsv(`waha-${kind}-${stamp}-stats.csv`, stats);
+
+    if (run.failed_items?.length) {
+      const failures = run.failed_items.map((f) => ({
+        estagio: STAGE_LABEL[f.stage ?? ''] ?? f.stage ?? '',
+        motivo: f.reason ?? '',
+        telefone: f.phone ?? '',
+        chat_id: f.chat_id ?? '',
+        provider_msg_id: f.provider_msg_id ?? '',
+        quando: fmtDate(f.at ?? null),
+      }));
+      downloadCsv(`waha-${kind}-${stamp}-falhas.csv`, failures);
+    }
+    toast.success('Relatório CSV gerado');
+  };
+
 
   const runRetry = async () => {
     if (!run || !runId) return;
@@ -216,22 +257,56 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
                   Atualmente: <span className="font-mono">{run.current_chat_label}</span>
                 </div>
               )}
-              {isRunning && (
-                <div className="flex justify-end pt-1">
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    disabled={cancelling || run?.status === 'cancel_requested'}
-                    onClick={cancelRun}
-                    className="gap-1.5"
-                  >
-                    {cancelling || run?.status === 'cancel_requested'
-                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      : <StopCircle className="w-3.5 h-3.5" />}
-                    {run?.status === 'cancel_requested' ? 'Cancelando…' : 'Cancelar importação'}
-                  </Button>
-                </div>
-              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={exportCsv}
+                  disabled={!run}
+                  className="gap-1.5"
+                  title="Baixa CSV com estatísticas e falhas deste run."
+                >
+                  <FileDown className="w-3.5 h-3.5" />
+                  Exportar CSV
+                </Button>
+                {isRunning && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        disabled={cancelling || run?.status === 'cancel_requested'}
+                        className="gap-1.5"
+                      >
+                        {cancelling || run?.status === 'cancel_requested'
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <StopCircle className="w-3.5 h-3.5" />}
+                        {run?.status === 'cancel_requested' ? 'Cancelando…' : 'Cancelar importação'}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Cancelar a importação em andamento?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          O job vai parar em segurança no próximo chat. Tudo que já foi importado
+                          será mantido no banco — apenas os chats ainda não processados serão
+                          ignorados. Você poderá rodar a importação novamente depois.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Continuar importando</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={cancelRun}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Sim, cancelar job
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </div>
+
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
