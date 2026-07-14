@@ -26,7 +26,8 @@ export function MediaGallery({ customerId }: Props) {
   const [rows, setRows] = useState<MediaRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('all');
-  const [open, setOpen] = useState<MediaItem | null>(null);
+  const [sortDesc, setSortDesc] = useState(true);
+  const [openIdx, setOpenIdx] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
