@@ -99,7 +99,7 @@ export function CustomerServiceHistory({ customerId }: Props) {
 
       const [{ data: cust }, leadsRes] = await Promise.all([
         (supabase as any).from('customers')
-          .select('name,created_at,created_by,source,channel')
+          .select('name,phone,created_at,created_by,source,channel')
           .eq('id', customerId).maybeSingle(),
         supabase.from('leads').select('id,name,source,channel,created_at,pipeline_id,created_by')
           .eq('customer_id', customerId),
