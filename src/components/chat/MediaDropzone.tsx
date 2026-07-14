@@ -219,6 +219,29 @@ export function MediaDropzone({
     };
   }, [active, addFiles]);
 
+  // Colar (Ctrl/⌘+V) — captura arquivos da área de transferência.
+  useEffect(() => {
+    if (!active) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items?.length) return;
+      const files: File[] = [];
+      for (const it of Array.from(items)) {
+        if (it.kind === 'file') {
+          const f = it.getAsFile();
+          if (f) files.push(f);
+        }
+      }
+      if (!files.length) return;
+      // Se o foco está num campo de texto e o usuário digitou texto (sem arquivos reais),
+      // não interceptar. Aqui já filtramos por kind==='file', então é seguro assumir.
+      e.preventDefault();
+      addFiles(files);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [active, addFiles]);
+
   // Sinal externo para abrir picker (fallback mobile)
   useEffect(() => {
     if (openSignal !== lastOpenSignal.current) {
