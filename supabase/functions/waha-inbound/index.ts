@@ -818,8 +818,9 @@ Deno.serve(async (req) => {
     });
   }
 
-  const pushName: string | null =
-    info?.PushName || webPayload?._data?.Info?.PushName || webPayload?.notifyName || null;
+  const pushName: string | null = fromMeFlag
+    ? null // don't overwrite contact name with our own device pushName
+    : (info?.PushName || webPayload?._data?.Info?.PushName || webPayload?.notifyName || null);
 
   // Upsert customer by phone under this owner.
   const { data: existingCustomer } = await supabase
