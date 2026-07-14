@@ -257,22 +257,56 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
                   Atualmente: <span className="font-mono">{run.current_chat_label}</span>
                 </div>
               )}
-              {isRunning && (
-                <div className="flex justify-end pt-1">
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    disabled={cancelling || run?.status === 'cancel_requested'}
-                    onClick={cancelRun}
-                    className="gap-1.5"
-                  >
-                    {cancelling || run?.status === 'cancel_requested'
-                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      : <StopCircle className="w-3.5 h-3.5" />}
-                    {run?.status === 'cancel_requested' ? 'Cancelando…' : 'Cancelar importação'}
-                  </Button>
-                </div>
-              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={exportCsv}
+                  disabled={!run}
+                  className="gap-1.5"
+                  title="Baixa CSV com estatísticas e falhas deste run."
+                >
+                  <FileDown className="w-3.5 h-3.5" />
+                  Exportar CSV
+                </Button>
+                {isRunning && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        disabled={cancelling || run?.status === 'cancel_requested'}
+                        className="gap-1.5"
+                      >
+                        {cancelling || run?.status === 'cancel_requested'
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <StopCircle className="w-3.5 h-3.5" />}
+                        {run?.status === 'cancel_requested' ? 'Cancelando…' : 'Cancelar importação'}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Cancelar a importação em andamento?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          O job vai parar em segurança no próximo chat. Tudo que já foi importado
+                          será mantido no banco — apenas os chats ainda não processados serão
+                          ignorados. Você poderá rodar a importação novamente depois.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Continuar importando</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={cancelRun}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Sim, cancelar job
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </div>
+
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
