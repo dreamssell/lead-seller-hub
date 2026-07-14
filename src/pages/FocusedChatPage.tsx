@@ -116,7 +116,12 @@ export default function FocusedChatPage() {
 
   // Load conversation list (customers with last message).
   const loadConvs = useCallback(async () => {
-    setLoading(true);
+    // Hidratação instantânea a partir do cache local (IndexedDB).
+    try {
+      const cached = await getCachedConvs<Conversation>(user?.id, 'whatsapp');
+      if (cached?.length) { setConvs(cached); setLoading(false); }
+      else setLoading(true);
+    } catch { setLoading(true); }
     const { data: customers } = await supabase
       .from('customers')
       .select('id,name,phone,avatar_url,presence,is_archived')
@@ -152,23 +157,42 @@ export default function FocusedChatPage() {
       .sort((a, b) => (b.last_at || '').localeCompare(a.last_at || ''));
     setConvs(list);
     setLoading(false);
-  }, []);
+    void setCachedConvs(user?.id, 'whatsapp', list);
+  }, [user?.id]);
 
   useEffect(() => { loadConvs(); }, [loadConvs]);
 
   // Load messages for selected conversation.
   const loadMessages = useCallback(async (cid: string) => {
-    const { data } = await supabase
+    // Hidratação instantânea via cache; delta fetch atualiza gradualmente.
+    const cached = await getCachedMessages<Msg>(user?.id, cid);
+    if (cached?.items?.length) {
+      setMsgs(cached.items);
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'auto' });
+      });
+    }
+    const deltaFrom = cached?.lastAt || null;
+    const base = supabase
       .from('chat_messages')
       .select('*')
       .eq('customer_id', cid)
       .order('created_at', { ascending: true })
       .limit(500);
-    setMsgs((data as Msg[]) || []);
+    const { data } = deltaFrom ? await base.gt('created_at', deltaFrom) : await base;
+    const fetched = (data as Msg[]) || [];
+    const merged: Msg[] = deltaFrom
+      ? [
+          ...(cached?.items || []),
+          ...fetched.filter(f => !(cached?.items || []).some((c: any) => c.id === f.id)),
+        ]
+      : fetched;
+    setMsgs(merged);
+    void setCachedMessages(user?.id, cid, merged);
     requestAnimationFrame(() => {
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'auto' });
     });
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!selected) return;
