@@ -4,9 +4,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Loader2, UserPlus, ArrowRightLeft, StickyNote, FileSignature,
-  MessageSquare, Layers, Sparkles, Clock, CheckCircle2, XCircle, Loader,
-  PhoneCall, PhoneIncoming, PhoneMissed, Send,
+  Loader2, ArrowRightLeft, StickyNote, FileSignature,
+  Layers, Clock, CheckCircle2, XCircle, Loader, Send, CheckSquare,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
