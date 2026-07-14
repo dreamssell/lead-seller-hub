@@ -741,11 +741,29 @@ export default function ChatPage() {
       });
       return false;
     }
-    const { data, error } = await supabase
+    // Hidratação instantânea a partir do cache local (IndexedDB): pinta a
+    // conversa imediatamente enquanto o fetch de rede roda em background.
+    const cached = await getCachedMessages<any>(activeOwnerIdRef.current, conversationId);
+    if (cached?.items?.length && conversationId === selectedConvIdRef.current) {
+      const hydratedCache = cached.items.map(hydrateChatMessage);
+      setMessages((prev) => applyConversationMessagesAfterSwitch({
+        currentConversationId: selectedConvIdRef.current,
+        requestedConversationId: conversationId,
+        previousMessages: prev,
+        loadedMessages: hydratedCache,
+      }));
+    }
+
+    // Delta fetch quando temos ponto de sincronização em cache; senão, full fetch.
+    const deltaFrom = cached?.lastAt || null;
+    const baseQuery = supabase
       .from('chat_messages')
       .select('*')
       .eq('customer_id', conversationId)
       .order('created_at', { ascending: true });
+    const { data, error } = deltaFrom
+      ? await baseQuery.gt('created_at', deltaFrom)
+      : await baseQuery;
     if (conversationId !== selectedConvIdRef.current) return false;
     if (error) {
       console.warn('loadMessages error', error);
