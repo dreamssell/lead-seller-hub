@@ -81,7 +81,7 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
 
   const saveName = async () => {
     const check = validateContactName(nameDraft);
-    if (!check.ok) { toast.error(check.message); return; }
+    if (check.ok === false) { toast.error(check.message); return; }
     const next = check.value;
     if (next === customerName) { setEditingName(false); return; }
     setSavingName(true);
