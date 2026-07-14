@@ -1,0 +1,1 @@
+UPDATE public.waha_import_runs SET status='failed', error_message='Job interrompido: a edge function excedeu o tempo limite da plataforma antes de concluir. Nenhuma mensagem já inserida foi perdida — use "Reprocessar" ou rode a importação novamente para continuar.', finished_at=NOW(), updated_at=NOW() WHERE id='3672f73e-3248-4d39-b346-105a74cef49a' AND status='running';
