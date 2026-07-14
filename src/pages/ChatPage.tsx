@@ -863,12 +863,18 @@ export default function ChatPage() {
             providers: summary.labels,
           });
 
+          // Sempre carrega o histórico de conversas — independente do status
+          // da conexão. A conexão em `connecting`/`offline` só impede envio de
+          // novas mensagens, mas o usuário precisa continuar vendo o
+          // ambiente do WhatsApp (contatos + histórico) normalmente.
           if (isConnected) {
             addDebugLog('info', `Status: ATIVO (${summary.labels.join(' + ')}). Iniciando carga de contatos.`);
             loadInboundPipelineDebug(summary.primary, activeOwnerId);
             triggerWahaInboundBackfill(summary.primary, activeOwnerId, 'provider_status_connected');
-            loadConversations(channel);
+          } else {
+            addDebugLog('info', `Status: ${summary.status}. Carregando histórico sem envio ativo.`);
           }
+          loadConversations(channel);
         } else if (channel === 'telegram') {
           // Mock Telegram connection validation
           addDebugLog('info', 'Validando conexão Telegram via API...');
