@@ -354,10 +354,46 @@ Deno.serve(async (req) => {
     // "Sem mensagens ainda" when the webhook missed delivery. Idempotent by
     // uaz_msg_id + (owner_id, phone), so it can be re-run safely and never
     // affects UAZ / Evolution / Wavoip data or the live inbound path.
+    // ─── cancel_run ────────────────────────────────────────────────────────
+    // Flags a running import so the backfill loop stops on its next check and
+    // marks the run as 'cancelled'. RLS on waha_import_runs already restricts
+    // this to owner / account admin / platform admin.
+    if (action === "cancel_run") {
+      const runId = String(body?.run_id ?? "").trim();
+      if (!runId) return json({ ok: false, error: "run_id_required" }, 400);
+      const { data: runRow } = await supabaseAdmin
+        .from("waha_import_runs")
+        .select("id, owner_id, status")
+        .eq("id", runId)
+        .maybeSingle();
+      if (!runRow) return json({ ok: false, error: "run_not_found" }, 404);
+      if (callerId && runRow.owner_id !== callerId) {
+        const { data: access } = await supabaseAdmin
+          .from("user_account_access")
+          .select("is_account_admin")
+          .eq("user_id", callerId)
+          .eq("owner_id", runRow.owner_id);
+        const isAcctAdmin = !!access?.some((a: any) => a.is_account_admin);
+        if (!isAcctAdmin) {
+          const { data: roles } = await supabaseAdmin
+            .from("user_roles").select("role").eq("user_id", callerId).eq("role", "admin");
+          if (!roles?.length) return json({ ok: false, error: "forbidden" });
+        }
+      }
+      if (runRow.status !== "running") {
+        return json({ ok: true, already: true, status: runRow.status });
+      }
+      await supabaseAdmin.from("waha_import_runs")
+        .update({ status: "cancel_requested" }).eq("id", runId);
+      await logEvent("cancel_run", "requested", { run_id: runId });
+      return json({ ok: true, run_id: runId, status: "cancel_requested" });
+    }
+
     if (action === "backfill_from_server" || action === "retry_failed") {
       if (!conn?.id) return json({ ok: false, error: "connection_required" }, 400);
       if (!base || !token || !sess) return json({ ok: false, error: "waha_credentials_missing" }, 400);
 
+      const dryRun: boolean = body?.dry_run === true;
       const chatLimit = Math.max(1, Math.min(500, Number(body?.chat_limit ?? 200)));
       const msgLimit = Math.max(1, Math.min(500, Number(body?.msg_limit ?? 100)));
       const onlyChatId: string | null = typeof body?.chat_id === "string" ? body.chat_id : null;
