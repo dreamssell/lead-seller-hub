@@ -226,7 +226,7 @@ Deno.serve(async (req) => {
             .select("is_account_admin, sub_company_id")
             .eq("user_id", callerId)
             .eq("owner_id", conn.owner_id);
-          const canUseBackfill = action === "backfill_inbound";
+          const canUseBackfill = action === "backfill_inbound" || action === "backfill_from_server";
           hasAccess = !!access?.some((a: any) =>
             (canUseBackfill || a.is_account_admin)
             && (a.sub_company_id === null || a.sub_company_id === conn.sub_company_id)
