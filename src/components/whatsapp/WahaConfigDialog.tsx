@@ -146,15 +146,15 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
     }
   };
 
-  const runBackfillFromServer = async () => {
+  const runBackfillFromServer = async (dryRun: boolean) => {
     if (!cfg.url || !cfg.token || !cfg.session)
       return toast.error('Preencha URL, API Key e Session Name antes.');
-    if (!window.confirm('Importar o histórico de conversas direto do servidor WAHA?\n\nApenas mensagens que ainda não existem aqui serão criadas. O fluxo ao vivo não é afetado.')) return;
-    setBusyAction('backfill');
+    if (!dryRun && !window.confirm('Importar o histórico de conversas direto do servidor WAHA?\n\nApenas mensagens que ainda não existem aqui serão criadas. O fluxo ao vivo não é afetado.')) return;
+    setBusyAction(dryRun ? 'simulate' : 'backfill');
     setBackfillResult(null);
     setActiveRunId(null);
     setShowProgress(true);
-    const toastId = toast.loading('Importando histórico do WAHA…');
+    const toastId = toast.loading(dryRun ? 'Simulando importação (nada será gravado)…' : 'Importando histórico do WAHA…');
     try {
       const invocation = supabase.functions.invoke('waha-session', {
         body: {
@@ -165,6 +165,7 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
           session: cfg.session,
           chat_limit: 300,
           msg_limit: 200,
+          dry_run: dryRun,
         },
       });
 
@@ -192,14 +193,21 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
         inserted: data.inserted ?? 0,
         skipped: data.skipped ?? 0,
         customersCreated: data.customersCreated ?? 0,
+        dryRun,
       });
-      toast.success(`${data.inserted ?? 0} mensagens importadas`, {
-        id: toastId,
-        description: `${data.chatsSeen ?? 0} chats analisados · ${data.customersCreated ?? 0} contatos novos · ${data.failed_count ?? 0} falhas`,
-      });
-      onSaved();
+      const cancelledMsg = data.cancelled ? ' · CANCELADO' : '';
+      toast.success(
+        dryRun
+          ? `Simulação: ${data.inserted ?? 0} mensagens seriam importadas${cancelledMsg}`
+          : `${data.inserted ?? 0} mensagens importadas${cancelledMsg}`,
+        {
+          id: toastId,
+          description: `${data.chatsSeen ?? 0} chats analisados · ${data.customersCreated ?? 0} contatos${dryRun ? ' seriam criados' : ' novos'} · ${data.failed_count ?? 0} falhas`,
+        },
+      );
+      if (!dryRun) onSaved();
     } catch (e: any) {
-      toast.error('Falha na importação', { id: toastId, description: e?.message ?? String(e) });
+      toast.error(dryRun ? 'Falha na simulação' : 'Falha na importação', { id: toastId, description: e?.message ?? String(e) });
     } finally {
       setBusyAction(null);
     }
