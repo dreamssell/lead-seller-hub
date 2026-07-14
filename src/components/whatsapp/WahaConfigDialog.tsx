@@ -222,6 +222,8 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
         skipped: data.skipped ?? 0,
         customersCreated: data.customersCreated ?? 0,
         dryRun,
+        failedCount: data.failed_count ?? 0,
+        runId: data.run_id ?? null,
       });
       const cancelledMsg = data.cancelled ? ' · CANCELADO' : '';
       toast.success(
