@@ -2655,6 +2655,16 @@ export default function ChatPage() {
                     <SearchCode className="w-4 h-4" />
                   </button>
                   <button
+                    onClick={() => {
+                      const url = selectedConvId ? `/chat/focus?c=${selectedConvId}` : '/chat/focus';
+                      window.open(url, '_blank', 'noopener,noreferrer');
+                    }}
+                    className="p-2 rounded-lg hover:bg-secondary text-muted-foreground"
+                    title="Abrir Modo Foco em nova aba"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </button>
+                  <button
                     onClick={() => setRightPanelOpen((v) => !v)}
                     className={`p-2 rounded-lg hover:bg-secondary ${rightPanelOpen ? 'bg-secondary text-primary' : 'text-muted-foreground'}`}
                     title="Notas internas, CRM e mídia"
