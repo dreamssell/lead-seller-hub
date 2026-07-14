@@ -261,11 +261,15 @@ export function CustomerServiceHistory({ customerId }: Props) {
       });
 
       // Ligações — formato pedido: "Ligação por WhatsApp · 00:40"
+      const seenCalls = new Set<string>();
       (calls.data || []).forEach((c: any) => {
+        if (seenCalls.has(c.id)) return;
+        seenCalls.add(c.id);
         const dur = formatDuration(c.duration_seconds || 0);
         const ch = ptChannel(c.channel) || 'Telefone';
-        const dir = ptDirection(c.direction) || '—';
+        const dir = ptDirection(c.direction);
         const st = ptCallStatus(c.status);
+        const parts = [who(c.user_id), dir, st, c.connection_label].filter(Boolean);
         arr.push({
           key: `call-${c.id}`,
           when: c.started_at,
@@ -274,9 +278,12 @@ export function CustomerServiceHistory({ customerId }: Props) {
             <div className="text-xs leading-relaxed">
               <p className="font-semibold">Ligação por {ch} · {dur}</p>
               <p className="text-[11px] text-muted-foreground">
-                <span className="font-medium text-foreground/90">{who(c.user_id)}</span> · {dir}
-                {st && ` · ${st}`}
-                {c.connection_label && ` · ${c.connection_label}`}
+                {parts.map((p, i) => (
+                  <span key={i}>
+                    {i === 0 ? <span className="font-medium text-foreground/90">{p}</span> : p}
+                    {i < parts.length - 1 && ' · '}
+                  </span>
+                ))}
               </p>
             </div>
           ),
