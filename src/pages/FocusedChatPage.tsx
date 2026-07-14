@@ -1,27 +1,31 @@
 /**
  * FocusedChatPage — ambiente premium standalone do WhatsApp.
  *
- * Objetivos:
- *  - Foco total na conversa: lista à esquerda (compacta), thread central em destaque,
- *    painel lateral direito colapsável por ferramenta escolhida no header.
- *  - Header com barra de ícones clicáveis (Info, Mídia, Fixadas, Estrelas, Busca,
- *    Notas, 360, IA) — cada um alterna o conteúdo do painel direito.
- *  - Realtime: atualização em segundo plano via Postgres Changes, sem reload.
- *  - Reutiliza componentes já existentes do /chat sem alterá-los, garantindo
- *    zero regressão no fluxo principal.
+ * Recursos adicionados nesta iteração:
+ *  - Painel lateral direito persistido na URL (?tool=...) — sobrevive a reload.
+ *  - Marcação automática de "lido" ao abrir uma conversa, com sincronização
+ *    entre múltiplas abas (BroadcastChannel + storage). Contadores de não-lidas
+ *    são recomputados a partir do último timestamp lido.
+ *  - Paginação sob demanda + virtualização (@tanstack/react-virtual) do
+ *    histórico de mensagens: apenas as últimas N mensagens são carregadas
+ *    inicialmente; ao rolar para o topo, páginas anteriores são buscadas.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   MessageCircle, Search, Info, Images, Pin, Star, StickyNote,
-  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check,
+  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2,
 } from 'lucide-react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { supabase } from '@/integrations/supabase/client';
 import {
   getCachedConvs, setCachedConvs,
   getCachedMessages, setCachedMessages,
 } from '@/lib/chatCache';
+import {
+  getAllLastReads, getLastRead, markRead, subscribeReadEvents,
+} from '@/lib/chatReadTracker';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -42,6 +46,11 @@ import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import type { WhatsAppConnection } from '@/components/whatsapp/types';
 
 type Tool = null | 'info' | 'media' | 'pinned' | 'starred' | 'notes' | 'ai' | 'timeline';
+const VALID_TOOLS: ReadonlyArray<Exclude<Tool, null>> =
+  ['info', 'media', 'pinned', 'starred', 'notes', 'ai', 'timeline'];
+
+/** Página inicial do histórico e tamanho de cada lote de mensagens antigas. */
+const PAGE_SIZE = 60;
 
 interface Conversation {
   id: string;
@@ -80,10 +89,22 @@ function formatTime(iso: string | null) {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
 
+function computeUnread(latestAt: string | null, lastRead: string | null): number {
+  // Aproximação leve: exibimos "1+" quando há mensagem posterior à última leitura,
+  // e 0 caso contrário. O contador exato por número absoluto é calculado no
+  // fetch inicial da lista (a partir das últimas mensagens já carregadas).
+  if (!latestAt) return 0;
+  if (!lastRead) return 1;
+  return latestAt > lastRead ? 1 : 0;
+}
+
 export default function FocusedChatPage() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
   const initialConv = params.get('c');
+  const initialToolParam = params.get('tool');
+  const initialTool: Tool = (VALID_TOOLS as ReadonlyArray<string>).includes(initialToolParam || '')
+    ? (initialToolParam as Tool) : null;
 
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [filter, setFilter] = useState('');
@@ -93,8 +114,11 @@ export default function FocusedChatPage() {
   const [conn, setConn] = useState<WhatsAppConnection | null>(null);
   const [connOnline, setConnOnline] = useState(false);
   const [composerText, setComposerText] = useState('');
-  const [tool, setTool] = useState<Tool>(null);
+  const [tool, setTool] = useState<Tool>(initialTool);
+  const [olderLoading, setOlderLoading] = useState(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const keepScrollAnchor = useRef<{ prevHeight: number; prevTop: number } | null>(null);
 
   const selectedConv = useMemo(() => convs.find(c => c.id === selected) || null, [convs, selected]);
 
@@ -116,11 +140,15 @@ export default function FocusedChatPage() {
 
   // Load conversation list (customers with last message).
   const loadConvs = useCallback(async () => {
+    const reads = getAllLastReads(user?.id);
     // Hidratação instantânea a partir do cache local (IndexedDB).
     try {
       const cached = await getCachedConvs<Conversation>(user?.id, 'whatsapp');
-      if (cached?.length) { setConvs(cached); setLoading(false); }
-      else setLoading(true);
+      if (cached?.length) {
+        const hydrated = cached.map(c => ({ ...c, unread: computeUnread(c.last_at, reads[c.id] || null) }));
+        setConvs(hydrated);
+        setLoading(false);
+      } else setLoading(true);
     } catch { setLoading(true); }
     const { data: customers } = await supabase
       .from('customers')
@@ -152,7 +180,7 @@ export default function FocusedChatPage() {
         presence: c.presence,
         last_message: lastByCustomer.get(c.id)?.content?.slice(0, 80) || 'Sem mensagem ainda',
         last_at: lastByCustomer.get(c.id)?.created_at || null,
-        unread: 0,
+        unread: computeUnread(lastByCustomer.get(c.id)?.created_at || null, reads[c.id] || null),
       }))
       .sort((a, b) => (b.last_at || '').localeCompare(a.last_at || ''));
     setConvs(list);
@@ -162,43 +190,95 @@ export default function FocusedChatPage() {
 
   useEffect(() => { loadConvs(); }, [loadConvs]);
 
-  // Load messages for selected conversation.
+  // Load messages (last PAGE_SIZE) for selected conversation.
   const loadMessages = useCallback(async (cid: string) => {
+    setHasMoreOlder(true);
     // Hidratação instantânea via cache; delta fetch atualiza gradualmente.
     const cached = await getCachedMessages<Msg>(user?.id, cid);
     if (cached?.items?.length) {
-      setMsgs(cached.items);
+      const tail = cached.items.slice(-PAGE_SIZE);
+      setMsgs(tail);
       requestAnimationFrame(() => {
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'auto' });
       });
+    } else {
+      setMsgs([]);
     }
-    const deltaFrom = cached?.lastAt || null;
-    const base = supabase
+    // Busca as N mais recentes por padrão (order desc + reverse).
+    const { data: latest } = await supabase
       .from('chat_messages')
       .select('*')
       .eq('customer_id', cid)
-      .order('created_at', { ascending: true })
-      .limit(500);
-    const { data } = deltaFrom ? await base.gt('created_at', deltaFrom) : await base;
-    const fetched = (data as Msg[]) || [];
-    const merged: Msg[] = deltaFrom
-      ? [
-          ...(cached?.items || []),
-          ...fetched.filter(f => !(cached?.items || []).some((c: any) => c.id === f.id)),
-        ]
-      : fetched;
-    setMsgs(merged);
+      .order('created_at', { ascending: false })
+      .limit(PAGE_SIZE);
+    const fetched = ((latest as Msg[]) || []).slice().reverse();
+    if (fetched.length < PAGE_SIZE) setHasMoreOlder(false);
+    setMsgs(fetched);
+    // Cache com o histórico já conhecido (mescla mantendo únicos).
+    const prev = cached?.items || [];
+    const byId = new Map<string, Msg>();
+    [...prev, ...fetched].forEach(m => byId.set(m.id, m));
+    const merged = Array.from(byId.values()).sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
     void setCachedMessages(user?.id, cid, merged);
     requestAnimationFrame(() => {
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'auto' });
     });
+    // Marca como lida ao abrir.
+    const last = fetched[fetched.length - 1];
+    if (last) markRead(user?.id, cid, last.created_at);
   }, [user?.id]);
+
+  // Carrega uma página anterior (mensagens mais antigas) sob demanda.
+  const loadOlder = useCallback(async () => {
+    if (!selected || olderLoading || !hasMoreOlder || !msgs.length) return;
+    setOlderLoading(true);
+    const oldest = msgs[0]?.created_at;
+    if (!oldest) { setOlderLoading(false); return; }
+    // Preserva a posição visual do usuário depois de prepend.
+    const el = scrollRef.current;
+    keepScrollAnchor.current = el
+      ? { prevHeight: el.scrollHeight, prevTop: el.scrollTop }
+      : null;
+    const { data } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('customer_id', selected)
+      .lt('created_at', oldest)
+      .order('created_at', { ascending: false })
+      .limit(PAGE_SIZE);
+    const older = ((data as Msg[]) || []).slice().reverse();
+    if (older.length < PAGE_SIZE) setHasMoreOlder(false);
+    if (older.length) {
+      setMsgs(prev => {
+        const ids = new Set(prev.map(p => p.id));
+        return [...older.filter(o => !ids.has(o.id)), ...prev];
+      });
+    }
+    setOlderLoading(false);
+  }, [selected, olderLoading, hasMoreOlder, msgs]);
 
   useEffect(() => {
     if (!selected) return;
     loadMessages(selected);
-    if (initialConv !== selected) setParams({ c: selected }, { replace: true });
-  }, [selected, loadMessages, initialConv, setParams]);
+    // Persiste conversa e ferramenta na URL para sobreviver a reload.
+    setParams((prev) => {
+      const p = new URLSearchParams(prev);
+      p.set('c', selected);
+      return p;
+    }, { replace: true });
+    // Zera unread local ao abrir.
+    setConvs(prev => prev.map(c => c.id === selected ? { ...c, unread: 0 } : c));
+  }, [selected, loadMessages, setParams]);
+
+  // Persiste a ferramenta ativa na URL.
+  useEffect(() => {
+    setParams((prev) => {
+      const p = new URLSearchParams(prev);
+      if (tool) p.set('tool', tool);
+      else p.delete('tool');
+      return p;
+    }, { replace: true });
+  }, [tool, setParams]);
 
   // Realtime: new/updated messages arrive silently in background.
   useEffect(() => {
@@ -209,6 +289,7 @@ export default function FocusedChatPage() {
         { event: 'INSERT', schema: 'public', table: 'chat_messages' },
         (payload) => {
           const m = payload.new as Msg;
+          const isOpen = selected === m.customer_id;
           setConvs(prev => {
             const idx = prev.findIndex(c => c.id === m.customer_id);
             if (idx === -1) return prev;
@@ -217,13 +298,14 @@ export default function FocusedChatPage() {
               ...next[idx],
               last_message: (m.content || '').slice(0, 80),
               last_at: m.created_at,
-              unread: selected === m.customer_id ? 0 : next[idx].unread + (m.sender_type === 'client' ? 1 : 0),
+              unread: isOpen ? 0 : next[idx].unread + (m.sender_type === 'client' ? 1 : 0),
             };
             next.sort((a, b) => (b.last_at || '').localeCompare(a.last_at || ''));
             return next;
           });
-          if (m.customer_id === selected) {
+          if (isOpen) {
             setMsgs(prev => (prev.some(x => x.id === m.id) ? prev : [...prev, m]));
+            markRead(user.id, m.customer_id, m.created_at);
             requestAnimationFrame(() => {
               scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
             });
@@ -239,6 +321,16 @@ export default function FocusedChatPage() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user, selected]);
+
+  // Sincroniza contadores de não-lidas entre abas (BroadcastChannel + storage).
+  useEffect(() => {
+    return subscribeReadEvents((e) => {
+      if (e.ownerId !== user?.id) return;
+      setConvs(prev => prev.map(c =>
+        c.id === e.customerId ? { ...c, unread: computeUnread(c.last_at, e.readAt) } : c,
+      ));
+    });
+  }, [user?.id]);
 
   const handleSend = async (text: string) => {
     if (!selected || !conn) {
@@ -276,6 +368,8 @@ export default function FocusedChatPage() {
         .eq('client_msg_id', clientId);
       setMsgs(prev => prev.map(m => m.client_msg_id === clientId
         ? { ...m, uaz_msg_id: providerId, metadata: { status: 'sent' } } : m));
+      // Sua própria mensagem também zera a "não-lida".
+      markRead(user?.id, selected, new Date().toISOString());
     } catch (err: any) {
       setMsgs(prev => prev.map(m => m.client_msg_id === clientId
         ? { ...m, metadata: { status: 'error', error: err?.message } } : m));
@@ -305,6 +399,34 @@ export default function FocusedChatPage() {
   ];
 
   const toggleTool = (t: Tool) => setTool(prev => (prev === t ? null : t));
+
+  // ---- Virtualização do histórico ------------------------------------------
+  const virtualizer = useVirtualizer({
+    count: msgs.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 72,
+    overscan: 8,
+    getItemKey: (i) => msgs[i]?.id ?? i,
+  });
+
+  // Ao carregar mensagens antigas (prepend), preserva a posição visual do usuário.
+  useEffect(() => {
+    if (!keepScrollAnchor.current || !scrollRef.current) return;
+    const el = scrollRef.current;
+    const { prevHeight, prevTop } = keepScrollAnchor.current;
+    const delta = el.scrollHeight - prevHeight;
+    if (delta > 0) el.scrollTop = prevTop + delta;
+    keepScrollAnchor.current = null;
+  }, [msgs.length]);
+
+  // Rolagem próxima ao topo → carrega página anterior automaticamente.
+  const onMessagesScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollTop < 120 && hasMoreOlder && !olderLoading) {
+      void loadOlder();
+    }
+  };
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -429,42 +551,82 @@ export default function FocusedChatPage() {
                   </div>
                 </div>
 
-                {/* Messages */}
+                {/* Messages (virtualizadas) */}
                 <div
                   ref={scrollRef}
-                  className="flex-1 overflow-y-auto px-6 py-4 space-y-2 bg-gradient-to-b from-background to-secondary/20"
+                  onScroll={onMessagesScroll}
+                  className="flex-1 overflow-y-auto px-6 py-4 bg-gradient-to-b from-background to-secondary/20"
                 >
+                  {/* Topo: indicador de carregamento de mensagens antigas */}
+                  <div className="h-8 flex items-center justify-center text-[11px] text-muted-foreground">
+                    {olderLoading ? (
+                      <span className="inline-flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin" /> Carregando anteriores…</span>
+                    ) : hasMoreOlder && msgs.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => void loadOlder()}
+                        className="underline decoration-dotted underline-offset-4 hover:text-foreground"
+                      >
+                        Carregar mensagens antigas
+                      </button>
+                    ) : msgs.length > 0 ? (
+                      <span>Início da conversa</span>
+                    ) : null}
+                  </div>
+
                   {msgs.length === 0 ? (
                     <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
                       Nenhuma mensagem ainda — envie a primeira.
                     </div>
-                  ) : msgs.map(m => {
-                    const isMe = m.sender_type !== 'client';
-                    const status = m.metadata?.status;
-                    return (
-                      <div key={m.id} className={cn('flex', isMe ? 'justify-end' : 'justify-start')}>
-                        <div
-                          className={cn(
-                            'max-w-[68%] px-3.5 py-2 rounded-2xl shadow-sm text-sm whitespace-pre-wrap break-words',
-                            isMe
-                              ? 'bg-primary text-primary-foreground rounded-br-sm'
-                              : 'bg-card border border-border rounded-bl-sm',
-                          )}
-                        >
-                          <div>{renderWhatsAppText(m.content || '')}</div>
-                          <div className={cn(
-                            'flex items-center gap-1 mt-1 text-[10px] opacity-70',
-                            isMe ? 'justify-end' : 'justify-start',
-                          )}>
-                            <span>{formatTime(m.created_at)}</span>
-                            {isMe && status === 'sent' && <CheckCheck className="w-3 h-3" />}
-                            {isMe && status === 'sending' && <Check className="w-3 h-3" />}
-                            {isMe && status === 'error' && <span className="text-destructive">falhou</span>}
+                  ) : (
+                    <div
+                      style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}
+                    >
+                      {virtualizer.getVirtualItems().map((vi) => {
+                        const m = msgs[vi.index];
+                        if (!m) return null;
+                        const isMe = m.sender_type !== 'client';
+                        const status = m.metadata?.status;
+                        return (
+                          <div
+                            key={vi.key}
+                            data-index={vi.index}
+                            ref={virtualizer.measureElement}
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              width: '100%',
+                              transform: `translateY(${vi.start}px)`,
+                              paddingBottom: 8,
+                            }}
+                          >
+                            <div className={cn('flex', isMe ? 'justify-end' : 'justify-start')}>
+                              <div
+                                className={cn(
+                                  'max-w-[68%] px-3.5 py-2 rounded-2xl shadow-sm text-sm whitespace-pre-wrap break-words',
+                                  isMe
+                                    ? 'bg-primary text-primary-foreground rounded-br-sm'
+                                    : 'bg-card border border-border rounded-bl-sm',
+                                )}
+                              >
+                                <div>{renderWhatsAppText(m.content || '')}</div>
+                                <div className={cn(
+                                  'flex items-center gap-1 mt-1 text-[10px] opacity-70',
+                                  isMe ? 'justify-end' : 'justify-start',
+                                )}>
+                                  <span>{formatTime(m.created_at)}</span>
+                                  {isMe && status === 'sent' && <CheckCheck className="w-3 h-3" />}
+                                  {isMe && status === 'sending' && <Check className="w-3 h-3" />}
+                                  {isMe && status === 'error' && <span className="text-destructive">falhou</span>}
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {/* Composer */}
