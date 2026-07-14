@@ -947,7 +947,20 @@ export default function ChatPage() {
         setAuthValidation({ valid: false, reason: accessLoading ? 'Resolvendo owner ativo…' : 'Owner ativo não resolvido. Atualize o access antes de consultar mensagens.', loading: accessLoading });
         return;
       }
-      
+
+      // Hidratação instantânea: pinta a lista de conversas a partir do cache
+      // local antes do fetch de rede — carregamento parece imediato ao voltar.
+      try {
+        const cachedConvs = await getCachedConvs<any>(activeOwnerId, channel);
+        if (cachedConvs?.length) {
+          setConvs(prev => {
+            const next = { ...prev, [channel]: cachedConvs };
+            convsRef.current = next;
+            return next;
+          });
+        }
+      } catch {}
+
       const { data: customers, error } = await supabase
         .from('customers')
         .select('*')
