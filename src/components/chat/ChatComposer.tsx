@@ -137,6 +137,7 @@ export function ChatComposer({
 
   const submit = async () => {
     if (sending || disabled) return;
+    setFmtOpen(false);
     if (attachment && onSendMedia) {
       setSending(true);
       try { await onSendMedia(attachment, withSignature(caption || text)); resetAfterSend(); }
@@ -157,6 +158,24 @@ export function ChatComposer({
     setAttachment((a) => { if (a?.previewUrl) URL.revokeObjectURL(a.previewUrl); return null; });
   };
 
+  const wrapFormat = (fmt: 'bold' | 'italic' | 'strike' | 'mono') => {
+    const ta = taRef.current;
+    if (!ta) return;
+    const map = { bold: '*', italic: '_', strike: '~', mono: '`' } as const;
+    const c = map[fmt];
+    const s = ta.selectionStart ?? text.length;
+    const e = ta.selectionEnd ?? text.length;
+    const before = text.slice(0, s);
+    const sel = text.slice(s, e) || (fmt === 'bold' ? 'negrito' : fmt === 'italic' ? 'itálico' : fmt === 'strike' ? 'tachado' : 'código');
+    const after = text.slice(e);
+    onChangeText(`${before}${c}${sel}${c}${after}`);
+    requestAnimationFrame(() => {
+      ta.focus();
+      const ns = before.length + c.length;
+      ta.setSelectionRange(ns, ns + sel.length);
+    });
+  };
+
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Etapa 9 — navegação da lista de /atalhos
     if (slashOpen) {
@@ -167,11 +186,21 @@ export function ChatComposer({
       }
       if (e.key === 'Escape') { e.preventDefault(); setSlashOpen(false); return; }
     }
+    // Atalhos de formatação (Ctrl/Cmd + B/I/S/M)
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && !e.shiftKey && !e.altKey) {
+      const k = e.key.toLowerCase();
+      if (k === 'b') { e.preventDefault(); wrapFormat('bold'); return; }
+      if (k === 'i') { e.preventDefault(); wrapFormat('italic'); return; }
+      if (k === 's') { e.preventDefault(); wrapFormat('strike'); return; }
+      if (k === 'm') { e.preventDefault(); wrapFormat('mono'); return; }
+    }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); return; }
     if (e.key === 'Escape') {
       if (attachment) { resetAfterSend(); }
     }
   };
+
 
   const variables = { nome: contactName || '', empresa: 'Lead Seller' };
 
