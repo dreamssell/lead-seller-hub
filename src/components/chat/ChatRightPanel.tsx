@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { StickyNote, Zap, Loader2, Trash2, Plus, X, Send, History as HistoryIcon, Layers, Images, Phone, Mail, MapPin, IdCard, Copy, Video, MessageSquare, Paperclip, Mic, Ban, ShieldCheck, CheckCircle2, RefreshCw, Info, Archive, BellOff, Bell, Tag, Check, Clock, Pencil } from 'lucide-react';
+import { StickyNote, Zap, Loader2, Trash2, Plus, X, Send, History as HistoryIcon, Layers, Images, Phone, Mail, MapPin, IdCard, Copy, Video, MessageSquare, Paperclip, Mic, Ban, ShieldCheck, CheckCircle2, RefreshCw, Info, Archive, BellOff, Bell, Tag, Check, Clock, Pencil, Star } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import { toast as sonnerToast } from 'sonner';
@@ -19,6 +19,7 @@ import { Customer360Timeline } from './Customer360Timeline';
 import { AIInsightsPanel } from './AIInsightsPanel';
 import { Sparkles } from 'lucide-react';
 import { MediaGallery } from './MediaGallery';
+import { StarredMessagesPanel } from './StarredMessagesPanel';
 
 
 interface Note {
@@ -45,7 +46,7 @@ interface Props {
 }
 
 export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }: Props) {
-  const [tab, setTab] = useState<'notes' | 'replies' | 'history' | 'crm' | 'media'>('crm');
+  const [tab, setTab] = useState<'notes' | 'replies' | 'history' | 'crm' | 'media' | 'starred'>('crm');
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [profile, setProfile] = useState<{ phone?: string; email?: string; company?: string; channel?: string; created_at?: string; avatar_url?: string | null; address?: string; document?: string; profile_about?: string | null; is_blocked?: boolean; has_whatsapp?: boolean | null; profile_synced_at?: string | null; origin_connection_id?: string | null; is_archived?: boolean; is_muted?: boolean; muted_until?: string | null; label_ids?: string[] } | null>(null);
   const [avatarBroken, setAvatarBroken] = useState(false);
@@ -689,7 +690,7 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
 
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="flex-1 flex flex-col">
-        <TabsList className="grid grid-cols-6 mx-3 mt-3">
+        <TabsList className="grid grid-cols-7 mx-3 mt-3">
 
           <TabsTrigger value="notes" className="gap-1 text-[10px] px-1" title="Notas">
             <StickyNote className="w-3.5 h-3.5" />
@@ -705,6 +706,9 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
           </TabsTrigger>
           <TabsTrigger value="media" className="gap-1 text-[10px] px-1" title="Galeria de mídias">
             <Images className="w-3.5 h-3.5" />
+          </TabsTrigger>
+          <TabsTrigger value="starred" className="gap-1 text-[10px] px-1" title="Mensagens favoritas">
+            <Star className="w-3.5 h-3.5" />
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-1 text-[10px] px-1" title="Histórico de atendimento">
             <HistoryIcon className="w-3.5 h-3.5" />
@@ -840,6 +844,10 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
 
         <TabsContent value="media" className="flex-1 flex flex-col mt-3 px-3 pb-3 data-[state=inactive]:hidden">
           <MediaGallery customerId={customerId} />
+        </TabsContent>
+
+        <TabsContent value="starred" className="flex-1 flex flex-col mt-3 px-3 pb-3 data-[state=inactive]:hidden">
+          <StarredMessagesPanel customerId={customerId} />
         </TabsContent>
 
         <TabsContent value="history" className="flex-1 flex flex-col mt-3 px-3 pb-3 data-[state=inactive]:hidden">

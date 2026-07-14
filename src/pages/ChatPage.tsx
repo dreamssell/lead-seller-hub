@@ -5,7 +5,8 @@ import {
   Send, Paperclip, Phone, Video, MoreVertical, Search, Circle,
   Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Settings,
   Database, Activity, ShieldAlert, Wifi, WifiOff, Terminal, ChevronDown, ChevronUp, History as HistoryIcon, Bug, Play, Share2,
-  FileDown, Filter, Calendar, Clock, Loader2, X, AlertTriangle, Check, SmilePlus, Reply, Pencil, Trash2, Forward as ForwardIcon
+  FileDown, Filter, Calendar, Clock, Loader2, X, AlertTriangle, Check, SmilePlus, Reply, Pencil, Trash2, Forward as ForwardIcon,
+  Pin, PinOff, Star, StarOff, SearchCode
 } from 'lucide-react';
 import {
   Popover,
@@ -44,6 +45,8 @@ import { MediaDropzone } from '@/components/chat/MediaDropzone';
 import { KeyboardShortcutsHelp } from '@/components/chat/KeyboardShortcutsHelp';
 import { useChatShortcuts } from '@/hooks/useChatShortcuts';
 import { renderWhatsAppText } from '@/lib/whatsappFormat';
+import { InChatSearchBar } from '@/components/chat/InChatSearchBar';
+import { PinnedMessagesBar, type PinnedItem } from '@/components/chat/PinnedMessagesBar';
 import { CollaborationBar } from '@/components/chat/CollaborationBar';
 import { WhisperFeed } from '@/components/chat/WhisperFeed';
 import { SupervisorBanner } from '@/components/chat/SupervisorBanner';
@@ -455,6 +458,126 @@ export default function ChatPage() {
   const [editTarget, setEditTarget] = useState<any | null>(null);
   const [editText, setEditText] = useState('');
   useEffect(() => { setReplyingTo(null); setForwardTarget(null); setEditTarget(null); }, [selectedConvId]);
+
+  // Etapa 8 — busca dentro da conversa (Ctrl/Cmd+F)
+  const [inChatSearchOpen, setInChatSearchOpen] = useState(false);
+  const [inChatSearchQuery, setInChatSearchQuery] = useState('');
+  const [inChatSearchIndex, setInChatSearchIndex] = useState(0);
+  const inChatMatches = useMemo(() => {
+    const q = inChatSearchQuery.trim().toLowerCase();
+    if (!q) return [] as string[];
+    return messages
+      .filter((m: any) => (m.content || '').toLowerCase().includes(q))
+      .map((m: any) => m.uaz_msg_id || m.id);
+  }, [inChatSearchQuery, messages]);
+  useEffect(() => { setInChatSearchIndex(0); }, [inChatSearchQuery]);
+  useEffect(() => { setInChatSearchOpen(false); setInChatSearchQuery(''); }, [selectedConvId]);
+  useEffect(() => {
+    const id = inChatMatches[inChatSearchIndex];
+    if (!id) return;
+    const el = document.querySelector(`[data-msg-id="${id}"]`) as HTMLElement | null;
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [inChatSearchIndex, inChatMatches]);
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f' && selectedConvId) {
+        e.preventDefault();
+        setInChatSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedConvId]);
+
+  // Etapa 8 — mensagens fixadas na conversa atual (visíveis para toda a equipe)
+  const [pinnedItems, setPinnedItems] = useState<PinnedItem[]>([]);
+  const pinnedIds = useMemo(() => new Set(pinnedItems.map((p) => p.message_id)), [pinnedItems]);
+  useEffect(() => {
+    if (!selectedConvId) { setPinnedItems([]); return; }
+    let cancelled = false;
+    const load = async () => {
+      const { data } = await supabase
+        .from('chat_pinned_messages')
+        .select('id, message_id, created_at, chat_messages(content, sender_type, created_at)')
+        .eq('customer_id', selectedConvId)
+        .order('created_at', { ascending: false });
+      if (cancelled) return;
+      setPinnedItems(
+        ((data as any[]) || []).map((r) => ({
+          pin_id: r.id,
+          message_id: r.message_id,
+          content: r.chat_messages?.content ?? null,
+          sender_type: r.chat_messages?.sender_type ?? 'client',
+          created_at: r.chat_messages?.created_at ?? r.created_at,
+          pinned_at: r.created_at,
+        })),
+      );
+    };
+    load();
+    const ch = supabase
+      .channel(`pinned-${selectedConvId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_pinned_messages', filter: `customer_id=eq.${selectedConvId}` }, () => load())
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(ch); };
+  }, [selectedConvId]);
+
+  // Etapa 8 — favoritas do próprio atendente na conversa atual
+  const [starredIds, setStarredIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!selectedConvId || !currentUserId) { setStarredIds(new Set()); return; }
+    let cancelled = false;
+    const load = async () => {
+      const { data } = await supabase
+        .from('chat_starred_messages')
+        .select('message_id')
+        .eq('customer_id', selectedConvId)
+        .eq('user_id', currentUserId);
+      if (cancelled) return;
+      setStarredIds(new Set(((data as any[]) || []).map((r) => r.message_id)));
+    };
+    load();
+    const ch = supabase
+      .channel(`starred-${selectedConvId}-${currentUserId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_starred_messages', filter: `customer_id=eq.${selectedConvId}` }, () => load())
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(ch); };
+  }, [selectedConvId, currentUserId]);
+
+  const handleTogglePin = async (m: any) => {
+    if (!selectedConvId || !activeOwnerId) return;
+    const existing = pinnedItems.find((p) => p.message_id === m.id);
+    if (existing) {
+      const { error } = await supabase.from('chat_pinned_messages').delete().eq('id', existing.pin_id);
+      if (error) return toast({ title: 'Não foi possível desafixar', description: error.message, variant: 'destructive' });
+    } else {
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id;
+      if (!uid) return;
+      const { error } = await supabase.from('chat_pinned_messages').insert({
+        message_id: m.id,
+        customer_id: selectedConvId,
+        owner_id: activeOwnerId,
+        sub_company_id: (selectedConv as any)?.sub_company_id ?? null,
+        pinned_by: uid,
+      } as any);
+      if (error) return toast({ title: 'Não foi possível fixar', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const handleToggleStar = async (m: any) => {
+    if (!selectedConvId || !activeOwnerId || !currentUserId) return;
+    if (starredIds.has(m.id)) {
+      await supabase.from('chat_starred_messages').delete().eq('message_id', m.id).eq('user_id', currentUserId);
+    } else {
+      const { error } = await supabase.from('chat_starred_messages').insert({
+        message_id: m.id,
+        customer_id: selectedConvId,
+        user_id: currentUserId,
+        owner_id: activeOwnerId,
+      } as any);
+      if (error) return toast({ title: 'Não foi possível favoritar', description: error.message, variant: 'destructive' });
+    }
+  };
 
   useChatShortcuts(!!selectedConvId, {
     onHelp: () => setShortcutsOpen(true),
@@ -2494,6 +2617,13 @@ export default function ChatPage() {
                     <PenLine className="w-4 h-4" />
                   </button>
                   <button
+                    onClick={() => setInChatSearchOpen((v) => !v)}
+                    className={`p-2 rounded-lg hover:bg-secondary ${inChatSearchOpen ? 'bg-secondary text-primary' : 'text-muted-foreground'}`}
+                    title="Buscar nesta conversa (Ctrl+F)"
+                  >
+                    <SearchCode className="w-4 h-4" />
+                  </button>
+                  <button
                     onClick={() => setRightPanelOpen((v) => !v)}
                     className={`p-2 rounded-lg hover:bg-secondary ${rightPanelOpen ? 'bg-secondary text-primary' : 'text-muted-foreground'}`}
                     title="Notas internas, CRM e mídia"
@@ -2570,6 +2700,34 @@ export default function ChatPage() {
 
 
 
+              {/* Etapa 8 — mensagens fixadas e busca dentro da conversa */}
+              <PinnedMessagesBar
+                items={pinnedItems}
+                onJump={(id) => {
+                  const el = document.querySelector(`[data-msg-id="${id}"]`) as HTMLElement | null;
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.classList.add('ring-2', 'ring-primary/60');
+                    setTimeout(() => el.classList.remove('ring-2', 'ring-primary/60'), 1200);
+                  } else {
+                    toast({ title: 'Mensagem fora do trecho', description: 'Role o histórico para carregar a mensagem original.' });
+                  }
+                }}
+                onUnpin={async (pinId) => {
+                  await supabase.from('chat_pinned_messages').delete().eq('id', pinId);
+                }}
+              />
+              <InChatSearchBar
+                open={inChatSearchOpen}
+                query={inChatSearchQuery}
+                onQueryChange={setInChatSearchQuery}
+                currentIndex={inChatSearchIndex}
+                total={inChatMatches.length}
+                onPrev={() => setInChatSearchIndex((i) => (inChatMatches.length ? (i - 1 + inChatMatches.length) % inChatMatches.length : 0))}
+                onNext={() => setInChatSearchIndex((i) => (inChatMatches.length ? (i + 1) % inChatMatches.length : 0))}
+                onClose={() => { setInChatSearchOpen(false); setInChatSearchQuery(''); }}
+              />
+
               <div className="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col">
                 {activeChannel === 'telegram' && hasMoreHistory && (
                   <div className="flex justify-center py-2">
@@ -2602,7 +2760,14 @@ export default function ChatPage() {
                     >
                       <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm relative group ${
                         m.sender_type !== 'client' ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-secondary text-foreground rounded-bl-md'
+                      } ${pinnedIds.has(m.id) ? 'ring-1 ring-primary/50' : ''} ${
+                        inChatSearchQuery && inChatMatches[inChatSearchIndex] === (m.uaz_msg_id || m.id) ? 'ring-2 ring-yellow-400/80' : ''
                       }`}>
+                        {pinnedIds.has(m.id) && (
+                          <div className={`absolute -top-2 ${m.sender_type !== 'client' ? '-left-2' : '-right-2'} bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center shadow`} title="Fixada nesta conversa">
+                            <Pin className="w-2.5 h-2.5" />
+                          </div>
+                        )}
                         {/* Quoted/reply preview — Etapa 3 */}
                         {m._quoted && (
                           <button
@@ -2716,6 +2881,24 @@ export default function ChatPage() {
                                 <ForwardIcon className="w-3.5 h-3.5" />
                               </button>
                             )}
+                            {/* Etapa 8 — fixar/desafixar (visível para toda a equipe) */}
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePin(m)}
+                              className={`w-7 h-7 rounded-full bg-background border border-border shadow-sm flex items-center justify-center hover:bg-secondary ${pinnedIds.has(m.id) ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                              title={pinnedIds.has(m.id) ? 'Desafixar mensagem' : 'Fixar na conversa'}
+                            >
+                              {pinnedIds.has(m.id) ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+                            </button>
+                            {/* Etapa 8 — favoritar (visível só para você) */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleStar(m)}
+                              className={`w-7 h-7 rounded-full bg-background border border-border shadow-sm flex items-center justify-center hover:bg-secondary ${starredIds.has(m.id) ? 'text-yellow-500' : 'text-muted-foreground hover:text-foreground'}`}
+                              title={starredIds.has(m.id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+                            >
+                              {starredIds.has(m.id) ? <Star className="w-3.5 h-3.5 fill-current" /> : <Star className="w-3.5 h-3.5" />}
+                            </button>
                             {/* Etapa 4 — editar (apenas próprias, dentro de 15 min, sem mídia) */}
                             {m.sender_type !== 'client' && !m._revoked && !m._mediaUrl && (Date.now() - new Date(m.created_at).getTime() < 15 * 60 * 1000) && (
                               <button
