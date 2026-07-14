@@ -151,9 +151,11 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
     if (!window.confirm('Importar o histórico de conversas direto do servidor WAHA?\n\nApenas mensagens que ainda não existem aqui serão criadas. O fluxo ao vivo não é afetado.')) return;
     setBusyAction('backfill');
     setBackfillResult(null);
+    setActiveRunId(null);
+    setShowProgress(true);
     const toastId = toast.loading('Importando histórico do WAHA…');
     try {
-      const { data, error } = await supabase.functions.invoke('waha-session', {
+      const invocation = supabase.functions.invoke('waha-session', {
         body: {
           action: 'backfill_from_server',
           connection_id: conn.id,
@@ -164,7 +166,26 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
           msg_limit: 200,
         },
       });
+
+      // As soon as the run row exists (server creates it early), open its progress screen.
+      const pickUpRun = setInterval(async () => {
+        const { data } = await supabase
+          .from('waha_import_runs')
+          .select('id')
+          .eq('connection_id', conn.id)
+          .order('started_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (data?.id) {
+          setActiveRunId(data.id);
+          clearInterval(pickUpRun);
+        }
+      }, 700);
+
+      const { data, error } = await invocation;
+      clearInterval(pickUpRun);
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'Falha ao importar');
+      if (data.run_id) setActiveRunId(data.run_id);
       setBackfillResult({
         chatsSeen: data.chatsSeen ?? 0,
         inserted: data.inserted ?? 0,
@@ -173,7 +194,7 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
       });
       toast.success(`${data.inserted ?? 0} mensagens importadas`, {
         id: toastId,
-        description: `${data.chatsSeen ?? 0} chats analisados · ${data.customersCreated ?? 0} contatos novos`,
+        description: `${data.chatsSeen ?? 0} chats analisados · ${data.customersCreated ?? 0} contatos novos · ${data.failed_count ?? 0} falhas`,
       });
       onSaved();
     } catch (e: any) {
@@ -182,6 +203,7 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
       setBusyAction(null);
     }
   };
+
 
 
 
