@@ -124,7 +124,6 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
 
   const cancelRun = async () => {
     if (!runId) return;
-    if (!window.confirm('Cancelar a importação em andamento? O que já foi importado será mantido.')) return;
     setCancelling(true);
     const toastId = toast.loading('Solicitando cancelamento…');
     try {
@@ -142,6 +141,43 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
       setCancelling(false);
     }
   };
+
+  const exportCsv = () => {
+    if (!run) return;
+    const kind = isDryRun ? 'simulacao' : 'importacao';
+    const stamp = new Date(run.started_at).toISOString().slice(0, 19).replace(/[:T]/g, '-');
+
+    const stats = [{
+      run_id: run.id,
+      tipo: isDryRun ? 'Simulação (dry-run)' : 'Importação real',
+      status: run.status,
+      iniciado_em: fmtDate(run.started_at),
+      finalizado_em: fmtDate(run.finished_at),
+      chats_total: run.chats_total,
+      chats_processados: run.chats_processed,
+      mensagens_consideradas: run.messages_considered,
+      mensagens_inseridas: run.messages_inserted,
+      mensagens_ignoradas: run.messages_skipped,
+      contatos_criados: run.customers_created,
+      falhas: run.failed_items?.length ?? 0,
+      erro: run.error_message ?? '',
+    }];
+    downloadCsv(`waha-${kind}-${stamp}-stats.csv`, stats);
+
+    if (run.failed_items?.length) {
+      const failures = run.failed_items.map((f) => ({
+        estagio: STAGE_LABEL[f.stage ?? ''] ?? f.stage ?? '',
+        motivo: f.reason ?? '',
+        telefone: f.phone ?? '',
+        chat_id: f.chat_id ?? '',
+        provider_msg_id: f.provider_msg_id ?? '',
+        quando: fmtDate(f.at ?? null),
+      }));
+      downloadCsv(`waha-${kind}-${stamp}-falhas.csv`, failures);
+    }
+    toast.success('Relatório CSV gerado');
+  };
+
 
   const runRetry = async () => {
     if (!run || !runId) return;
