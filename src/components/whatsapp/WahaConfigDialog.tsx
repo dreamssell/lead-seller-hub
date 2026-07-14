@@ -30,9 +30,9 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
   const [cfg, setCfg] = useState<WahaConfig>(initial);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [busyAction, setBusyAction] = useState<null | 'create' | 'delete' | 'logout' | 'list' | 'backfill'>(null);
+  const [busyAction, setBusyAction] = useState<null | 'create' | 'delete' | 'logout' | 'list' | 'backfill' | 'simulate'>(null);
   const [remoteSessions, setRemoteSessions] = useState<any[] | null>(null);
-  const [backfillResult, setBackfillResult] = useState<null | { chatsSeen: number; inserted: number; skipped: number; customersCreated: number }>(null);
+  const [backfillResult, setBackfillResult] = useState<null | { chatsSeen: number; inserted: number; skipped: number; customersCreated: number; dryRun: boolean }>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [showProgress, setShowProgress] = useState(false);
 
