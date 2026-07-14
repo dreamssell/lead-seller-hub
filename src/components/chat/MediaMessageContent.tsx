@@ -9,6 +9,7 @@ interface Props {
   filename?: string | null;
   duration?: number | null;
   mine?: boolean;
+  onOpen?: (url: string) => void;
 }
 
 function formatDuration(seconds?: number | null) {
