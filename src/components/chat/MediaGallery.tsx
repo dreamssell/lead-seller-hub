@@ -90,26 +90,67 @@ export function MediaGallery({ customerId }: Props) {
         <p className="text-xs text-muted-foreground text-center py-8 italic">Nenhuma mídia para este filtro.</p>
       ) : (
         <ScrollArea className="flex-1 -mx-3 px-3">
-          <div className="grid grid-cols-3 gap-1.5">
-            {filtered.map(r => (
-              <button
-                key={r.id}
-                onClick={() => setOpen(r)}
-                className="relative aspect-square rounded-md overflow-hidden bg-secondary border border-border group hover:ring-2 hover:ring-primary/40"
-                title={r.name || r.caption || ''}
-              >
-                {r.kind === 'image' ? (
-                  <img src={r.url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                ) : r.kind === 'video' ? (
-                  <div className="w-full h-full flex items-center justify-center bg-black/60 text-white"><Film className="w-5 h-5" /></div>
-                ) : r.kind === 'audio' ? (
-                  <div className="w-full h-full flex items-center justify-center bg-amber-500/15 text-amber-700 dark:text-amber-300"><Music className="w-5 h-5" /></div>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-blue-500/15 text-blue-600 dark:text-blue-300"><FileText className="w-5 h-5" /></div>
-                )}
-              </button>
-            ))}
-          </div>
+          {filter === 'audio' || filter === 'document' ? (
+            <ul className="space-y-1.5">
+              {filtered.map(r => (
+                <li key={r.id}>
+                  <button
+                    onClick={() => setOpen(r)}
+                    className="w-full flex items-center gap-2.5 rounded-lg border border-border bg-card/60 hover:bg-secondary px-2.5 py-2 text-left transition"
+                    title={r.name || r.caption || ''}
+                  >
+                    <div className={cn(
+                      'w-9 h-9 rounded-lg flex items-center justify-center shrink-0',
+                      r.kind === 'audio'
+                        ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                        : 'bg-blue-500/15 text-blue-600 dark:text-blue-300',
+                    )}>
+                      {r.kind === 'audio' ? <Music className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium truncate">
+                        {r.name || r.caption || (r.kind === 'audio' ? 'Áudio' : 'Documento')}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {new Date(r.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: '2-digit' })}
+                      </p>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="grid grid-cols-3 gap-1.5">
+              {filtered.map(r => (
+                <button
+                  key={r.id}
+                  onClick={() => setOpen(r)}
+                  className="relative aspect-square rounded-md overflow-hidden bg-secondary border border-border group hover:ring-2 hover:ring-primary/40"
+                  title={r.name || r.caption || ''}
+                >
+                  {r.kind === 'image' ? (
+                    <img src={r.url} alt="" className="w-full h-full object-cover transition group-hover:scale-105" loading="lazy" />
+                  ) : r.kind === 'video' ? (
+                    <>
+                      <video src={r.url} preload="metadata" muted playsInline className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/20 transition">
+                        <div className="w-8 h-8 rounded-full bg-white/90 text-black flex items-center justify-center shadow-md">
+                          <Film className="w-4 h-4" />
+                        </div>
+                      </div>
+                    </>
+                  ) : r.kind === 'audio' ? (
+                    <div className="w-full h-full flex items-center justify-center bg-amber-500/15 text-amber-700 dark:text-amber-300"><Music className="w-5 h-5" /></div>
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-blue-500/15 text-blue-600 dark:text-blue-300 gap-1 px-1">
+                      <FileText className="w-5 h-5" />
+                      <span className="text-[9px] truncate max-w-full">{r.name || 'doc'}</span>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </ScrollArea>
       )}
       <MediaViewerDialog item={open} onClose={() => setOpen(null)} />
