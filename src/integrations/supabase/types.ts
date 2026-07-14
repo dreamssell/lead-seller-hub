@@ -4935,6 +4935,80 @@ export type Database = {
         }
         Relationships: []
       }
+      waha_import_runs: {
+        Row: {
+          chats_processed: number
+          chats_total: number
+          connection_id: string
+          created_at: string
+          current_chat_label: string | null
+          customers_created: number
+          error_message: string | null
+          failed_items: Json
+          finished_at: string | null
+          id: string
+          messages_considered: number
+          messages_inserted: number
+          messages_skipped: number
+          owner_id: string
+          params: Json
+          started_at: string
+          status: string
+          triggered_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          chats_processed?: number
+          chats_total?: number
+          connection_id: string
+          created_at?: string
+          current_chat_label?: string | null
+          customers_created?: number
+          error_message?: string | null
+          failed_items?: Json
+          finished_at?: string | null
+          id?: string
+          messages_considered?: number
+          messages_inserted?: number
+          messages_skipped?: number
+          owner_id: string
+          params?: Json
+          started_at?: string
+          status?: string
+          triggered_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          chats_processed?: number
+          chats_total?: number
+          connection_id?: string
+          created_at?: string
+          current_chat_label?: string | null
+          customers_created?: number
+          error_message?: string | null
+          failed_items?: Json
+          finished_at?: string | null
+          id?: string
+          messages_considered?: number
+          messages_inserted?: number
+          messages_skipped?: number
+          owner_id?: string
+          params?: Json
+          started_at?: string
+          status?: string
+          triggered_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "waha_import_runs_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wavoip_audit_logs: {
         Row: {
           id: string
