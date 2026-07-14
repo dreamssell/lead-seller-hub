@@ -78,7 +78,10 @@ function fmtDate(iso: string | null) {
 export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, creds, onRetryStarted }: Props) {
   const [run, setRun] = useState<WahaImportRun | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [resuming, setResuming] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [batchRetryingKey, setBatchRetryingKey] = useState<string | null>(null);
 
   // Poll every 1.5s while running, and subscribe to realtime updates.
   useEffect(() => {
