@@ -2273,8 +2273,17 @@ export default function ChatPage() {
                 }`}
               >
                 <div className="relative shrink-0">
-                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                    <span className="text-xs font-bold text-primary">{c.name.split(/[\s.@]/).filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase()).join('')}</span>
+                  <div className="w-10 h-10 rounded-full bg-primary/20 overflow-hidden flex items-center justify-center">
+                    {(c as any).avatar_url ? (
+                      <img
+                        src={(c as any).avatar_url}
+                        alt={c.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { (e.currentTarget.style.display = 'none'); }}
+                      />
+                    ) : (
+                      <span className="text-xs font-bold text-primary">{c.name.split(/[\s.@]/).filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase()).join('')}</span>
+                    )}
                   </div>
                   {c.online && <Circle className="w-3 h-3 text-success fill-success absolute -bottom-0.5 -right-0.5" />}
                 </div>

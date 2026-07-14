@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { StickyNote, Zap, Loader2, Trash2, Plus, X, Send, History as HistoryIcon, Layers, Images, Phone, Mail, MapPin, IdCard, Copy, Video, MessageSquare, Paperclip, Mic, Ban, ShieldCheck, CheckCircle2, RefreshCw, Info, Archive, BellOff, Bell, Tag, Check, Clock } from 'lucide-react';
+import { StickyNote, Zap, Loader2, Trash2, Plus, X, Send, History as HistoryIcon, Layers, Images, Phone, Mail, MapPin, IdCard, Copy, Video, MessageSquare, Paperclip, Mic, Ban, ShieldCheck, CheckCircle2, RefreshCw, Info, Archive, BellOff, Bell, Tag, Check, Clock, Pencil } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import { toast as sonnerToast } from 'sonner';
@@ -62,6 +62,22 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
   const [newReply, setNewReply] = useState({ shortcut: '', content: '' });
   const [savingReply, setSavingReply] = useState(false);
   const [user, setUser] = useState<{ id: string; name: string } | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [savingName, setSavingName] = useState(false);
+
+  const saveName = async () => {
+    const next = nameDraft.trim();
+    if (!next || next === customerName) { setEditingName(false); return; }
+    if (next.length > 120) { toast.error('Nome deve ter no máximo 120 caracteres.'); return; }
+    setSavingName(true);
+    const { error } = await supabase.from('customers').update({ name: next } as any).eq('id', customerId);
+    setSavingName(false);
+    if (error) { toast.error('Não foi possível renomear o contato.'); return; }
+    toast.success('Contato renomeado.');
+    setEditingName(false);
+    window.dispatchEvent(new CustomEvent('customer:renamed', { detail: { id: customerId, name: next } }));
+  };
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -369,7 +385,41 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold truncate">{customerName}</p>
+            {editingName ? (
+              <div className="flex items-center gap-1">
+                <Input
+                  value={nameDraft}
+                  autoFocus
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); saveName(); }
+                    if (e.key === 'Escape') { setEditingName(false); }
+                  }}
+                  disabled={savingName}
+                  className="h-7 text-sm"
+                  maxLength={120}
+                />
+                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={saveName} disabled={savingName} aria-label="Salvar nome">
+                  {savingName ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                </Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => setEditingName(false)} disabled={savingName} aria-label="Cancelar">
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 group">
+                <p className="text-sm font-semibold truncate">{customerName}</p>
+                <button
+                  type="button"
+                  onClick={() => { setNameDraft(customerName); setEditingName(true); }}
+                  className="p-1 rounded hover:bg-secondary opacity-60 hover:opacity-100 transition"
+                  title="Renomear contato"
+                  aria-label="Renomear contato"
+                >
+                  <Pencil className="w-3 h-3" />
+                </button>
+              </div>
+            )}
             {profile?.company && <p className="text-[11px] text-muted-foreground truncate">{profile.company}</p>}
             <div className="flex items-center gap-1.5 mt-1 flex-wrap">
               {profile?.channel && (
