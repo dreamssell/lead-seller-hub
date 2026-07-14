@@ -333,19 +333,33 @@ Deno.serve(async (req) => {
   // know the event is a valid individual inbound; WAHA often emits message.any
   // plus message, and status/group/no-phone variants must not consume the key.
   if (providerMsgId && bucket === 'ack') {
-    const idemKey = bucket === 'ack' ? `waha:ack:${providerMsgId}` : `waha:msg:${providerMsgId}`;
+    const idemKey = `waha:ack:${providerMsgId}`;
     const { data: existing } = await supabase
       .from('webhook_idempotency_keys')
-      .select('id')
+      .select('id, hit_count')
       .eq('webhook_id', connectionId)
       .eq('idempotency_key', idemKey)
       .maybeSingle();
-    if (existing) return json({ ok: true, idempotent: true });
+    if (existing) {
+      // Audit parallel/duplicate hit so we can spot double webhooks.
+      await supabase.from('webhook_idempotency_hits').insert({
+        webhook_id: connectionId,
+        idempotency_key: idemKey,
+        source: 'waha-inbound',
+        reason: 'ack_duplicate',
+        metadata: { event, session, event_log_id: eventLogId },
+      });
+      await supabase.from('webhook_idempotency_keys')
+        .update({ hit_count: (existing.hit_count ?? 1) + 1, last_hit_at: new Date().toISOString() })
+        .eq('id', existing.id);
+      return json({ ok: true, idempotent: true });
+    }
     await supabase.from('webhook_idempotency_keys').insert({
       webhook_id: connectionId,
       idempotency_key: idemKey,
     });
   }
+
 
   // ── SESSION STATUS ───────────────────────────────────────────────────────
   if (bucket === 'session') {
