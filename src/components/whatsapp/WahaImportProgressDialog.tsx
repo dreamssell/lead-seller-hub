@@ -175,15 +175,22 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 flex-wrap">
             {isRunning ? <Loader2 className="w-4 h-4 animate-spin text-primary" />
               : run?.status === 'completed' ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              : run?.status === 'completed_dry_run' ? <FlaskConical className="w-4 h-4 text-sky-500" />
+              : run?.status === 'cancelled' ? <Ban className="w-4 h-4 text-amber-500" />
               : run?.status === 'failed' ? <XCircle className="w-4 h-4 text-destructive" />
               : <PlayCircle className="w-4 h-4" />}
-            Importação de histórico do WAHA
+            {isDryRun ? 'Simulação de importação do WAHA' : 'Importação de histórico do WAHA'}
+            {isDryRun && <Badge variant="outline" className="text-[10px] gap-1"><FlaskConical className="w-3 h-3" /> Modo simulação</Badge>}
+            {run?.status === 'cancel_requested' && <Badge variant="secondary" className="text-[10px]">Parando…</Badge>}
+            {run?.status === 'cancelled' && <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/40">Cancelado</Badge>}
           </DialogTitle>
           <DialogDescription>
-            Acompanhe em tempo real quantos chats e mensagens foram varridos. A operação não afeta o fluxo ao vivo, nem UAZ, Evolution ou Wavoip.
+            {isDryRun
+              ? 'Contagem apenas — nenhuma mensagem ou contato é gravado no banco. Use o resultado para decidir se roda a importação real.'
+              : 'Acompanhe em tempo real quantos chats e mensagens foram varridos. A operação não afeta o fluxo ao vivo, nem UAZ, Evolution ou Wavoip.'}
           </DialogDescription>
         </DialogHeader>
 
