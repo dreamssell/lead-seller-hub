@@ -2629,6 +2629,7 @@ export default function ChatPage() {
                             filename={m._mediaFilename}
                             duration={m._mediaDuration}
                             mine={m.sender_type !== 'client'}
+                            onOpen={m._mediaType === 'image' ? (u) => setLightboxUrl(u) : undefined}
                           />
                         )}
                         {m._revoked ? (
