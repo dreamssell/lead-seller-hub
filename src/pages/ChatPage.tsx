@@ -944,7 +944,7 @@ export default function ChatPage() {
           (Object.keys(next) as ChannelKey[]).forEach(k => {
             next[k] = next[k].map((conv: any) =>
               conv.id === c.id
-                ? { ...conv, online: pres.online, presenceLabel: pres.label, presence: c.presence, lastSeenAt: c.last_seen_at, is_archived: !!c.is_archived, is_muted: !!c.is_muted, muted_until: c.muted_until || null, label_ids: Array.isArray(c.label_ids) ? c.label_ids : conv.label_ids }
+                ? { ...conv, name: (typeof c.name === 'string' && c.name.trim()) ? c.name : conv.name, avatar_url: c.avatar_url ?? conv.avatar_url, online: pres.online, presenceLabel: pres.label, presence: c.presence, lastSeenAt: c.last_seen_at, is_archived: !!c.is_archived, is_muted: !!c.is_muted, muted_until: c.muted_until || null, label_ids: Array.isArray(c.label_ids) ? c.label_ids : conv.label_ids }
                 : conv
             );
           });
@@ -970,6 +970,22 @@ export default function ChatPage() {
       supabase.removeChannel(channel);
     };
   }, [selectedConvId, whatsappStatus.connected, activeChannel, activeOwnerId, accessLoading]);
+
+  useEffect(() => {
+    const onRenamed = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { id?: string; name?: string } | undefined;
+      if (!detail?.id || !detail?.name) return;
+      setConvs(prev => {
+        const next: any = { ...prev };
+        (Object.keys(next) as ChannelKey[]).forEach(k => {
+          next[k] = next[k].map((conv: any) => conv.id === detail.id ? { ...conv, name: detail.name } : conv);
+        });
+        return next;
+      });
+    };
+    window.addEventListener('customer:renamed', onRenamed);
+    return () => window.removeEventListener('customer:renamed', onRenamed);
+  }, []);
 
   useEffect(() => {
     // Real-time listener for connection events (Omnichannel Diagnostics)
