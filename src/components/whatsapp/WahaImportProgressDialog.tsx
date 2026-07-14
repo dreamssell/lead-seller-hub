@@ -45,7 +45,7 @@ export interface WahaImportRun {
   started_at: string;
   finished_at: string | null;
   updated_at: string;
-  params?: { dry_run?: boolean; action?: string } | null;
+  params?: { dry_run?: boolean; action?: string; processed_chat_ids?: string[]; auto_retry_count?: number } | null;
 }
 
 interface Props {
