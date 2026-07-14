@@ -216,13 +216,29 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
                   Atualmente: <span className="font-mono">{run.current_chat_label}</span>
                 </div>
               )}
+              {isRunning && (
+                <div className="flex justify-end pt-1">
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={cancelling || run?.status === 'cancel_requested'}
+                    onClick={cancelRun}
+                    className="gap-1.5"
+                  >
+                    {cancelling || run?.status === 'cancel_requested'
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <StopCircle className="w-3.5 h-3.5" />}
+                    {run?.status === 'cancel_requested' ? 'Cancelando…' : 'Cancelar importação'}
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <Stat label="Consideradas" value={run.messages_considered} />
-              <Stat label="Inseridas" value={run.messages_inserted} highlight="emerald" />
+              <Stat label={isDryRun ? 'Seriam inseridas' : 'Inseridas'} value={run.messages_inserted} highlight="emerald" />
               <Stat label="Ignoradas" value={run.messages_skipped} />
-              <Stat label="Contatos novos" value={run.customers_created} highlight="teal" />
+              <Stat label={isDryRun ? 'Contatos que seriam criados' : 'Contatos novos'} value={run.customers_created} highlight="teal" />
             </div>
 
             {run.error_message && (
