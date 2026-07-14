@@ -448,6 +448,7 @@ export default function ChatPage() {
   const wavoip = useWavoipWebphone();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [externalAttachment, setExternalAttachment] = useState<File | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   // Etapa 3 — mensagem sendo respondida (quote/reply). null = envio normal.
   const [replyingTo, setReplyingTo] = useState<any | null>(null);
   const [forwardTarget, setForwardTarget] = useState<any | null>(null);
