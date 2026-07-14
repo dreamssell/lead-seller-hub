@@ -142,6 +142,45 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
     }
   };
 
+  const runBackfillFromServer = async () => {
+    if (!cfg.url || !cfg.token || !cfg.session)
+      return toast.error('Preencha URL, API Key e Session Name antes.');
+    if (!window.confirm('Importar o histórico de conversas direto do servidor WAHA?\n\nApenas mensagens que ainda não existem aqui serão criadas. O fluxo ao vivo não é afetado.')) return;
+    setBusyAction('backfill');
+    setBackfillResult(null);
+    const toastId = toast.loading('Importando histórico do WAHA…');
+    try {
+      const { data, error } = await supabase.functions.invoke('waha-session', {
+        body: {
+          action: 'backfill_from_server',
+          connection_id: conn.id,
+          url: cfg.url,
+          token: cfg.token,
+          session: cfg.session,
+          chat_limit: 300,
+          msg_limit: 200,
+        },
+      });
+      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'Falha ao importar');
+      setBackfillResult({
+        chatsSeen: data.chatsSeen ?? 0,
+        inserted: data.inserted ?? 0,
+        skipped: data.skipped ?? 0,
+        customersCreated: data.customersCreated ?? 0,
+      });
+      toast.success(`${data.inserted ?? 0} mensagens importadas`, {
+        id: toastId,
+        description: `${data.chatsSeen ?? 0} chats analisados · ${data.customersCreated ?? 0} contatos novos`,
+      });
+      onSaved();
+    } catch (e: any) {
+      toast.error('Falha na importação', { id: toastId, description: e?.message ?? String(e) });
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
