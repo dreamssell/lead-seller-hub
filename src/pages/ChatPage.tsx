@@ -3263,7 +3263,7 @@ export default function ChatPage() {
               fail++;
             }
           }
-          toast.success(`${ok} enviados${fail ? ` · ${fail} falharam` : ''}`);
+          sonnerToast.success(`${ok} enviados${fail ? ` · ${fail} falharam` : ''}`);
         }}
       />
 
