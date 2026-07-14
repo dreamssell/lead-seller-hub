@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Copy, Loader2, ExternalLink, Wifi, PlusCircle, Trash2, LogOut, ListRestart } from 'lucide-react';
+import { Copy, Loader2, ExternalLink, Wifi, PlusCircle, Trash2, LogOut, ListRestart, DownloadCloud } from 'lucide-react';
 import { WahaConfigSchema, readWahaConfig, buildWahaWebhookUrl, type WahaConfig } from './wahaConfig';
 import type { WhatsAppConnection } from './types';
 
@@ -29,8 +29,9 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
   const [cfg, setCfg] = useState<WahaConfig>(initial);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [busyAction, setBusyAction] = useState<null | 'create' | 'delete' | 'logout' | 'list'>(null);
+  const [busyAction, setBusyAction] = useState<null | 'create' | 'delete' | 'logout' | 'list' | 'backfill'>(null);
   const [remoteSessions, setRemoteSessions] = useState<any[] | null>(null);
+  const [backfillResult, setBackfillResult] = useState<null | { chatsSeen: number; inserted: number; skipped: number; customersCreated: number }>(null);
 
   const functionsBase = (import.meta as any).env?.VITE_SUPABASE_URL
     ? `${(import.meta as any).env.VITE_SUPABASE_URL.replace(/\/$/, '')}/functions/v1`
@@ -140,6 +141,45 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
       setBusyAction(null);
     }
   };
+
+  const runBackfillFromServer = async () => {
+    if (!cfg.url || !cfg.token || !cfg.session)
+      return toast.error('Preencha URL, API Key e Session Name antes.');
+    if (!window.confirm('Importar o histórico de conversas direto do servidor WAHA?\n\nApenas mensagens que ainda não existem aqui serão criadas. O fluxo ao vivo não é afetado.')) return;
+    setBusyAction('backfill');
+    setBackfillResult(null);
+    const toastId = toast.loading('Importando histórico do WAHA…');
+    try {
+      const { data, error } = await supabase.functions.invoke('waha-session', {
+        body: {
+          action: 'backfill_from_server',
+          connection_id: conn.id,
+          url: cfg.url,
+          token: cfg.token,
+          session: cfg.session,
+          chat_limit: 300,
+          msg_limit: 200,
+        },
+      });
+      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'Falha ao importar');
+      setBackfillResult({
+        chatsSeen: data.chatsSeen ?? 0,
+        inserted: data.inserted ?? 0,
+        skipped: data.skipped ?? 0,
+        customersCreated: data.customersCreated ?? 0,
+      });
+      toast.success(`${data.inserted ?? 0} mensagens importadas`, {
+        id: toastId,
+        description: `${data.chatsSeen ?? 0} chats analisados · ${data.customersCreated ?? 0} contatos novos`,
+      });
+      onSaved();
+    } catch (e: any) {
+      toast.error('Falha na importação', { id: toastId, description: e?.message ?? String(e) });
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
 
 
   return (
@@ -312,7 +352,23 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
                 {busyAction === 'delete' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                 Excluir sessão remota
               </Button>
+              <Button
+                size="sm" variant="secondary"
+                disabled={busyAction !== null}
+                onClick={runBackfillFromServer}
+                className="gap-1"
+                title="Baixa o histórico de conversas do servidor WAHA e importa mensagens que faltam aqui, sem afetar o fluxo ao vivo."
+              >
+                {busyAction === 'backfill' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DownloadCloud className="w-3.5 h-3.5" />}
+                Importar histórico do WAHA
+              </Button>
             </div>
+            {backfillResult && (
+              <div className="rounded-md border border-teal-500/30 bg-teal-500/5 p-2 text-[11px] text-teal-700 dark:text-teal-400">
+                Importação concluída: <b>{backfillResult.inserted}</b> mensagens novas em {backfillResult.chatsSeen} chats
+                ({backfillResult.customersCreated} contatos criados · {backfillResult.skipped} ignorados por já existirem).
+              </div>
+            )}
             {remoteSessions && (
               <div className="rounded-md border border-border/60 bg-secondary/30 p-2 max-h-40 overflow-auto">
                 <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">
