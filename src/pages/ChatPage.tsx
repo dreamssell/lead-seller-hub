@@ -459,6 +459,126 @@ export default function ChatPage() {
   const [editText, setEditText] = useState('');
   useEffect(() => { setReplyingTo(null); setForwardTarget(null); setEditTarget(null); }, [selectedConvId]);
 
+  // Etapa 8 — busca dentro da conversa (Ctrl/Cmd+F)
+  const [inChatSearchOpen, setInChatSearchOpen] = useState(false);
+  const [inChatSearchQuery, setInChatSearchQuery] = useState('');
+  const [inChatSearchIndex, setInChatSearchIndex] = useState(0);
+  const inChatMatches = useMemo(() => {
+    const q = inChatSearchQuery.trim().toLowerCase();
+    if (!q) return [] as string[];
+    return messages
+      .filter((m: any) => (m.content || '').toLowerCase().includes(q))
+      .map((m: any) => m.uaz_msg_id || m.id);
+  }, [inChatSearchQuery, messages]);
+  useEffect(() => { setInChatSearchIndex(0); }, [inChatSearchQuery]);
+  useEffect(() => { setInChatSearchOpen(false); setInChatSearchQuery(''); }, [selectedConvId]);
+  useEffect(() => {
+    const id = inChatMatches[inChatSearchIndex];
+    if (!id) return;
+    const el = document.querySelector(`[data-msg-id="${id}"]`) as HTMLElement | null;
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [inChatSearchIndex, inChatMatches]);
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f' && selectedConvId) {
+        e.preventDefault();
+        setInChatSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedConvId]);
+
+  // Etapa 8 — mensagens fixadas na conversa atual (visíveis para toda a equipe)
+  const [pinnedItems, setPinnedItems] = useState<PinnedItem[]>([]);
+  const pinnedIds = useMemo(() => new Set(pinnedItems.map((p) => p.message_id)), [pinnedItems]);
+  useEffect(() => {
+    if (!selectedConvId) { setPinnedItems([]); return; }
+    let cancelled = false;
+    const load = async () => {
+      const { data } = await supabase
+        .from('chat_pinned_messages')
+        .select('id, message_id, created_at, chat_messages(content, sender_type, created_at)')
+        .eq('customer_id', selectedConvId)
+        .order('created_at', { ascending: false });
+      if (cancelled) return;
+      setPinnedItems(
+        ((data as any[]) || []).map((r) => ({
+          pin_id: r.id,
+          message_id: r.message_id,
+          content: r.chat_messages?.content ?? null,
+          sender_type: r.chat_messages?.sender_type ?? 'client',
+          created_at: r.chat_messages?.created_at ?? r.created_at,
+          pinned_at: r.created_at,
+        })),
+      );
+    };
+    load();
+    const ch = supabase
+      .channel(`pinned-${selectedConvId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_pinned_messages', filter: `customer_id=eq.${selectedConvId}` }, () => load())
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(ch); };
+  }, [selectedConvId]);
+
+  // Etapa 8 — favoritas do próprio atendente na conversa atual
+  const [starredIds, setStarredIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!selectedConvId || !currentUserId) { setStarredIds(new Set()); return; }
+    let cancelled = false;
+    const load = async () => {
+      const { data } = await supabase
+        .from('chat_starred_messages')
+        .select('message_id')
+        .eq('customer_id', selectedConvId)
+        .eq('user_id', currentUserId);
+      if (cancelled) return;
+      setStarredIds(new Set(((data as any[]) || []).map((r) => r.message_id)));
+    };
+    load();
+    const ch = supabase
+      .channel(`starred-${selectedConvId}-${currentUserId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_starred_messages', filter: `customer_id=eq.${selectedConvId}` }, () => load())
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(ch); };
+  }, [selectedConvId, currentUserId]);
+
+  const handleTogglePin = async (m: any) => {
+    if (!selectedConvId || !activeOwnerId) return;
+    const existing = pinnedItems.find((p) => p.message_id === m.id);
+    if (existing) {
+      const { error } = await supabase.from('chat_pinned_messages').delete().eq('id', existing.pin_id);
+      if (error) return toast({ title: 'Não foi possível desafixar', description: error.message, variant: 'destructive' });
+    } else {
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id;
+      if (!uid) return;
+      const { error } = await supabase.from('chat_pinned_messages').insert({
+        message_id: m.id,
+        customer_id: selectedConvId,
+        owner_id: activeOwnerId,
+        sub_company_id: (selectedConv as any)?.sub_company_id ?? null,
+        pinned_by: uid,
+      } as any);
+      if (error) return toast({ title: 'Não foi possível fixar', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const handleToggleStar = async (m: any) => {
+    if (!selectedConvId || !activeOwnerId || !currentUserId) return;
+    if (starredIds.has(m.id)) {
+      await supabase.from('chat_starred_messages').delete().eq('message_id', m.id).eq('user_id', currentUserId);
+    } else {
+      const { error } = await supabase.from('chat_starred_messages').insert({
+        message_id: m.id,
+        customer_id: selectedConvId,
+        user_id: currentUserId,
+        owner_id: activeOwnerId,
+      } as any);
+      if (error) return toast({ title: 'Não foi possível favoritar', description: error.message, variant: 'destructive' });
+    }
+  };
+
   useChatShortcuts(!!selectedConvId, {
     onHelp: () => setShortcutsOpen(true),
     onSend: () => { /* ChatComposer handles its own Ctrl+Enter via key event */ },
