@@ -449,6 +449,18 @@ export default function FocusedChatPage() {
     }
   };
 
+  // Atalho de teclado: Ctrl/⌘+F abre o diálogo de busca no histórico.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f' && selected) {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected]);
+
   /**
    * Salta para uma mensagem específica retornada pela busca completa.
    * Carrega uma "janela" de contexto (antes + depois) sem quebrar a paginação:
