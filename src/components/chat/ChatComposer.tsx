@@ -209,10 +209,23 @@ export function ChatComposer({
 
         <QuickReplyPopover open={slashOpen} query={slashQuery} onPick={insertSlashPick} variables={variables} externalKey={slashKey} />
 
-        <FormatToolbar textareaRef={taRef} value={text} onChange={onChangeText} />
-
         <div className="flex items-end gap-2 mt-1">
           <div className="flex items-center">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-xl">
+                      <MoreHorizontal className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Formatação e emojis</TooltipContent>
+                </Tooltip>
+              </PopoverTrigger>
+              <PopoverContent align="start" side="top" className="w-auto p-1">
+                <FormatToolbar textareaRef={taRef} value={text} onChange={onChangeText} />
+              </PopoverContent>
+            </Popover>
             <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => handleFiles(e.target.files)} />
             <Tooltip>
               <TooltipTrigger asChild>
