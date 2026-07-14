@@ -3241,12 +3241,13 @@ export default function ChatPage() {
             setExternalAttachment(files[0]);
             return;
           }
-          toast.message(`Enviando ${files.length} arquivos...`);
+          sonnerToast.message(`Enviando ${files.length} arquivos...`);
           let ok = 0;
           let fail = 0;
           for (const f of files) {
             if (f.size > 20 * 1024 * 1024) {
-              toast.error(`"${f.name}" excede 20 MB`);
+              sonnerToast.error(`"${f.name}" excede 20 MB`);
+
               fail++;
               continue;
             }
