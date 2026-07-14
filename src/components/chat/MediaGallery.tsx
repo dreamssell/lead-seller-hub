@@ -168,7 +168,9 @@ export function MediaGallery({ customerId }: Props) {
           )}
         </ScrollArea>
       )}
-      <MediaViewerDialog items={filtered} index={openIdx ?? 0} onIndexChange={setOpenIdx} onClose={() => setOpenIdx(null)} />
+      {openIdx !== null && (
+        <MediaViewerDialog items={filtered} index={openIdx} onIndexChange={setOpenIdx} onClose={() => setOpenIdx(null)} />
+      )}
     </div>
   );
 }
