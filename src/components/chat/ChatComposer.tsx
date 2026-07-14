@@ -72,6 +72,8 @@ export function ChatComposer({
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
   const [slashKey, setSlashKey] = useState<{ seq: number; key: 'up' | 'down' | 'enter' | null }>({ seq: 0, key: null });
+  const [fmtOpen, setFmtOpen] = useState(false);
+
 
   useEffect(() => {
     if (externalAttachment) {
