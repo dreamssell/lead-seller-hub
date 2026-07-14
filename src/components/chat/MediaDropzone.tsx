@@ -2,9 +2,39 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Upload, Files, X, Plus, Send, Loader2, CheckCircle2, AlertCircle,
   Image as ImageIcon, Video as VideoIcon, FileText, AudioLines, Trash2,
+  RotateCcw, Ban,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+
+const QUEUE_META_KEY = 'chat:composerQueue:meta:v1';
+interface PersistedItemMeta {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  kind: 'image' | 'video' | 'audio' | 'document';
+  lastModified: number;
+}
+function persistQueueMeta(items: Array<{ id: string; file: File; kind: PersistedItemMeta['kind'] }>): void {
+  try {
+    const meta: PersistedItemMeta[] = items.map(i => ({
+      id: i.id, name: i.file.name, size: i.file.size, type: i.file.type,
+      kind: i.kind, lastModified: i.file.lastModified,
+    }));
+    if (meta.length) sessionStorage.setItem(QUEUE_META_KEY, JSON.stringify(meta));
+    else sessionStorage.removeItem(QUEUE_META_KEY);
+  } catch {}
+}
+function readQueueMeta(): PersistedItemMeta[] {
+  try {
+    const raw = sessionStorage.getItem(QUEUE_META_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+function clearQueueMeta() { try { sessionStorage.removeItem(QUEUE_META_KEY); } catch {} }
 
 type Kind = 'image' | 'video' | 'audio' | 'document';
 type Status = 'queued' | 'sending' | 'done' | 'error' | 'canceled' | 'rejected';
