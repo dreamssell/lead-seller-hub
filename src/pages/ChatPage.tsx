@@ -27,6 +27,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/hooks/use-toast';
+import { toast as sonnerToast } from 'sonner';
+
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
@@ -3230,7 +3232,41 @@ export default function ChatPage() {
 
 
 
-      <MediaDropzone active={!!selectedConvId} onDrop={(files) => setExternalAttachment(files[0] || null)} />
+      <MediaDropzone
+        active={!!selectedConvId}
+        maxFiles={30}
+        onDrop={async (files) => {
+          if (!files.length) return;
+          if (files.length === 1) {
+            setExternalAttachment(files[0]);
+            return;
+          }
+          sonnerToast.message(`Enviando ${files.length} arquivos...`);
+          let ok = 0;
+          let fail = 0;
+          for (const f of files) {
+            if (f.size > 20 * 1024 * 1024) {
+              sonnerToast.error(`"${f.name}" excede 20 MB`);
+
+              fail++;
+              continue;
+            }
+            const kind: 'image' | 'video' | 'audio' | 'document' =
+              f.type.startsWith('image/') ? 'image'
+              : f.type.startsWith('video/') ? 'video'
+              : f.type.startsWith('audio/') ? 'audio'
+              : 'document';
+            try {
+              await handleSendMedia({ file: f, previewUrl: null, kind }, '');
+              ok++;
+            } catch {
+              fail++;
+            }
+          }
+          sonnerToast.success(`${ok} enviados${fail ? ` · ${fail} falharam` : ''}`);
+        }}
+      />
+
       {lightboxUrl && (() => {
         const imgs: MediaItem[] = messages
           .filter((mm: any) => mm._mediaType === 'image' && mm._mediaUrl)
