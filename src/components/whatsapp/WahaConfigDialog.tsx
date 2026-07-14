@@ -388,9 +388,19 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
                 Excluir sessão remota
               </Button>
               <Button
+                size="sm" variant="outline"
+                disabled={busyAction !== null}
+                onClick={() => runBackfillFromServer(true)}
+                className="gap-1"
+                title="Conta quantas mensagens e contatos seriam importados, sem gravar nada no banco."
+              >
+                {busyAction === 'simulate' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FlaskConical className="w-3.5 h-3.5" />}
+                Simular importação
+              </Button>
+              <Button
                 size="sm" variant="secondary"
                 disabled={busyAction !== null}
-                onClick={runBackfillFromServer}
+                onClick={() => runBackfillFromServer(false)}
                 className="gap-1"
                 title="Baixa o histórico de conversas do servidor WAHA e importa mensagens que faltam aqui, sem afetar o fluxo ao vivo."
               >
@@ -399,9 +409,12 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
               </Button>
             </div>
             {backfillResult && (
-              <div className="rounded-md border border-teal-500/30 bg-teal-500/5 p-2 text-[11px] text-teal-700 dark:text-teal-400">
-                Importação concluída: <b>{backfillResult.inserted}</b> mensagens novas em {backfillResult.chatsSeen} chats
-                ({backfillResult.customersCreated} contatos criados · {backfillResult.skipped} ignorados por já existirem).
+              <div className={`rounded-md border p-2 text-[11px] ${backfillResult.dryRun
+                ? 'border-sky-500/30 bg-sky-500/5 text-sky-700 dark:text-sky-400'
+                : 'border-teal-500/30 bg-teal-500/5 text-teal-700 dark:text-teal-400'}`}>
+                {backfillResult.dryRun ? 'Simulação concluída: ' : 'Importação concluída: '}
+                <b>{backfillResult.inserted}</b> mensagens {backfillResult.dryRun ? 'seriam importadas' : 'novas'} em {backfillResult.chatsSeen} chats
+                ({backfillResult.customersCreated} contatos {backfillResult.dryRun ? 'seriam criados' : 'criados'} · {backfillResult.skipped} ignorados por já existirem).
               </div>
             )}
             {remoteSessions && (
