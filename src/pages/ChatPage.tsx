@@ -6,7 +6,7 @@ import {
   Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Settings,
   Database, Activity, ShieldAlert, Wifi, WifiOff, Terminal, ChevronDown, ChevronUp, History as HistoryIcon, Bug, Play, Share2,
   FileDown, Filter, Calendar, Clock, Loader2, X, AlertTriangle, Check, SmilePlus, Reply, Pencil, Trash2, Forward as ForwardIcon,
-  Pin, PinOff, Star, StarOff, SearchCode
+  Pin, PinOff, Star, StarOff, SearchCode, ExternalLink
 } from 'lucide-react';
 import {
   Popover,
@@ -2653,6 +2653,16 @@ export default function ChatPage() {
                     title="Buscar nesta conversa (Ctrl+F)"
                   >
                     <SearchCode className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      const url = selectedConvId ? `/chat/focus?c=${selectedConvId}` : '/chat/focus';
+                      window.open(url, '_blank', 'noopener,noreferrer');
+                    }}
+                    className="p-2 rounded-lg hover:bg-secondary text-muted-foreground"
+                    title="Abrir Modo Foco em nova aba"
+                  >
+                    <ExternalLink className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setRightPanelOpen((v) => !v)}

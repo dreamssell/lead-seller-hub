@@ -65,6 +65,7 @@ const InternalCommsPage = lazy(() => import("./pages/InternalCommsPage"));
 const InternalMessageDetailPage = lazy(() => import("./pages/InternalMessageDetailPage"));
 const InternalCommsAuditPage = lazy(() => import("./pages/owner/InternalCommsAuditPage"));
 const WavoipWebhookAdminPage = lazy(() => import("./pages/owner/WavoipWebhookAdminPage"));
+const FocusedChatPage = lazy(() => import("./pages/FocusedChatPage"));
 
 /**
  * React Query com defaults calibrados para reduzir refetches redundantes.
@@ -118,6 +119,7 @@ const App = () => (
               <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/ferramentas" element={<ProtectedRoute><ToolsPage /></ProtectedRoute>} />
               <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
+              <Route path="/chat/focus" element={<ProtectedRoute><FocusedChatPage /></ProtectedRoute>} />
               <Route path="/calls" element={<ProtectedRoute><CallsPage /></ProtectedRoute>} />
               <Route path="/tickets" element={<ProtectedRoute><TicketsPage /></ProtectedRoute>} />
               <Route path="/team" element={<ProtectedRoute><TeamPage /></ProtectedRoute>} />
