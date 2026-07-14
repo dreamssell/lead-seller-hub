@@ -110,7 +110,7 @@ export function MediaGallery({ customerId }: Props) {
               {filtered.map(r => (
                 <li key={r.id}>
                   <button
-                    onClick={() => setOpen(r)}
+                    onClick={() => setOpenIdx(filtered.indexOf(r))}
                     className="w-full flex items-center gap-2.5 rounded-lg border border-border bg-card/60 hover:bg-secondary px-2.5 py-2 text-left transition"
                     title={r.name || r.caption || ''}
                   >
@@ -139,7 +139,7 @@ export function MediaGallery({ customerId }: Props) {
               {filtered.map(r => (
                 <button
                   key={r.id}
-                  onClick={() => setOpen(r)}
+                  onClick={() => setOpenIdx(filtered.indexOf(r))}
                   className="relative aspect-square rounded-md overflow-hidden bg-secondary border border-border group hover:ring-2 hover:ring-primary/40"
                   title={r.name || r.caption || ''}
                 >
@@ -168,7 +168,7 @@ export function MediaGallery({ customerId }: Props) {
           )}
         </ScrollArea>
       )}
-      <MediaViewerDialog item={open} onClose={() => setOpen(null)} />
+      <MediaViewerDialog items={filtered} index={openIdx ?? 0} onIndexChange={setOpenIdx} onClose={() => setOpenIdx(null)} />
     </div>
   );
 }
