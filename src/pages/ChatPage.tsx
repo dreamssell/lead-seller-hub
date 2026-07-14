@@ -27,6 +27,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/hooks/use-toast';
+import { toast as sonnerToast } from 'sonner';
+
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
