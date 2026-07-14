@@ -333,19 +333,33 @@ Deno.serve(async (req) => {
   // know the event is a valid individual inbound; WAHA often emits message.any
   // plus message, and status/group/no-phone variants must not consume the key.
   if (providerMsgId && bucket === 'ack') {
-    const idemKey = bucket === 'ack' ? `waha:ack:${providerMsgId}` : `waha:msg:${providerMsgId}`;
+    const idemKey = `waha:ack:${providerMsgId}`;
     const { data: existing } = await supabase
       .from('webhook_idempotency_keys')
-      .select('id')
+      .select('id, hit_count')
       .eq('webhook_id', connectionId)
       .eq('idempotency_key', idemKey)
       .maybeSingle();
-    if (existing) return json({ ok: true, idempotent: true });
+    if (existing) {
+      // Audit parallel/duplicate hit so we can spot double webhooks.
+      await supabase.from('webhook_idempotency_hits').insert({
+        webhook_id: connectionId,
+        idempotency_key: idemKey,
+        source: 'waha-inbound',
+        reason: 'ack_duplicate',
+        metadata: { event, session, event_log_id: eventLogId },
+      });
+      await supabase.from('webhook_idempotency_keys')
+        .update({ hit_count: (existing.hit_count ?? 1) + 1, last_hit_at: new Date().toISOString() })
+        .eq('id', existing.id);
+      return json({ ok: true, idempotent: true });
+    }
     await supabase.from('webhook_idempotency_keys').insert({
       webhook_id: connectionId,
       idempotency_key: idemKey,
     });
   }
+
 
   // ── SESSION STATUS ───────────────────────────────────────────────────────
   if (bucket === 'session') {
@@ -807,11 +821,23 @@ Deno.serve(async (req) => {
     const idemKey = `waha:msg:${providerMsgId}`;
     const { data: existing } = await supabase
       .from('webhook_idempotency_keys')
-      .select('id')
+      .select('id, hit_count')
       .eq('webhook_id', connectionId)
       .eq('idempotency_key', idemKey)
       .maybeSingle();
-    if (existing) return json({ ok: true, idempotent: true });
+    if (existing) {
+      await supabase.from('webhook_idempotency_hits').insert({
+        webhook_id: connectionId,
+        idempotency_key: idemKey,
+        source: 'waha-inbound',
+        reason: 'message_duplicate',
+        metadata: { event, session, from_me: fromMeFlag, phone, event_log_id: eventLogId },
+      });
+      await supabase.from('webhook_idempotency_keys')
+        .update({ hit_count: (existing.hit_count ?? 1) + 1, last_hit_at: new Date().toISOString() })
+        .eq('id', existing.id);
+      return json({ ok: true, idempotent: true, message_id: providerMsgId, phone });
+    }
     await supabase.from('webhook_idempotency_keys').insert({
       webhook_id: connectionId,
       idempotency_key: idemKey,
@@ -822,35 +848,52 @@ Deno.serve(async (req) => {
     ? null // don't overwrite contact name with our own device pushName
     : (info?.PushName || webPayload?._data?.Info?.PushName || webPayload?.notifyName || null);
 
-  // Upsert customer by phone under this owner.
-  const { data: existingCustomer } = await supabase
-    .from('customers')
-    .select('id, name')
-    .eq('phone', phone)
-    .eq('owner_id', conn.owner_id)
-    .maybeSingle();
-
-  let customerId: string | null = existingCustomer?.id ?? null;
-  if (!customerId) {
-    const { data: created, error: createErr } = await supabase
+  // Correlate to an existing customer under this owner by PHONE. Race-safe:
+  // parallel webhooks (message + message.any, or dual-engine WEBJS/GOWS) used
+  // to insert two rows for the same phone, causing the second row to appear
+  // in the sidebar with "Sem mensagens ainda". The unique index
+  // (owner_id, phone) now blocks that; we upsert on conflict and re-read the
+  // canonical id so the message always lands on the real thread.
+  let customerId: string | null = null;
+  {
+    const { data: existingCustomer } = await supabase
       .from('customers')
-      .insert({
-        name: pushName || phone,
-        phone,
-        channel: 'whatsapp',
-        created_by: conn.owner_id,
-        owner_id: conn.owner_id,
-        sub_company_id: conn.sub_company_id,
-        origin_connection_id: conn.id,
-      })
-      .select('id')
-      .single();
-    if (createErr) return json({ error: 'customer_insert_failed', detail: createErr.message }, 500);
-    customerId = created.id;
-  } else if (pushName && (!existingCustomer?.name || existingCustomer.name === phone || /^Contato\s+\d{2,}$/i.test(existingCustomer.name))) {
-    // Enrich name if we only had the phone number stored.
-    await supabase.from('customers').update({ name: pushName }).eq('id', customerId);
+      .select('id, name')
+      .eq('phone', phone)
+      .eq('owner_id', conn.owner_id)
+      .maybeSingle();
+
+    if (existingCustomer?.id) {
+      customerId = existingCustomer.id;
+      if (pushName && (!existingCustomer.name || existingCustomer.name === phone || /^Contato\s+\d{2,}$/i.test(existingCustomer.name))) {
+        await supabase.from('customers').update({ name: pushName }).eq('id', customerId);
+      }
+    } else {
+      const { data: created, error: createErr } = await supabase
+        .from('customers')
+        .upsert({
+          name: pushName || phone,
+          phone,
+          channel: 'whatsapp',
+          created_by: conn.owner_id,
+          owner_id: conn.owner_id,
+          sub_company_id: conn.sub_company_id,
+          origin_connection_id: conn.id,
+        }, { onConflict: 'owner_id,phone', ignoreDuplicates: false })
+        .select('id')
+        .single();
+      if (createErr) {
+        // Fallback: another concurrent webhook won the race — read the winner.
+        const { data: raced } = await supabase
+          .from('customers').select('id').eq('phone', phone).eq('owner_id', conn.owner_id).maybeSingle();
+        if (!raced?.id) return json({ error: 'customer_insert_failed', detail: createErr.message }, 500);
+        customerId = raced.id;
+      } else {
+        customerId = created.id;
+      }
+    }
   }
+
 
   const extractedBody =
     webPayload?.body ||
@@ -969,8 +1012,21 @@ Deno.serve(async (req) => {
     },
   }).select('id').single();
   if (msgErr?.code === '23505') {
+    // Unique-violation on uaz_msg_id → we already inserted this exact provider
+    // message before (parallel webhook or a same-second retry). Log the hit so
+    // duplicated deliveries are traceable per (webhook, providerMsgId).
+    if (providerMsgId) {
+      await supabase.from('webhook_idempotency_hits').insert({
+        webhook_id: connectionId,
+        idempotency_key: `waha:msg:${providerMsgId}`,
+        source: 'waha-inbound',
+        reason: 'unique_violation_uaz_msg_id',
+        metadata: { event, session, from_me: fromMeFlag, phone, customer_id: customerId },
+      });
+    }
     return json({ ok: true, idempotent: true, message_id: providerMsgId, phone });
   }
+
   if (msgErr) return json({ error: 'message_insert_failed', detail: msgErr.message }, 500);
 
   if (eventLogId && insertedMsg?.id) {
