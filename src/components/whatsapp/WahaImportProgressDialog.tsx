@@ -20,7 +20,7 @@ export interface WahaImportRun {
   id: string;
   connection_id: string;
   owner_id: string;
-  status: 'running' | 'completed' | 'failed' | string;
+  status: 'running' | 'completed' | 'failed' | 'cancel_requested' | 'cancelled' | 'completed_dry_run' | string;
   chats_total: number;
   chats_processed: number;
   current_chat_label: string | null;
@@ -40,6 +40,7 @@ export interface WahaImportRun {
   started_at: string;
   finished_at: string | null;
   updated_at: string;
+  params?: { dry_run?: boolean; action?: string } | null;
 }
 
 interface Props {
