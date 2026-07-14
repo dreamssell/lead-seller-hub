@@ -5,7 +5,8 @@ import {
   Send, Paperclip, Phone, Video, MoreVertical, Search, Circle,
   Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Settings,
   Database, Activity, ShieldAlert, Wifi, WifiOff, Terminal, ChevronDown, ChevronUp, History as HistoryIcon, Bug, Play, Share2,
-  FileDown, Filter, Calendar, Clock, Loader2, X, AlertTriangle, Check, SmilePlus, Reply, Pencil, Trash2, Forward as ForwardIcon
+  FileDown, Filter, Calendar, Clock, Loader2, X, AlertTriangle, Check, SmilePlus, Reply, Pencil, Trash2, Forward as ForwardIcon,
+  Pin, PinOff, Star, StarOff, SearchCode
 } from 'lucide-react';
 import {
   Popover,
@@ -44,6 +45,8 @@ import { MediaDropzone } from '@/components/chat/MediaDropzone';
 import { KeyboardShortcutsHelp } from '@/components/chat/KeyboardShortcutsHelp';
 import { useChatShortcuts } from '@/hooks/useChatShortcuts';
 import { renderWhatsAppText } from '@/lib/whatsappFormat';
+import { InChatSearchBar } from '@/components/chat/InChatSearchBar';
+import { PinnedMessagesBar, type PinnedItem } from '@/components/chat/PinnedMessagesBar';
 import { CollaborationBar } from '@/components/chat/CollaborationBar';
 import { WhisperFeed } from '@/components/chat/WhisperFeed';
 import { SupervisorBanner } from '@/components/chat/SupervisorBanner';
