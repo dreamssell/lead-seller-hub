@@ -589,12 +589,52 @@ export default function FocusedChatPage() {
                     </Avatar>
                     <div className="min-w-0">
                       <div className="text-sm font-semibold truncate">{selectedConv.name}</div>
-                      <div className="text-[11px] text-muted-foreground truncate">
-                        {selectedConv.phone || '—'} {selectedConv.presence ? `· ${selectedConv.presence}` : ''}
+                      <div className="text-[11px] text-muted-foreground truncate flex items-center gap-2">
+                        <span className="truncate">
+                          {selectedConv.phone || '—'} {selectedConv.presence ? `· ${selectedConv.presence}` : ''}
+                        </span>
+                        {readers.length > 0 && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex items-center gap-1 shrink-0 text-emerald-600 dark:text-emerald-400">
+                                <Eye className="w-3 h-3" />
+                                <span className="flex -space-x-1.5">
+                                  {readers.slice(0, 3).map((r) => (
+                                    <Avatar key={r.id} className="w-4 h-4 border border-background">
+                                      <AvatarImage src={r.avatarUrl || undefined} />
+                                      <AvatarFallback className="text-[8px] bg-emerald-500/20">{initials(r.label)}</AvatarFallback>
+                                    </Avatar>
+                                  ))}
+                                </span>
+                                {readers.length > 3 && <span>+{readers.length - 3}</span>}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <div className="text-xs">
+                                <div className="font-medium mb-1">Vistas por</div>
+                                {readers.map(r => (
+                                  <div key={r.id}>{r.label} · {new Date(r.readAt).toLocaleString('pt-BR')}</div>
+                                ))}
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setSearchOpen(true)}
+                          className="p-2 rounded-lg hover:bg-secondary transition text-muted-foreground"
+                          aria-label="Buscar no histórico"
+                        >
+                          <Search className="w-4 h-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Buscar no histórico (Ctrl/⌘+F)</TooltipContent>
+                    </Tooltip>
                     {tools.map(t => (
                       <Tooltip key={t.key || 'none'}>
                         <TooltipTrigger asChild>
@@ -614,6 +654,7 @@ export default function FocusedChatPage() {
                     ))}
                   </div>
                 </div>
+
 
                 {/* Messages (virtualizadas) */}
                 <div
