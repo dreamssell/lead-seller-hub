@@ -759,15 +759,24 @@ Deno.serve(async (req) => {
     info?.IsFromMe === true ||
     webPayload?._data?.Info?.IsFromMe === true;
 
-  const rawFrom: string | undefined =
-    webPayload?.from ||
-    info?.Chat ||
-    info?.Sender ||
-    webPayload?._data?.Info?.Chat;
+  // Counterparty JID: for inbound messages it's the sender; for messages the
+  // user sent from another device (fromMe=true) it's the recipient. WEBJS
+  // exposes `to`; GOWS keeps `Info.Chat` pointing at the peer even for fromMe.
+  const rawFrom: string | undefined = fromMeFlag
+    ? (webPayload?.to ||
+       info?.Chat ||
+       webPayload?._data?.Info?.Chat ||
+       webPayload?.from)
+    : (webPayload?.from ||
+       info?.Chat ||
+       info?.Sender ||
+       webPayload?._data?.Info?.Chat);
 
   const senderAlt: string | undefined =
     info?.SenderAlt ||
-    webPayload?._data?.Info?.SenderAlt;
+    info?.RecipientAlt ||
+    webPayload?._data?.Info?.SenderAlt ||
+    webPayload?._data?.Info?.RecipientAlt;
   const senderLid =
     typeof rawFrom === 'string' && rawFrom.includes('@lid')
       ? rawFrom
@@ -782,8 +791,7 @@ Deno.serve(async (req) => {
   if (typeof rawFrom === 'string' && rawFrom.includes('status@broadcast')) {
     return json({ ok: true, skipped: 'status_broadcast' });
   }
-  if (fromMeFlag) return json({ ok: true, skipped: 'from_me' });
-  if (isGroup)   return json({ ok: true, skipped: 'group_message' });
+  if (isGroup) return json({ ok: true, skipped: 'group_message' });
 
   // If Sender/Chat is a @lid (Baileys "linked id"), the real phone must come
   // from SenderAlt. Normalizing the LID itself creates an invalid contact and
@@ -793,7 +801,7 @@ Deno.serve(async (req) => {
   const phone = rawFromIsLid
     ? normalizePhone(senderAlt) || normalizePhone(rawFrom)
     : normalizePhone(rawFrom) || normalizePhone(senderAlt);
-  if (!phone) return json({ ok: true, skipped: 'no_individual_sender', rawFrom, senderAlt });
+  if (!phone) return json({ ok: true, skipped: 'no_individual_sender', rawFrom, senderAlt, from_me: fromMeFlag });
 
   if (providerMsgId) {
     const idemKey = `waha:msg:${providerMsgId}`;
@@ -810,8 +818,9 @@ Deno.serve(async (req) => {
     });
   }
 
-  const pushName: string | null =
-    info?.PushName || webPayload?._data?.Info?.PushName || webPayload?.notifyName || null;
+  const pushName: string | null = fromMeFlag
+    ? null // don't overwrite contact name with our own device pushName
+    : (info?.PushName || webPayload?._data?.Info?.PushName || webPayload?.notifyName || null);
 
   // Upsert customer by phone under this owner.
   const { data: existingCustomer } = await supabase
@@ -934,7 +943,7 @@ Deno.serve(async (req) => {
 
   const { data: insertedMsg, error: msgErr } = await supabase.from('chat_messages').insert({
     customer_id: customerId,
-    sender_type: 'client',
+    sender_type: fromMeFlag ? 'agent' : 'client',
     channel: 'whatsapp',
     content,
     connection_id: conn.id,
@@ -951,6 +960,9 @@ Deno.serve(async (req) => {
       sender_lid: senderLid,
       owner_id: conn.owner_id,
       webhook_received_at: new Date().toISOString(),
+      from_me: fromMeFlag,
+      direction: fromMeFlag ? 'outbound_native' : 'inbound',
+      external_device: fromMeFlag === true,
       ...(mediaMeta || {}),
       ...(quotedMeta ? { quoted: quotedMeta } : {}),
       raw: gowsData ?? webPayload,
