@@ -2,9 +2,39 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Upload, Files, X, Plus, Send, Loader2, CheckCircle2, AlertCircle,
   Image as ImageIcon, Video as VideoIcon, FileText, AudioLines, Trash2,
+  RotateCcw, Ban,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+
+const QUEUE_META_KEY = 'chat:composerQueue:meta:v1';
+interface PersistedItemMeta {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  kind: 'image' | 'video' | 'audio' | 'document';
+  lastModified: number;
+}
+function persistQueueMeta(items: Array<{ id: string; file: File; kind: PersistedItemMeta['kind'] }>): void {
+  try {
+    const meta: PersistedItemMeta[] = items.map(i => ({
+      id: i.id, name: i.file.name, size: i.file.size, type: i.file.type,
+      kind: i.kind, lastModified: i.file.lastModified,
+    }));
+    if (meta.length) sessionStorage.setItem(QUEUE_META_KEY, JSON.stringify(meta));
+    else sessionStorage.removeItem(QUEUE_META_KEY);
+  } catch {}
+}
+function readQueueMeta(): PersistedItemMeta[] {
+  try {
+    const raw = sessionStorage.getItem(QUEUE_META_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+function clearQueueMeta() { try { sessionStorage.removeItem(QUEUE_META_KEY); } catch {} }
 
 type Kind = 'image' | 'video' | 'audio' | 'document';
 type Status = 'queued' | 'sending' | 'done' | 'error' | 'canceled' | 'rejected';
@@ -73,7 +103,9 @@ export function MediaDropzone({
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<QueueItem[]>([]);
   const [sending, setSending] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
   const cancelRef = useRef(false);
+  const canceledIdsRef = useRef<Set<string>>(new Set());
   const depthRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -82,6 +114,25 @@ export function MediaDropzone({
   // Cleanup preview URLs
   useEffect(() => () => {
     items.forEach((i) => { if (i.previewUrl) URL.revokeObjectURL(i.previewUrl); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persistência de metadados da fila (sobrevive a reload dentro da mesma aba).
+  // Blobs não podem ser reidratados em File objects sem apoio de IDB específico;
+  // por isso ao recarregar exibimos um aviso ao usuário para reanexar.
+  useEffect(() => {
+    persistQueueMeta(items.map(i => ({ id: i.id, file: i.file, kind: i.kind })));
+  }, [items]);
+
+  useEffect(() => {
+    const meta = readQueueMeta();
+    if (meta.length) {
+      toast.warning(`${meta.length} anexo(s) da sessão anterior precisam ser reanexados`, {
+        description: meta.slice(0, 3).map(m => m.name).join(' · '),
+        duration: 6000,
+      });
+      clearQueueMeta();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -113,9 +164,13 @@ export function MediaDropzone({
     if (!next.length) return;
     const rejected = next.filter(i => i.status === 'rejected');
     if (rejected.length) {
-      toast.error(`${rejected.length} arquivo(s) inválido(s)`, {
+      const msg = `${rejected.length} arquivo(s) inválido(s)`;
+      toast.error(msg, {
         description: rejected.slice(0, 3).map(r => `${r.file.name}: ${r.error}`).join(' · '),
       });
+      setAnnouncement(msg);
+    } else {
+      setAnnouncement(`${next.length} arquivo(s) adicionado(s) à fila`);
     }
     setItems((prev) => [...prev, ...next]);
     setOpen(true);
@@ -127,6 +182,7 @@ export function MediaDropzone({
       if (it?.previewUrl) URL.revokeObjectURL(it.previewUrl);
       return prev.filter(x => x.id !== id);
     });
+    setAnnouncement('Arquivo removido da fila');
   };
 
   const clearAll = () => {
@@ -134,11 +190,55 @@ export function MediaDropzone({
     setItems([]);
     setOpen(false);
     cancelRef.current = false;
+    canceledIdsRef.current.clear();
+    clearQueueMeta();
   };
 
   const cancelSending = () => {
     cancelRef.current = true;
     toast.message('Cancelando envios pendentes...');
+    setAnnouncement('Cancelando envios pendentes');
+  };
+
+  const cancelItem = (id: string) => {
+    canceledIdsRef.current.add(id);
+    setItems(prev => prev.map(x => x.id === id && (x.status === 'queued' || x.status === 'sending')
+      ? { ...x, status: 'canceled' } : x));
+    setAnnouncement('Envio de arquivo cancelado');
+  };
+
+  const retryItem = (id: string) => {
+    canceledIdsRef.current.delete(id);
+    setItems(prev => prev.map(x => x.id === id
+      ? { ...x, status: 'queued', progress: 0, error: undefined } : x));
+    setAnnouncement('Reenvio agendado — clique em Enviar');
+  };
+
+  const sendOne = async (it: QueueItem): Promise<'ok' | 'fail' | 'canceled'> => {
+    if (canceledIdsRef.current.has(it.id)) return 'canceled';
+    setItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'sending', progress: 10 } : x));
+    setAnnouncement(`Enviando ${it.file.name}`);
+    const tick = window.setInterval(() => {
+      setItems(prev => prev.map(x => x.id === it.id && x.status === 'sending'
+        ? { ...x, progress: Math.min(90, x.progress + 8) } : x));
+    }, 250);
+    try {
+      await onSendFile(it.file, it.kind);
+      window.clearInterval(tick);
+      if (canceledIdsRef.current.has(it.id)) {
+        setItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'canceled' } : x));
+        return 'canceled';
+      }
+      setItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'done', progress: 100 } : x));
+      setAnnouncement(`${it.file.name} enviado com sucesso`);
+      return 'ok';
+    } catch (e: any) {
+      window.clearInterval(tick);
+      const msg = e?.message || 'Falha no envio';
+      setItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'error', error: msg } : x));
+      setAnnouncement(`Falha ao enviar ${it.file.name}: ${msg}`);
+      return 'fail';
+    }
   };
 
   const sendAll = async () => {
@@ -152,33 +252,33 @@ export function MediaDropzone({
         setItems(prev => prev.map(x => x.status === 'queued' ? { ...x, status: 'canceled' } : x));
         break;
       }
-      setItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'sending', progress: 10 } : x));
-      // Simular avanço enquanto o await roda
-      const tick = window.setInterval(() => {
-        setItems(prev => prev.map(x => x.id === it.id && x.status === 'sending'
-          ? { ...x, progress: Math.min(90, x.progress + 8) } : x));
-      }, 250);
-      try {
-        await onSendFile(it.file, it.kind);
-        window.clearInterval(tick);
-        setItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'done', progress: 100 } : x));
-        ok++;
-      } catch (e: any) {
-        window.clearInterval(tick);
-        setItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'error', error: e?.message || 'Falha no envio' } : x));
-        fail++;
-      }
+      const r = await sendOne(it);
+      if (r === 'ok') ok++;
+      else if (r === 'fail') fail++;
     }
     setSending(false);
     if (ok || fail) {
       const msg = `${ok} enviado(s)${fail ? ` · ${fail} falha(s)` : ''}`;
       fail ? toast.warning(msg) : toast.success(msg);
+      setAnnouncement(msg);
     }
-    // Auto-fecha se tudo concluído com sucesso
     if (fail === 0 && !cancelRef.current) {
       window.setTimeout(() => clearAll(), 900);
     }
   };
+
+  const retryFailed = async () => {
+    const failed = items.filter(i => i.status === 'error' || i.status === 'canceled');
+    if (!failed.length) return;
+    setItems(prev => prev.map(x => (x.status === 'error' || x.status === 'canceled')
+      ? { ...x, status: 'queued', progress: 0, error: undefined } : x));
+    failed.forEach(f => canceledIdsRef.current.delete(f.id));
+    setAnnouncement(`Reenviando ${failed.length} arquivo(s)`);
+    // Deixa o React aplicar o reset antes de disparar o envio.
+    await new Promise(r => setTimeout(r, 30));
+    void sendAll();
+  };
+
 
   // Drag & drop global
   useEffect(() => {
@@ -398,18 +498,36 @@ export function MediaDropzone({
                     )}
                   </div>
 
-                  {/* Status / remover */}
+                  {/* Status / cancelar / retry / remover */}
                   <div className="shrink-0 flex items-center gap-1">
                     {it.status === 'sending' && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
                     {it.status === 'done' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
                     {(it.status === 'error' || it.status === 'rejected') && (
                       <AlertCircle className="w-4 h-4 text-destructive" />
                     )}
+                    {it.status === 'sending' && (
+                      <Button
+                        type="button" variant="ghost" size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        aria-label={`Cancelar envio de ${it.file.name}`}
+                        onClick={() => cancelItem(it.id)}
+                      >
+                        <Ban className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {(it.status === 'error' || it.status === 'canceled') && (
+                      <Button
+                        type="button" variant="ghost" size="icon"
+                        className="h-8 w-8 text-primary hover:text-primary"
+                        aria-label={`Reenviar ${it.file.name}`}
+                        onClick={() => retryItem(it.id)}
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </Button>
+                    )}
                     {(it.status === 'queued' || it.status === 'rejected' || it.status === 'error' || it.status === 'canceled') && (
                       <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
+                        type="button" variant="ghost" size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-destructive"
                         aria-label={`Remover ${it.file.name}`}
                         onClick={() => removeItem(it.id)}
@@ -420,6 +538,10 @@ export function MediaDropzone({
                   </div>
                 </div>
               ))}
+              {/* Região aria-live: anúncios para leitores de tela sobre a fila. */}
+              <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                {announcement}
+              </div>
             </div>
 
             {/* Footer */}
@@ -434,6 +556,11 @@ export function MediaDropzone({
                 <Plus className="w-4 h-4 mr-1" /> Adicionar
               </Button>
               <div className="flex items-center gap-2">
+                {items.some(i => i.status === 'error' || i.status === 'canceled') && !sending && (
+                  <Button type="button" variant="outline" size="sm" onClick={retryFailed}>
+                    <RotateCcw className="w-4 h-4 mr-1" /> Reenviar falhas
+                  </Button>
+                )}
                 {sending ? (
                   <Button type="button" variant="outline" size="sm" onClick={cancelSending}>
                     Cancelar envio

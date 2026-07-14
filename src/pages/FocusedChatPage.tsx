@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   MessageCircle, Search, Info, Images, Pin, Star, StickyNote,
-  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2,
+  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2, Eye,
 } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,7 +24,8 @@ import {
   getCachedMessages, setCachedMessages,
 } from '@/lib/chatCache';
 import {
-  getAllLastReads, getLastRead, markRead, subscribeReadEvents,
+  getAllLastReads, markRead, subscribeReadEvents, getReaders,
+  type ReaderEntry,
 } from '@/lib/chatReadTracker';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
@@ -41,6 +42,7 @@ import { MediaGallery } from '@/components/chat/MediaGallery';
 import { StarredMessagesPanel } from '@/components/chat/StarredMessagesPanel';
 import { AIInsightsPanel } from '@/components/chat/AIInsightsPanel';
 import { Customer360Timeline } from '@/components/chat/Customer360Timeline';
+import { MessageSearchDialog, type MessageSearchHit } from '@/components/chat/MessageSearchDialog';
 
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import type { WhatsAppConnection } from '@/components/whatsapp/types';
@@ -117,8 +119,17 @@ export default function FocusedChatPage() {
   const [tool, setTool] = useState<Tool>(initialTool);
   const [olderLoading, setOlderLoading] = useState(false);
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [readers, setReaders] = useState<ReaderEntry[]>([]);
+  const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const keepScrollAnchor = useRef<{ prevHeight: number; prevTop: number } | null>(null);
+
+  const readerInfo = useMemo(() => user ? ({
+    id: user.id,
+    label: (user as any).user_metadata?.full_name || user.email || 'Você',
+    avatarUrl: (user as any).user_metadata?.avatar_url || null,
+  }) : null, [user]);
 
   const selectedConv = useMemo(() => convs.find(c => c.id === selected) || null, [convs, selected]);
 
@@ -223,10 +234,10 @@ export default function FocusedChatPage() {
     requestAnimationFrame(() => {
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'auto' });
     });
-    // Marca como lida ao abrir.
+    // Marca como lida ao abrir (com identidade do leitor atual).
     const last = fetched[fetched.length - 1];
-    if (last) markRead(user?.id, cid, last.created_at);
-  }, [user?.id]);
+    if (last) markRead(user?.id, cid, last.created_at, readerInfo);
+  }, [user?.id, readerInfo]);
 
   // Carrega uma página anterior (mensagens mais antigas) sob demanda.
   const loadOlder = useCallback(async () => {
@@ -305,7 +316,7 @@ export default function FocusedChatPage() {
           });
           if (isOpen) {
             setMsgs(prev => (prev.some(x => x.id === m.id) ? prev : [...prev, m]));
-            markRead(user.id, m.customer_id, m.created_at);
+            markRead(user.id, m.customer_id, m.created_at, readerInfo);
             requestAnimationFrame(() => {
               scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
             });
@@ -320,17 +331,27 @@ export default function FocusedChatPage() {
         })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user, selected]);
+  }, [user, selected, readerInfo]);
 
-  // Sincroniza contadores de não-lidas entre abas (BroadcastChannel + storage).
+  // Sincroniza contadores de não-lidas e ledger de leitores entre abas.
   useEffect(() => {
     return subscribeReadEvents((e) => {
       if (e.ownerId !== user?.id) return;
       setConvs(prev => prev.map(c =>
         c.id === e.customerId ? { ...c, unread: computeUnread(c.last_at, e.readAt) } : c,
       ));
+      if (selected && e.customerId === selected) {
+        setReaders(getReaders(user?.id, selected));
+      }
     });
-  }, [user?.id]);
+  }, [user?.id, selected]);
+
+  // Carrega ledger de leitores ao trocar de conversa.
+  useEffect(() => {
+    if (!selected) { setReaders([]); return; }
+    setReaders(getReaders(user?.id, selected));
+  }, [selected, user?.id]);
+
 
   const handleSend = async (text: string) => {
     if (!selected || !conn) {
@@ -369,7 +390,7 @@ export default function FocusedChatPage() {
       setMsgs(prev => prev.map(m => m.client_msg_id === clientId
         ? { ...m, uaz_msg_id: providerId, metadata: { status: 'sent' } } : m));
       // Sua própria mensagem também zera a "não-lida".
-      markRead(user?.id, selected, new Date().toISOString());
+      markRead(user?.id, selected, new Date().toISOString(), readerInfo);
     } catch (err: any) {
       setMsgs(prev => prev.map(m => m.client_msg_id === clientId
         ? { ...m, metadata: { status: 'error', error: err?.message } } : m));
@@ -427,6 +448,61 @@ export default function FocusedChatPage() {
       void loadOlder();
     }
   };
+
+  // Atalho de teclado: Ctrl/⌘+F abre o diálogo de busca no histórico.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f' && selected) {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected]);
+
+  /**
+   * Salta para uma mensagem específica retornada pela busca completa.
+   * Carrega uma "janela" de contexto (antes + depois) sem quebrar a paginação:
+   * mensagens mais antigas continuam disponíveis via botão "Carregar antigas".
+   */
+  const handleJumpToMessage = useCallback(async (hit: MessageSearchHit) => {
+    if (!hit.customer_id) return;
+    if (selected !== hit.customer_id) setSelected(hit.customer_id);
+    const [{ data: before }, { data: after }] = await Promise.all([
+      supabase.from('chat_messages').select('*')
+        .eq('customer_id', hit.customer_id)
+        .lte('created_at', hit.created_at)
+        .order('created_at', { ascending: false })
+        .limit(40),
+      supabase.from('chat_messages').select('*')
+        .eq('customer_id', hit.customer_id)
+        .gt('created_at', hit.created_at)
+        .order('created_at', { ascending: true })
+        .limit(20),
+    ]);
+    const beforeAsc = ((before as Msg[]) || []).slice().reverse();
+    const window = [...beforeAsc, ...((after as Msg[]) || [])];
+    const byId = new Map<string, Msg>();
+    window.forEach(m => byId.set(m.id, m));
+    const merged = Array.from(byId.values()).sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+    setHasMoreOlder(true);
+    setMsgs(merged);
+    setPendingScrollId(hit.id);
+  }, [selected]);
+
+  // Efetiva o scroll para a mensagem alvo após o virtualizer medir.
+  useEffect(() => {
+    if (!pendingScrollId) return;
+    const idx = msgs.findIndex(m => m.id === pendingScrollId);
+    if (idx < 0) return;
+    const id = window.setTimeout(() => {
+      try { virtualizer.scrollToIndex(idx, { align: 'center' }); } catch {}
+      setPendingScrollId(null);
+    }, 40);
+    return () => window.clearTimeout(id);
+  }, [pendingScrollId, msgs, virtualizer]);
+
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -525,12 +601,52 @@ export default function FocusedChatPage() {
                     </Avatar>
                     <div className="min-w-0">
                       <div className="text-sm font-semibold truncate">{selectedConv.name}</div>
-                      <div className="text-[11px] text-muted-foreground truncate">
-                        {selectedConv.phone || '—'} {selectedConv.presence ? `· ${selectedConv.presence}` : ''}
+                      <div className="text-[11px] text-muted-foreground truncate flex items-center gap-2">
+                        <span className="truncate">
+                          {selectedConv.phone || '—'} {selectedConv.presence ? `· ${selectedConv.presence}` : ''}
+                        </span>
+                        {readers.length > 0 && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex items-center gap-1 shrink-0 text-emerald-600 dark:text-emerald-400">
+                                <Eye className="w-3 h-3" />
+                                <span className="flex -space-x-1.5">
+                                  {readers.slice(0, 3).map((r) => (
+                                    <Avatar key={r.id} className="w-4 h-4 border border-background">
+                                      <AvatarImage src={r.avatarUrl || undefined} />
+                                      <AvatarFallback className="text-[8px] bg-emerald-500/20">{initials(r.label)}</AvatarFallback>
+                                    </Avatar>
+                                  ))}
+                                </span>
+                                {readers.length > 3 && <span>+{readers.length - 3}</span>}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <div className="text-xs">
+                                <div className="font-medium mb-1">Vistas por</div>
+                                {readers.map(r => (
+                                  <div key={r.id}>{r.label} · {new Date(r.readAt).toLocaleString('pt-BR')}</div>
+                                ))}
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setSearchOpen(true)}
+                          className="p-2 rounded-lg hover:bg-secondary transition text-muted-foreground"
+                          aria-label="Buscar no histórico"
+                        >
+                          <Search className="w-4 h-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Buscar no histórico (Ctrl/⌘+F)</TooltipContent>
+                    </Tooltip>
                     {tools.map(t => (
                       <Tooltip key={t.key || 'none'}>
                         <TooltipTrigger asChild>
@@ -550,6 +666,7 @@ export default function FocusedChatPage() {
                     ))}
                   </div>
                 </div>
+
 
                 {/* Messages (virtualizadas) */}
                 <div
@@ -704,6 +821,13 @@ export default function FocusedChatPage() {
           )}
         </div>
       </div>
+
+      <MessageSearchDialog
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        customerId={selected}
+        onJump={handleJumpToMessage}
+      />
     </TooltipProvider>
   );
 }
