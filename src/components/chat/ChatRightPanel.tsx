@@ -62,6 +62,22 @@ export function ChatRightPanel({ customerId, customerName, onClose, onUseReply }
   const [newReply, setNewReply] = useState({ shortcut: '', content: '' });
   const [savingReply, setSavingReply] = useState(false);
   const [user, setUser] = useState<{ id: string; name: string } | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [savingName, setSavingName] = useState(false);
+
+  const saveName = async () => {
+    const next = nameDraft.trim();
+    if (!next || next === customerName) { setEditingName(false); return; }
+    if (next.length > 120) { toast.error('Nome deve ter no máximo 120 caracteres.'); return; }
+    setSavingName(true);
+    const { error } = await supabase.from('customers').update({ name: next } as any).eq('id', customerId);
+    setSavingName(false);
+    if (error) { toast.error('Não foi possível renomear o contato.'); return; }
+    toast.success('Contato renomeado.');
+    setEditingName(false);
+    window.dispatchEvent(new CustomEvent('customer:renamed', { detail: { id: customerId, name: next } }));
+  };
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
