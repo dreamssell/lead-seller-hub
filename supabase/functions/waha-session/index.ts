@@ -466,18 +466,6 @@ Deno.serve(async (req) => {
         if (data?.status === "cancel_requested") cancelRequested = true;
         return cancelRequested;
       };
-        .select("id")
-        .single();
-      if (runErr || !runRow) return json({ ok: false, error: runErr?.message ?? "run_create_failed" }, 500);
-      const runId = runRow.id;
-
-      let chatsSeen = 0;
-      let considered = 0;
-      let inserted = 0;
-      let skipped = 0;
-      let customersCreated = 0;
-      const failedItems: any[] = [];
-      let lastProgressUpdate = 0;
 
       const updateProgress = async (force = false, currentLabel?: string | null) => {
         const now = Date.now();
