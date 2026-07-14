@@ -2994,6 +2994,19 @@ export default function ChatPage() {
 
 
       <MediaDropzone active={!!selectedConvId} onDrop={(files) => setExternalAttachment(files[0] || null)} />
+      {lightboxUrl && (() => {
+        const imgs: MediaItem[] = messages
+          .filter((mm: any) => mm._mediaType === 'image' && mm._mediaUrl)
+          .map((mm: any) => ({ url: mm._mediaUrl, mime: mm._mediaMime, name: mm._mediaFilename, caption: mm.content && mm.content !== '[mídia]' ? mm.content : undefined }));
+        const idx = Math.max(0, imgs.findIndex(i => i.url === lightboxUrl));
+        return (
+          <MediaViewerDialog
+            items={imgs.length ? imgs : [{ url: lightboxUrl }]}
+            index={idx}
+            onClose={() => setLightboxUrl(null)}
+          />
+        );
+      })()}
       <KeyboardShortcutsHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       <GlobalSearchDialog open={globalSearchOpen} onOpenChange={setGlobalSearchOpen} />
       <NewConversationDialog
