@@ -231,9 +231,16 @@ export function ChatComposer({
           </Tooltip>
         </div>
 
+        {sending && attachment && (
+          <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-secondary/60">
+            <div className="h-full w-1/3 bg-primary animate-[progress_1.2s_ease-in-out_infinite]" style={{ animationName: 'progress' }} />
+            <style>{`@keyframes progress { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }`}</style>
+          </div>
+        )}
+
         <div className="mt-1.5 flex items-center justify-between text-[10px] text-muted-foreground px-1">
           <span>
-            Rascunho salvo automaticamente · use <kbd className="px-1 py-px bg-secondary border border-border rounded">/</kbd> para respostas rápidas
+            Rascunho salvo automaticamente · use <kbd className="px-1 py-px bg-secondary border border-border rounded">/</kbd> para respostas rápidas · arraste arquivos para anexar
           </span>
           <span>{text.length} caracteres</span>
         </div>
