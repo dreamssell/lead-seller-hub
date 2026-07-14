@@ -234,10 +234,10 @@ export default function FocusedChatPage() {
     requestAnimationFrame(() => {
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'auto' });
     });
-    // Marca como lida ao abrir.
+    // Marca como lida ao abrir (com identidade do leitor atual).
     const last = fetched[fetched.length - 1];
-    if (last) markRead(user?.id, cid, last.created_at);
-  }, [user?.id]);
+    if (last) markRead(user?.id, cid, last.created_at, readerInfo);
+  }, [user?.id, readerInfo]);
 
   // Carrega uma página anterior (mensagens mais antigas) sob demanda.
   const loadOlder = useCallback(async () => {
