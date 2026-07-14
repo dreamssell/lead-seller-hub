@@ -18,6 +18,10 @@ import {
   Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  getCachedConvs, setCachedConvs,
+  getCachedMessages, setCachedMessages,
+} from '@/lib/chatCache';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
