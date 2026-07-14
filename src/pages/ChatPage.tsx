@@ -30,6 +30,10 @@ import { toast } from '@/hooks/use-toast';
 import { toast as sonnerToast } from 'sonner';
 
 import { supabase } from '@/integrations/supabase/client';
+import {
+  getCachedConvs, setCachedConvs,
+  getCachedMessages, setCachedMessages,
+} from '@/lib/chatCache';
 import { Link } from 'react-router-dom';
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import { WhatsAppConnection } from '@/components/whatsapp/types';
