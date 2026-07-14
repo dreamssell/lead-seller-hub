@@ -32,19 +32,33 @@ const CHANNEL_LABEL: Record<string, string> = {
 const CALL_STATUS_LABEL: Record<string, string> = {
   answered: 'atendida',
   completed: 'concluída',
+  ended: 'finalizada',
+  end: 'finalizada',
+  hangup: 'finalizada',
+  terminated: 'finalizada',
+  finished: 'finalizada',
   missed: 'perdida',
   failed: 'falhou',
+  error: 'falhou',
   rejected: 'rejeitada',
   busy: 'ocupada',
   no_answer: 'sem resposta',
+  noanswer: 'sem resposta',
   cancelled: 'cancelada',
+  canceled: 'cancelada',
   ongoing: 'em andamento',
   ringing: 'chamando',
+  ring: 'chamando',
+  initiated: 'iniciada',
+  invite: 'iniciada',
+  dialing: 'discando',
 };
 
 const CALL_DIRECTION_LABEL: Record<string, string> = {
   inbound: 'recebida',
+  in: 'recebida',
   outbound: 'efetuada',
+  out: 'efetuada',
   incoming: 'recebida',
   outgoing: 'efetuada',
 };
@@ -85,7 +99,7 @@ export function CustomerServiceHistory({ customerId }: Props) {
 
       const [{ data: cust }, leadsRes] = await Promise.all([
         (supabase as any).from('customers')
-          .select('name,created_at,created_by,source,channel')
+          .select('name,phone,created_at,created_by,source,channel')
           .eq('id', customerId).maybeSingle(),
         supabase.from('leads').select('id,name,source,channel,created_at,pipeline_id,created_by')
           .eq('customer_id', customerId),
@@ -102,9 +116,17 @@ export function CustomerServiceHistory({ customerId }: Props) {
         supabase.from('conversation_assignments')
           .select('id,from_user_id,to_user_id,reason,created_at')
           .eq('customer_id', customerId).order('created_at', { ascending: true }).limit(100),
-        (supabase as any).from('call_history')
-          .select('id,direction,status,duration_seconds,started_at,phone_number,channel,connection_label,user_id')
-          .eq('customer_id', customerId).order('started_at', { ascending: true }).limit(50),
+        (async () => {
+          const digits = String((cust as any)?.phone || '').replace(/\D/g, '');
+          const suffix = digits.slice(-8);
+          const q = (supabase as any).from('call_history')
+            .select('id,direction,status,duration_seconds,started_at,phone_number,channel,connection_label,user_id')
+            .order('started_at', { ascending: true }).limit(50);
+          const filter = suffix
+            ? q.or(`customer_id.eq.${customerId},phone_number.ilike.%${suffix}`)
+            : q.eq('customer_id', customerId);
+          return await filter;
+        })(),
         leadIds.length
           ? supabase.from('lead_events')
               .select('id,lead_id,type,from_stage_name,to_stage_name,channel,source,created_at,user_id')
@@ -239,11 +261,15 @@ export function CustomerServiceHistory({ customerId }: Props) {
       });
 
       // Ligações — formato pedido: "Ligação por WhatsApp · 00:40"
+      const seenCalls = new Set<string>();
       (calls.data || []).forEach((c: any) => {
+        if (seenCalls.has(c.id)) return;
+        seenCalls.add(c.id);
         const dur = formatDuration(c.duration_seconds || 0);
         const ch = ptChannel(c.channel) || 'Telefone';
-        const dir = ptDirection(c.direction) || '—';
+        const dir = ptDirection(c.direction);
         const st = ptCallStatus(c.status);
+        const parts = [who(c.user_id), dir, st, c.connection_label].filter(Boolean);
         arr.push({
           key: `call-${c.id}`,
           when: c.started_at,
@@ -252,9 +278,12 @@ export function CustomerServiceHistory({ customerId }: Props) {
             <div className="text-xs leading-relaxed">
               <p className="font-semibold">Ligação por {ch} · {dur}</p>
               <p className="text-[11px] text-muted-foreground">
-                <span className="font-medium text-foreground/90">{who(c.user_id)}</span> · {dir}
-                {st && ` · ${st}`}
-                {c.connection_label && ` · ${c.connection_label}`}
+                {parts.map((p, i) => (
+                  <span key={i}>
+                    {i === 0 ? <span className="font-medium text-foreground/90">{p}</span> : p}
+                    {i < parts.length - 1 && ' · '}
+                  </span>
+                ))}
               </p>
             </div>
           ),
