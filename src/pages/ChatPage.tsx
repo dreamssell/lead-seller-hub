@@ -2700,6 +2700,34 @@ export default function ChatPage() {
 
 
 
+              {/* Etapa 8 — mensagens fixadas e busca dentro da conversa */}
+              <PinnedMessagesBar
+                items={pinnedItems}
+                onJump={(id) => {
+                  const el = document.querySelector(`[data-msg-id="${id}"]`) as HTMLElement | null;
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.classList.add('ring-2', 'ring-primary/60');
+                    setTimeout(() => el.classList.remove('ring-2', 'ring-primary/60'), 1200);
+                  } else {
+                    toast({ title: 'Mensagem fora do trecho', description: 'Role o histórico para carregar a mensagem original.' });
+                  }
+                }}
+                onUnpin={async (pinId) => {
+                  await supabase.from('chat_pinned_messages').delete().eq('id', pinId);
+                }}
+              />
+              <InChatSearchBar
+                open={inChatSearchOpen}
+                query={inChatSearchQuery}
+                onQueryChange={setInChatSearchQuery}
+                currentIndex={inChatSearchIndex}
+                total={inChatMatches.length}
+                onPrev={() => setInChatSearchIndex((i) => (inChatMatches.length ? (i - 1 + inChatMatches.length) % inChatMatches.length : 0))}
+                onNext={() => setInChatSearchIndex((i) => (inChatMatches.length ? (i + 1) % inChatMatches.length : 0))}
+                onClose={() => { setInChatSearchOpen(false); setInChatSearchQuery(''); }}
+              />
+
               <div className="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col">
                 {activeChannel === 'telegram' && hasMoreHistory && (
                   <div className="flex justify-center py-2">
