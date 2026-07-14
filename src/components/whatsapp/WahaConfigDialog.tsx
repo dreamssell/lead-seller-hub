@@ -330,7 +330,6 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
                 ({backfillResult.customersCreated} contatos criados · {backfillResult.skipped} ignorados por já existirem).
               </div>
             )}
-            </div>
             {remoteSessions && (
               <div className="rounded-md border border-border/60 bg-secondary/30 p-2 max-h-40 overflow-auto">
                 <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">
