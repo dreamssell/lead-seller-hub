@@ -31,11 +31,25 @@ function json(data: unknown, status = 200) {
   });
 }
 
+// Canonicalize WhatsApp message ids so the same message delivered by WAHA
+// under different JID flavours (`@c.us` vs `@lid`) collapses into a single
+// dedup key. WhatsApp ids have the shape `<fromMe>_<jid>_<HASH>` where HASH
+// is a hex string that is globally unique per message. We prefer HASH; if the
+// id does not match that shape we keep the original string so unrelated
+// providers/events don't get lumped together.
+function canonicalMsgId(raw: string): string {
+  const parts = raw.split('_');
+  const tail = parts[parts.length - 1];
+  if (parts.length >= 3 && /^[A-F0-9]{16,}$/i.test(tail)) return tail.toUpperCase();
+  return raw;
+}
 function extractId(id: any): string | null {
+  let raw: string | null = null;
   if (!id) return null;
-  if (typeof id === 'string') return id;
-  if (typeof id === 'object' && typeof id._serialized === 'string') return id._serialized;
-  return null;
+  if (typeof id === 'string') raw = id;
+  else if (typeof id === 'object' && typeof id._serialized === 'string') raw = id._serialized;
+  if (!raw) return null;
+  return canonicalMsgId(raw);
 }
 
 // WhatsApp JIDs come in several flavours:
@@ -981,6 +995,32 @@ Deno.serve(async (req) => {
         media_path: stored?.path ?? null,
         media_size: stored?.size ?? null,
       };
+    }
+  }
+
+  // Outbound-echo dedup: when the platform sends a message via UAZ we insert
+  // the row locally with a client_msg_id but no uaz_msg_id. WAHA then echoes
+  // that same message back with IsFromMe=true and the canonical HASH. Instead
+  // of creating a second row, backfill uaz_msg_id onto the existing outbound
+  // record so the chat stays clean.
+  if (fromMeFlag && providerMsgId) {
+    const { data: echo } = await supabase
+      .from('chat_messages')
+      .select('id')
+      .eq('customer_id', customerId)
+      .eq('sender_type', 'agent')
+      .eq('content', content)
+      .is('uaz_msg_id', null)
+      .gte('created_at', new Date(Date.now() - 5 * 60_000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (echo?.id) {
+      await supabase
+        .from('chat_messages')
+        .update({ uaz_msg_id: providerMsgId })
+        .eq('id', echo.id);
+      return json({ ok: true, echo_merged: true, message_id: providerMsgId, chat_message_id: echo.id });
     }
   }
 
