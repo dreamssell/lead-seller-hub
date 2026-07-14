@@ -33,6 +33,7 @@ import { WhatsAppConnection } from '@/components/whatsapp/types';
 import { useVoip } from '@/contexts/VoipContext';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
 import { ChatRightPanel } from '@/components/chat/ChatRightPanel';
+import { MediaMessageContent } from '@/components/chat/MediaMessageContent';
 import { SignatureDocumentModal } from '@/components/signature/SignatureDocumentModal';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { StickyNote, Zap, PhoneCall, Headphones, PenLine, Keyboard } from 'lucide-react';
