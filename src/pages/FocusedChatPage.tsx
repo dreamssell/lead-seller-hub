@@ -821,6 +821,13 @@ export default function FocusedChatPage() {
           )}
         </div>
       </div>
+
+      <MessageSearchDialog
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        customerId={selected}
+        onJump={handleJumpToMessage}
+      />
     </TooltipProvider>
   );
 }
