@@ -316,7 +316,7 @@ export default function FocusedChatPage() {
           });
           if (isOpen) {
             setMsgs(prev => (prev.some(x => x.id === m.id) ? prev : [...prev, m]));
-            markRead(user.id, m.customer_id, m.created_at);
+            markRead(user.id, m.customer_id, m.created_at, readerInfo);
             requestAnimationFrame(() => {
               scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
             });
@@ -331,17 +331,27 @@ export default function FocusedChatPage() {
         })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user, selected]);
+  }, [user, selected, readerInfo]);
 
-  // Sincroniza contadores de não-lidas entre abas (BroadcastChannel + storage).
+  // Sincroniza contadores de não-lidas e ledger de leitores entre abas.
   useEffect(() => {
     return subscribeReadEvents((e) => {
       if (e.ownerId !== user?.id) return;
       setConvs(prev => prev.map(c =>
         c.id === e.customerId ? { ...c, unread: computeUnread(c.last_at, e.readAt) } : c,
       ));
+      if (selected && e.customerId === selected) {
+        setReaders(getReaders(user?.id, selected));
+      }
     });
-  }, [user?.id]);
+  }, [user?.id, selected]);
+
+  // Carrega ledger de leitores ao trocar de conversa.
+  useEffect(() => {
+    if (!selected) { setReaders([]); return; }
+    setReaders(getReaders(user?.id, selected));
+  }, [selected, user?.id]);
+
 
   const handleSend = async (text: string) => {
     if (!selected || !conn) {
