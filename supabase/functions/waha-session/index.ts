@@ -431,7 +431,6 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Create the tracking run row.
       const { data: runRow, error: runErr } = await supabaseAdmin
         .from("waha_import_runs")
         .insert({
@@ -440,8 +439,33 @@ Deno.serve(async (req) => {
           triggered_by: callerId,
           status: "running",
           chats_total: chats.length,
-          params: { action, chat_limit: chatLimit, msg_limit: msgLimit, retry_of: retrySourceRunId },
+          params: { action, chat_limit: chatLimit, msg_limit: msgLimit, retry_of: retrySourceRunId, dry_run: dryRun },
         })
+        .select("id")
+        .single();
+      if (runErr || !runRow) return json({ ok: false, error: runErr?.message ?? "run_create_failed" }, 500);
+      const runId = runRow.id;
+
+      let chatsSeen = 0;
+      let considered = 0;
+      let inserted = 0; // in dry-run: how many WOULD be inserted
+      let skipped = 0;
+      let customersCreated = 0; // in dry-run: how many contacts WOULD be created
+      const failedItems: any[] = [];
+      const wouldCreatePhones = new Set<string>(); // dry-run only, to avoid double-counting
+      let lastProgressUpdate = 0;
+      let cancelRequested = false;
+      let lastCancelCheck = 0;
+
+      const checkCancel = async (force = false): Promise<boolean> => {
+        const now = Date.now();
+        if (!force && now - lastCancelCheck < 1500) return cancelRequested;
+        lastCancelCheck = now;
+        const { data } = await supabaseAdmin
+          .from("waha_import_runs").select("status").eq("id", runId).maybeSingle();
+        if (data?.status === "cancel_requested") cancelRequested = true;
+        return cancelRequested;
+      };
         .select("id")
         .single();
       if (runErr || !runRow) return json({ ok: false, error: runErr?.message ?? "run_create_failed" }, 500);
