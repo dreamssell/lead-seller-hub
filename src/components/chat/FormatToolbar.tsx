@@ -11,9 +11,11 @@ interface Props {
   textareaRef: React.RefObject<HTMLTextAreaElement>;
   value: string;
   onChange: (v: string) => void;
+  onAfterAction?: () => void;
 }
 
-export function FormatToolbar({ textareaRef, value, onChange }: Props) {
+export function FormatToolbar({ textareaRef, value, onChange, onAfterAction }: Props) {
+
   const wrap = (fmt: Fmt) => {
     const ta = textareaRef.current;
     if (!ta) return;
