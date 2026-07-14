@@ -9,6 +9,7 @@ interface Props {
   filename?: string | null;
   duration?: number | null;
   mine?: boolean;
+  onOpen?: (url: string) => void;
 }
 
 function formatDuration(seconds?: number | null) {
@@ -36,31 +37,40 @@ function docKindColor(ext: string): string {
   return 'bg-muted text-muted-foreground';
 }
 
-export function MediaMessageContent({ url, type, mime, filename, duration, mine }: Props) {
+export function MediaMessageContent({ url, type, mime, filename, duration, mine, onOpen }: Props) {
   const [imgError, setImgError] = useState(false);
 
   if (type === 'image') {
-    return (
-      <a
-        href={url}
-        target="_blank"
-        rel="noreferrer"
-        className="block relative group my-1 rounded-xl overflow-hidden bg-black/5 dark:bg-white/5 max-w-[280px]"
-      >
-        {!imgError ? (
-          <img
-            src={url}
-            alt={filename || 'imagem'}
-            className="w-full max-h-72 object-cover"
-            loading="lazy"
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <div className="w-[240px] h-40 flex flex-col items-center justify-center text-muted-foreground gap-1">
-            <ImageIcon className="w-6 h-6" />
-            <span className="text-[10px]">Imagem indisponível</span>
+    const commonImg = (
+      !imgError ? (
+        <img
+          src={url}
+          alt={filename || 'imagem'}
+          className="w-full max-h-72 object-cover"
+          loading="lazy"
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <div className="w-[240px] h-40 flex flex-col items-center justify-center text-muted-foreground gap-1">
+          <ImageIcon className="w-6 h-6" />
+          <span className="text-[10px]">Imagem indisponível</span>
+        </div>
+      )
+    );
+    const cls = 'block relative group my-1 rounded-xl overflow-hidden bg-black/5 dark:bg-white/5 max-w-[280px] cursor-zoom-in';
+    if (onOpen) {
+      return (
+        <button type="button" onClick={() => onOpen(url)} className={cls} title="Ampliar">
+          {commonImg}
+          <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition rounded-md bg-black/60 text-white p-1">
+            <ExternalLink className="w-3 h-3" />
           </div>
-        )}
+        </button>
+      );
+    }
+    return (
+      <a href={url} target="_blank" rel="noreferrer" className={cls}>
+        {commonImg}
         <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition rounded-md bg-black/60 text-white p-1">
           <ExternalLink className="w-3 h-3" />
         </div>

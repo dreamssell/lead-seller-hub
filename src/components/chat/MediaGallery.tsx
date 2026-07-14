@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Image as ImageIcon, FileText, Film, Music, Images } from 'lucide-react';
+import { Loader2, Image as ImageIcon, FileText, Film, Music, Images, ArrowDownWideNarrow, ArrowUpWideNarrow } from 'lucide-react';
 import { MediaViewerDialog, MediaItem } from './MediaViewerDialog';
 import { cn } from '@/lib/utils';
 
@@ -26,7 +26,8 @@ export function MediaGallery({ customerId }: Props) {
   const [rows, setRows] = useState<MediaRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('all');
-  const [open, setOpen] = useState<MediaItem | null>(null);
+  const [sortDesc, setSortDesc] = useState(true);
+  const [openIdx, setOpenIdx] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +56,13 @@ export function MediaGallery({ customerId }: Props) {
     return () => { cancelled = true; };
   }, [customerId]);
 
-  const filtered = useMemo(() => filter === 'all' ? rows : rows.filter(r => r.kind === filter), [rows, filter]);
+  const filtered = useMemo(() => {
+    const base = filter === 'all' ? rows : rows.filter(r => r.kind === filter);
+    return [...base].sort((a, b) => {
+      const t = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      return sortDesc ? -t : t;
+    });
+  }, [rows, filter, sortDesc]);
 
   const counts = useMemo(() => ({
     all: rows.length,
@@ -83,6 +90,14 @@ export function MediaGallery({ customerId }: Props) {
         {chip('video', Film, 'Vídeos')}
         {chip('audio', Music, 'Áudios')}
         {chip('document', FileText, 'Docs')}
+        <button
+          onClick={() => setSortDesc(v => !v)}
+          className="ml-auto px-2 py-1 rounded-full text-[10px] flex items-center gap-1 border bg-secondary/50 border-border hover:bg-secondary transition"
+          title={sortDesc ? 'Mais recentes primeiro' : 'Mais antigos primeiro'}
+        >
+          {sortDesc ? <ArrowDownWideNarrow className="w-3 h-3" /> : <ArrowUpWideNarrow className="w-3 h-3" />}
+          {sortDesc ? 'Recentes' : 'Antigos'}
+        </button>
       </div>
       {loading ? (
         <div className="flex items-center justify-center py-8"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
@@ -95,7 +110,7 @@ export function MediaGallery({ customerId }: Props) {
               {filtered.map(r => (
                 <li key={r.id}>
                   <button
-                    onClick={() => setOpen(r)}
+                    onClick={() => setOpenIdx(filtered.indexOf(r))}
                     className="w-full flex items-center gap-2.5 rounded-lg border border-border bg-card/60 hover:bg-secondary px-2.5 py-2 text-left transition"
                     title={r.name || r.caption || ''}
                   >
@@ -124,7 +139,7 @@ export function MediaGallery({ customerId }: Props) {
               {filtered.map(r => (
                 <button
                   key={r.id}
-                  onClick={() => setOpen(r)}
+                  onClick={() => setOpenIdx(filtered.indexOf(r))}
                   className="relative aspect-square rounded-md overflow-hidden bg-secondary border border-border group hover:ring-2 hover:ring-primary/40"
                   title={r.name || r.caption || ''}
                 >
@@ -153,7 +168,9 @@ export function MediaGallery({ customerId }: Props) {
           )}
         </ScrollArea>
       )}
-      <MediaViewerDialog item={open} onClose={() => setOpen(null)} />
+      {openIdx !== null && (
+        <MediaViewerDialog items={filtered} index={openIdx} onIndexChange={setOpenIdx} onClose={() => setOpenIdx(null)} />
+      )}
     </div>
   );
 }

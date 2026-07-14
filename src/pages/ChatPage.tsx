@@ -34,6 +34,7 @@ import { useVoip } from '@/contexts/VoipContext';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
 import { ChatRightPanel } from '@/components/chat/ChatRightPanel';
 import { MediaMessageContent } from '@/components/chat/MediaMessageContent';
+import { MediaViewerDialog, type MediaItem } from '@/components/chat/MediaViewerDialog';
 import { SignatureDocumentModal } from '@/components/signature/SignatureDocumentModal';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { StickyNote, Zap, PhoneCall, Headphones, PenLine, Keyboard } from 'lucide-react';
@@ -447,6 +448,7 @@ export default function ChatPage() {
   const wavoip = useWavoipWebphone();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [externalAttachment, setExternalAttachment] = useState<File | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   // Etapa 3 — mensagem sendo respondida (quote/reply). null = envio normal.
   const [replyingTo, setReplyingTo] = useState<any | null>(null);
   const [forwardTarget, setForwardTarget] = useState<any | null>(null);
@@ -2628,6 +2630,7 @@ export default function ChatPage() {
                             filename={m._mediaFilename}
                             duration={m._mediaDuration}
                             mine={m.sender_type !== 'client'}
+                            onOpen={m._mediaType === 'image' ? (u) => setLightboxUrl(u) : undefined}
                           />
                         )}
                         {m._revoked ? (
@@ -2991,6 +2994,19 @@ export default function ChatPage() {
 
 
       <MediaDropzone active={!!selectedConvId} onDrop={(files) => setExternalAttachment(files[0] || null)} />
+      {lightboxUrl && (() => {
+        const imgs: MediaItem[] = messages
+          .filter((mm: any) => mm._mediaType === 'image' && mm._mediaUrl)
+          .map((mm: any) => ({ url: mm._mediaUrl, mime: mm._mediaMime, name: mm._mediaFilename, caption: mm.content && mm.content !== '[mídia]' ? mm.content : undefined }));
+        const idx = Math.max(0, imgs.findIndex(i => i.url === lightboxUrl));
+        return (
+          <MediaViewerDialog
+            items={imgs.length ? imgs : [{ url: lightboxUrl }]}
+            index={idx}
+            onClose={() => setLightboxUrl(null)}
+          />
+        );
+      })()}
       <KeyboardShortcutsHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       <GlobalSearchDialog open={globalSearchOpen} onOpenChange={setGlobalSearchOpen} />
       <NewConversationDialog
