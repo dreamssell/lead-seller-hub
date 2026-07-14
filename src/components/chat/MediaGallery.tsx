@@ -90,6 +90,14 @@ export function MediaGallery({ customerId }: Props) {
         {chip('video', Film, 'Vídeos')}
         {chip('audio', Music, 'Áudios')}
         {chip('document', FileText, 'Docs')}
+        <button
+          onClick={() => setSortDesc(v => !v)}
+          className="ml-auto px-2 py-1 rounded-full text-[10px] flex items-center gap-1 border bg-secondary/50 border-border hover:bg-secondary transition"
+          title={sortDesc ? 'Mais recentes primeiro' : 'Mais antigos primeiro'}
+        >
+          {sortDesc ? <ArrowDownWideNarrow className="w-3 h-3" /> : <ArrowUpWideNarrow className="w-3 h-3" />}
+          {sortDesc ? 'Recentes' : 'Antigos'}
+        </button>
       </div>
       {loading ? (
         <div className="flex items-center justify-center py-8"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
