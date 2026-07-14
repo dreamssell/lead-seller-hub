@@ -32,19 +32,33 @@ const CHANNEL_LABEL: Record<string, string> = {
 const CALL_STATUS_LABEL: Record<string, string> = {
   answered: 'atendida',
   completed: 'concluída',
+  ended: 'finalizada',
+  end: 'finalizada',
+  hangup: 'finalizada',
+  terminated: 'finalizada',
+  finished: 'finalizada',
   missed: 'perdida',
   failed: 'falhou',
+  error: 'falhou',
   rejected: 'rejeitada',
   busy: 'ocupada',
   no_answer: 'sem resposta',
+  noanswer: 'sem resposta',
   cancelled: 'cancelada',
+  canceled: 'cancelada',
   ongoing: 'em andamento',
   ringing: 'chamando',
+  ring: 'chamando',
+  initiated: 'iniciada',
+  invite: 'iniciada',
+  dialing: 'discando',
 };
 
 const CALL_DIRECTION_LABEL: Record<string, string> = {
   inbound: 'recebida',
+  in: 'recebida',
   outbound: 'efetuada',
+  out: 'efetuada',
   incoming: 'recebida',
   outgoing: 'efetuada',
 };
