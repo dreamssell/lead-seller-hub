@@ -354,7 +354,7 @@ Deno.serve(async (req) => {
     // "Sem mensagens ainda" when the webhook missed delivery. Idempotent by
     // uaz_msg_id + (owner_id, phone), so it can be re-run safely and never
     // affects UAZ / Evolution / Wavoip data or the live inbound path.
-    if (action === "backfill_from_server") {
+    if (action === "backfill_from_server" || action === "retry_failed") {
       if (!conn?.id) return json({ ok: false, error: "connection_required" }, 400);
       if (!base || !token || !sess) return json({ ok: false, error: "waha_credentials_missing" }, 400);
 
@@ -364,12 +364,27 @@ Deno.serve(async (req) => {
 
       const wahaHeaders = { "Content-Type": "application/json", "X-Api-Key": token } as Record<string, string>;
 
-      // 1) Fetch chats (or use the one provided).
+      // Build list of chats. For retry_failed, load from the source run's failed_items.
       let chats: any[] = [];
-      if (onlyChatId) {
+      let retrySourceRunId: string | null = null;
+      if (action === "retry_failed") {
+        retrySourceRunId = String(body?.run_id ?? "").trim() || null;
+        if (!retrySourceRunId) return json({ ok: false, error: "run_id_required" }, 400);
+        const { data: srcRun } = await supabaseAdmin
+          .from("waha_import_runs")
+          .select("id, owner_id, connection_id, failed_items")
+          .eq("id", retrySourceRunId)
+          .maybeSingle();
+        if (!srcRun || srcRun.connection_id !== conn.id) {
+          return json({ ok: false, error: "run_not_found" }, 404);
+        }
+        const failed: any[] = Array.isArray(srcRun.failed_items) ? srcRun.failed_items : [];
+        const uniqueChatIds = Array.from(new Set(failed.map((f) => f?.chat_id).filter(Boolean)));
+        chats = uniqueChatIds.map((cid) => ({ id: cid }));
+        if (!chats.length) return json({ ok: false, error: "no_failed_items_to_retry" }, 400);
+      } else if (onlyChatId) {
         chats = [{ id: onlyChatId }];
       } else {
-        // Try `/api/{session}/chats/overview` first (WAHA Plus), then fallback.
         for (const path of [`/api/${encodeURIComponent(sess)}/chats/overview?limit=${chatLimit}`, `/api/${encodeURIComponent(sess)}/chats?limit=${chatLimit}`]) {
           try {
             const r = await fetch(`${base}${path}`, { headers: wahaHeaders });
@@ -380,142 +395,215 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Create the tracking run row.
+      const { data: runRow, error: runErr } = await supabaseAdmin
+        .from("waha_import_runs")
+        .insert({
+          connection_id: conn.id,
+          owner_id: conn.owner_id,
+          triggered_by: callerId,
+          status: "running",
+          chats_total: chats.length,
+          params: { action, chat_limit: chatLimit, msg_limit: msgLimit, retry_of: retrySourceRunId },
+        })
+        .select("id")
+        .single();
+      if (runErr || !runRow) return json({ ok: false, error: runErr?.message ?? "run_create_failed" }, 500);
+      const runId = runRow.id;
+
       let chatsSeen = 0;
       let considered = 0;
       let inserted = 0;
       let skipped = 0;
       let customersCreated = 0;
-      const errors: any[] = [];
+      const failedItems: any[] = [];
+      let lastProgressUpdate = 0;
 
-      for (const chat of chats) {
-        chatsSeen++;
-        const chatIdRaw: string | undefined =
-          (typeof chat?.id === "string" ? chat.id : chat?.id?._serialized) ||
-          chat?.chatId || chat?.remoteJid;
-        if (!chatIdRaw) { skipped++; continue; }
-        // Only individual chats — skip groups, broadcasts, LIDs.
-        if (chatIdRaw.endsWith("@g.us") || chatIdRaw.endsWith("@broadcast") || chatIdRaw.endsWith("@lid")) {
-          skipped++;
-          continue;
-        }
-        const phone = normalizePhone(chatIdRaw);
-        if (!phone) { skipped++; continue; }
+      const updateProgress = async (force = false, currentLabel?: string | null) => {
+        const now = Date.now();
+        if (!force && now - lastProgressUpdate < 1200) return;
+        lastProgressUpdate = now;
+        await supabaseAdmin.from("waha_import_runs").update({
+          chats_processed: chatsSeen,
+          current_chat_label: currentLabel ?? undefined,
+          messages_considered: considered,
+          messages_inserted: inserted,
+          messages_skipped: skipped,
+          customers_created: customersCreated,
+          failed_items: failedItems.slice(0, 500),
+        }).eq("id", runId);
+      };
 
-        // Ensure a customer exists for this phone (race-safe upsert).
-        let customerId: string | null = null;
-        {
-          const { data: existing } = await supabaseAdmin
-            .from("customers")
-            .select("id")
-            .eq("phone", phone)
-            .eq("owner_id", conn.owner_id)
-            .maybeSingle();
-          if (existing?.id) {
-            customerId = existing.id;
-          } else {
-            const displayName = (typeof chat?.name === "string" && chat.name.trim())
-              || (typeof chat?.pushname === "string" && chat.pushname.trim())
-              || phone;
-            const { data: created, error: cErr } = await supabaseAdmin
-              .from("customers")
-              .upsert({
-                name: displayName,
-                phone,
-                channel: "whatsapp",
-                created_by: conn.owner_id,
-                owner_id: conn.owner_id,
-                sub_company_id: conn.sub_company_id,
-                origin_connection_id: conn.id,
-              }, { onConflict: "owner_id,phone", ignoreDuplicates: false })
-              .select("id")
-              .single();
-            if (cErr || !created?.id) {
-              const { data: raced } = await supabaseAdmin
-                .from("customers").select("id").eq("phone", phone).eq("owner_id", conn.owner_id).maybeSingle();
-              if (!raced?.id) { skipped++; errors.push({ phone, error: cErr?.message ?? "customer_upsert_failed" }); continue; }
-              customerId = raced.id;
+      try {
+        for (const chat of chats) {
+          const chatIdRaw: string | undefined =
+            (typeof chat?.id === "string" ? chat.id : chat?.id?._serialized) ||
+            chat?.chatId || chat?.remoteJid;
+          const chatLabel = (typeof chat?.name === "string" && chat.name) || chatIdRaw || "—";
+          await updateProgress(false, chatLabel);
+
+          if (!chatIdRaw) {
+            chatsSeen++;
+            failedItems.push({ chat_id: null, stage: "chat_id_missing", reason: "Chat sem ID válido", at: new Date().toISOString() });
+            continue;
+          }
+          if (chatIdRaw.endsWith("@g.us") || chatIdRaw.endsWith("@broadcast") || chatIdRaw.endsWith("@lid")) {
+            chatsSeen++; skipped++;
+            continue;
+          }
+          const phone = normalizePhone(chatIdRaw);
+          if (!phone) {
+            chatsSeen++;
+            failedItems.push({ chat_id: chatIdRaw, stage: "phone_normalize", reason: "Não foi possível extrair telefone", at: new Date().toISOString() });
+            continue;
+          }
+
+          // Upsert customer.
+          let customerId: string | null = null;
+          {
+            const { data: existing } = await supabaseAdmin
+              .from("customers").select("id")
+              .eq("phone", phone).eq("owner_id", conn.owner_id).maybeSingle();
+            if (existing?.id) {
+              customerId = existing.id;
             } else {
-              customerId = created.id;
-              customersCreated++;
+              const displayName = (typeof chat?.name === "string" && chat.name.trim())
+                || (typeof chat?.pushname === "string" && chat.pushname.trim())
+                || phone;
+              const { data: created, error: cErr } = await supabaseAdmin
+                .from("customers")
+                .upsert({
+                  name: displayName, phone, channel: "whatsapp",
+                  created_by: conn.owner_id, owner_id: conn.owner_id,
+                  sub_company_id: conn.sub_company_id, origin_connection_id: conn.id,
+                }, { onConflict: "owner_id,phone", ignoreDuplicates: false })
+                .select("id").single();
+              if (cErr || !created?.id) {
+                const { data: raced } = await supabaseAdmin
+                  .from("customers").select("id").eq("phone", phone).eq("owner_id", conn.owner_id).maybeSingle();
+                if (!raced?.id) {
+                  chatsSeen++;
+                  failedItems.push({ chat_id: chatIdRaw, phone, stage: "customer_upsert", reason: cErr?.message ?? "Falha ao criar contato", at: new Date().toISOString() });
+                  continue;
+                }
+                customerId = raced.id;
+              } else {
+                customerId = created.id;
+                customersCreated++;
+              }
             }
           }
+
+          // Fetch messages with error capture.
+          let messages: any[] = [];
+          let fetchError: string | null = null;
+          for (const path of [
+            `/api/${encodeURIComponent(sess)}/chats/${encodeURIComponent(chatIdRaw)}/messages?limit=${msgLimit}&downloadMedia=false`,
+            `/api/${encodeURIComponent(sess)}/${encodeURIComponent(chatIdRaw)}/messages?limit=${msgLimit}`,
+          ]) {
+            try {
+              const r = await fetch(`${base}${path}`, { headers: wahaHeaders });
+              if (!r.ok) { fetchError = `HTTP ${r.status} em ${path}`; continue; }
+              const arr = await r.json().catch(() => []);
+              if (Array.isArray(arr)) { messages = arr; fetchError = null; break; }
+            } catch (e) { fetchError = (e as any)?.message ?? String(e); }
+          }
+          if (fetchError && !messages.length) {
+            chatsSeen++;
+            failedItems.push({ chat_id: chatIdRaw, phone, stage: "waha_fetch_messages", reason: fetchError, at: new Date().toISOString() });
+            continue;
+          }
+
+          for (const m of messages) {
+            considered++;
+            const providerMsgId = extractId(m?.id) || (typeof m?.id === "string" ? m.id : null);
+            if (!providerMsgId) { skipped++; continue; }
+            const fromMe = m?.fromMe === true || m?.key?.fromMe === true;
+            const bodyText: string =
+              m?.body || m?.text || m?.caption ||
+              m?._data?.body || m?.message?.conversation ||
+              m?.message?.extendedTextMessage?.text || "";
+            const hasMedia = m?.hasMedia === true || !!m?.mediaUrl || !!m?.message?.imageMessage || !!m?.message?.videoMessage || !!m?.message?.audioMessage || !!m?.message?.documentMessage;
+            const content = bodyText || (hasMedia ? "[mídia]" : "");
+            if (!content) { skipped++; continue; }
+
+            const tsSec = Number(m?.timestamp || m?.t || m?.messageTimestamp || 0);
+            const createdAt = tsSec > 0
+              ? new Date(tsSec > 1e12 ? tsSec : tsSec * 1000).toISOString()
+              : new Date().toISOString();
+
+            const { data: dup } = await supabaseAdmin
+              .from("chat_messages")
+              .select("id, customers!inner(owner_id)")
+              .eq("uaz_msg_id", providerMsgId)
+              .eq("customers.owner_id", conn.owner_id)
+              .maybeSingle();
+            if (dup) { skipped++; continue; }
+
+            const { error: msgErr } = await supabaseAdmin.from("chat_messages").insert({
+              customer_id: customerId,
+              sender_type: fromMe ? "agent" : "client",
+              channel: "whatsapp",
+              content,
+              connection_id: conn.id,
+              sub_company_id: conn.sub_company_id,
+              uaz_msg_id: providerMsgId,
+              created_at: createdAt,
+              metadata: {
+                provider: "waha", source: "waha-session.backfill_from_server",
+                from_me: fromMe, direction: fromMe ? "outbound_native" : "inbound",
+                external_device: fromMe === true, chat_id: chatIdRaw,
+                owner_id: conn.owner_id, waha_timestamp: tsSec || null, raw: m,
+              },
+            });
+            if (msgErr?.code === "23505") { skipped++; continue; }
+            if (msgErr) {
+              skipped++;
+              failedItems.push({ chat_id: chatIdRaw, phone, provider_msg_id: providerMsgId, stage: "message_insert", reason: msgErr.message, at: new Date().toISOString() });
+              continue;
+            }
+            inserted++;
+          }
+          chatsSeen++;
+          await updateProgress(false, chatLabel);
         }
 
-        // 2) Fetch recent messages for the chat (try v3 then legacy path).
-        let messages: any[] = [];
-        for (const path of [
-          `/api/${encodeURIComponent(sess)}/chats/${encodeURIComponent(chatIdRaw)}/messages?limit=${msgLimit}&downloadMedia=false`,
-          `/api/${encodeURIComponent(sess)}/${encodeURIComponent(chatIdRaw)}/messages?limit=${msgLimit}`,
-        ]) {
-          try {
-            const r = await fetch(`${base}${path}`, { headers: wahaHeaders });
-            if (!r.ok) continue;
-            const arr = await r.json().catch(() => []);
-            if (Array.isArray(arr)) { messages = arr; break; }
-          } catch (_) { /* try next */ }
-        }
+        await supabaseAdmin.from("waha_import_runs").update({
+          status: "completed",
+          chats_processed: chatsSeen,
+          current_chat_label: null,
+          messages_considered: considered,
+          messages_inserted: inserted,
+          messages_skipped: skipped,
+          customers_created: customersCreated,
+          failed_items: failedItems.slice(0, 500),
+          finished_at: new Date().toISOString(),
+        }).eq("id", runId);
 
-        for (const m of messages) {
-          considered++;
-          const providerMsgId = extractId(m?.id) || (typeof m?.id === "string" ? m.id : null);
-          if (!providerMsgId) { skipped++; continue; }
-          const fromMe = m?.fromMe === true || m?.key?.fromMe === true;
-          const bodyText: string =
-            m?.body || m?.text || m?.caption ||
-            m?._data?.body || m?.message?.conversation ||
-            m?.message?.extendedTextMessage?.text || "";
-          const hasMedia = m?.hasMedia === true || !!m?.mediaUrl || !!m?.message?.imageMessage || !!m?.message?.videoMessage || !!m?.message?.audioMessage || !!m?.message?.documentMessage;
-          const content = bodyText || (hasMedia ? "[mídia]" : "");
-          if (!content) { skipped++; continue; }
-
-          const tsSec = Number(m?.timestamp || m?.t || m?.messageTimestamp || 0);
-          const createdAt = tsSec > 0
-            ? new Date(tsSec > 1e12 ? tsSec : tsSec * 1000).toISOString()
-            : new Date().toISOString();
-
-          // Idempotency: same providerMsgId under this owner → skip.
-          const { data: dup } = await supabaseAdmin
-            .from("chat_messages")
-            .select("id, customers!inner(owner_id)")
-            .eq("uaz_msg_id", providerMsgId)
-            .eq("customers.owner_id", conn.owner_id)
-            .maybeSingle();
-          if (dup) { skipped++; continue; }
-
-          const { error: msgErr } = await supabaseAdmin.from("chat_messages").insert({
-            customer_id: customerId,
-            sender_type: fromMe ? "agent" : "client",
-            channel: "whatsapp",
-            content,
-            connection_id: conn.id,
-            sub_company_id: conn.sub_company_id,
-            uaz_msg_id: providerMsgId,
-            created_at: createdAt,
-            metadata: {
-              provider: "waha",
-              source: "waha-session.backfill_from_server",
-              from_me: fromMe,
-              direction: fromMe ? "outbound_native" : "inbound",
-              external_device: fromMe === true,
-              chat_id: chatIdRaw,
-              owner_id: conn.owner_id,
-              waha_timestamp: tsSec || null,
-              raw: m,
-            },
-          });
-          if (msgErr?.code === "23505") { skipped++; continue; }
-          if (msgErr) { skipped++; errors.push({ providerMsgId, error: msgErr.message }); continue; }
-          inserted++;
-        }
+        await logEvent(action, "success", { run_id: runId, chatsSeen, considered, inserted, skipped, customersCreated, failed_count: failedItems.length });
+        return json({
+          ok: true, action, run_id: runId, connection_id: conn.id, owner_id: conn.owner_id,
+          chatsSeen, considered, inserted, skipped, customersCreated,
+          failed_count: failedItems.length,
+          failed_items: failedItems.slice(0, 10),
+        });
+      } catch (e: any) {
+        await supabaseAdmin.from("waha_import_runs").update({
+          status: "failed",
+          error_message: e?.message ?? String(e),
+          chats_processed: chatsSeen,
+          messages_considered: considered,
+          messages_inserted: inserted,
+          messages_skipped: skipped,
+          customers_created: customersCreated,
+          failed_items: failedItems.slice(0, 500),
+          finished_at: new Date().toISOString(),
+        }).eq("id", runId);
+        await logEvent(action, "error", { run_id: runId, error: e?.message ?? String(e) });
+        return json({ ok: false, run_id: runId, error: e?.message ?? String(e) }, 500);
       }
-
-      await logEvent("backfill_from_server", "success", { chatsSeen, considered, inserted, skipped, customersCreated, errors: errors.slice(0, 5) });
-      return json({
-        ok: true, action, connection_id: conn.id, owner_id: conn.owner_id,
-        chatsSeen, considered, inserted, skipped, customersCreated,
-        errors: errors.slice(0, 10),
-      });
     }
+
 
 
     // ─── cleanup_scan (no url/token required) ───────────────────────────────
