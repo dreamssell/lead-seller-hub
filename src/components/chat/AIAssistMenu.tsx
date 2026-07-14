@@ -55,7 +55,7 @@ export function AIAssistMenu({ messages, currentText, onSuggest, onSummary }: Pr
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="text-[10px] uppercase tracking-wider">Lovable AI</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-[10px] uppercase tracking-wider">Agente AI</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => run('suggest')} disabled={!!loading}>
           <Sparkles className="w-3.5 h-3.5 mr-2" /> Sugerir resposta
