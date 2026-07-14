@@ -119,8 +119,17 @@ export default function FocusedChatPage() {
   const [tool, setTool] = useState<Tool>(initialTool);
   const [olderLoading, setOlderLoading] = useState(false);
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [readers, setReaders] = useState<ReaderEntry[]>([]);
+  const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const keepScrollAnchor = useRef<{ prevHeight: number; prevTop: number } | null>(null);
+
+  const readerInfo = useMemo(() => user ? ({
+    id: user.id,
+    label: (user as any).user_metadata?.full_name || user.email || 'Você',
+    avatarUrl: (user as any).user_metadata?.avatar_url || null,
+  }) : null, [user]);
 
   const selectedConv = useMemo(() => convs.find(c => c.id === selected) || null, [convs, selected]);
 
