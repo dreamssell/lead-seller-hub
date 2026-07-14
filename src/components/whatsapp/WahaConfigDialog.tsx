@@ -313,6 +313,23 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
                 {busyAction === 'delete' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                 Excluir sessão remota
               </Button>
+              <Button
+                size="sm" variant="secondary"
+                disabled={busyAction !== null}
+                onClick={runBackfillFromServer}
+                className="gap-1"
+                title="Baixa o histórico de conversas do servidor WAHA e importa mensagens que faltam aqui, sem afetar o fluxo ao vivo."
+              >
+                {busyAction === 'backfill' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DownloadCloud className="w-3.5 h-3.5" />}
+                Importar histórico do WAHA
+              </Button>
+            </div>
+            {backfillResult && (
+              <div className="rounded-md border border-teal-500/30 bg-teal-500/5 p-2 text-[11px] text-teal-700 dark:text-teal-400">
+                Importação concluída: <b>{backfillResult.inserted}</b> mensagens novas em {backfillResult.chatsSeen} chats
+                ({backfillResult.customersCreated} contatos criados · {backfillResult.skipped} ignorados por já existirem).
+              </div>
+            )}
             </div>
             {remoteSessions && (
               <div className="rounded-md border border-border/60 bg-secondary/30 p-2 max-h-40 overflow-auto">
