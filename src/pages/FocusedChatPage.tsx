@@ -441,7 +441,14 @@ export default function FocusedChatPage() {
 
                 {/* Composer */}
                 <div className="border-t border-border bg-card/40 p-3">
-                  <ChatComposer onSendText={handleSend} />
+                  <ChatComposer
+                    conversationId={selectedConv.id}
+                    text={composerText}
+                    onChangeText={setComposerText}
+                    onSendText={async (t) => { await handleSend(t); setComposerText(''); }}
+                    recentMessages={msgs.slice(-20).map(m => ({ sender_type: m.sender_type, content: m.content }))}
+                    contactName={selectedConv.name}
+                  />
                 </div>
               </>
             ) : (
