@@ -30,6 +30,10 @@ import { toast } from '@/hooks/use-toast';
 import { toast as sonnerToast } from 'sonner';
 
 import { supabase } from '@/integrations/supabase/client';
+import {
+  getCachedConvs, setCachedConvs,
+  getCachedMessages, setCachedMessages,
+} from '@/lib/chatCache';
 import { Link } from 'react-router-dom';
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import { WhatsAppConnection } from '@/components/whatsapp/types';
@@ -737,11 +741,29 @@ export default function ChatPage() {
       });
       return false;
     }
-    const { data, error } = await supabase
+    // Hidratação instantânea a partir do cache local (IndexedDB): pinta a
+    // conversa imediatamente enquanto o fetch de rede roda em background.
+    const cached = await getCachedMessages<any>(activeOwnerIdRef.current, conversationId);
+    if (cached?.items?.length && conversationId === selectedConvIdRef.current) {
+      const hydratedCache = cached.items.map(hydrateChatMessage);
+      setMessages((prev) => applyConversationMessagesAfterSwitch({
+        currentConversationId: selectedConvIdRef.current,
+        requestedConversationId: conversationId,
+        previousMessages: prev,
+        loadedMessages: hydratedCache,
+      }));
+    }
+
+    // Delta fetch quando temos ponto de sincronização em cache; senão, full fetch.
+    const deltaFrom = cached?.lastAt || null;
+    const baseQuery = supabase
       .from('chat_messages')
       .select('*')
       .eq('customer_id', conversationId)
       .order('created_at', { ascending: true });
+    const { data, error } = deltaFrom
+      ? await baseQuery.gt('created_at', deltaFrom)
+      : await baseQuery;
     if (conversationId !== selectedConvIdRef.current) return false;
     if (error) {
       console.warn('loadMessages error', error);
@@ -753,13 +775,25 @@ export default function ChatPage() {
       addDebugLog('error', '[Inbound] Falha na gravação/leitura de mensagens', error);
       return false;
     }
-    const hydrated = (data || []).map(hydrateChatMessage);
+    const fetched = (data || []).map(hydrateChatMessage);
+    // Merge com cache quando fizemos delta; senão, é full replace.
+    const cachedItems = (cached?.items || []).map(hydrateChatMessage);
+    const byId = new Map<string, any>();
+    (deltaFrom ? cachedItems : []).concat(fetched).forEach((m: any) => {
+      const k = String(m.id || m.client_msg_id || `${m.created_at}:${m.content || ''}`);
+      byId.set(k, m);
+    });
+    const hydrated = Array.from(byId.values()).sort((a, b) =>
+      Date.parse(String(a.created_at || 0)) - Date.parse(String(b.created_at || 0))
+    );
     setMessages((prev) => applyConversationMessagesAfterSwitch({
       currentConversationId: selectedConvIdRef.current,
       requestedConversationId: conversationId,
       previousMessages: prev,
       loadedMessages: hydrated,
     }));
+    // Grava snapshot atualizado no cache local (fire-and-forget).
+    void setCachedMessages(activeOwnerIdRef.current, conversationId, hydrated);
     const last = hydrated[hydrated.length - 1];
     setInboundDebug((prev) => ({
       ...prev,
@@ -913,7 +947,20 @@ export default function ChatPage() {
         setAuthValidation({ valid: false, reason: accessLoading ? 'Resolvendo owner ativo…' : 'Owner ativo não resolvido. Atualize o access antes de consultar mensagens.', loading: accessLoading });
         return;
       }
-      
+
+      // Hidratação instantânea: pinta a lista de conversas a partir do cache
+      // local antes do fetch de rede — carregamento parece imediato ao voltar.
+      try {
+        const cachedConvs = await getCachedConvs<any>(activeOwnerId, channel);
+        if (cachedConvs?.length) {
+          setConvs(prev => {
+            const next = { ...prev, [channel]: cachedConvs };
+            convsRef.current = next;
+            return next;
+          });
+        }
+      } catch {}
+
       const { data: customers, error } = await supabase
         .from('customers')
         .select('*')
@@ -993,6 +1040,8 @@ export default function ChatPage() {
           convsRef.current = next;
           return next;
         });
+        // Persiste snapshot da lista para próxima abertura instantânea.
+        void setCachedConvs(activeOwnerId, channel, formatted);
         if (selectedConvIdRef.current && formatted.some((c: any) => c.id === selectedConvIdRef.current)) {
           loadMessagesForConversation(selectedConvIdRef.current, 'manual');
         }
