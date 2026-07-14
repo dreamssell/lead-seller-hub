@@ -437,14 +437,57 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
                 {busyAction === 'backfill' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DownloadCloud className="w-3.5 h-3.5" />}
                 Importar histórico do WAHA
               </Button>
+              {lastRun && (
+                <Button
+                  size="sm" variant="ghost"
+                  disabled={busyAction !== null}
+                  onClick={() => { setActiveRunId(lastRun.id); setShowProgress(true); }}
+                  className="gap-1"
+                  title="Reabre o último run com todos os números e falhas — sem reexecutar."
+                >
+                  <History className="w-3.5 h-3.5" />
+                  Ver último {lastRun.dry_run ? 'simulação' : 'import'} ({lastRun.inserted}/{lastRun.chats})
+                </Button>
+              )}
             </div>
             {backfillResult && (
-              <div className={`rounded-md border p-2 text-[11px] ${backfillResult.dryRun
-                ? 'border-sky-500/30 bg-sky-500/5 text-sky-700 dark:text-sky-400'
-                : 'border-teal-500/30 bg-teal-500/5 text-teal-700 dark:text-teal-400'}`}>
-                {backfillResult.dryRun ? 'Simulação concluída: ' : 'Importação concluída: '}
-                <b>{backfillResult.inserted}</b> mensagens {backfillResult.dryRun ? 'seriam importadas' : 'novas'} em {backfillResult.chatsSeen} chats
-                ({backfillResult.customersCreated} contatos {backfillResult.dryRun ? 'seriam criados' : 'criados'} · {backfillResult.skipped} ignorados por já existirem).
+              <div className={`rounded-md border p-3 text-[12px] space-y-2 ${backfillResult.dryRun
+                ? 'border-sky-500/30 bg-sky-500/5'
+                : 'border-teal-500/30 bg-teal-500/5'}`}>
+                <div className={`flex items-center gap-2 font-semibold ${backfillResult.dryRun ? 'text-sky-700 dark:text-sky-400' : 'text-teal-700 dark:text-teal-400'}`}>
+                  {backfillResult.dryRun ? <FlaskConical className="w-4 h-4" /> : <DownloadCloud className="w-4 h-4" />}
+                  {backfillResult.dryRun ? 'Resumo da simulação (nada foi gravado)' : 'Importação concluída'}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+                  <SummaryCell label={backfillResult.dryRun ? 'Seriam inseridas' : 'Inseridas'} value={backfillResult.inserted} strong />
+                  <SummaryCell label="Ignoradas (já existem)" value={backfillResult.skipped} />
+                  <SummaryCell label={backfillResult.dryRun ? 'Contatos novos previstos' : 'Contatos novos'} value={backfillResult.customersCreated} />
+                  <SummaryCell label="Chats analisados" value={backfillResult.chatsSeen} />
+                </div>
+                {backfillResult.failedCount > 0 && (
+                  <div className="text-[11px] text-amber-700 dark:text-amber-400">
+                    ⚠ {backfillResult.failedCount} item(ns) com falha — abra o detalhe para reprocessar.
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {backfillResult.runId && (
+                    <Button size="sm" variant="outline" className="gap-1"
+                      onClick={() => { setActiveRunId(backfillResult.runId); setShowProgress(true); }}>
+                      <History className="w-3.5 h-3.5" /> Ver detalhes e exportar CSV
+                    </Button>
+                  )}
+                  {backfillResult.dryRun && backfillResult.inserted > 0 && (
+                    <Button size="sm" className="gap-1"
+                      disabled={busyAction !== null}
+                      onClick={() => {
+                        if (window.confirm(`Confirmar a importação real de aproximadamente ${backfillResult.inserted} mensagens?`)) {
+                          runBackfillFromServer(false);
+                        }
+                      }}>
+                      <PlayCircle className="w-3.5 h-3.5" /> Iniciar importação real
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
             {remoteSessions && (
