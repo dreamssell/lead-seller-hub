@@ -2760,7 +2760,14 @@ export default function ChatPage() {
                     >
                       <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm relative group ${
                         m.sender_type !== 'client' ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-secondary text-foreground rounded-bl-md'
+                      } ${pinnedIds.has(m.id) ? 'ring-1 ring-primary/50' : ''} ${
+                        inChatSearchQuery && inChatMatches[inChatSearchIndex] === (m.uaz_msg_id || m.id) ? 'ring-2 ring-yellow-400/80' : ''
                       }`}>
+                        {pinnedIds.has(m.id) && (
+                          <div className={`absolute -top-2 ${m.sender_type !== 'client' ? '-left-2' : '-right-2'} bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center shadow`} title="Fixada nesta conversa">
+                            <Pin className="w-2.5 h-2.5" />
+                          </div>
+                        )}
                         {/* Quoted/reply preview — Etapa 3 */}
                         {m._quoted && (
                           <button
@@ -2874,6 +2881,24 @@ export default function ChatPage() {
                                 <ForwardIcon className="w-3.5 h-3.5" />
                               </button>
                             )}
+                            {/* Etapa 8 — fixar/desafixar (visível para toda a equipe) */}
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePin(m)}
+                              className={`w-7 h-7 rounded-full bg-background border border-border shadow-sm flex items-center justify-center hover:bg-secondary ${pinnedIds.has(m.id) ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                              title={pinnedIds.has(m.id) ? 'Desafixar mensagem' : 'Fixar na conversa'}
+                            >
+                              {pinnedIds.has(m.id) ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+                            </button>
+                            {/* Etapa 8 — favoritar (visível só para você) */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleStar(m)}
+                              className={`w-7 h-7 rounded-full bg-background border border-border shadow-sm flex items-center justify-center hover:bg-secondary ${starredIds.has(m.id) ? 'text-yellow-500' : 'text-muted-foreground hover:text-foreground'}`}
+                              title={starredIds.has(m.id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+                            >
+                              {starredIds.has(m.id) ? <Star className="w-3.5 h-3.5 fill-current" /> : <Star className="w-3.5 h-3.5" />}
+                            </button>
                             {/* Etapa 4 — editar (apenas próprias, dentro de 15 min, sem mídia) */}
                             {m.sender_type !== 'client' && !m._revoked && !m._mediaUrl && (Date.now() - new Date(m.created_at).getTime() < 15 * 60 * 1000) && (
                               <button
