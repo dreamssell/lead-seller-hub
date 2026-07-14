@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   MessageCircle, Search, Info, Images, Pin, Star, StickyNote,
-  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2,
+  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2, Eye,
 } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,7 +24,8 @@ import {
   getCachedMessages, setCachedMessages,
 } from '@/lib/chatCache';
 import {
-  getAllLastReads, getLastRead, markRead, subscribeReadEvents,
+  getAllLastReads, markRead, subscribeReadEvents, getReaders,
+  type ReaderEntry,
 } from '@/lib/chatReadTracker';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
@@ -41,6 +42,7 @@ import { MediaGallery } from '@/components/chat/MediaGallery';
 import { StarredMessagesPanel } from '@/components/chat/StarredMessagesPanel';
 import { AIInsightsPanel } from '@/components/chat/AIInsightsPanel';
 import { Customer360Timeline } from '@/components/chat/Customer360Timeline';
+import { MessageSearchDialog, type MessageSearchHit } from '@/components/chat/MessageSearchDialog';
 
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import type { WhatsAppConnection } from '@/components/whatsapp/types';
