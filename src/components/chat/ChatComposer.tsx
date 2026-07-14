@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, KeyboardEvent, ReactNode } from 'react';
-import { Send, Paperclip, X, Loader2, FileText, AudioLines, CalendarClock, PenLine } from 'lucide-react';
+import { Send, Paperclip, X, Loader2, FileText, AudioLines, CalendarClock, PenLine, MoreHorizontal } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { FormatToolbar } from './FormatToolbar';
