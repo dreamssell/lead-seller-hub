@@ -5407,11 +5407,43 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_idempotency_hits: {
+        Row: {
+          created_at: string
+          id: string
+          idempotency_key: string
+          metadata: Json | null
+          reason: string | null
+          source: string | null
+          webhook_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          metadata?: Json | null
+          reason?: string | null
+          source?: string | null
+          webhook_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          metadata?: Json | null
+          reason?: string | null
+          source?: string | null
+          webhook_id?: string
+        }
+        Relationships: []
+      }
       webhook_idempotency_keys: {
         Row: {
           created_at: string | null
+          hit_count: number
           id: string
           idempotency_key: string
+          last_hit_at: string
           latency_ms: number | null
           response_body: string | null
           response_status: number | null
@@ -5419,8 +5451,10 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          hit_count?: number
           id?: string
           idempotency_key: string
+          last_hit_at?: string
           latency_ms?: number | null
           response_body?: string | null
           response_status?: number | null
@@ -5428,8 +5462,10 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          hit_count?: number
           id?: string
           idempotency_key?: string
+          last_hit_at?: string
           latency_ms?: number | null
           response_body?: string | null
           response_status?: number | null
