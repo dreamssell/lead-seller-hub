@@ -433,6 +433,15 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <WahaImportProgressDialog
+      open={showProgress}
+      onOpenChange={setShowProgress}
+      runId={activeRunId}
+      conn={conn}
+      creds={{ url: cfg.url, token: cfg.token, session: cfg.session }}
+      onRetryStarted={(rid) => setActiveRunId(rid)}
+    />
+    </>
   );
 }
 
