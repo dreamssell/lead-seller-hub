@@ -498,18 +498,36 @@ export function MediaDropzone({
                     )}
                   </div>
 
-                  {/* Status / remover */}
+                  {/* Status / cancelar / retry / remover */}
                   <div className="shrink-0 flex items-center gap-1">
                     {it.status === 'sending' && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
                     {it.status === 'done' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
                     {(it.status === 'error' || it.status === 'rejected') && (
                       <AlertCircle className="w-4 h-4 text-destructive" />
                     )}
+                    {it.status === 'sending' && (
+                      <Button
+                        type="button" variant="ghost" size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        aria-label={`Cancelar envio de ${it.file.name}`}
+                        onClick={() => cancelItem(it.id)}
+                      >
+                        <Ban className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {(it.status === 'error' || it.status === 'canceled') && (
+                      <Button
+                        type="button" variant="ghost" size="icon"
+                        className="h-8 w-8 text-primary hover:text-primary"
+                        aria-label={`Reenviar ${it.file.name}`}
+                        onClick={() => retryItem(it.id)}
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </Button>
+                    )}
                     {(it.status === 'queued' || it.status === 'rejected' || it.status === 'error' || it.status === 'canceled') && (
                       <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
+                        type="button" variant="ghost" size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-destructive"
                         aria-label={`Remover ${it.file.name}`}
                         onClick={() => removeItem(it.id)}
@@ -520,6 +538,10 @@ export function MediaDropzone({
                   </div>
                 </div>
               ))}
+              {/* Região aria-live: anúncios para leitores de tela sobre a fila. */}
+              <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                {announcement}
+              </div>
             </div>
 
             {/* Footer */}
