@@ -47,6 +47,7 @@ import { useChatShortcuts } from '@/hooks/useChatShortcuts';
 import { renderWhatsAppText } from '@/lib/whatsappFormat';
 import { InChatSearchBar } from '@/components/chat/InChatSearchBar';
 import { PinnedMessagesBar, type PinnedItem } from '@/components/chat/PinnedMessagesBar';
+import { ScheduleMessageDialog } from '@/components/chat/ScheduleMessageDialog';
 import { CollaborationBar } from '@/components/chat/CollaborationBar';
 import { WhisperFeed } from '@/components/chat/WhisperFeed';
 import { SupervisorBanner } from '@/components/chat/SupervisorBanner';
@@ -458,6 +459,30 @@ export default function ChatPage() {
   const [editTarget, setEditTarget] = useState<any | null>(null);
   const [editText, setEditText] = useState('');
   useEffect(() => { setReplyingTo(null); setForwardTarget(null); setEditTarget(null); }, [selectedConvId]);
+
+  // Etapa 9 — assinatura pessoal + agendamento
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [signatureText, setSignatureText] = useState<string>('');
+  const [signatureEnabled, setSignatureEnabled] = useState<boolean>(false);
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('profiles')
+        .select('signature, signature_enabled')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      setSignatureText((data as any)?.signature || '');
+      setSignatureEnabled(!!(data as any)?.signature_enabled);
+    })();
+  }, []);
+  const handleToggleSignature = async (v: boolean) => {
+    setSignatureEnabled(v);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('profiles').update({ signature_enabled: v }).eq('user_id', user.id);
+  };
 
   // Etapa 8 — busca dentro da conversa (Ctrl/Cmd+F)
   const [inChatSearchOpen, setInChatSearchOpen] = useState(false);
