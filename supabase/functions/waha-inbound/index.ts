@@ -943,7 +943,7 @@ Deno.serve(async (req) => {
 
   const { data: insertedMsg, error: msgErr } = await supabase.from('chat_messages').insert({
     customer_id: customerId,
-    sender_type: 'client',
+    sender_type: fromMeFlag ? 'agent' : 'client',
     channel: 'whatsapp',
     content,
     connection_id: conn.id,
