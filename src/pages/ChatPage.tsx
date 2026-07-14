@@ -2617,6 +2617,13 @@ export default function ChatPage() {
                     <PenLine className="w-4 h-4" />
                   </button>
                   <button
+                    onClick={() => setInChatSearchOpen((v) => !v)}
+                    className={`p-2 rounded-lg hover:bg-secondary ${inChatSearchOpen ? 'bg-secondary text-primary' : 'text-muted-foreground'}`}
+                    title="Buscar nesta conversa (Ctrl+F)"
+                  >
+                    <SearchCode className="w-4 h-4" />
+                  </button>
+                  <button
                     onClick={() => setRightPanelOpen((v) => !v)}
                     className={`p-2 rounded-lg hover:bg-secondary ${rightPanelOpen ? 'bg-secondary text-primary' : 'text-muted-foreground'}`}
                     title="Notas internas, CRM e mídia"
