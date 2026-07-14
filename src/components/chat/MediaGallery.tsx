@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Image as ImageIcon, FileText, Film, Music, Images } from 'lucide-react';
+import { Loader2, Image as ImageIcon, FileText, Film, Music, Images, ArrowDownWideNarrow, ArrowUpWideNarrow } from 'lucide-react';
 import { MediaViewerDialog, MediaItem } from './MediaViewerDialog';
 import { cn } from '@/lib/utils';
 
