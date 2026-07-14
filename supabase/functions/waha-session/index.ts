@@ -389,7 +389,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, run_id: runId, status: "cancel_requested" });
     }
 
-    if (action === "backfill_from_server" || action === "retry_failed") {
+    if (action === "backfill_from_server" || action === "retry_failed" || action === "resume_run") {
       if (!conn?.id) return json({ ok: false, error: "connection_required" }, 400);
       if (!base || !token || !sess) return json({ ok: false, error: "waha_credentials_missing" }, 400);
 
@@ -397,74 +397,167 @@ Deno.serve(async (req) => {
       const chatLimit = Math.max(1, Math.min(500, Number(body?.chat_limit ?? 200)));
       const msgLimit = Math.max(1, Math.min(500, Number(body?.msg_limit ?? 100)));
       const onlyChatId: string | null = typeof body?.chat_id === "string" ? body.chat_id : null;
+      // Auto-retry ceiling for a single job (used both by resume-on-timeout and
+      // by chat-level HTTP retry). Prevents runaway self-invocation loops.
+      const maxAutoRetries: number = Math.max(0, Math.min(20, Number(body?.max_auto_retries ?? 8)));
 
       const wahaHeaders = { "Content-Type": "application/json", "X-Api-Key": token } as Record<string, string>;
 
-      // Build list of chats. For retry_failed, load from the source run's failed_items.
+      // Resolve or create the run row. `resume_run` reuses the existing run
+      // (keeping the run id + accumulated counters); the other two actions
+      // insert a fresh run and copy over their input params.
+      let runId: string;
+      let runParams: Record<string, unknown> = {};
+      let processedChatIds = new Set<string>();
+      let autoRetryCount = 0;
       let chats: any[] = [];
       let retrySourceRunId: string | null = null;
-      if (action === "retry_failed") {
-        retrySourceRunId = String(body?.run_id ?? "").trim() || null;
-        if (!retrySourceRunId) return json({ ok: false, error: "run_id_required" }, 400);
-        const { data: srcRun } = await supabaseAdmin
+      let resumedCounters = {
+        chatsSeen: 0, considered: 0, inserted: 0, skipped: 0, customersCreated: 0,
+        failedItems: [] as any[],
+      };
+
+      if (action === "resume_run") {
+        const requestedRunId = String(body?.run_id ?? "").trim();
+        if (!requestedRunId) return json({ ok: false, error: "run_id_required" }, 400);
+        const { data: existing } = await supabaseAdmin
           .from("waha_import_runs")
-          .select("id, owner_id, connection_id, failed_items")
-          .eq("id", retrySourceRunId)
+          .select("id, owner_id, connection_id, params, status, chats_processed, messages_considered, messages_inserted, messages_skipped, customers_created, failed_items")
+          .eq("id", requestedRunId)
           .maybeSingle();
-        if (!srcRun || srcRun.connection_id !== conn.id) {
+        if (!existing || existing.connection_id !== conn.id) {
           return json({ ok: false, error: "run_not_found" }, 404);
         }
-        const failed: any[] = Array.isArray(srcRun.failed_items) ? srcRun.failed_items : [];
-        const uniqueChatIds = Array.from(new Set(failed.map((f) => f?.chat_id).filter(Boolean)));
-        chats = uniqueChatIds.map((cid) => ({ id: cid }));
-        if (!chats.length) return json({ ok: false, error: "no_failed_items_to_retry" }, 400);
-      } else if (onlyChatId) {
-        chats = [{ id: onlyChatId }];
-      } else {
-        for (const path of [`/api/${encodeURIComponent(sess)}/chats/overview?limit=${chatLimit}`, `/api/${encodeURIComponent(sess)}/chats?limit=${chatLimit}`]) {
-          try {
-            const r = await fetch(`${base}${path}`, { headers: wahaHeaders });
-            if (!r.ok) continue;
-            const arr = await r.json().catch(() => []);
-            if (Array.isArray(arr) && arr.length) { chats = arr; break; }
-          } catch (_) { /* try next */ }
+        runId = existing.id;
+        runParams = (existing.params as any) ?? {};
+        const savedIds: string[] = Array.isArray((runParams as any).processed_chat_ids)
+          ? (runParams as any).processed_chat_ids as string[] : [];
+        processedChatIds = new Set(savedIds);
+        autoRetryCount = Number((runParams as any).auto_retry_count ?? 0);
+        resumedCounters = {
+          chatsSeen: existing.chats_processed ?? 0,
+          considered: existing.messages_considered ?? 0,
+          inserted: existing.messages_inserted ?? 0,
+          skipped: existing.messages_skipped ?? 0,
+          customersCreated: existing.customers_created ?? 0,
+          failedItems: Array.isArray(existing.failed_items) ? existing.failed_items as any[] : [],
+        };
+        retrySourceRunId = (runParams as any).retry_of ?? null;
+        // Rebuild the chat list from the original source so we can honour the
+        // "skip already processed" semantics. Same fallback order as the
+        // initial run — either the retry source's failed items or the WAHA
+        // /chats overview endpoint.
+        if ((runParams as any).action === "retry_failed" && retrySourceRunId) {
+          const { data: srcRun } = await supabaseAdmin
+            .from("waha_import_runs").select("failed_items")
+            .eq("id", retrySourceRunId).maybeSingle();
+          const failed: any[] = Array.isArray(srcRun?.failed_items) ? srcRun!.failed_items as any[] : [];
+          const uniqueChatIds = Array.from(new Set(failed.map((f) => f?.chat_id).filter(Boolean)));
+          chats = uniqueChatIds.map((cid) => ({ id: cid }));
+        } else {
+          for (const path of [`/api/${encodeURIComponent(sess)}/chats/overview?limit=${chatLimit}`, `/api/${encodeURIComponent(sess)}/chats?limit=${chatLimit}`]) {
+            try {
+              const r = await fetch(`${base}${path}`, { headers: wahaHeaders });
+              if (!r.ok) continue;
+              const arr = await r.json().catch(() => []);
+              if (Array.isArray(arr) && arr.length) { chats = arr; break; }
+            } catch (_) { /* try next */ }
+          }
         }
+        // Flip back to running so the client's polling stops showing "failed".
+        await supabaseAdmin.from("waha_import_runs").update({
+          status: "running",
+          error_message: null,
+          finished_at: null,
+          params: { ...runParams, auto_retry_count: autoRetryCount, resumed_at: new Date().toISOString() },
+        }).eq("id", runId);
+      } else {
+        // Fresh run (backfill_from_server or retry_failed).
+        if (action === "retry_failed") {
+          retrySourceRunId = String(body?.run_id ?? "").trim() || null;
+          if (!retrySourceRunId) return json({ ok: false, error: "run_id_required" }, 400);
+          const { data: srcRun } = await supabaseAdmin
+            .from("waha_import_runs")
+            .select("id, owner_id, connection_id, failed_items")
+            .eq("id", retrySourceRunId).maybeSingle();
+          if (!srcRun || srcRun.connection_id !== conn.id) {
+            return json({ ok: false, error: "run_not_found" }, 404);
+          }
+          const failed: any[] = Array.isArray(srcRun.failed_items) ? srcRun.failed_items as any[] : [];
+          // Optional filter: only retry items matching a given stage/reason.
+          const stageFilter: string | null = typeof body?.only_stage === "string" ? body.only_stage : null;
+          const reasonFilter: string | null = typeof body?.only_reason === "string" ? body.only_reason : null;
+          const filtered = failed.filter((f) =>
+            (stageFilter ? f?.stage === stageFilter : true) &&
+            (reasonFilter ? f?.reason === reasonFilter : true)
+          );
+          const uniqueChatIds = Array.from(new Set(filtered.map((f) => f?.chat_id).filter(Boolean)));
+          chats = uniqueChatIds.map((cid) => ({ id: cid }));
+          if (!chats.length) return json({ ok: false, error: "no_failed_items_to_retry" }, 400);
+        } else if (onlyChatId) {
+          chats = [{ id: onlyChatId }];
+        } else {
+          for (const path of [`/api/${encodeURIComponent(sess)}/chats/overview?limit=${chatLimit}`, `/api/${encodeURIComponent(sess)}/chats?limit=${chatLimit}`]) {
+            try {
+              const r = await fetch(`${base}${path}`, { headers: wahaHeaders });
+              if (!r.ok) continue;
+              const arr = await r.json().catch(() => []);
+              if (Array.isArray(arr) && arr.length) { chats = arr; break; }
+            } catch (_) { /* try next */ }
+          }
+        }
+
+        runParams = {
+          action, chat_limit: chatLimit, msg_limit: msgLimit,
+          retry_of: retrySourceRunId, dry_run: dryRun,
+          processed_chat_ids: [] as string[], auto_retry_count: 0,
+        };
+        const { data: runRow, error: runErr } = await supabaseAdmin
+          .from("waha_import_runs")
+          .insert({
+            connection_id: conn.id, owner_id: conn.owner_id,
+            triggered_by: callerId, status: "running",
+            chats_total: chats.length, params: runParams,
+          })
+          .select("id").single();
+        if (runErr || !runRow) return json({ ok: false, error: runErr?.message ?? "run_create_failed" }, 500);
+        runId = runRow.id;
       }
 
-      const { data: runRow, error: runErr } = await supabaseAdmin
-        .from("waha_import_runs")
-        .insert({
-          connection_id: conn.id,
-          owner_id: conn.owner_id,
-          triggered_by: callerId,
-          status: "running",
-          chats_total: chats.length,
-          params: { action, chat_limit: chatLimit, msg_limit: msgLimit, retry_of: retrySourceRunId, dry_run: dryRun },
-        })
-        .select("id")
-        .single();
-      if (runErr || !runRow) return json({ ok: false, error: runErr?.message ?? "run_create_failed" }, 500);
-      const runId = runRow.id;
-
-      let chatsSeen = 0;
-      let considered = 0;
-      let inserted = 0; // in dry-run: how many WOULD be inserted
-      let skipped = 0;
-      let customersCreated = 0; // in dry-run: how many contacts WOULD be created
-      const failedItems: any[] = [];
-      const wouldCreatePhones = new Set<string>(); // dry-run only, to avoid double-counting
+      // Counters that survive resume by seeding from what the DB already had.
+      let chatsSeen = resumedCounters.chatsSeen;
+      let considered = resumedCounters.considered;
+      let inserted = resumedCounters.inserted;
+      let skipped = resumedCounters.skipped;
+      let customersCreated = resumedCounters.customersCreated;
+      const failedItems: any[] = resumedCounters.failedItems.slice();
+      const wouldCreatePhones = new Set<string>();
       let lastProgressUpdate = 0;
       let cancelRequested = false;
       let lastCancelCheck = 0;
+      const jobStart = Date.now();
+      // Leave a comfortable margin below the platform's per-invocation limit
+      // (~150s CPU + wall-clock). Persist state + hand off to `resume_run` a
+      // little before we hit that ceiling so no chat is lost.
+      const timeBudgetMs = 90_000;
+      const capturedRunId = runId;
+      const capturedConnId = conn.id;
+      const capturedOwnerId = conn.owner_id;
 
       const checkCancel = async (force = false): Promise<boolean> => {
         const now = Date.now();
         if (!force && now - lastCancelCheck < 1500) return cancelRequested;
         lastCancelCheck = now;
         const { data } = await supabaseAdmin
-          .from("waha_import_runs").select("status").eq("id", runId).maybeSingle();
+          .from("waha_import_runs").select("status").eq("id", capturedRunId).maybeSingle();
         if (data?.status === "cancel_requested") cancelRequested = true;
         return cancelRequested;
+      };
+
+      const persistProcessedIds = async () => {
+        await supabaseAdmin.from("waha_import_runs").update({
+          params: { ...runParams, processed_chat_ids: Array.from(processedChatIds), auto_retry_count: autoRetryCount },
+        }).eq("id", capturedRunId);
       };
 
       const updateProgress = async (force = false, currentLabel?: string | null) => {
@@ -479,200 +572,284 @@ Deno.serve(async (req) => {
           messages_skipped: skipped,
           customers_created: customersCreated,
           failed_items: failedItems.slice(0, 500),
-        }).eq("id", runId);
+        }).eq("id", capturedRunId);
       };
 
-      try {
-        for (const chat of chats) {
-          if (await checkCancel()) break;
-
-          const chatIdRaw: string | undefined =
-            (typeof chat?.id === "string" ? chat.id : chat?.id?._serialized) ||
-            chat?.chatId || chat?.remoteJid;
-          const chatLabel = (typeof chat?.name === "string" && chat.name) || chatIdRaw || "—";
-          await updateProgress(false, chatLabel);
-
-          if (!chatIdRaw) {
-            chatsSeen++;
-            failedItems.push({ chat_id: null, stage: "chat_id_missing", reason: "Chat sem ID válido", at: new Date().toISOString() });
-            continue;
-          }
-          if (chatIdRaw.endsWith("@g.us") || chatIdRaw.endsWith("@broadcast") || chatIdRaw.endsWith("@lid")) {
-            chatsSeen++; skipped++;
-            continue;
-          }
-          const phone = normalizePhone(chatIdRaw);
-          if (!phone) {
-            chatsSeen++;
-            failedItems.push({ chat_id: chatIdRaw, stage: "phone_normalize", reason: "Não foi possível extrair telefone", at: new Date().toISOString() });
-            continue;
-          }
-
-          // Upsert customer (skipped entirely on dry-run — just count).
-          let customerId: string | null = null;
-          {
-            const { data: existing } = await supabaseAdmin
-              .from("customers").select("id")
-              .eq("phone", phone).eq("owner_id", conn.owner_id).maybeSingle();
-            if (existing?.id) {
-              customerId = existing.id;
-            } else if (dryRun) {
-              // Count phone once — we won't create it, but need a sentinel id.
-              if (!wouldCreatePhones.has(phone)) {
-                wouldCreatePhones.add(phone);
-                customersCreated++;
-              }
-              customerId = "dry-run";
-            } else {
-              const displayName = (typeof chat?.name === "string" && chat.name.trim())
-                || (typeof chat?.pushname === "string" && chat.pushname.trim())
-                || phone;
-              const { data: created, error: cErr } = await supabaseAdmin
-                .from("customers")
-                .upsert({
-                  name: displayName, phone, channel: "whatsapp",
-                  created_by: conn.owner_id, owner_id: conn.owner_id,
-                  sub_company_id: conn.sub_company_id, origin_connection_id: conn.id,
-                }, { onConflict: "owner_id,phone", ignoreDuplicates: false })
-                .select("id").single();
-              if (cErr || !created?.id) {
-                const { data: raced } = await supabaseAdmin
-                  .from("customers").select("id").eq("phone", phone).eq("owner_id", conn.owner_id).maybeSingle();
-                if (!raced?.id) {
-                  chatsSeen++;
-                  failedItems.push({ chat_id: chatIdRaw, phone, stage: "customer_upsert", reason: cErr?.message ?? "Falha ao criar contato", at: new Date().toISOString() });
-                  continue;
-                }
-                customerId = raced.id;
-              } else {
-                customerId = created.id;
-                customersCreated++;
-              }
-            }
-          }
-
-          // Fetch messages with error capture.
-          let messages: any[] = [];
-          let fetchError: string | null = null;
-          for (const path of [
-            `/api/${encodeURIComponent(sess)}/chats/${encodeURIComponent(chatIdRaw)}/messages?limit=${msgLimit}&downloadMedia=false`,
-            `/api/${encodeURIComponent(sess)}/${encodeURIComponent(chatIdRaw)}/messages?limit=${msgLimit}`,
-          ]) {
-            try {
-              const r = await fetch(`${base}${path}`, { headers: wahaHeaders });
-              if (!r.ok) { fetchError = `HTTP ${r.status} em ${path}`; continue; }
-              const arr = await r.json().catch(() => []);
-              if (Array.isArray(arr)) { messages = arr; fetchError = null; break; }
-            } catch (e) { fetchError = (e as any)?.message ?? String(e); }
-          }
-          if (fetchError && !messages.length) {
-            chatsSeen++;
-            failedItems.push({ chat_id: chatIdRaw, phone, stage: "waha_fetch_messages", reason: fetchError, at: new Date().toISOString() });
-            continue;
-          }
-
-          for (const m of messages) {
-            considered++;
-            const providerMsgId = extractId(m?.id) || (typeof m?.id === "string" ? m.id : null);
-            if (!providerMsgId) { skipped++; continue; }
-            const fromMe = m?.fromMe === true || m?.key?.fromMe === true;
-            const bodyText: string =
-              m?.body || m?.text || m?.caption ||
-              m?._data?.body || m?.message?.conversation ||
-              m?.message?.extendedTextMessage?.text || "";
-            const hasMedia = m?.hasMedia === true || !!m?.mediaUrl || !!m?.message?.imageMessage || !!m?.message?.videoMessage || !!m?.message?.audioMessage || !!m?.message?.documentMessage;
-            const content = bodyText || (hasMedia ? "[mídia]" : "");
-            if (!content) { skipped++; continue; }
-
-            const tsSec = Number(m?.timestamp || m?.t || m?.messageTimestamp || 0);
-            const createdAt = tsSec > 0
-              ? new Date(tsSec > 1e12 ? tsSec : tsSec * 1000).toISOString()
-              : new Date().toISOString();
-
-            const { data: dup } = await supabaseAdmin
-              .from("chat_messages")
-              .select("id, customers!inner(owner_id)")
-              .eq("uaz_msg_id", providerMsgId)
-              .eq("customers.owner_id", conn.owner_id)
-              .maybeSingle();
-            if (dup) { skipped++; continue; }
-
-            if (dryRun) {
-              // Would insert — count, but do not write.
-              inserted++;
-              continue;
-            }
-
-            const { error: msgErr } = await supabaseAdmin.from("chat_messages").insert({
-              customer_id: customerId,
-              sender_type: fromMe ? "agent" : "client",
-              channel: "whatsapp",
-              content,
-              connection_id: conn.id,
-              sub_company_id: conn.sub_company_id,
-              uaz_msg_id: providerMsgId,
-              created_at: createdAt,
-              metadata: {
-                provider: "waha", source: "waha-session.backfill_from_server",
-                from_me: fromMe, direction: fromMe ? "outbound_native" : "inbound",
-                external_device: fromMe === true, chat_id: chatIdRaw,
-                owner_id: conn.owner_id, waha_timestamp: tsSec || null, raw: m,
-              },
-            });
-            if (msgErr?.code === "23505") { skipped++; continue; }
-            if (msgErr) {
-              skipped++;
-              failedItems.push({ chat_id: chatIdRaw, phone, provider_msg_id: providerMsgId, stage: "message_insert", reason: msgErr.message, at: new Date().toISOString() });
-              continue;
-            }
-            inserted++;
-          }
-          chatsSeen++;
-          await updateProgress(false, chatLabel);
+      const scheduleResume = async (): Promise<void> => {
+        // Persist everything the resume needs, then trigger a fresh invocation
+        // of ourselves. Uses SERVICE_ROLE to bypass verify_jwt/ownership since
+        // this is an internal handoff, not a user-initiated request.
+        await persistProcessedIds();
+        await updateProgress(true, null);
+        autoRetryCount++;
+        await supabaseAdmin.from("waha_import_runs").update({
+          params: { ...runParams, processed_chat_ids: Array.from(processedChatIds), auto_retry_count: autoRetryCount, resumed_at: new Date().toISOString() },
+        }).eq("id", capturedRunId);
+        if (autoRetryCount > maxAutoRetries) {
+          await supabaseAdmin.from("waha_import_runs").update({
+            status: "failed",
+            error_message: `Excedeu o número máximo de continuações automáticas (${maxAutoRetries}). Use "Retomar" para continuar manualmente.`,
+            finished_at: new Date().toISOString(),
+          }).eq("id", capturedRunId);
+          return;
         }
+        const supabaseUrl = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
+        const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+        try {
+          await fetch(`${supabaseUrl}/functions/v1/waha-session`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${serviceKey}`,
+              "apikey": serviceKey,
+            },
+            body: JSON.stringify({
+              action: "resume_run",
+              connection_id: capturedConnId,
+              run_id: capturedRunId,
+              max_auto_retries: maxAutoRetries,
+              // Creds are re-resolved from connection metadata on the other side,
+              // but we still forward them to short-circuit the DB lookup.
+              url, token, session: sess,
+              chat_limit: chatLimit, msg_limit: msgLimit,
+            }),
+          });
+        } catch (e) {
+          await supabaseAdmin.from("waha_import_runs").update({
+            status: "failed",
+            error_message: `Falha ao agendar continuação automática: ${(e as any)?.message ?? String(e)}`,
+            finished_at: new Date().toISOString(),
+          }).eq("id", capturedRunId);
+        }
+      };
 
-        const finalStatus = cancelRequested
-          ? "cancelled"
-          : (dryRun ? "completed_dry_run" : "completed");
+      // The actual loop runs in the background so we can return 202 to the
+      // client immediately. If the platform kills this invocation before we
+      // finish, `scheduleResume` has already handed the work off, so no
+      // progress is lost. Dedup on chat_messages(uaz_msg_id, owner_id) keeps
+      // resumed runs from double-inserting.
+      const runJob = async () => {
+        try {
+          for (const chat of chats) {
+            if (await checkCancel()) break;
+            if (Date.now() - jobStart > timeBudgetMs) {
+              // Time budget hit — schedule continuation and stop THIS iteration
+              // without marking the run as completed.
+              await scheduleResume();
+              return;
+            }
 
-        await supabaseAdmin.from("waha_import_runs").update({
-          status: finalStatus,
-          chats_processed: chatsSeen,
-          current_chat_label: null,
-          messages_considered: considered,
-          messages_inserted: inserted,
-          messages_skipped: skipped,
-          customers_created: customersCreated,
-          failed_items: failedItems.slice(0, 500),
-          finished_at: new Date().toISOString(),
-        }).eq("id", runId);
+            const chatIdRaw: string | undefined =
+              (typeof chat?.id === "string" ? chat.id : chat?.id?._serialized) ||
+              chat?.chatId || chat?.remoteJid;
 
-        await logEvent(action, cancelRequested ? "cancelled" : "success", {
-          run_id: runId, dry_run: dryRun, chatsSeen, considered, inserted, skipped, customersCreated, failed_count: failedItems.length,
-        });
-        return json({
-          ok: true, action, run_id: runId, connection_id: conn.id, owner_id: conn.owner_id,
-          dry_run: dryRun, cancelled: cancelRequested, status: finalStatus,
-          chatsSeen, considered, inserted, skipped, customersCreated,
-          failed_count: failedItems.length,
-          failed_items: failedItems.slice(0, 10),
-        });
-      } catch (e: any) {
-        await supabaseAdmin.from("waha_import_runs").update({
-          status: "failed",
-          error_message: e?.message ?? String(e),
-          chats_processed: chatsSeen,
-          messages_considered: considered,
-          messages_inserted: inserted,
-          messages_skipped: skipped,
-          customers_created: customersCreated,
-          failed_items: failedItems.slice(0, 500),
-          finished_at: new Date().toISOString(),
-        }).eq("id", runId);
-        await logEvent(action, "error", { run_id: runId, error: e?.message ?? String(e) });
-        return json({ ok: false, run_id: runId, error: e?.message ?? String(e) }, 500);
+            if (chatIdRaw && processedChatIds.has(chatIdRaw)) continue;
+
+            const chatLabel = (typeof chat?.name === "string" && chat.name) || chatIdRaw || "—";
+            await updateProgress(false, chatLabel);
+
+            if (!chatIdRaw) {
+              chatsSeen++;
+              failedItems.push({ chat_id: null, stage: "chat_id_missing", reason: "Chat sem ID válido", at: new Date().toISOString() });
+              continue;
+            }
+            if (chatIdRaw.endsWith("@g.us") || chatIdRaw.endsWith("@broadcast") || chatIdRaw.endsWith("@lid")) {
+              chatsSeen++; skipped++;
+              processedChatIds.add(chatIdRaw);
+              continue;
+            }
+            const phone = normalizePhone(chatIdRaw);
+            if (!phone) {
+              chatsSeen++;
+              processedChatIds.add(chatIdRaw);
+              failedItems.push({ chat_id: chatIdRaw, stage: "phone_normalize", reason: "Não foi possível extrair telefone", at: new Date().toISOString() });
+              continue;
+            }
+
+            // Upsert customer.
+            let customerId: string | null = null;
+            {
+              const { data: existing } = await supabaseAdmin
+                .from("customers").select("id")
+                .eq("phone", phone).eq("owner_id", capturedOwnerId).maybeSingle();
+              if (existing?.id) {
+                customerId = existing.id;
+              } else if (dryRun) {
+                if (!wouldCreatePhones.has(phone)) {
+                  wouldCreatePhones.add(phone);
+                  customersCreated++;
+                }
+                customerId = "dry-run";
+              } else {
+                const displayName = (typeof chat?.name === "string" && chat.name.trim())
+                  || (typeof chat?.pushname === "string" && chat.pushname.trim())
+                  || phone;
+                const { data: created, error: cErr } = await supabaseAdmin
+                  .from("customers")
+                  .upsert({
+                    name: displayName, phone, channel: "whatsapp",
+                    created_by: capturedOwnerId, owner_id: capturedOwnerId,
+                    sub_company_id: conn.sub_company_id, origin_connection_id: capturedConnId,
+                  }, { onConflict: "owner_id,phone", ignoreDuplicates: false })
+                  .select("id").single();
+                if (cErr || !created?.id) {
+                  const { data: raced } = await supabaseAdmin
+                    .from("customers").select("id").eq("phone", phone).eq("owner_id", capturedOwnerId).maybeSingle();
+                  if (!raced?.id) {
+                    chatsSeen++;
+                    processedChatIds.add(chatIdRaw);
+                    failedItems.push({ chat_id: chatIdRaw, phone, stage: "customer_upsert", reason: cErr?.message ?? "Falha ao criar contato", at: new Date().toISOString() });
+                    continue;
+                  }
+                  customerId = raced.id;
+                } else {
+                  customerId = created.id;
+                  customersCreated++;
+                }
+              }
+            }
+
+            // Fetch messages with per-chat auto-retry (2 extra attempts + light
+            // backoff) so transient WAHA blips don't fill failed_items.
+            let messages: any[] = [];
+            let fetchError: string | null = null;
+            attempts: for (let attempt = 0; attempt < 3; attempt++) {
+              if (attempt > 0) await new Promise((r) => setTimeout(r, 400 * attempt));
+              for (const path of [
+                `/api/${encodeURIComponent(sess)}/chats/${encodeURIComponent(chatIdRaw)}/messages?limit=${msgLimit}&downloadMedia=false`,
+                `/api/${encodeURIComponent(sess)}/${encodeURIComponent(chatIdRaw)}/messages?limit=${msgLimit}`,
+              ]) {
+                try {
+                  const r = await fetch(`${base}${path}`, { headers: wahaHeaders });
+                  if (!r.ok) { fetchError = `HTTP ${r.status} em ${path}`; continue; }
+                  const arr = await r.json().catch(() => []);
+                  if (Array.isArray(arr)) { messages = arr; fetchError = null; break attempts; }
+                } catch (e) { fetchError = (e as any)?.message ?? String(e); }
+              }
+            }
+            if (fetchError && !messages.length) {
+              chatsSeen++;
+              processedChatIds.add(chatIdRaw);
+              failedItems.push({ chat_id: chatIdRaw, phone, stage: "waha_fetch_messages", reason: fetchError, at: new Date().toISOString() });
+              continue;
+            }
+
+            for (const m of messages) {
+              considered++;
+              const providerMsgId = extractId(m?.id) || (typeof m?.id === "string" ? m.id : null);
+              if (!providerMsgId) { skipped++; continue; }
+              const fromMe = m?.fromMe === true || m?.key?.fromMe === true;
+              const bodyText: string =
+                m?.body || m?.text || m?.caption ||
+                m?._data?.body || m?.message?.conversation ||
+                m?.message?.extendedTextMessage?.text || "";
+              const hasMedia = m?.hasMedia === true || !!m?.mediaUrl || !!m?.message?.imageMessage || !!m?.message?.videoMessage || !!m?.message?.audioMessage || !!m?.message?.documentMessage;
+              const content = bodyText || (hasMedia ? "[mídia]" : "");
+              if (!content) { skipped++; continue; }
+
+              const tsSec = Number(m?.timestamp || m?.t || m?.messageTimestamp || 0);
+              const createdAt = tsSec > 0
+                ? new Date(tsSec > 1e12 ? tsSec : tsSec * 1000).toISOString()
+                : new Date().toISOString();
+
+              // Idempotency check keyed on (uaz_msg_id, owner_id) — same key
+              // used by the live inbound path, so resumed jobs never
+              // double-insert regardless of how many times the loop restarts.
+              const { data: dup } = await supabaseAdmin
+                .from("chat_messages")
+                .select("id, customers!inner(owner_id)")
+                .eq("uaz_msg_id", providerMsgId)
+                .eq("customers.owner_id", capturedOwnerId)
+                .maybeSingle();
+              if (dup) { skipped++; continue; }
+
+              if (dryRun) { inserted++; continue; }
+
+              const { error: msgErr } = await supabaseAdmin.from("chat_messages").insert({
+                customer_id: customerId,
+                sender_type: fromMe ? "agent" : "client",
+                channel: "whatsapp",
+                content,
+                connection_id: capturedConnId,
+                sub_company_id: conn.sub_company_id,
+                uaz_msg_id: providerMsgId,
+                created_at: createdAt,
+                metadata: {
+                  provider: "waha", source: "waha-session.backfill_from_server",
+                  from_me: fromMe, direction: fromMe ? "outbound_native" : "inbound",
+                  external_device: fromMe === true, chat_id: chatIdRaw,
+                  owner_id: capturedOwnerId, waha_timestamp: tsSec || null, raw: m,
+                  run_id: capturedRunId,
+                },
+              });
+              if (msgErr?.code === "23505") { skipped++; continue; }
+              if (msgErr) {
+                skipped++;
+                failedItems.push({ chat_id: chatIdRaw, phone, provider_msg_id: providerMsgId, stage: "message_insert", reason: msgErr.message, at: new Date().toISOString() });
+                continue;
+              }
+              inserted++;
+            }
+            chatsSeen++;
+            processedChatIds.add(chatIdRaw);
+            await updateProgress(false, chatLabel);
+          }
+
+          const finalStatus = cancelRequested
+            ? "cancelled"
+            : (dryRun ? "completed_dry_run" : "completed");
+
+          await supabaseAdmin.from("waha_import_runs").update({
+            status: finalStatus,
+            chats_processed: chatsSeen,
+            current_chat_label: null,
+            messages_considered: considered,
+            messages_inserted: inserted,
+            messages_skipped: skipped,
+            customers_created: customersCreated,
+            failed_items: failedItems.slice(0, 500),
+            finished_at: new Date().toISOString(),
+            params: { ...runParams, processed_chat_ids: Array.from(processedChatIds), auto_retry_count: autoRetryCount },
+          }).eq("id", capturedRunId);
+
+          await logEvent(action, cancelRequested ? "cancelled" : "success", {
+            run_id: capturedRunId, dry_run: dryRun, chatsSeen, considered, inserted, skipped, customersCreated, failed_count: failedItems.length,
+          });
+        } catch (e: any) {
+          await supabaseAdmin.from("waha_import_runs").update({
+            status: "failed",
+            error_message: e?.message ?? String(e),
+            chats_processed: chatsSeen,
+            messages_considered: considered,
+            messages_inserted: inserted,
+            messages_skipped: skipped,
+            customers_created: customersCreated,
+            failed_items: failedItems.slice(0, 500),
+            finished_at: new Date().toISOString(),
+            params: { ...runParams, processed_chat_ids: Array.from(processedChatIds), auto_retry_count: autoRetryCount },
+          }).eq("id", capturedRunId);
+          await logEvent(action, "error", { run_id: capturedRunId, error: e?.message ?? String(e) });
+        }
+      };
+
+      // Deno Edge Runtime keeps the invocation alive until this promise
+      // resolves, even after the HTTP response is sent. That's what lets us
+      // return 202 immediately without killing the background loop.
+      // deno-lint-ignore no-explicit-any
+      const runtime: any = (globalThis as any).EdgeRuntime;
+      if (runtime?.waitUntil) {
+        runtime.waitUntil(runJob());
+      } else {
+        // Fallback for local dev without EdgeRuntime — run inline.
+        await runJob();
       }
+
+      return json({
+        ok: true, action, run_id: runId, connection_id: conn.id, owner_id: conn.owner_id,
+        dry_run: dryRun, status: "running", accepted: true,
+      }, 202);
     }
+
 
 
 
