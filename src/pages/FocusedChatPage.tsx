@@ -88,6 +88,7 @@ export default function FocusedChatPage() {
   const [loading, setLoading] = useState(true);
   const [conn, setConn] = useState<WhatsAppConnection | null>(null);
   const [connOnline, setConnOnline] = useState(false);
+  const [composerText, setComposerText] = useState('');
   const [tool, setTool] = useState<Tool>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
