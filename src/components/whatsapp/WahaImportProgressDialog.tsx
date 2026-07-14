@@ -202,13 +202,16 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
   };
 
 
-  const runRetry = async () => {
+  const runRetry = async (opts?: { stage?: string; reason?: string; label?: string }) => {
     if (!run || !runId) return;
     if (!creds.url || !creds.token || !creds.session) {
       return toast.error('Preencha URL, API Key e Session Name antes.');
     }
-    setRetrying(true);
-    const toastId = toast.loading(`Reprocessando ${failedCount} itens falhos…`);
+    const setBusy = opts?.stage || opts?.reason ? setBatchRetryingKey : setRetrying;
+    const busyPayload: any = opts?.stage || opts?.reason ? `${opts?.stage ?? ''}::${opts?.reason ?? ''}` : true;
+    setBusy(busyPayload as any);
+    const label = opts?.label ?? `${failedCount} itens falhos`;
+    const toastId = toast.loading(`Reprocessando ${label}…`);
     try {
       const { data, error } = await supabase.functions.invoke('waha-session', {
         body: {
@@ -220,18 +223,52 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
           run_id: runId,
           chat_limit: 500,
           msg_limit: 200,
+          only_stage: opts?.stage,
+          only_reason: opts?.reason,
         },
       });
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'Falha ao reprocessar');
-      toast.success(`Reprocessamento concluído: ${data.inserted ?? 0} mensagens`, {
+      toast.success('Reprocessamento iniciado', {
         id: toastId,
-        description: `${data.failed_count ?? 0} itens ainda falharam`,
+        description: 'Acompanhe o progresso do novo run na tela que abrirá.',
       });
       if (data.run_id && onRetryStarted) onRetryStarted(data.run_id);
     } catch (e: any) {
       toast.error('Falha ao reprocessar', { id: toastId, description: e?.message ?? String(e) });
     } finally {
-      setRetrying(false);
+      if (opts?.stage || opts?.reason) setBatchRetryingKey(null);
+      else setRetrying(false);
+    }
+  };
+
+  const resumeRun = async () => {
+    if (!run || !runId) return;
+    if (!creds.url || !creds.token || !creds.session) {
+      return toast.error('Preencha URL, API Key e Session Name antes.');
+    }
+    setResuming(true);
+    const remaining = Math.max(0, run.chats_total - run.chats_processed);
+    const toastId = toast.loading(`Retomando importação (${remaining} chats restantes)…`);
+    try {
+      const { data, error } = await supabase.functions.invoke('waha-session', {
+        body: {
+          action: 'resume_run',
+          connection_id: conn.id,
+          url: creds.url,
+          token: creds.token,
+          session: creds.session,
+          run_id: runId,
+        },
+      });
+      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'Falha ao retomar');
+      toast.success('Retomada agendada', {
+        id: toastId,
+        description: 'O job continuará do último chat processado. Dedup por provider_msg_id mantém a idempotência.',
+      });
+    } catch (e: any) {
+      toast.error('Falha ao retomar', { id: toastId, description: e?.message ?? String(e) });
+    } finally {
+      setResuming(false);
     }
   };
 
