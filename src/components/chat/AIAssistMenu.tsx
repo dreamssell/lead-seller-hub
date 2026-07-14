@@ -50,7 +50,7 @@ export function AIAssistMenu({ messages, currentText, onSuggest, onSummary }: Pr
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-xl" title="Assistente de IA (Lovable AI)">
+        <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-xl" title="Assistente de IA (Agente AI)">
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-primary" />}
         </Button>
       </DropdownMenuTrigger>
