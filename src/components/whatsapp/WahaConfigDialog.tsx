@@ -32,9 +32,37 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
   const [testing, setTesting] = useState(false);
   const [busyAction, setBusyAction] = useState<null | 'create' | 'delete' | 'logout' | 'list' | 'backfill' | 'simulate'>(null);
   const [remoteSessions, setRemoteSessions] = useState<any[] | null>(null);
-  const [backfillResult, setBackfillResult] = useState<null | { chatsSeen: number; inserted: number; skipped: number; customersCreated: number; dryRun: boolean }>(null);
+  const [backfillResult, setBackfillResult] = useState<null | { chatsSeen: number; inserted: number; skipped: number; customersCreated: number; dryRun: boolean; failedCount: number; runId: string | null }>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [showProgress, setShowProgress] = useState(false);
+  const [lastRun, setLastRun] = useState<null | { id: string; status: string; dry_run: boolean; started_at: string; inserted: number; chats: number; failed: number }>(null);
+
+  // Load latest run for this connection whenever the dialog opens so the user
+  // can revisit the last simulation/import without re-running anything.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('waha_import_runs')
+        .select('id,status,params,started_at,messages_inserted,chats_processed,failed_items')
+        .eq('connection_id', conn.id)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled || !data) return;
+      setLastRun({
+        id: data.id,
+        status: data.status,
+        dry_run: (data.params as any)?.dry_run === true,
+        started_at: data.started_at,
+        inserted: data.messages_inserted ?? 0,
+        chats: data.chats_processed ?? 0,
+        failed: Array.isArray(data.failed_items) ? data.failed_items.length : 0,
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [open, conn.id, showProgress]);
 
 
   const functionsBase = (import.meta as any).env?.VITE_SUPABASE_URL
