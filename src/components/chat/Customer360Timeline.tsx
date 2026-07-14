@@ -3,40 +3,74 @@ import { supabase } from '@/integrations/supabase/client';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, UserPlus, ArrowRightLeft, StickyNote, FileSignature, CheckSquare, MessageSquare, Layers } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import {
+  Loader2, UserPlus, ArrowRightLeft, StickyNote, FileSignature,
+  MessageSquare, Layers, Sparkles, Clock, CheckCircle2, XCircle, Loader,
+  PhoneCall, PhoneIncoming, PhoneMissed, Send,
+} from 'lucide-react';
+import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface Props { customerId: string }
 
+type Kind =
+  | 'lead_origin'
+  | 'lead_event'
+  | 'note'
+  | 'signature'
+  | 'assignment'
+  | 'followup'
+  | 'call'
+  | 'message';
+
 interface TimelineItem {
   id: string;
-  kind: 'lead_event' | 'note' | 'task' | 'signature' | 'assignment' | 'message';
+  kind: Kind;
   title: string;
   body?: string;
   at: string;
   meta?: string;
+  status?: 'scheduled' | 'processing' | 'sent' | 'failed' | 'cancelled' | string;
+  details?: { label: string; value: string }[];
 }
 
 const PAGE = 25;
 
-const ICONS: Record<TimelineItem['kind'], any> = {
+const ICONS: Record<Kind, any> = {
+  lead_origin: Sparkles,
   lead_event: ArrowRightLeft,
   note: StickyNote,
-  task: CheckSquare,
   signature: FileSignature,
   assignment: UserPlus,
+  followup: Send,
+  call: PhoneCall,
   message: MessageSquare,
 };
 
-const COLORS: Record<TimelineItem['kind'], string> = {
+const COLORS: Record<Kind, string> = {
+  lead_origin: 'text-fuchsia-500 bg-fuchsia-500/10',
   lead_event: 'text-blue-500 bg-blue-500/10',
   note: 'text-amber-500 bg-amber-500/10',
-  task: 'text-purple-500 bg-purple-500/10',
   signature: 'text-emerald-500 bg-emerald-500/10',
   assignment: 'text-cyan-500 bg-cyan-500/10',
+  followup: 'text-indigo-500 bg-indigo-500/10',
+  call: 'text-rose-500 bg-rose-500/10',
   message: 'text-muted-foreground bg-muted',
 };
+
+const STATUS_META: Record<string, { label: string; icon: any; className: string }> = {
+  scheduled: { label: 'Agendado', icon: Clock, className: 'text-amber-600 border-amber-500/40 bg-amber-500/10' },
+  processing: { label: 'Enviando', icon: Loader, className: 'text-blue-600 border-blue-500/40 bg-blue-500/10' },
+  sent: { label: 'Enviado', icon: CheckCircle2, className: 'text-emerald-600 border-emerald-500/40 bg-emerald-500/10' },
+  failed: { label: 'Falhou', icon: XCircle, className: 'text-red-600 border-red-500/40 bg-red-500/10' },
+  error: { label: 'Erro', icon: XCircle, className: 'text-red-600 border-red-500/40 bg-red-500/10' },
+  cancelled: { label: 'Cancelado', icon: XCircle, className: 'text-muted-foreground border-border bg-muted' },
+};
+
+function fmtDT(iso: string) {
+  try { return format(new Date(iso), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }); }
+  catch { return iso; }
+}
 
 export function Customer360Timeline({ customerId }: Props) {
   const [items, setItems] = useState<TimelineItem[]>([]);
@@ -48,19 +82,103 @@ export function Customer360Timeline({ customerId }: Props) {
   const fetchPage = useCallback(async (pageIdx: number) => {
     const from = pageIdx * PAGE;
     const to = from + PAGE - 1;
-    const [events, notes, sigs, assigns] = await Promise.all([
-      supabase.from('lead_events').select('id,type,from_stage_name,to_stage_name,channel,created_at').eq('lead_id', customerId).order('created_at', { ascending: false }).range(from, to),
+
+    // Localiza leads vinculados ao customer para eventos de funil
+    const { data: leadsData } = await supabase
+      .from('leads')
+      .select('id,name,source,channel,created_at,pipeline_id,stage_id')
+      .eq('customer_id', customerId);
+    const leadIds = (leadsData || []).map((l: any) => l.id);
+
+    const leadEventsQuery = leadIds.length
+      ? supabase.from('lead_events')
+          .select('id,type,from_stage_name,to_stage_name,channel,source,created_at,metadata')
+          .in('lead_id', leadIds)
+          .order('created_at', { ascending: false })
+          .range(from, to)
+      : Promise.resolve({ data: [], error: null } as any);
+
+    const [notes, sigs, assigns, followups, calls, events] = await Promise.all([
       supabase.from('customer_notes').select('id,content,author_name,created_at').eq('customer_id', customerId).order('created_at', { ascending: false }).range(from, to),
-      supabase.from('signature_documents').select('id,description,status,created_at,lead_id').eq('lead_id', customerId).order('created_at', { ascending: false }).range(from, to).then(r => r, () => ({ data: [], error: null } as any)),
+      supabase.from('signature_documents').select('id,description,status,created_at,lead_id')
+        .in('lead_id', leadIds.length ? leadIds : ['00000000-0000-0000-0000-000000000000'])
+        .order('created_at', { ascending: false }).range(from, to)
+        .then(r => r, () => ({ data: [], error: null } as any)),
       supabase.from('conversation_assignments').select('id,reason,to_user_id,to_queue_id,created_at').eq('customer_id', customerId).order('created_at', { ascending: false }).range(from, to),
+      supabase.from('auto_followups').select('id,status,scheduled_for,sent_at,cancelled_reason,message_template,created_at,updated_at').eq('customer_id', customerId).order('created_at', { ascending: false }).range(from, to),
+      supabase.from('call_history').select('id,direction,status,duration_seconds,started_at,ended_at,contact_name,phone_number,recording_url').eq('customer_id', customerId).order('started_at', { ascending: false }).range(from, to),
+      leadEventsQuery,
     ]);
 
     const arr: TimelineItem[] = [];
-    (events.data || []).forEach((e: any) => arr.push({
-      id: 'e' + e.id, kind: 'lead_event', at: e.created_at,
-      title: e.type === 'stage_changed' ? `Movido: ${e.from_stage_name || '—'} → ${e.to_stage_name || '—'}` : e.type,
-      meta: e.channel || undefined,
-    }));
+
+    // Origem do lead (primeira página)
+    if (pageIdx === 0) {
+      (leadsData || []).forEach((l: any) => {
+        arr.push({
+          id: 'lo' + l.id,
+          kind: 'lead_origin',
+          at: l.created_at,
+          title: `Lead criado: ${l.name}`,
+          meta: l.channel || l.source || undefined,
+          details: [
+            l.source ? { label: 'Origem', value: l.source } : null,
+            l.channel ? { label: 'Canal', value: l.channel } : null,
+          ].filter(Boolean) as any,
+        });
+      });
+    }
+
+    (events.data || []).forEach((e: any) => {
+      const isStage = e.type === 'stage_changed';
+      arr.push({
+        id: 'e' + e.id,
+        kind: 'lead_event',
+        at: e.created_at,
+        title: isStage
+          ? `Etapa: ${e.from_stage_name || '—'} → ${e.to_stage_name || '—'}`
+          : (e.type || 'Evento do lead'),
+        meta: e.channel || e.source || undefined,
+      });
+    });
+
+    (followups.data || []).forEach((f: any) => {
+      const s = STATUS_META[f.status] || STATUS_META.scheduled;
+      const at = f.sent_at || f.updated_at || f.scheduled_for || f.created_at;
+      arr.push({
+        id: 'f' + f.id,
+        kind: 'followup',
+        at,
+        status: f.status,
+        title: `Agendamento — ${s.label}`,
+        body: f.message_template,
+        details: [
+          { label: 'Agendado para', value: fmtDT(f.scheduled_for) },
+          f.sent_at ? { label: 'Enviado em', value: fmtDT(f.sent_at) } : null,
+          f.cancelled_reason ? { label: 'Motivo', value: f.cancelled_reason } : null,
+        ].filter(Boolean) as any,
+      });
+    });
+
+    (calls.data || []).forEach((c: any) => {
+      const dur = c.duration_seconds || 0;
+      const mm = Math.floor(dur / 60).toString().padStart(2, '0');
+      const ss = (dur % 60).toString().padStart(2, '0');
+      arr.push({
+        id: 'c' + c.id,
+        kind: 'call',
+        at: c.started_at,
+        title: c.direction === 'inbound' ? 'Chamada recebida' : 'Chamada realizada',
+        meta: c.status,
+        details: [
+          { label: 'Número', value: c.phone_number },
+          { label: 'Duração', value: `${mm}:${ss}` },
+          c.ended_at ? { label: 'Finalizada', value: fmtDT(c.ended_at) } : null,
+          c.recording_url ? { label: 'Gravação', value: 'Disponível' } : null,
+        ].filter(Boolean) as any,
+      });
+    });
+
     (notes.data || []).forEach((n: any) => arr.push({
       id: 'n' + n.id, kind: 'note', at: n.created_at,
       title: `Nota de ${n.author_name || 'atendente'}`, body: n.content,
@@ -75,7 +193,14 @@ export function Customer360Timeline({ customerId }: Props) {
       body: a.reason || undefined,
     }));
 
-    const got = (events.data?.length || 0) + (notes.data?.length || 0) + (sigs.data?.length || 0) + (assigns.data?.length || 0);
+    const got =
+      (events.data?.length || 0) +
+      (notes.data?.length || 0) +
+      (sigs.data?.length || 0) +
+      (assigns.data?.length || 0) +
+      (followups.data?.length || 0) +
+      (calls.data?.length || 0);
+
     arr.sort((a, b) => +new Date(b.at) - +new Date(a.at));
     return { arr, exhausted: got < PAGE };
   }, [customerId]);
@@ -88,7 +213,19 @@ export function Customer360Timeline({ customerId }: Props) {
       if (cancelled) return;
       setItems(arr); setHasMore(!exhausted); setLoading(false);
     })();
-    return () => { cancelled = true; };
+
+    // Realtime: reflete mudanças de status dos agendamentos ao vivo
+    const ch = supabase
+      .channel(`c360-${customerId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'auto_followups', filter: `customer_id=eq.${customerId}` }, () => {
+        fetchPage(0).then(({ arr, exhausted }) => {
+          if (cancelled) return;
+          setItems(arr); setHasMore(!exhausted); setPage(0);
+        });
+      })
+      .subscribe();
+
+    return () => { cancelled = true; supabase.removeChannel(ch); };
   }, [customerId, fetchPage]);
 
   const loadMore = async () => {
@@ -122,6 +259,8 @@ export function Customer360Timeline({ customerId }: Props) {
         <div className="absolute left-[7px] top-1 bottom-1 w-px bg-border" />
         {items.map((it) => {
           const Icon = ICONS[it.kind];
+          const statusMeta = it.status ? STATUS_META[it.status] : undefined;
+          const StatusIcon = statusMeta?.icon;
           return (
             <div key={it.id} className="relative">
               <div className={`absolute -left-4 top-1 w-3.5 h-3.5 rounded-full flex items-center justify-center ${COLORS[it.kind]}`}>
@@ -130,11 +269,28 @@ export function Customer360Timeline({ customerId }: Props) {
               <div className="rounded-lg border border-border bg-secondary/40 p-2.5">
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <p className="text-xs font-semibold leading-tight">{it.title}</p>
-                  {it.meta && <Badge variant="outline" className="text-[9px] h-4 px-1.5 shrink-0">{it.meta}</Badge>}
+                  {statusMeta ? (
+                    <Badge variant="outline" className={`text-[9px] h-4 px-1.5 shrink-0 gap-1 ${statusMeta.className}`}>
+                      {StatusIcon && <StatusIcon className={`w-2.5 h-2.5 ${it.status === 'processing' ? 'animate-spin' : ''}`} />}
+                      {statusMeta.label}
+                    </Badge>
+                  ) : it.meta ? (
+                    <Badge variant="outline" className="text-[9px] h-4 px-1.5 shrink-0">{it.meta}</Badge>
+                  ) : null}
                 </div>
                 {it.body && <p className="text-[11px] text-foreground/80 whitespace-pre-wrap line-clamp-3">{it.body}</p>}
+                {it.details && it.details.length > 0 && (
+                  <div className="mt-1.5 grid grid-cols-1 gap-0.5">
+                    {it.details.map((d, i) => (
+                      <div key={i} className="flex items-center gap-1.5 text-[10px]">
+                        <span className="text-muted-foreground">{d.label}:</span>
+                        <span className="text-foreground/90 font-medium">{d.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <p className="text-[9px] text-muted-foreground mt-1">
-                  {formatDistanceToNow(new Date(it.at), { addSuffix: true, locale: ptBR })}
+                  {formatDistanceToNow(new Date(it.at), { addSuffix: true, locale: ptBR })} · {fmtDT(it.at)}
                 </p>
               </div>
             </div>
