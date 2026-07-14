@@ -390,7 +390,7 @@ export default function FocusedChatPage() {
       setMsgs(prev => prev.map(m => m.client_msg_id === clientId
         ? { ...m, uaz_msg_id: providerId, metadata: { status: 'sent' } } : m));
       // Sua própria mensagem também zera a "não-lida".
-      markRead(user?.id, selected, new Date().toISOString());
+      markRead(user?.id, selected, new Date().toISOString(), readerInfo);
     } catch (err: any) {
       setMsgs(prev => prev.map(m => m.client_msg_id === clientId
         ? { ...m, metadata: { status: 'error', error: err?.message } } : m));
