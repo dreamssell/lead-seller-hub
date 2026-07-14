@@ -65,6 +65,7 @@ const InternalCommsPage = lazy(() => import("./pages/InternalCommsPage"));
 const InternalMessageDetailPage = lazy(() => import("./pages/InternalMessageDetailPage"));
 const InternalCommsAuditPage = lazy(() => import("./pages/owner/InternalCommsAuditPage"));
 const WavoipWebhookAdminPage = lazy(() => import("./pages/owner/WavoipWebhookAdminPage"));
+const FocusedChatPage = lazy(() => import("./pages/FocusedChatPage"));
 
 /**
  * React Query com defaults calibrados para reduzir refetches redundantes.
