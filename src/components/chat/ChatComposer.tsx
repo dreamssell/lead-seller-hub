@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, KeyboardEvent, ReactNode } from 'react';
-import { Send, Paperclip, X, Loader2, FileText, AudioLines } from 'lucide-react';
+import { Send, Paperclip, X, Loader2, FileText, AudioLines, CalendarClock, PenLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { FormatToolbar } from './FormatToolbar';
@@ -28,6 +28,12 @@ interface Props {
   externalAttachment?: File | null;
   onConsumeExternalAttachment?: () => void;
   extras?: ReactNode;
+  /** Etapa 9 — abrir diálogo de agendamento */
+  onScheduleClick?: () => void;
+  /** Etapa 9 — assinatura pessoal do atendente (texto). */
+  signature?: string | null;
+  signatureEnabled?: boolean;
+  onToggleSignature?: (v: boolean) => void;
 }
 
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -52,6 +58,10 @@ export function ChatComposer({
   externalAttachment,
   onConsumeExternalAttachment,
   extras,
+  onScheduleClick,
+  signature,
+  signatureEnabled,
+  onToggleSignature,
 }: Props) {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -60,6 +70,7 @@ export function ChatComposer({
   const [sending, setSending] = useState(false);
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
+  const [slashKey, setSlashKey] = useState<{ seq: number; key: 'up' | 'down' | 'enter' | null }>({ seq: 0, key: null });
 
   useEffect(() => {
     if (externalAttachment) {
@@ -114,18 +125,25 @@ export function ChatComposer({
     requestAnimationFrame(() => taRef.current?.focus());
   };
 
+  const withSignature = (raw: string) => {
+    if (!signatureEnabled || !signature?.trim()) return raw;
+    const sig = signature.trim();
+    if (raw.trim().endsWith(sig)) return raw;
+    return `${raw.trimEnd()}\n\n${sig}`;
+  };
+
   const submit = async () => {
     if (sending || disabled) return;
     if (attachment && onSendMedia) {
       setSending(true);
-      try { await onSendMedia(attachment, caption || text); resetAfterSend(); }
+      try { await onSendMedia(attachment, withSignature(caption || text)); resetAfterSend(); }
       catch { /* ignore */ }
       finally { setSending(false); }
       return;
     }
     if (!text.trim()) return;
     setSending(true);
-    try { await onSendText(text); resetAfterSend(); }
+    try { await onSendText(withSignature(text)); resetAfterSend(); }
     catch { /* ignore */ }
     finally { setSending(false); }
   };
@@ -137,10 +155,17 @@ export function ChatComposer({
   };
 
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    const cmd = e.ctrlKey || e.metaKey;
+    // Etapa 9 — navegação da lista de /atalhos
+    if (slashOpen) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSlashKey(s => ({ seq: s.seq + 1, key: 'down' })); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setSlashKey(s => ({ seq: s.seq + 1, key: 'up' })); return; }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault(); setSlashKey(s => ({ seq: s.seq + 1, key: 'enter' })); return;
+      }
+      if (e.key === 'Escape') { e.preventDefault(); setSlashOpen(false); return; }
+    }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); return; }
     if (e.key === 'Escape') {
-      if (slashOpen) { setSlashOpen(false); return; }
       if (attachment) { resetAfterSend(); }
     }
   };
@@ -181,7 +206,7 @@ export function ChatComposer({
           </div>
         )}
 
-        <QuickReplyPopover open={slashOpen} query={slashQuery} onPick={insertSlashPick} variables={variables} />
+        <QuickReplyPopover open={slashOpen} query={slashQuery} onPick={insertSlashPick} variables={variables} externalKey={slashKey} />
 
         <FormatToolbar textareaRef={taRef} value={text} onChange={onChangeText} />
 
@@ -196,6 +221,37 @@ export function ChatComposer({
               </TooltipTrigger>
               <TooltipContent>Anexar arquivo</TooltipContent>
             </Tooltip>
+            {onScheduleClick && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-xl" onClick={onScheduleClick} disabled={disabled}>
+                    <CalendarClock className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Agendar mensagem</TooltipContent>
+              </Tooltip>
+            )}
+            {signature != null && onToggleSignature && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant={signatureEnabled ? 'secondary' : 'ghost'}
+                    size="icon"
+                    className={`h-10 w-10 rounded-xl ${signatureEnabled ? 'text-primary' : ''}`}
+                    onClick={() => onToggleSignature(!signatureEnabled)}
+                    disabled={!signature?.trim()}
+                  >
+                    <PenLine className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {!signature?.trim()
+                    ? 'Defina sua assinatura em Perfil'
+                    : signatureEnabled ? 'Assinatura ativa' : 'Ativar assinatura'}
+                </TooltipContent>
+              </Tooltip>
+            )}
             {extras}
           </div>
 
@@ -240,9 +296,9 @@ export function ChatComposer({
 
         <div className="mt-1.5 flex items-center justify-between text-[10px] text-muted-foreground px-1">
           <span>
-            Rascunho salvo automaticamente · use <kbd className="px-1 py-px bg-secondary border border-border rounded">/</kbd> para respostas rápidas · arraste arquivos para anexar
+            Rascunho salvo automaticamente · <kbd className="px-1 py-px bg-secondary border border-border rounded">/</kbd> respostas rápidas · <kbd className="px-1 py-px bg-secondary border border-border rounded">↑↓</kbd> navegar · arraste arquivos para anexar
           </span>
-          <span>{text.length} caracteres</span>
+          <span>{text.length} caracteres{signatureEnabled && signature?.trim() ? ' · assinatura ativa' : ''}</span>
         </div>
       </div>
     </TooltipProvider>
