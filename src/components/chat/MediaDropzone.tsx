@@ -103,7 +103,9 @@ export function MediaDropzone({
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<QueueItem[]>([]);
   const [sending, setSending] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
   const cancelRef = useRef(false);
+  const canceledIdsRef = useRef<Set<string>>(new Set());
   const depthRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -112,6 +114,25 @@ export function MediaDropzone({
   // Cleanup preview URLs
   useEffect(() => () => {
     items.forEach((i) => { if (i.previewUrl) URL.revokeObjectURL(i.previewUrl); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persistência de metadados da fila (sobrevive a reload dentro da mesma aba).
+  // Blobs não podem ser reidratados em File objects sem apoio de IDB específico;
+  // por isso ao recarregar exibimos um aviso ao usuário para reanexar.
+  useEffect(() => {
+    persistQueueMeta(items.map(i => ({ id: i.id, file: i.file, kind: i.kind })));
+  }, [items]);
+
+  useEffect(() => {
+    const meta = readQueueMeta();
+    if (meta.length) {
+      toast.warning(`${meta.length} anexo(s) da sessão anterior precisam ser reanexados`, {
+        description: meta.slice(0, 3).map(m => m.name).join(' · '),
+        duration: 6000,
+      });
+      clearQueueMeta();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -143,9 +164,13 @@ export function MediaDropzone({
     if (!next.length) return;
     const rejected = next.filter(i => i.status === 'rejected');
     if (rejected.length) {
-      toast.error(`${rejected.length} arquivo(s) inválido(s)`, {
+      const msg = `${rejected.length} arquivo(s) inválido(s)`;
+      toast.error(msg, {
         description: rejected.slice(0, 3).map(r => `${r.file.name}: ${r.error}`).join(' · '),
       });
+      setAnnouncement(msg);
+    } else {
+      setAnnouncement(`${next.length} arquivo(s) adicionado(s) à fila`);
     }
     setItems((prev) => [...prev, ...next]);
     setOpen(true);
@@ -157,6 +182,7 @@ export function MediaDropzone({
       if (it?.previewUrl) URL.revokeObjectURL(it.previewUrl);
       return prev.filter(x => x.id !== id);
     });
+    setAnnouncement('Arquivo removido da fila');
   };
 
   const clearAll = () => {
@@ -164,11 +190,55 @@ export function MediaDropzone({
     setItems([]);
     setOpen(false);
     cancelRef.current = false;
+    canceledIdsRef.current.clear();
+    clearQueueMeta();
   };
 
   const cancelSending = () => {
     cancelRef.current = true;
     toast.message('Cancelando envios pendentes...');
+    setAnnouncement('Cancelando envios pendentes');
+  };
+
+  const cancelItem = (id: string) => {
+    canceledIdsRef.current.add(id);
+    setItems(prev => prev.map(x => x.id === id && (x.status === 'queued' || x.status === 'sending')
+      ? { ...x, status: 'canceled' } : x));
+    setAnnouncement('Envio de arquivo cancelado');
+  };
+
+  const retryItem = (id: string) => {
+    canceledIdsRef.current.delete(id);
+    setItems(prev => prev.map(x => x.id === id
+      ? { ...x, status: 'queued', progress: 0, error: undefined } : x));
+    setAnnouncement('Reenvio agendado — clique em Enviar');
+  };
+
+  const sendOne = async (it: QueueItem): Promise<'ok' | 'fail' | 'canceled'> => {
+    if (canceledIdsRef.current.has(it.id)) return 'canceled';
+    setItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'sending', progress: 10 } : x));
+    setAnnouncement(`Enviando ${it.file.name}`);
+    const tick = window.setInterval(() => {
+      setItems(prev => prev.map(x => x.id === it.id && x.status === 'sending'
+        ? { ...x, progress: Math.min(90, x.progress + 8) } : x));
+    }, 250);
+    try {
+      await onSendFile(it.file, it.kind);
+      window.clearInterval(tick);
+      if (canceledIdsRef.current.has(it.id)) {
+        setItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'canceled' } : x));
+        return 'canceled';
+      }
+      setItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'done', progress: 100 } : x));
+      setAnnouncement(`${it.file.name} enviado com sucesso`);
+      return 'ok';
+    } catch (e: any) {
+      window.clearInterval(tick);
+      const msg = e?.message || 'Falha no envio';
+      setItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'error', error: msg } : x));
+      setAnnouncement(`Falha ao enviar ${it.file.name}: ${msg}`);
+      return 'fail';
+    }
   };
 
   const sendAll = async () => {
@@ -182,33 +252,33 @@ export function MediaDropzone({
         setItems(prev => prev.map(x => x.status === 'queued' ? { ...x, status: 'canceled' } : x));
         break;
       }
-      setItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'sending', progress: 10 } : x));
-      // Simular avanço enquanto o await roda
-      const tick = window.setInterval(() => {
-        setItems(prev => prev.map(x => x.id === it.id && x.status === 'sending'
-          ? { ...x, progress: Math.min(90, x.progress + 8) } : x));
-      }, 250);
-      try {
-        await onSendFile(it.file, it.kind);
-        window.clearInterval(tick);
-        setItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'done', progress: 100 } : x));
-        ok++;
-      } catch (e: any) {
-        window.clearInterval(tick);
-        setItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'error', error: e?.message || 'Falha no envio' } : x));
-        fail++;
-      }
+      const r = await sendOne(it);
+      if (r === 'ok') ok++;
+      else if (r === 'fail') fail++;
     }
     setSending(false);
     if (ok || fail) {
       const msg = `${ok} enviado(s)${fail ? ` · ${fail} falha(s)` : ''}`;
       fail ? toast.warning(msg) : toast.success(msg);
+      setAnnouncement(msg);
     }
-    // Auto-fecha se tudo concluído com sucesso
     if (fail === 0 && !cancelRef.current) {
       window.setTimeout(() => clearAll(), 900);
     }
   };
+
+  const retryFailed = async () => {
+    const failed = items.filter(i => i.status === 'error' || i.status === 'canceled');
+    if (!failed.length) return;
+    setItems(prev => prev.map(x => (x.status === 'error' || x.status === 'canceled')
+      ? { ...x, status: 'queued', progress: 0, error: undefined } : x));
+    failed.forEach(f => canceledIdsRef.current.delete(f.id));
+    setAnnouncement(`Reenviando ${failed.length} arquivo(s)`);
+    // Deixa o React aplicar o reset antes de disparar o envio.
+    await new Promise(r => setTimeout(r, 30));
+    void sendAll();
+  };
+
 
   // Drag & drop global
   useEffect(() => {
