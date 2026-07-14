@@ -73,6 +73,7 @@ function fmtDate(iso: string | null) {
 export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, creds, onRetryStarted }: Props) {
   const [run, setRun] = useState<WahaImportRun | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   // Poll every 1.5s while running, and subscribe to realtime updates.
   useEffect(() => {
@@ -112,8 +113,30 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
     return Math.min(100, Math.round((run.chats_processed / run.chats_total) * 100));
   }, [run]);
 
-  const isRunning = run?.status === 'running';
+  const isRunning = run?.status === 'running' || run?.status === 'cancel_requested';
+  const isDryRun = run?.params?.dry_run === true;
   const failedCount = run?.failed_items?.length ?? 0;
+
+  const cancelRun = async () => {
+    if (!runId) return;
+    if (!window.confirm('Cancelar a importação em andamento? O que já foi importado será mantido.')) return;
+    setCancelling(true);
+    const toastId = toast.loading('Solicitando cancelamento…');
+    try {
+      const { data, error } = await supabase.functions.invoke('waha-session', {
+        body: { action: 'cancel_run', connection_id: conn.id, run_id: runId },
+      });
+      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'Falha ao cancelar');
+      toast.success('Cancelamento solicitado', {
+        id: toastId,
+        description: 'O job vai parar em segurança no próximo chat.',
+      });
+    } catch (e: any) {
+      toast.error('Falha ao cancelar', { id: toastId, description: e?.message ?? String(e) });
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const runRetry = async () => {
     if (!run || !runId) return;
