@@ -1040,6 +1040,8 @@ export default function ChatPage() {
           convsRef.current = next;
           return next;
         });
+        // Persiste snapshot da lista para próxima abertura instantânea.
+        void setCachedConvs(activeOwnerId, channel, formatted);
         if (selectedConvIdRef.current && formatted.some((c: any) => c.id === selectedConvIdRef.current)) {
           loadMessagesForConversation(selectedConvIdRef.current, 'manual');
         }
