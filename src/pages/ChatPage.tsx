@@ -33,6 +33,7 @@ import { WhatsAppConnection } from '@/components/whatsapp/types';
 import { useVoip } from '@/contexts/VoipContext';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
 import { ChatRightPanel } from '@/components/chat/ChatRightPanel';
+import { MediaMessageContent } from '@/components/chat/MediaMessageContent';
 import { SignatureDocumentModal } from '@/components/signature/SignatureDocumentModal';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { StickyNote, Zap, PhoneCall, Headphones, PenLine, Keyboard } from 'lucide-react';
@@ -2619,23 +2620,15 @@ export default function ChatPage() {
                             <div className="truncate">{m._quoted.body || '[mídia]'}</div>
                           </button>
                         )}
-                        {m._mediaUrl && m._mediaType === 'audio' && (
-                          <audio controls preload="metadata" src={m._mediaUrl} className="w-full max-w-[280px] my-1" />
-                        )}
-                        {m._mediaUrl && m._mediaType === 'image' && (
-                          <a href={m._mediaUrl} target="_blank" rel="noreferrer">
-                            <img src={m._mediaUrl} alt={m._mediaFilename || 'imagem'} className="rounded-lg max-h-64 object-cover my-1" loading="lazy" />
-                          </a>
-                        )}
-                        {m._mediaUrl && m._mediaType === 'video' && (
-                          <video controls preload="metadata" src={m._mediaUrl} className="rounded-lg max-h-64 w-full my-1" />
-                        )}
-                        {m._mediaUrl && m._mediaType === 'document' && (
-                          <a href={m._mediaUrl} target="_blank" rel="noreferrer" download={m._mediaFilename || undefined}
-                             className="flex items-center gap-2 rounded-lg border border-current/20 bg-background/20 px-2 py-1.5 my-1 text-xs hover:bg-background/30">
-                            <FileDown className="w-4 h-4 shrink-0" />
-                            <span className="truncate">{m._mediaFilename || 'Arquivo'}</span>
-                          </a>
+                        {m._mediaUrl && m._mediaType && (
+                          <MediaMessageContent
+                            url={m._mediaUrl}
+                            type={m._mediaType}
+                            mime={m._mediaMime}
+                            filename={m._mediaFilename}
+                            duration={m._mediaDuration}
+                            mine={m.sender_type !== 'client'}
+                          />
                         )}
                         {m._revoked ? (
                           <p className="italic opacity-70 text-xs flex items-center gap-1">
