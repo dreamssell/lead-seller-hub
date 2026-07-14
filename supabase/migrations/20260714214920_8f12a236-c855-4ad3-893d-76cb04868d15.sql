@@ -1,0 +1,1 @@
+UPDATE public.waha_import_runs SET status='failed', error_message='Job interrompido pelo timeout da plataforma. A partir de agora, novos jobs continuam sozinhos via EdgeRuntime.waitUntil; use "Retomar do último ponto" para reaproveitar este run.', finished_at=NOW(), updated_at=NOW() WHERE id='a3a9accb-517c-452d-b477-eeb31d83babc' AND status='running';

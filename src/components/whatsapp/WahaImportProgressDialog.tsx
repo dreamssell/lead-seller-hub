@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, RefreshCw, AlertOctagon, CheckCircle2, XCircle, PlayCircle, StopCircle, FlaskConical, Ban, FileDown } from 'lucide-react';
+import { Loader2, RefreshCw, AlertOctagon, CheckCircle2, XCircle, PlayCircle, StopCircle, FlaskConical, Ban, FileDown, RotateCcw, ChevronDown, ChevronRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { downloadCsv } from '@/lib/ceoExport';
@@ -45,7 +45,7 @@ export interface WahaImportRun {
   started_at: string;
   finished_at: string | null;
   updated_at: string;
-  params?: { dry_run?: boolean; action?: string } | null;
+  params?: { dry_run?: boolean; action?: string; processed_chat_ids?: string[]; auto_retry_count?: number } | null;
 }
 
 interface Props {
@@ -78,7 +78,10 @@ function fmtDate(iso: string | null) {
 export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, creds, onRetryStarted }: Props) {
   const [run, setRun] = useState<WahaImportRun | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [resuming, setResuming] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [batchRetryingKey, setBatchRetryingKey] = useState<string | null>(null);
 
   // Poll every 1.5s while running, and subscribe to realtime updates.
   useEffect(() => {
@@ -120,7 +123,27 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
 
   const isRunning = run?.status === 'running' || run?.status === 'cancel_requested';
   const isDryRun = run?.params?.dry_run === true;
+  const canResume = run?.status === 'failed' || run?.status === 'cancelled';
+  const autoRetryCount = run?.params?.auto_retry_count ?? 0;
   const failedCount = run?.failed_items?.length ?? 0;
+
+  // Group failures by (stage, reason) so the user sees "5 chats falharam ao
+  // buscar mensagens (HTTP 502)" instead of a flat 500-line list. Groups are
+  // sorted by count desc; each group can be expanded and reprocessed alone.
+  const failureGroups = useMemo(() => {
+    const map = new Map<string, { stage: string; reason: string; items: WahaImportRun['failed_items'] }>();
+    for (const item of run?.failed_items ?? []) {
+      const stage = item.stage ?? 'unknown';
+      const reason = item.reason ?? '(sem motivo)';
+      const key = `${stage}::${reason}`;
+      const g = map.get(key) ?? { stage, reason, items: [] };
+      g.items.push(item);
+      map.set(key, g);
+    }
+    return Array.from(map.entries())
+      .map(([key, g]) => ({ key, ...g }))
+      .sort((a, b) => b.items.length - a.items.length);
+  }, [run?.failed_items]);
 
   const cancelRun = async () => {
     if (!runId) return;
@@ -179,13 +202,16 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
   };
 
 
-  const runRetry = async () => {
+  const runRetry = async (opts?: { stage?: string; reason?: string; label?: string }) => {
     if (!run || !runId) return;
     if (!creds.url || !creds.token || !creds.session) {
       return toast.error('Preencha URL, API Key e Session Name antes.');
     }
-    setRetrying(true);
-    const toastId = toast.loading(`Reprocessando ${failedCount} itens falhos…`);
+    const setBusy = opts?.stage || opts?.reason ? setBatchRetryingKey : setRetrying;
+    const busyPayload: any = opts?.stage || opts?.reason ? `${opts?.stage ?? ''}::${opts?.reason ?? ''}` : true;
+    setBusy(busyPayload as any);
+    const label = opts?.label ?? `${failedCount} itens falhos`;
+    const toastId = toast.loading(`Reprocessando ${label}…`);
     try {
       const { data, error } = await supabase.functions.invoke('waha-session', {
         body: {
@@ -197,18 +223,52 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
           run_id: runId,
           chat_limit: 500,
           msg_limit: 200,
+          only_stage: opts?.stage,
+          only_reason: opts?.reason,
         },
       });
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'Falha ao reprocessar');
-      toast.success(`Reprocessamento concluído: ${data.inserted ?? 0} mensagens`, {
+      toast.success('Reprocessamento iniciado', {
         id: toastId,
-        description: `${data.failed_count ?? 0} itens ainda falharam`,
+        description: 'Acompanhe o progresso do novo run na tela que abrirá.',
       });
       if (data.run_id && onRetryStarted) onRetryStarted(data.run_id);
     } catch (e: any) {
       toast.error('Falha ao reprocessar', { id: toastId, description: e?.message ?? String(e) });
     } finally {
-      setRetrying(false);
+      if (opts?.stage || opts?.reason) setBatchRetryingKey(null);
+      else setRetrying(false);
+    }
+  };
+
+  const resumeRun = async () => {
+    if (!run || !runId) return;
+    if (!creds.url || !creds.token || !creds.session) {
+      return toast.error('Preencha URL, API Key e Session Name antes.');
+    }
+    setResuming(true);
+    const remaining = Math.max(0, run.chats_total - run.chats_processed);
+    const toastId = toast.loading(`Retomando importação (${remaining} chats restantes)…`);
+    try {
+      const { data, error } = await supabase.functions.invoke('waha-session', {
+        body: {
+          action: 'resume_run',
+          connection_id: conn.id,
+          url: creds.url,
+          token: creds.token,
+          session: creds.session,
+          run_id: runId,
+        },
+      });
+      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'Falha ao retomar');
+      toast.success('Retomada agendada', {
+        id: toastId,
+        description: 'O job continuará do último chat processado. Dedup por provider_msg_id mantém a idempotência.',
+      });
+    } catch (e: any) {
+      toast.error('Falha ao retomar', { id: toastId, description: e?.message ?? String(e) });
+    } finally {
+      setResuming(false);
     }
   };
 
@@ -317,12 +377,45 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
             </div>
 
             {run.error_message && (
-              <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2.5 text-xs text-destructive flex items-start gap-2">
-                <AlertOctagon className="w-4 h-4 mt-0.5 shrink-0" />
-                <div>
-                  <div className="font-semibold">Job encerrado com erro</div>
-                  <div className="font-mono break-all">{run.error_message}</div>
+              <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2.5 text-xs text-destructive space-y-2">
+                <div className="flex items-start gap-2">
+                  <AlertOctagon className="w-4 h-4 mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold">Job encerrado com erro</div>
+                    <div className="font-mono break-all">{run.error_message}</div>
+                    {autoRetryCount > 0 && (
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        Continuações automáticas usadas: {autoRetryCount}
+                      </div>
+                    )}
+                  </div>
                 </div>
+                {canResume && (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    disabled={resuming}
+                    onClick={resumeRun}
+                    className="gap-1.5"
+                    title="Retoma do último chat processado. Dedup por provider_msg_id garante que nada será duplicado."
+                  >
+                    {resuming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                    Retomar do último ponto
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {!run.error_message && canResume && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5 text-xs flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                  <Ban className="w-4 h-4" />
+                  Job {run.status === 'cancelled' ? 'cancelado' : 'interrompido'} em {run.chats_processed}/{run.chats_total} chats.
+                </div>
+                <Button size="sm" variant="default" disabled={resuming} onClick={resumeRun} className="gap-1.5">
+                  {resuming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                  Retomar
+                </Button>
               </div>
             )}
 
@@ -332,40 +425,79 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
                   <AlertOctagon className="w-4 h-4 text-amber-500" />
                   Itens com falha
                   <Badge variant="secondary" className="tabular-nums">{failedCount}</Badge>
+                  {failureGroups.length > 1 && (
+                    <span className="text-[10px] text-muted-foreground font-normal">
+                      · {failureGroups.length} motivos distintos
+                    </span>
+                  )}
                 </div>
                 <Button
                   size="sm"
                   variant={failedCount > 0 ? 'default' : 'outline'}
                   disabled={retrying || isRunning || failedCount === 0}
-                  onClick={runRetry}
+                  onClick={() => runRetry()}
                   className="gap-1.5"
                 >
                   {retrying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                  Reprocessar {failedCount > 0 ? `(${failedCount})` : ''}
+                  Reprocessar tudo {failedCount > 0 ? `(${failedCount})` : ''}
                 </Button>
               </div>
 
               {failedCount === 0 ? (
                 <div className="text-xs text-muted-foreground italic">Nenhuma falha registrada.</div>
               ) : (
-                <ScrollArea className="h-56 rounded-md border">
+                <ScrollArea className="h-72 rounded-md border">
                   <ul className="divide-y">
-                    {run.failed_items.map((f, i) => (
-                      <li key={i} className="p-2 text-[11px] space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-[10px]">
-                            {STAGE_LABEL[f.stage ?? ''] ?? f.stage ?? 'Falha'}
-                          </Badge>
-                          {f.phone && <span className="font-mono text-muted-foreground">{f.phone}</span>}
-                          {f.chat_id && !f.phone && <span className="font-mono text-muted-foreground truncate">{f.chat_id}</span>}
-                          <span className="ml-auto text-muted-foreground">{fmtDate(f.at ?? null)}</span>
-                        </div>
-                        <div className="text-destructive font-mono break-all">{f.reason}</div>
-                        {f.provider_msg_id && (
-                          <div className="text-muted-foreground font-mono truncate">msg: {f.provider_msg_id}</div>
-                        )}
-                      </li>
-                    ))}
+                    {failureGroups.map((g) => {
+                      const key = g.key;
+                      const expanded = !!expandedGroups[key];
+                      const stageLabel = STAGE_LABEL[g.stage] ?? g.stage;
+                      const busy = batchRetryingKey === key;
+                      return (
+                        <li key={key} className="p-2 space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedGroups((s) => ({ ...s, [key]: !expanded }))}
+                              className="flex items-center gap-1.5 text-left flex-1 min-w-0 hover:text-primary transition-colors"
+                            >
+                              {expanded ? <ChevronDown className="w-3.5 h-3.5 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
+                              <Badge variant="outline" className="text-[10px] shrink-0">{stageLabel}</Badge>
+                              <span className="text-[11px] text-destructive font-mono truncate flex-1">{g.reason}</span>
+                              <Badge variant="secondary" className="text-[10px] tabular-nums shrink-0">{g.items.length}</Badge>
+                            </button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy || isRunning || retrying}
+                              onClick={() => runRetry({ stage: g.stage, reason: g.reason, label: `${g.items.length} itens · ${stageLabel}` })}
+                              className="h-7 gap-1.5 text-[11px]"
+                              title="Reprocessa apenas os chats que falharam com este motivo."
+                            >
+                              {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                              Reprocessar este motivo
+                            </Button>
+                          </div>
+                          {expanded && (
+                            <ul className="pl-5 space-y-0.5">
+                              {g.items.slice(0, 50).map((f, i) => (
+                                <li key={i} className="text-[10px] flex items-center gap-2">
+                                  {f.phone && <span className="font-mono text-muted-foreground">{f.phone}</span>}
+                                  {f.chat_id && !f.phone && <span className="font-mono text-muted-foreground truncate max-w-[180px]">{f.chat_id}</span>}
+                                  {f.provider_msg_id && <span className="font-mono text-muted-foreground truncate max-w-[180px]">msg: {f.provider_msg_id}</span>}
+                                  <span className="ml-auto text-muted-foreground">{fmtDate(f.at ?? null)}</span>
+                                </li>
+                              ))}
+                              {g.items.length > 50 && (
+                                <li className="text-[10px] text-muted-foreground italic">
+                                  … +{g.items.length - 50} itens (exporte CSV para ver todos)
+                                </li>
+                              )}
+                            </ul>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </ScrollArea>
               )}
