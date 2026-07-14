@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Copy, Loader2, ExternalLink, Wifi, PlusCircle, Trash2, LogOut, ListRestart, DownloadCloud } from 'lucide-react';
 import { WahaConfigSchema, readWahaConfig, buildWahaWebhookUrl, type WahaConfig } from './wahaConfig';
+import { WahaImportProgressDialog } from './WahaImportProgressDialog';
 import type { WhatsAppConnection } from './types';
 
 interface Props {
@@ -32,6 +33,9 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
   const [busyAction, setBusyAction] = useState<null | 'create' | 'delete' | 'logout' | 'list' | 'backfill'>(null);
   const [remoteSessions, setRemoteSessions] = useState<any[] | null>(null);
   const [backfillResult, setBackfillResult] = useState<null | { chatsSeen: number; inserted: number; skipped: number; customersCreated: number }>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [showProgress, setShowProgress] = useState(false);
+
 
   const functionsBase = (import.meta as any).env?.VITE_SUPABASE_URL
     ? `${(import.meta as any).env.VITE_SUPABASE_URL.replace(/\/$/, '')}/functions/v1`
@@ -148,9 +152,11 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
     if (!window.confirm('Importar o histórico de conversas direto do servidor WAHA?\n\nApenas mensagens que ainda não existem aqui serão criadas. O fluxo ao vivo não é afetado.')) return;
     setBusyAction('backfill');
     setBackfillResult(null);
+    setActiveRunId(null);
+    setShowProgress(true);
     const toastId = toast.loading('Importando histórico do WAHA…');
     try {
-      const { data, error } = await supabase.functions.invoke('waha-session', {
+      const invocation = supabase.functions.invoke('waha-session', {
         body: {
           action: 'backfill_from_server',
           connection_id: conn.id,
@@ -161,7 +167,26 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
           msg_limit: 200,
         },
       });
+
+      // As soon as the run row exists (server creates it early), open its progress screen.
+      const pickUpRun = setInterval(async () => {
+        const { data } = await supabase
+          .from('waha_import_runs')
+          .select('id')
+          .eq('connection_id', conn.id)
+          .order('started_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (data?.id) {
+          setActiveRunId(data.id);
+          clearInterval(pickUpRun);
+        }
+      }, 700);
+
+      const { data, error } = await invocation;
+      clearInterval(pickUpRun);
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'Falha ao importar');
+      if (data.run_id) setActiveRunId(data.run_id);
       setBackfillResult({
         chatsSeen: data.chatsSeen ?? 0,
         inserted: data.inserted ?? 0,
@@ -170,7 +195,7 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
       });
       toast.success(`${data.inserted ?? 0} mensagens importadas`, {
         id: toastId,
-        description: `${data.chatsSeen ?? 0} chats analisados · ${data.customersCreated ?? 0} contatos novos`,
+        description: `${data.chatsSeen ?? 0} chats analisados · ${data.customersCreated ?? 0} contatos novos · ${data.failed_count ?? 0} falhas`,
       });
       onSaved();
     } catch (e: any) {
@@ -182,7 +207,9 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
 
 
 
+
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
@@ -407,6 +434,15 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <WahaImportProgressDialog
+      open={showProgress}
+      onOpenChange={setShowProgress}
+      runId={activeRunId}
+      conn={conn}
+      creds={{ url: cfg.url, token: cfg.token, session: cfg.session }}
+      onRetryStarted={(rid) => setActiveRunId(rid)}
+    />
+    </>
   );
 }
 
