@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
       | "status" | "qr" | "restart" | "logout" | "create" | "delete"
       | "list_remote" | "test_webhook" | "cleanup_scan" | "configure_webhook"
       | "validate_webhook" | "validate_all_webhooks" | "backfill_inbound"
-      | "backfill_from_server";
+      | "backfill_from_server" | "retry_failed" | "cancel_run";
     // When true, `status` will auto-heal a missing/outdated webhook config
     // in the WAHA server without requiring a separate call. Defaults to true.
     const autoHeal: boolean = body?.auto_heal !== false;
@@ -354,10 +354,46 @@ Deno.serve(async (req) => {
     // "Sem mensagens ainda" when the webhook missed delivery. Idempotent by
     // uaz_msg_id + (owner_id, phone), so it can be re-run safely and never
     // affects UAZ / Evolution / Wavoip data or the live inbound path.
+    // ─── cancel_run ────────────────────────────────────────────────────────
+    // Flags a running import so the backfill loop stops on its next check and
+    // marks the run as 'cancelled'. RLS on waha_import_runs already restricts
+    // this to owner / account admin / platform admin.
+    if (action === "cancel_run") {
+      const runId = String(body?.run_id ?? "").trim();
+      if (!runId) return json({ ok: false, error: "run_id_required" }, 400);
+      const { data: runRow } = await supabaseAdmin
+        .from("waha_import_runs")
+        .select("id, owner_id, status")
+        .eq("id", runId)
+        .maybeSingle();
+      if (!runRow) return json({ ok: false, error: "run_not_found" }, 404);
+      if (callerId && runRow.owner_id !== callerId) {
+        const { data: access } = await supabaseAdmin
+          .from("user_account_access")
+          .select("is_account_admin")
+          .eq("user_id", callerId)
+          .eq("owner_id", runRow.owner_id);
+        const isAcctAdmin = !!access?.some((a: any) => a.is_account_admin);
+        if (!isAcctAdmin) {
+          const { data: roles } = await supabaseAdmin
+            .from("user_roles").select("role").eq("user_id", callerId).eq("role", "admin");
+          if (!roles?.length) return json({ ok: false, error: "forbidden" });
+        }
+      }
+      if (runRow.status !== "running") {
+        return json({ ok: true, already: true, status: runRow.status });
+      }
+      await supabaseAdmin.from("waha_import_runs")
+        .update({ status: "cancel_requested" }).eq("id", runId);
+      await logEvent("cancel_run", "requested", { run_id: runId });
+      return json({ ok: true, run_id: runId, status: "cancel_requested" });
+    }
+
     if (action === "backfill_from_server" || action === "retry_failed") {
       if (!conn?.id) return json({ ok: false, error: "connection_required" }, 400);
       if (!base || !token || !sess) return json({ ok: false, error: "waha_credentials_missing" }, 400);
 
+      const dryRun: boolean = body?.dry_run === true;
       const chatLimit = Math.max(1, Math.min(500, Number(body?.chat_limit ?? 200)));
       const msgLimit = Math.max(1, Math.min(500, Number(body?.msg_limit ?? 100)));
       const onlyChatId: string | null = typeof body?.chat_id === "string" ? body.chat_id : null;
@@ -395,7 +431,6 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Create the tracking run row.
       const { data: runRow, error: runErr } = await supabaseAdmin
         .from("waha_import_runs")
         .insert({
@@ -404,7 +439,7 @@ Deno.serve(async (req) => {
           triggered_by: callerId,
           status: "running",
           chats_total: chats.length,
-          params: { action, chat_limit: chatLimit, msg_limit: msgLimit, retry_of: retrySourceRunId },
+          params: { action, chat_limit: chatLimit, msg_limit: msgLimit, retry_of: retrySourceRunId, dry_run: dryRun },
         })
         .select("id")
         .single();
@@ -413,11 +448,24 @@ Deno.serve(async (req) => {
 
       let chatsSeen = 0;
       let considered = 0;
-      let inserted = 0;
+      let inserted = 0; // in dry-run: how many WOULD be inserted
       let skipped = 0;
-      let customersCreated = 0;
+      let customersCreated = 0; // in dry-run: how many contacts WOULD be created
       const failedItems: any[] = [];
+      const wouldCreatePhones = new Set<string>(); // dry-run only, to avoid double-counting
       let lastProgressUpdate = 0;
+      let cancelRequested = false;
+      let lastCancelCheck = 0;
+
+      const checkCancel = async (force = false): Promise<boolean> => {
+        const now = Date.now();
+        if (!force && now - lastCancelCheck < 1500) return cancelRequested;
+        lastCancelCheck = now;
+        const { data } = await supabaseAdmin
+          .from("waha_import_runs").select("status").eq("id", runId).maybeSingle();
+        if (data?.status === "cancel_requested") cancelRequested = true;
+        return cancelRequested;
+      };
 
       const updateProgress = async (force = false, currentLabel?: string | null) => {
         const now = Date.now();
@@ -436,6 +484,8 @@ Deno.serve(async (req) => {
 
       try {
         for (const chat of chats) {
+          if (await checkCancel()) break;
+
           const chatIdRaw: string | undefined =
             (typeof chat?.id === "string" ? chat.id : chat?.id?._serialized) ||
             chat?.chatId || chat?.remoteJid;
@@ -458,7 +508,7 @@ Deno.serve(async (req) => {
             continue;
           }
 
-          // Upsert customer.
+          // Upsert customer (skipped entirely on dry-run — just count).
           let customerId: string | null = null;
           {
             const { data: existing } = await supabaseAdmin
@@ -466,6 +516,13 @@ Deno.serve(async (req) => {
               .eq("phone", phone).eq("owner_id", conn.owner_id).maybeSingle();
             if (existing?.id) {
               customerId = existing.id;
+            } else if (dryRun) {
+              // Count phone once — we won't create it, but need a sentinel id.
+              if (!wouldCreatePhones.has(phone)) {
+                wouldCreatePhones.add(phone);
+                customersCreated++;
+              }
+              customerId = "dry-run";
             } else {
               const displayName = (typeof chat?.name === "string" && chat.name.trim())
                 || (typeof chat?.pushname === "string" && chat.pushname.trim())
@@ -540,6 +597,12 @@ Deno.serve(async (req) => {
               .maybeSingle();
             if (dup) { skipped++; continue; }
 
+            if (dryRun) {
+              // Would insert — count, but do not write.
+              inserted++;
+              continue;
+            }
+
             const { error: msgErr } = await supabaseAdmin.from("chat_messages").insert({
               customer_id: customerId,
               sender_type: fromMe ? "agent" : "client",
@@ -568,8 +631,12 @@ Deno.serve(async (req) => {
           await updateProgress(false, chatLabel);
         }
 
+        const finalStatus = cancelRequested
+          ? "cancelled"
+          : (dryRun ? "completed_dry_run" : "completed");
+
         await supabaseAdmin.from("waha_import_runs").update({
-          status: "completed",
+          status: finalStatus,
           chats_processed: chatsSeen,
           current_chat_label: null,
           messages_considered: considered,
@@ -580,9 +647,12 @@ Deno.serve(async (req) => {
           finished_at: new Date().toISOString(),
         }).eq("id", runId);
 
-        await logEvent(action, "success", { run_id: runId, chatsSeen, considered, inserted, skipped, customersCreated, failed_count: failedItems.length });
+        await logEvent(action, cancelRequested ? "cancelled" : "success", {
+          run_id: runId, dry_run: dryRun, chatsSeen, considered, inserted, skipped, customersCreated, failed_count: failedItems.length,
+        });
         return json({
           ok: true, action, run_id: runId, connection_id: conn.id, owner_id: conn.owner_id,
+          dry_run: dryRun, cancelled: cancelRequested, status: finalStatus,
           chatsSeen, considered, inserted, skipped, customersCreated,
           failed_count: failedItems.length,
           failed_items: failedItems.slice(0, 10),

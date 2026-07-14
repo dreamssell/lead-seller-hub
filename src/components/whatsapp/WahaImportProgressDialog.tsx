@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, RefreshCw, AlertOctagon, CheckCircle2, XCircle, PlayCircle } from 'lucide-react';
+import { Loader2, RefreshCw, AlertOctagon, CheckCircle2, XCircle, PlayCircle, StopCircle, FlaskConical, Ban } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { WhatsAppConnection } from './types';
@@ -20,7 +20,7 @@ export interface WahaImportRun {
   id: string;
   connection_id: string;
   owner_id: string;
-  status: 'running' | 'completed' | 'failed' | string;
+  status: 'running' | 'completed' | 'failed' | 'cancel_requested' | 'cancelled' | 'completed_dry_run' | string;
   chats_total: number;
   chats_processed: number;
   current_chat_label: string | null;
@@ -40,6 +40,7 @@ export interface WahaImportRun {
   started_at: string;
   finished_at: string | null;
   updated_at: string;
+  params?: { dry_run?: boolean; action?: string } | null;
 }
 
 interface Props {
@@ -72,6 +73,7 @@ function fmtDate(iso: string | null) {
 export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, creds, onRetryStarted }: Props) {
   const [run, setRun] = useState<WahaImportRun | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   // Poll every 1.5s while running, and subscribe to realtime updates.
   useEffect(() => {
@@ -111,8 +113,30 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
     return Math.min(100, Math.round((run.chats_processed / run.chats_total) * 100));
   }, [run]);
 
-  const isRunning = run?.status === 'running';
+  const isRunning = run?.status === 'running' || run?.status === 'cancel_requested';
+  const isDryRun = run?.params?.dry_run === true;
   const failedCount = run?.failed_items?.length ?? 0;
+
+  const cancelRun = async () => {
+    if (!runId) return;
+    if (!window.confirm('Cancelar a importação em andamento? O que já foi importado será mantido.')) return;
+    setCancelling(true);
+    const toastId = toast.loading('Solicitando cancelamento…');
+    try {
+      const { data, error } = await supabase.functions.invoke('waha-session', {
+        body: { action: 'cancel_run', connection_id: conn.id, run_id: runId },
+      });
+      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'Falha ao cancelar');
+      toast.success('Cancelamento solicitado', {
+        id: toastId,
+        description: 'O job vai parar em segurança no próximo chat.',
+      });
+    } catch (e: any) {
+      toast.error('Falha ao cancelar', { id: toastId, description: e?.message ?? String(e) });
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const runRetry = async () => {
     if (!run || !runId) return;
@@ -151,15 +175,22 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 flex-wrap">
             {isRunning ? <Loader2 className="w-4 h-4 animate-spin text-primary" />
               : run?.status === 'completed' ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              : run?.status === 'completed_dry_run' ? <FlaskConical className="w-4 h-4 text-sky-500" />
+              : run?.status === 'cancelled' ? <Ban className="w-4 h-4 text-amber-500" />
               : run?.status === 'failed' ? <XCircle className="w-4 h-4 text-destructive" />
               : <PlayCircle className="w-4 h-4" />}
-            Importação de histórico do WAHA
+            {isDryRun ? 'Simulação de importação do WAHA' : 'Importação de histórico do WAHA'}
+            {isDryRun && <Badge variant="outline" className="text-[10px] gap-1"><FlaskConical className="w-3 h-3" /> Modo simulação</Badge>}
+            {run?.status === 'cancel_requested' && <Badge variant="secondary" className="text-[10px]">Parando…</Badge>}
+            {run?.status === 'cancelled' && <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/40">Cancelado</Badge>}
           </DialogTitle>
           <DialogDescription>
-            Acompanhe em tempo real quantos chats e mensagens foram varridos. A operação não afeta o fluxo ao vivo, nem UAZ, Evolution ou Wavoip.
+            {isDryRun
+              ? 'Contagem apenas — nenhuma mensagem ou contato é gravado no banco. Use o resultado para decidir se roda a importação real.'
+              : 'Acompanhe em tempo real quantos chats e mensagens foram varridos. A operação não afeta o fluxo ao vivo, nem UAZ, Evolution ou Wavoip.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -185,13 +216,29 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
                   Atualmente: <span className="font-mono">{run.current_chat_label}</span>
                 </div>
               )}
+              {isRunning && (
+                <div className="flex justify-end pt-1">
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={cancelling || run?.status === 'cancel_requested'}
+                    onClick={cancelRun}
+                    className="gap-1.5"
+                  >
+                    {cancelling || run?.status === 'cancel_requested'
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <StopCircle className="w-3.5 h-3.5" />}
+                    {run?.status === 'cancel_requested' ? 'Cancelando…' : 'Cancelar importação'}
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <Stat label="Consideradas" value={run.messages_considered} />
-              <Stat label="Inseridas" value={run.messages_inserted} highlight="emerald" />
+              <Stat label={isDryRun ? 'Seriam inseridas' : 'Inseridas'} value={run.messages_inserted} highlight="emerald" />
               <Stat label="Ignoradas" value={run.messages_skipped} />
-              <Stat label="Contatos novos" value={run.customers_created} highlight="teal" />
+              <Stat label={isDryRun ? 'Contatos que seriam criados' : 'Contatos novos'} value={run.customers_created} highlight="teal" />
             </div>
 
             {run.error_message && (

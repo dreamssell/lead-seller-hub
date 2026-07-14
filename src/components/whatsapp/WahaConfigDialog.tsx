@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Copy, Loader2, ExternalLink, Wifi, PlusCircle, Trash2, LogOut, ListRestart, DownloadCloud } from 'lucide-react';
+import { Copy, Loader2, ExternalLink, Wifi, PlusCircle, Trash2, LogOut, ListRestart, DownloadCloud, FlaskConical } from 'lucide-react';
 import { WahaConfigSchema, readWahaConfig, buildWahaWebhookUrl, type WahaConfig } from './wahaConfig';
 import { WahaImportProgressDialog } from './WahaImportProgressDialog';
 import type { WhatsAppConnection } from './types';
@@ -30,9 +30,9 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
   const [cfg, setCfg] = useState<WahaConfig>(initial);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [busyAction, setBusyAction] = useState<null | 'create' | 'delete' | 'logout' | 'list' | 'backfill'>(null);
+  const [busyAction, setBusyAction] = useState<null | 'create' | 'delete' | 'logout' | 'list' | 'backfill' | 'simulate'>(null);
   const [remoteSessions, setRemoteSessions] = useState<any[] | null>(null);
-  const [backfillResult, setBackfillResult] = useState<null | { chatsSeen: number; inserted: number; skipped: number; customersCreated: number }>(null);
+  const [backfillResult, setBackfillResult] = useState<null | { chatsSeen: number; inserted: number; skipped: number; customersCreated: number; dryRun: boolean }>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [showProgress, setShowProgress] = useState(false);
 
@@ -146,15 +146,15 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
     }
   };
 
-  const runBackfillFromServer = async () => {
+  const runBackfillFromServer = async (dryRun: boolean) => {
     if (!cfg.url || !cfg.token || !cfg.session)
       return toast.error('Preencha URL, API Key e Session Name antes.');
-    if (!window.confirm('Importar o histórico de conversas direto do servidor WAHA?\n\nApenas mensagens que ainda não existem aqui serão criadas. O fluxo ao vivo não é afetado.')) return;
-    setBusyAction('backfill');
+    if (!dryRun && !window.confirm('Importar o histórico de conversas direto do servidor WAHA?\n\nApenas mensagens que ainda não existem aqui serão criadas. O fluxo ao vivo não é afetado.')) return;
+    setBusyAction(dryRun ? 'simulate' : 'backfill');
     setBackfillResult(null);
     setActiveRunId(null);
     setShowProgress(true);
-    const toastId = toast.loading('Importando histórico do WAHA…');
+    const toastId = toast.loading(dryRun ? 'Simulando importação (nada será gravado)…' : 'Importando histórico do WAHA…');
     try {
       const invocation = supabase.functions.invoke('waha-session', {
         body: {
@@ -165,6 +165,7 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
           session: cfg.session,
           chat_limit: 300,
           msg_limit: 200,
+          dry_run: dryRun,
         },
       });
 
@@ -192,14 +193,21 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
         inserted: data.inserted ?? 0,
         skipped: data.skipped ?? 0,
         customersCreated: data.customersCreated ?? 0,
+        dryRun,
       });
-      toast.success(`${data.inserted ?? 0} mensagens importadas`, {
-        id: toastId,
-        description: `${data.chatsSeen ?? 0} chats analisados · ${data.customersCreated ?? 0} contatos novos · ${data.failed_count ?? 0} falhas`,
-      });
-      onSaved();
+      const cancelledMsg = data.cancelled ? ' · CANCELADO' : '';
+      toast.success(
+        dryRun
+          ? `Simulação: ${data.inserted ?? 0} mensagens seriam importadas${cancelledMsg}`
+          : `${data.inserted ?? 0} mensagens importadas${cancelledMsg}`,
+        {
+          id: toastId,
+          description: `${data.chatsSeen ?? 0} chats analisados · ${data.customersCreated ?? 0} contatos${dryRun ? ' seriam criados' : ' novos'} · ${data.failed_count ?? 0} falhas`,
+        },
+      );
+      if (!dryRun) onSaved();
     } catch (e: any) {
-      toast.error('Falha na importação', { id: toastId, description: e?.message ?? String(e) });
+      toast.error(dryRun ? 'Falha na simulação' : 'Falha na importação', { id: toastId, description: e?.message ?? String(e) });
     } finally {
       setBusyAction(null);
     }
@@ -380,9 +388,19 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
                 Excluir sessão remota
               </Button>
               <Button
+                size="sm" variant="outline"
+                disabled={busyAction !== null}
+                onClick={() => runBackfillFromServer(true)}
+                className="gap-1"
+                title="Conta quantas mensagens e contatos seriam importados, sem gravar nada no banco."
+              >
+                {busyAction === 'simulate' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FlaskConical className="w-3.5 h-3.5" />}
+                Simular importação
+              </Button>
+              <Button
                 size="sm" variant="secondary"
                 disabled={busyAction !== null}
-                onClick={runBackfillFromServer}
+                onClick={() => runBackfillFromServer(false)}
                 className="gap-1"
                 title="Baixa o histórico de conversas do servidor WAHA e importa mensagens que faltam aqui, sem afetar o fluxo ao vivo."
               >
@@ -391,9 +409,12 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
               </Button>
             </div>
             {backfillResult && (
-              <div className="rounded-md border border-teal-500/30 bg-teal-500/5 p-2 text-[11px] text-teal-700 dark:text-teal-400">
-                Importação concluída: <b>{backfillResult.inserted}</b> mensagens novas em {backfillResult.chatsSeen} chats
-                ({backfillResult.customersCreated} contatos criados · {backfillResult.skipped} ignorados por já existirem).
+              <div className={`rounded-md border p-2 text-[11px] ${backfillResult.dryRun
+                ? 'border-sky-500/30 bg-sky-500/5 text-sky-700 dark:text-sky-400'
+                : 'border-teal-500/30 bg-teal-500/5 text-teal-700 dark:text-teal-400'}`}>
+                {backfillResult.dryRun ? 'Simulação concluída: ' : 'Importação concluída: '}
+                <b>{backfillResult.inserted}</b> mensagens {backfillResult.dryRun ? 'seriam importadas' : 'novas'} em {backfillResult.chatsSeen} chats
+                ({backfillResult.customersCreated} contatos {backfillResult.dryRun ? 'seriam criados' : 'criados'} · {backfillResult.skipped} ignorados por já existirem).
               </div>
             )}
             {remoteSessions && (
