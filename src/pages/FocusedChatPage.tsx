@@ -499,23 +499,14 @@ export default function FocusedChatPage() {
                     customerId={selectedConv.id}
                     customerName={selectedConv.name}
                     onClose={() => setTool(null)}
+                    onUseReply={(text) => setComposerText(prev => prev ? `${prev} ${text}` : text)}
                   />
                 )}
                 {tool === 'ai' && <div className="p-4"><AIInsightsPanel customerId={selectedConv.id} /></div>}
                 {tool === 'timeline' && <div className="p-4"><Customer360Timeline customerId={selectedConv.id} /></div>}
                 {tool === 'pinned' && (
                   <div className="p-4 text-sm text-muted-foreground">
-                    Use o ícone de fixar em cada mensagem no /chat principal para fixá-las. Elas aparecerão aqui em tempo real.
-                    <div className="mt-4">
-                      <InChatSearchBar
-                        isOpen
-                        onClose={() => {}}
-                        onSearch={() => {}}
-                        results={[]}
-                        currentIndex={0}
-                        onNavigate={() => {}}
-                      />
-                    </div>
+                    Fixe mensagens no /chat principal — elas aparecerão aqui em tempo real.
                   </div>
                 )}
               </div>
