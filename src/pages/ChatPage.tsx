@@ -944,7 +944,7 @@ export default function ChatPage() {
           (Object.keys(next) as ChannelKey[]).forEach(k => {
             next[k] = next[k].map((conv: any) =>
               conv.id === c.id
-                ? { ...conv, online: pres.online, presenceLabel: pres.label, presence: c.presence, lastSeenAt: c.last_seen_at, is_archived: !!c.is_archived, is_muted: !!c.is_muted, muted_until: c.muted_until || null, label_ids: Array.isArray(c.label_ids) ? c.label_ids : conv.label_ids }
+                ? { ...conv, name: (typeof c.name === 'string' && c.name.trim()) ? c.name : conv.name, avatar_url: c.avatar_url ?? conv.avatar_url, online: pres.online, presenceLabel: pres.label, presence: c.presence, lastSeenAt: c.last_seen_at, is_archived: !!c.is_archived, is_muted: !!c.is_muted, muted_until: c.muted_until || null, label_ids: Array.isArray(c.label_ids) ? c.label_ids : conv.label_ids }
                 : conv
             );
           });
