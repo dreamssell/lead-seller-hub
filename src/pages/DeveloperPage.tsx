@@ -126,6 +126,22 @@ export default function DeveloperPage() {
                       <div key={tab.value}>
                         {button}
                         <button
+                          onClick={() => navigate('/automations/flows')}
+                          className="w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 text-muted-foreground hover:text-foreground hover:bg-secondary group relative"
+                        >
+                          <div className="p-2 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10">
+                            <Workflow className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold truncate leading-tight flex items-center gap-1.5">
+                              Flow
+                              <span className="text-[8px] px-1 py-0.5 rounded bg-primary/20 text-primary font-bold uppercase tracking-wider">novo</span>
+                            </p>
+                            <p className="text-[10px] truncate text-muted-foreground">Automações e roteamento visual</p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </button>
+                        <button
                           onClick={() => navigate('/automations')}
                           className="w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 text-muted-foreground hover:text-foreground hover:bg-secondary group"
                         >
