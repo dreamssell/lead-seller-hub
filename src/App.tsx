@@ -56,6 +56,7 @@ const PublicLandingPage = lazy(() => import("./pages/PublicLandingPage"));
 const InternalTelemetryPage = lazy(() => import("./pages/InternalTelemetryPage"));
 const RoleLabelAuditPage = lazy(() => import("./pages/RoleLabelAuditPage"));
 const BotFlowsPage = lazy(() => import("./pages/BotFlowsPage"));
+const FlowBuilderPage = lazy(() => import("./pages/FlowBuilderPage"));
 const OwnerDashboardPage = lazy(() => import("./pages/OwnerDashboardPage"));
 const AccessHealthPage = lazy(() => import("./pages/owner/AccessHealthPage"));
 const AuditTrailPage = lazy(() => import("./pages/owner/AuditTrailPage"));
@@ -152,6 +153,7 @@ const App = () => (
               <Route path="/internal/telemetry" element={<ProtectedRoute ownerOnly><InternalTelemetryPage /></ProtectedRoute>} />
               <Route path="/internal/role-label-audit" element={<ProtectedRoute ownerOnly><RoleLabelAuditPage /></ProtectedRoute>} />
               <Route path="/bot-flows" element={<ProtectedRoute><BotFlowsPage /></ProtectedRoute>} />
+              <Route path="/automations/flows" element={<ProtectedRoute><FlowBuilderPage /></ProtectedRoute>} />
               <Route path="/owner" element={<ProtectedRoute ownerOnly><OwnerDashboardPage /></ProtectedRoute>} />
               <Route path="/owner/access-health" element={<ProtectedRoute ownerOnly><AccessHealthPage /></ProtectedRoute>} />
               <Route path="/owner/audit-trail" element={<ProtectedRoute ownerOnly><AuditTrailPage /></ProtectedRoute>} />
