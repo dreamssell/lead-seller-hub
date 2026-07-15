@@ -903,6 +903,21 @@ export default function FocusedChatPage() {
       <MediaDropzone
         active={!!selected}
         maxFiles={30}
+        maxBytes={100 * 1024 * 1024}
+        perKindMaxBytes={{
+          image: 16 * 1024 * 1024,      // WhatsApp: 16 MB
+          video: 64 * 1024 * 1024,      // WhatsApp: 64 MB
+          audio: 16 * 1024 * 1024,      // WhatsApp: 16 MB
+          document: 100 * 1024 * 1024,  // WhatsApp: 100 MB
+        }}
+        accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar"
+        allowedTypes={[
+          /^image\//, /^video\//, /^audio\//,
+          /^application\/pdf$/,
+          /^application\/(msword|vnd\.openxmlformats|vnd\.ms-)/,
+          /^text\/(plain|csv)/,
+          /\.(pdf|docx?|xlsx?|pptx?|txt|csv|zip|rar)$/i,
+        ]}
         onSendFile={async (file, kind) => { await handleSendMedia(file, kind); }}
       />
 

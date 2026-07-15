@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Upload, Files, X, Plus, Send, Loader2, CheckCircle2, AlertCircle,
   Image as ImageIcon, Video as VideoIcon, FileText, AudioLines, Trash2,
-  RotateCcw, Ban,
+  RotateCcw, Ban, Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 
 const QUEUE_META_KEY = 'chat:composerQueue:meta:v1';
@@ -55,10 +56,17 @@ interface Props {
   onSendFile: (file: File, kind: Kind) => Promise<void>;
   /** Máximo de arquivos aceitos por lote. Default: 30 */
   maxFiles?: number;
-  /** Tamanho máx. por arquivo em bytes. Default: 20MB */
+  /** Tamanho máx. por arquivo em bytes (fallback global). Default: 20MB */
   maxBytes?: number;
+  /** Limites por tipo (imagem/vídeo/áudio/documento). Sobrepõe `maxBytes`. */
+  perKindMaxBytes?: Partial<Record<Kind, number>>;
   /** Formatos aceitos (accept do input). Default: aceita tudo. */
   accept?: string;
+  /**
+   * Allowlist de MIME/extensão. Se ausente, aceita todos exceto executáveis.
+   * Ex.: [/^image\//, /^application\/pdf$/, /\.docx?$/i]
+   */
+  allowedTypes?: RegExp[];
   /** Incrementar para abrir o painel manualmente (fallback mobile). */
   openSignal?: number;
 }
@@ -70,17 +78,31 @@ function kindOf(file: File): Kind {
   return 'document';
 }
 
+const KIND_LABEL: Record<Kind, string> = {
+  image: 'imagem', video: 'vídeo', audio: 'áudio', document: 'documento',
+};
+
 function isBlockedFormat(file: File): string | null {
   // Bloqueia apenas executáveis óbvios — WhatsApp aceita quase todos os tipos.
   const bad = /\.(exe|bat|cmd|com|msi|scr|ps1|sh|apk)$/i;
-  if (bad.test(file.name)) return 'Formato não permitido';
+  if (bad.test(file.name)) return 'Formato não permitido (executável bloqueado)';
   return null;
+}
+
+function matchesAllowlist(file: File, patterns?: RegExp[]): boolean {
+  if (!patterns || !patterns.length) return true;
+  const hay = `${file.type} ${file.name}`;
+  return patterns.some(p => p.test(file.type) || p.test(file.name) || p.test(hay));
 }
 
 function humanSize(n: number) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isPdf(file: File): boolean {
+  return file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
 }
 
 function KindIcon({ k, className }: { k: Kind; className?: string }) {
@@ -96,7 +118,9 @@ export function MediaDropzone({
   onSendFile,
   maxFiles = 30,
   maxBytes = 20 * 1024 * 1024,
+  perKindMaxBytes,
   accept,
+  allowedTypes,
   openSignal = 0,
 }: Props) {
   const [over, setOver] = useState(false);
@@ -104,12 +128,17 @@ export function MediaDropzone({
   const [items, setItems] = useState<QueueItem[]>([]);
   const [sending, setSending] = useState(false);
   const [announcement, setAnnouncement] = useState('');
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const cancelRef = useRef(false);
   const canceledIdsRef = useRef<Set<string>>(new Set());
   const depthRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const lastOpenSignal = useRef(openSignal);
+
+  const limitFor = useCallback((k: Kind): number => {
+    return perKindMaxBytes?.[k] ?? maxBytes;
+  }, [perKindMaxBytes, maxBytes]);
 
   // Cleanup preview URLs
   useEffect(() => () => {
@@ -148,15 +177,25 @@ export function MediaDropzone({
       let status: Status = 'queued';
       let error: string | undefined;
       const blocked = isBlockedFormat(f);
-      if (blocked) { status = 'rejected'; error = blocked; }
-      else if (f.size > maxBytes) { status = 'rejected'; error = `Excede ${(maxBytes / (1024 * 1024)).toFixed(0)} MB`; }
-      const previewUrl = (k === 'image' || k === 'video') ? URL.createObjectURL(f) : null;
+      const limit = limitFor(k);
+      const limitMb = (limit / (1024 * 1024)).toFixed(0);
+      if (blocked) {
+        status = 'rejected'; error = blocked;
+      } else if (!matchesAllowlist(f, allowedTypes)) {
+        status = 'rejected';
+        error = `Tipo "${f.type || f.name.split('.').pop() || 'desconhecido'}" não é aceito neste canal`;
+      } else if (f.size > limit) {
+        status = 'rejected';
+        error = `${humanSize(f.size)} excede o limite de ${limitMb} MB para ${KIND_LABEL[k]}`;
+      }
+      const canPreview = k === 'image' || k === 'video' || isPdf(f);
+      const previewUrl = canPreview ? URL.createObjectURL(f) : null;
       return {
         id: `${f.name}-${f.size}-${f.lastModified}-${Math.random().toString(36).slice(2, 7)}`,
         file: f, kind: k, previewUrl, status, progress: 0, error,
       };
     });
-  }, [items.length, maxBytes, maxFiles]);
+  }, [items.length, maxFiles, allowedTypes, limitFor]);
 
   const addFiles = useCallback((files: File[]) => {
     if (!files.length) return;
@@ -464,16 +503,32 @@ export function MediaDropzone({
                       : 'border-border bg-secondary/40'
                   }`}
                 >
-                  {/* Miniatura / chip */}
-                  <div className="w-12 h-12 rounded-lg overflow-hidden bg-black/10 flex items-center justify-center shrink-0 text-primary">
+                  {/* Miniatura / chip — clicável para abrir pré-visualização */}
+                  <button
+                    type="button"
+                    onClick={() => { if (it.previewUrl) setPreviewId(it.id); }}
+                    disabled={!it.previewUrl}
+                    aria-label={it.previewUrl ? `Pré-visualizar ${it.file.name}` : it.file.name}
+                    className="relative group w-12 h-12 rounded-lg overflow-hidden bg-black/10 flex items-center justify-center shrink-0 text-primary disabled:cursor-default"
+                  >
                     {it.kind === 'image' && it.previewUrl ? (
                       <img src={it.previewUrl} alt="" className="w-full h-full object-cover" />
                     ) : it.kind === 'video' && it.previewUrl ? (
                       <video src={it.previewUrl} className="w-full h-full object-cover" muted />
+                    ) : isPdf(it.file) ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-red-500/10 text-red-600 dark:text-red-400">
+                        <FileText className="w-5 h-5" />
+                        <span className="text-[8px] font-bold tracking-wider">PDF</span>
+                      </div>
                     ) : (
                       <KindIcon k={it.kind} />
                     )}
-                  </div>
+                    {it.previewUrl && (
+                      <span className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white">
+                        <Eye className="w-4 h-4" />
+                      </span>
+                    )}
+                  </button>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -587,6 +642,38 @@ export function MediaDropzone({
           </div>
         </div>
       )}
+
+      {/* Modal de pré-visualização (imagens, vídeos e PDFs) */}
+      <Dialog open={!!previewId} onOpenChange={(o) => { if (!o) setPreviewId(null); }}>
+        <DialogContent className="max-w-4xl w-[92vw] p-0 overflow-hidden">
+          {(() => {
+            const it = items.find(x => x.id === previewId);
+            if (!it || !it.previewUrl) return null;
+            return (
+              <>
+                <DialogHeader className="px-5 py-3 border-b border-border">
+                  <DialogTitle className="flex items-center gap-2 text-base">
+                    <KindIcon k={it.kind} className="w-4 h-4 text-primary" />
+                    <span className="truncate">{it.file.name}</span>
+                    <span className="text-xs text-muted-foreground ml-auto">{humanSize(it.file.size)}</span>
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="bg-black/70 flex items-center justify-center min-h-[60vh] max-h-[75vh]">
+                  {it.kind === 'image' ? (
+                    <img src={it.previewUrl} alt={it.file.name} className="max-h-[75vh] max-w-full object-contain" />
+                  ) : it.kind === 'video' ? (
+                    <video src={it.previewUrl} controls className="max-h-[75vh] max-w-full" />
+                  ) : isPdf(it.file) ? (
+                    <embed src={it.previewUrl} type="application/pdf" className="w-full h-[75vh] bg-white" />
+                  ) : (
+                    <div className="text-white text-sm p-8">Pré-visualização não disponível para este tipo.</div>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
