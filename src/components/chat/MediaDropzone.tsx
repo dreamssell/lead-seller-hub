@@ -503,16 +503,32 @@ export function MediaDropzone({
                       : 'border-border bg-secondary/40'
                   }`}
                 >
-                  {/* Miniatura / chip */}
-                  <div className="w-12 h-12 rounded-lg overflow-hidden bg-black/10 flex items-center justify-center shrink-0 text-primary">
+                  {/* Miniatura / chip — clicável para abrir pré-visualização */}
+                  <button
+                    type="button"
+                    onClick={() => { if (it.previewUrl) setPreviewId(it.id); }}
+                    disabled={!it.previewUrl}
+                    aria-label={it.previewUrl ? `Pré-visualizar ${it.file.name}` : it.file.name}
+                    className="relative group w-12 h-12 rounded-lg overflow-hidden bg-black/10 flex items-center justify-center shrink-0 text-primary disabled:cursor-default"
+                  >
                     {it.kind === 'image' && it.previewUrl ? (
                       <img src={it.previewUrl} alt="" className="w-full h-full object-cover" />
                     ) : it.kind === 'video' && it.previewUrl ? (
                       <video src={it.previewUrl} className="w-full h-full object-cover" muted />
+                    ) : isPdf(it.file) ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-red-500/10 text-red-600 dark:text-red-400">
+                        <FileText className="w-5 h-5" />
+                        <span className="text-[8px] font-bold tracking-wider">PDF</span>
+                      </div>
                     ) : (
                       <KindIcon k={it.kind} />
                     )}
-                  </div>
+                    {it.previewUrl && (
+                      <span className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white">
+                        <Eye className="w-4 h-4" />
+                      </span>
+                    )}
+                  </button>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
