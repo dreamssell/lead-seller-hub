@@ -10,6 +10,17 @@ interface Props {
 }
 
 const SPEEDS = [1, 1.5, 2, 0.75] as const;
+const SPEED_STORAGE_KEY = 'chat_audio_player_speed_idx';
+
+function loadSpeedIdx(): number {
+  try {
+    const raw = localStorage.getItem(SPEED_STORAGE_KEY);
+    if (raw == null) return 0;
+    const n = parseInt(raw, 10);
+    if (Number.isFinite(n) && n >= 0 && n < SPEEDS.length) return n;
+  } catch {}
+  return 0;
+}
 
 function fmt(sec: number) {
   if (!isFinite(sec) || sec < 0) sec = 0;
@@ -45,7 +56,7 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
   const [loading, setLoading] = useState(false);
   const [current, setCurrent] = useState(0);
   const [total, setTotal] = useState(duration ?? 0);
-  const [speedIdx, setSpeedIdx] = useState(0);
+  const [speedIdx, setSpeedIdx] = useState<number>(() => loadSpeedIdx());
   const [error, setError] = useState(false);
   const bars = useBars(url);
 
@@ -85,6 +96,24 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     };
   }, [url]);
 
+  // Apply persisted playback rate as soon as the audio element exists / url changes.
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.playbackRate = SPEEDS[speedIdx];
+  }, [url, speedIdx]);
+
+  // Smooth waveform sync via rAF while playing (timeupdate only fires ~4x/s).
+  useEffect(() => {
+    if (!playing) return;
+    let raf = 0;
+    const tick = () => {
+      const a = audioRef.current;
+      if (a) setCurrent(a.currentTime);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing]);
+
   const toggle = async () => {
     const a = audioRef.current;
     if (!a) return;
@@ -122,6 +151,7 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     const next = (speedIdx + 1) % SPEEDS.length;
     setSpeedIdx(next);
     if (audioRef.current) audioRef.current.playbackRate = SPEEDS[next];
+    try { localStorage.setItem(SPEED_STORAGE_KEY, String(next)); } catch {}
   };
 
   const progress = total > 0 ? current / total : 0;
