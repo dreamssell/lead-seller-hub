@@ -43,6 +43,7 @@ import { StarredMessagesPanel } from '@/components/chat/StarredMessagesPanel';
 import { AIInsightsPanel } from '@/components/chat/AIInsightsPanel';
 import { Customer360Timeline } from '@/components/chat/Customer360Timeline';
 import { MessageSearchDialog, type MessageSearchHit } from '@/components/chat/MessageSearchDialog';
+import { MediaDropzone } from '@/components/chat/MediaDropzone';
 
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import type { WhatsAppConnection } from '@/components/whatsapp/types';
