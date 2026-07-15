@@ -62,7 +62,8 @@ import { TransferConversationDialog } from '@/components/chat/TransferConversati
 import { useIsSupervisor } from '@/hooks/useIsSupervisor';
 import { normalizeChatSendError, NormalizedChatError } from '@/lib/chatErrorMapper';
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
-import { Plus, Archive, BellOff, Bell, Tag } from 'lucide-react';
+import { ContactsDialog } from '@/components/chat/ContactsDialog';
+import { Plus, Archive, BellOff, Bell, Tag, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { applyConversationMessagesAfterSwitch, canUseTenantRecord, getActiveOwnerId } from '@/lib/chatTenantScope';
@@ -298,6 +299,7 @@ export default function ChatPage() {
   const [collabTransferOpen, setCollabTransferOpen] = useState(false);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [newConversationOpen, setNewConversationOpen] = useState(false);
+  const [contactsOpen, setContactsOpen] = useState(false);
   const { isSupervisor, userId: currentUserId } = useIsSupervisor();
   const { access, accessLoading, reloadAccess } = useAuth();
   const { isOwner } = usePlatformOwner();
@@ -2376,15 +2378,27 @@ export default function ChatPage() {
         <div className="w-80 border-r border-border flex flex-col">
           <div className="p-3 border-b border-border space-y-2">
             {activeChannel === 'whatsapp' && (
-              <Button
-                onClick={() => setNewConversationOpen(true)}
-                className="w-full h-9 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-                disabled={!activeWhatsAppConn || !activeOwnerId}
-                title={!activeWhatsAppConn ? 'Selecione uma conexão WhatsApp ativa' : !activeOwnerId ? 'Recarregue o access do owner' : 'Iniciar conversa a partir de um número'}
-              >
-                <Plus className="w-4 h-4" />
-                Nova conversa
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => setNewConversationOpen(true)}
+                  className="flex-1 h-9 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                  disabled={!activeWhatsAppConn || !activeOwnerId}
+                  title={!activeWhatsAppConn ? 'Selecione uma conexão WhatsApp ativa' : !activeOwnerId ? 'Recarregue o access do owner' : 'Iniciar conversa a partir de um número'}
+                >
+                  <Plus className="w-4 h-4" />
+                  Nova conversa
+                </Button>
+                <Button
+                  onClick={() => setContactsOpen(true)}
+                  variant="outline"
+                  className="h-9 gap-2"
+                  disabled={!activeOwnerId}
+                  title="Abrir agenda de contatos"
+                >
+                  <Users className="w-4 h-4" />
+                  Contatos
+                </Button>
+              </div>
             )}
             <div className="flex flex-col gap-2 bg-secondary rounded-xl p-3">
               <div className="flex items-center gap-2">
@@ -3335,6 +3349,17 @@ export default function ChatPage() {
           setSelectedConvId(customerId);
           setActiveChannel('whatsapp');
         }}
+      />
+      <ContactsDialog
+        open={contactsOpen}
+        onOpenChange={setContactsOpen}
+        ownerId={activeOwnerId}
+        channel={activeChannel}
+        onSelect={(customerId) => {
+          setSelectedConvId(customerId);
+          if (!activeChannel) setActiveChannel('whatsapp');
+        }}
+        onCreateNew={() => setNewConversationOpen(true)}
       />
     </AppLayout>
   );

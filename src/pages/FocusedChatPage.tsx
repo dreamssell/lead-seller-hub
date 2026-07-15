@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   MessageCircle, Search, Info, Images, Pin, Star, StickyNote,
-  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2, Eye,
+  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2, Eye, Contact2, Plus,
 } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { supabase } from '@/integrations/supabase/client';
@@ -44,6 +44,8 @@ import { AIInsightsPanel } from '@/components/chat/AIInsightsPanel';
 import { Customer360Timeline } from '@/components/chat/Customer360Timeline';
 import { MessageSearchDialog, type MessageSearchHit } from '@/components/chat/MessageSearchDialog';
 import { MediaDropzone } from '@/components/chat/MediaDropzone';
+import { ContactsDialog } from '@/components/chat/ContactsDialog';
+import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
 
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import type { WhatsAppConnection } from '@/components/whatsapp/types';
@@ -123,6 +125,8 @@ export default function FocusedChatPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [readers, setReaders] = useState<ReaderEntry[]>([]);
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
+  const [contactsOpen, setContactsOpen] = useState(false);
+  const [newConvOpen, setNewConvOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const keepScrollAnchor = useRef<{ prevHeight: number; prevTop: number } | null>(null);
 
@@ -593,7 +597,7 @@ export default function FocusedChatPage() {
         <div className="flex-1 flex min-h-0">
           {/* Conversation list */}
           <aside className="w-72 shrink-0 border-r border-border bg-card/40 flex flex-col">
-            <div className="p-3 border-b border-border">
+            <div className="p-3 border-b border-border space-y-2">
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -602,6 +606,27 @@ export default function FocusedChatPage() {
                   placeholder="Buscar conversa..."
                   className="pl-8 h-9"
                 />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewConvOpen(true)}
+                  disabled={!conn}
+                  className="flex-1 h-8 rounded-md bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium inline-flex items-center justify-center gap-1.5 transition-colors"
+                  title={!conn ? 'Sem conexão WhatsApp ativa' : 'Iniciar nova conversa'}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Nova
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setContactsOpen(true)}
+                  className="flex-1 h-8 rounded-md border border-border hover:bg-secondary text-xs font-medium inline-flex items-center justify-center gap-1.5 transition-colors"
+                  title="Agenda de contatos"
+                >
+                  <Contact2 className="w-3.5 h-3.5" />
+                  Contatos
+                </button>
               </div>
             </div>
             <ScrollArea className="flex-1">
@@ -886,6 +911,28 @@ export default function FocusedChatPage() {
         onOpenChange={setSearchOpen}
         customerId={selected}
         onJump={handleJumpToMessage}
+      />
+
+      <ContactsDialog
+        open={contactsOpen}
+        onOpenChange={setContactsOpen}
+        ownerId={conn?.owner_id ?? user?.id ?? null}
+        channel="whatsapp"
+        onSelect={(customerId) => {
+          setSelected(customerId);
+          setParams((prev) => { const p = new URLSearchParams(prev); p.set('c', customerId); return p; });
+        }}
+        onCreateNew={() => setNewConvOpen(true)}
+      />
+
+      <NewConversationDialog
+        open={newConvOpen}
+        onOpenChange={setNewConvOpen}
+        connection={conn}
+        onCreated={(customerId) => {
+          setSelected(customerId);
+          setParams((prev) => { const p = new URLSearchParams(prev); p.set('c', customerId); return p; });
+        }}
       />
     </TooltipProvider>
   );
