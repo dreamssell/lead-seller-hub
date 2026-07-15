@@ -154,7 +154,7 @@ export function AttendanceFlowDialog({ open, onOpenChange, onSelectCustomer }: P
     try {
       const { data: cust, error: cErr } = await supabase
         .from('customers')
-        .insert({ owner_id: ownerId, name: qaName.trim(), phone: qaPhone.trim(), source: qaOrigin } as any)
+        .insert({ owner_id: ownerId, name: qaName.trim(), phone: qaPhone.trim(), channel: 'manual', created_by: userId } as any)
         .select('id')
         .single();
       if (cErr || !cust) throw cErr || new Error('Falha ao criar cliente');
