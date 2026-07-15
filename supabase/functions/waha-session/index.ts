@@ -108,9 +108,16 @@ function eventToInboundCandidate(eventRow: any) {
     webPayload?._data?.Info?.SenderAlt;
   const isGroup = info?.IsGroup === true || (typeof rawFrom === "string" && rawFrom.endsWith("@g.us"));
   const rawFromIsLid = typeof rawFrom === "string" && rawFrom.includes("@lid");
-  const phone = rawFromIsLid
+  let phone = rawFromIsLid
     ? normalizePhone(senderAlt) || normalizePhone(rawFrom)
     : normalizePhone(rawFrom) || normalizePhone(senderAlt);
+  // Same LID-only fallback as waha-inbound so backfill also captures leads
+  // whose Sender/Chat is `<digits>@lid` and whose SenderAlt is empty.
+  const lidJid = rawFromIsLid ? rawFrom : (typeof senderAlt === "string" && senderAlt.includes("@lid") ? senderAlt : null);
+  if (!phone && lidJid) {
+    const lidDigits = lidJid.replace(/\D/g, "");
+    if (lidDigits) phone = `lid_${lidDigits}`;
+  }
   const extractedBody =
     webPayload?.body ||
     msgWrap?.conversation ||
