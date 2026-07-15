@@ -96,6 +96,24 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     };
   }, [url]);
 
+  // Apply persisted playback rate as soon as the audio element exists / url changes.
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.playbackRate = SPEEDS[speedIdx];
+  }, [url, speedIdx]);
+
+  // Smooth waveform sync via rAF while playing (timeupdate only fires ~4x/s).
+  useEffect(() => {
+    if (!playing) return;
+    let raf = 0;
+    const tick = () => {
+      const a = audioRef.current;
+      if (a) setCurrent(a.currentTime);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing]);
+
   const toggle = async () => {
     const a = audioRef.current;
     if (!a) return;
