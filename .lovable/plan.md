@@ -1,80 +1,105 @@
-# Onda 2 — Isolamento multi-tenant, rastreabilidade e saúde de acessos
+# Fluxo de Atendimento Omnichannel + Flow Builder
 
-Foco: fechar brechas de RLS entre empresas/sub-empresas, dar rastreabilidade fim-a-fim ao ciclo de mensagens do WhatsApp e detectar contas com `user_account_access` inconsistente antes que virem ticket de suporte.
+Vou entregar em **5 etapas incrementais**, validando cada uma antes de avançar. Cada etapa é isolada — não afeta WhatsApp completo, Modo Foco, Wavoip, WAHA ou funis existentes.
 
-## 1. RLS e isolamento multi-tenant (crítico)
+---
 
-**Migração SQL corrigindo as tabelas apontadas na auditoria:**
+## Etapa 0 — Ajuste rápido (nesta primeira entrega)
 
-- `customer_notes`, `company_settings`, `video_error_logs` — revisar policies e substituir qualquer `USING (true)` por escopo com `owner_id` + `user_account_access` (mesmo padrão de `customers`).
-- Reforçar `chat_messages` / `customers`: garantir que INSERT/UPDATE também validem `sub_company_id` (não só `owner_id`), evitando que um usuário de outra sub-empresa da mesma matriz enxergue conversas.
-- Criar índices compostos `(owner_id, sub_company_id, created_at DESC)` nas tabelas quentes (`chat_messages`, `customers`, `leads`, `call_history`) para manter performance com o filtro mais estrito.
+**Botão "+" no Modo Foco** com paridade total ao WhatsApp completo:
+- Anexar mídia (dropzone), agendar mensagem, respostas rápidas, gravar áudio, emoji, template.
+- Reaproveita componentes já existentes do `ChatComposer`.
 
-**Gate de CI para RLS** (`.github/workflows/rls-guard.yml` + script Node):
+---
 
-- Varre `supabase/migrations/*.sql` e falha o pipeline se detectar:
-  - `USING (true)` ou `WITH CHECK (true)` em tabela pública.
-  - `CREATE POLICY ... FOR (INSERT|UPDATE|DELETE)` sem `WITH CHECK` ou sem referência a `auth.uid()` / `has_role` / `user_account_access`.
-  - `CREATE TABLE public.*` sem `GRANT` na mesma migração.
-- Roda também `src/lib/serverAccess.migrations.test.ts` e o novo teste de tenant.
+## Etapa 1 — Backend: modelo de distribuição e permissões
 
-**Testes de integração multi-tenant** (`src/__tests__/tenantIsolation.integration.test.ts`):
+**Novas tabelas** (RLS + GRANT completos, isoladas por `owner_id`/`sub_company_id`):
 
-- Cria 2 owners + 1 sub-empresa cada via service role.
-- Para cada tabela crítica (`customers`, `chat_messages`, `customer_notes`, `leads`, `call_history`, `company_settings`, `video_error_logs`) tenta ler/escrever cruzado usando a chave anon com JWT do owner B — assert 0 linhas / erro RLS.
+- `attendance_queues` — filas por funil/setor (id, name, pipeline_id, sub_company_id, routing_strategy: `round_robin|skill|load_balance|manual`, sla_overflow_seconds, fallback_queue_id).
+- `queue_members` — membros da fila (user_id, queue_id, skills[], is_active, current_load).
+- `lead_assignments` — atribuição atual do lead (customer_id, assigned_to, queue_id, stage: `manual|auto|waiting|active|snoozed|closed`, assigned_at, first_response_at, closed_at, close_value, close_status_tag).
+- `assignment_events` — histórico completo (para CRM 360: entrada, transbordo, devolução, snooze, encerramento).
+- `quick_replies_shortcuts` — já existe `quick_replies`; adiciono coluna `shortcut` (ex.: `/boasvindas`).
 
-## 2. correlationId fim-a-fim no WhatsApp
+**Funções SECURITY DEFINER:**
+- `assign_lead_round_robin(queue_id)` — próximo membro ativo.
+- `assign_lead_load_balance(queue_id)` — membro com menor `current_load`.
+- `sla_overflow_scan()` — cron 1min: devolve leads sem `first_response_at` após SLA.
 
-Reaproveita `src/lib/correlationId.ts` (já existe).
+**Realtime** habilitado em `lead_assignments` e `assignment_events` para atualizar as abas ao vivo.
 
-- **Composer → envio**: `ChatPage` gera `cid` antes do `insert` em `chat_messages` e grava em nova coluna `correlation_id text` (migração + índice).
-- **Adapter WAHA** (`src/components/whatsapp/wahaAdapter.ts`): propaga `cid` no header `X-Correlation-Id` da chamada à edge function.
-- **Edge `waha-send` / `uaz-send-message` / `waha-inbound`**: loga `cid` estruturado e escreve em `webhook_logs.correlation_id`.
-- **ACK/inbound**: quando o webhook casa `provider_message_id`, atualiza a mesma linha e emite evento realtime.
+---
 
-**Timeline por mensagem**: nova tabela `message_events(id, message_id, correlation_id, stage, status, detail jsonb, created_at)` com stages `composed | queued | provider_sent | provider_ack | delivered | read | failed`. Popular via triggers no `chat_messages` + inserts explícitos no edge.
+## Etapa 2 — Frontend: 4 abas no WhatsApp (completo + Modo Foco)
 
-**UI**: popover no balão do chat listando os eventos ordenados (usa a tabela nova). Sem mudar layout — apenas ação "Ver rota da mensagem".
+Novo componente `AttendanceTabs` acima da lista de conversas, com filtro por permissão via `useUserProfileLevel`:
 
-## 3. Detecção de acessos órfãos
+1. **Entrada Manual** — botão flutuante **Quick Add** (Nome, Telefone, Origem), auto-atribuição opcional, campo obrigatório "Primeira Nota" → gravada em `customer_notes` e disparada como evento no CRM 360.
+2. **Distribuição Automática** — visualiza leads roteados por webhook/bot; badge com estratégia aplicada; log de transbordo.
+3. **Aguardando Você** — fila pessoal do atendente; cards com cor dinâmica de SLA (verde/amarelo/vermelho); resumo IA do bot (reusa `chat-ai-assist`); botão **Devolver para Fila Geral**.
+4. **Em Atendimento** — chats ativos; ações: **Snooze**, **@ menção interna** (usa `internal_messages`), **Respostas Rápidas** (`/atalho`), **Encerrar** (modal com valor negociado + tag de status → grava em `lead_assignments.close_value/close_status_tag` e emite evento CRM 360 + métrica dashboards).
 
-**View + função**: `public.v_account_access_health` cobrindo:
+Gestores (supervisor/coordenador/diretor/dono) veem todas as abas de todos; atendentes só veem seus funis atribuídos (reusa `user_pipeline_assignments`).
 
-- `client_companies` cujo `auth_user_id` não tem linha em `user_account_access` nem role admin.
-- `user_account_access.owner_id` que não existe mais em `client_companies`.
-- `sub_companies` sem nenhum usuário admin ativo.
-- Usuários com `role_label` NULL/`Colaborador` em contas titulares (bug do backfill).
+---
 
-**Tela admin `/owner/access-health`** (só para dono da plataforma via `usePlatformOwner`):
+## Etapa 3 — Backend: Rule Engine e Orquestração
 
-- Lista os problemas categorizados, com botão "Corrigir" que chama uma edge function `access-health-fix` (idempotente, service role).
-- Envia notificação para admins quando novos itens aparecerem (reaproveita `notifications` + `notify_admins_on_error` como padrão).
+- `routing_rules` já existe — estendo com `conditions_jsonb` (canal, origem webhook, palavras-chave, horário, região) e `actions_jsonb` (fila destino, atendente direto, tag, prioridade).
+- Edge Function `route-inbound-lead` — chamada pelos webhooks existentes (`handle-inbound-webhook`, `landing-capture`, `waha-inbound`, integrações Holmes/DealerSpace). Avalia regras em ordem, aplica estratégia da fila, grava assignment e evento.
+- Cron `sla-overflow-scan` (pg_cron 1min) — devolve leads estagnados.
 
-**Job diário**: cron da Supabase chama a edge `access-health-scan` uma vez ao dia e insere `notifications` para o dono se `count > 0`.
+---
 
-## 4. Entregáveis / arquivos
+## Etapa 4 — Flow Builder no Developer Center
+
+- Novo botão **Flow** no `DeveloperPage` (ao lado de MCP/Webhooks) → rota `/automations/flows`.
+- Reaproveita `AutomationsPage` já existente; adiciona:
+  - Header com métricas: Automações Ativas / Execuções Hoje / Taxa Sucesso / Leads Processados (query em `bot_flow_runs` + `routing_rules`).
+  - Botão **+** abre modal **"Criar Novo Fluxo"** com 2 cards: *Começar do Zero* / *Usar Template*.
+  - Templates prontos: "Round-Robin Comercial", "Skill-Based Suporte", "SLA Overflow", "Captura Landing".
+- Editor visual reusa infraestrutura de `bot_flows` (nodes/edges JSON) — sem nova dependência.
+
+---
+
+## Etapa 5 — Integração final e testes
+
+- Testes E2E: permissões por cargo, SLA overflow, quick add, encerramento com valor.
+- Integração com dashboards CEO/Gestor (novo card "Leads encerrados hoje" + soma `close_value`).
+- Documentação em `/documentation`.
+
+---
+
+## Diagrama do fluxo
 
 ```text
-supabase/migrations/<ts>_wave2_rls_hardening.sql
-supabase/migrations/<ts>_wave2_correlation_and_events.sql
-supabase/migrations/<ts>_wave2_access_health.sql
-supabase/functions/access-health-scan/index.ts
-supabase/functions/access-health-fix/index.ts
-scripts/rls-guard.mjs
-.github/workflows/rls-guard.yml
-src/pages/owner/AccessHealthPage.tsx
-src/components/chat/MessageRoutePopover.tsx
-src/__tests__/tenantIsolation.integration.test.ts
+Webhook/Bot/Manual
+        │
+        ▼
+  ┌───────────────┐    Rule Engine
+  │ route-inbound │──► (routing_rules)
+  └───────┬───────┘
+          ▼
+  attendance_queues ──► strategy (round_robin | skill | load_balance)
+          │
+          ▼
+  lead_assignments (stage: waiting)
+          │
+   ┌──────┼──────────────┐
+   ▼      ▼              ▼
+Aguardando  SLA overflow  Devolver
+(atendente) (cron 1min)   (manual)
+   │
+   ▼
+Em Atendimento ──► Snooze / @menção / /respostas
+   │
+   ▼
+Encerrar (valor + tag) ──► CRM 360 + Dashboards
 ```
 
-Ajustes menores em: `ChatPage.tsx`, `wahaAdapter.ts`, `waha-inbound/index.ts`, `send-outbound-webhook/index.ts`, `App.tsx` (rota nova).
+---
 
-## 5. Ordem de execução
+## Confirmação antes de começar
 
-1. Migração RLS + índices (aprovação sua) → regenera tipos.
-2. Testes de tenant + gate de CI (falha se regredir).
-3. Migração `correlation_id` + `message_events` + wiring composer/adapter/edge.
-4. Popover de timeline no chat.
-5. Migração/view de access health + edges + página do dono + cron.
-
-Se aprovar, executo tudo em sequência e paro só nas aprovações de migração.
+Vou iniciar pela **Etapa 0 (botão + no Modo Foco)** e **Etapa 1 (backend do modelo de distribuição)** nesta rodada, sem tocar em nada que já funciona. Confirma que posso seguir por essa ordem? Se preferir outra sequência (ex.: começar pelo Flow Builder), me avise.
