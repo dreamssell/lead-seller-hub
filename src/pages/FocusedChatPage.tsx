@@ -597,7 +597,7 @@ export default function FocusedChatPage() {
         <div className="flex-1 flex min-h-0">
           {/* Conversation list */}
           <aside className="w-72 shrink-0 border-r border-border bg-card/40 flex flex-col">
-            <div className="p-3 border-b border-border">
+            <div className="p-3 border-b border-border space-y-2">
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -606,6 +606,27 @@ export default function FocusedChatPage() {
                   placeholder="Buscar conversa..."
                   className="pl-8 h-9"
                 />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewConvOpen(true)}
+                  disabled={!conn}
+                  className="flex-1 h-8 rounded-md bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium inline-flex items-center justify-center gap-1.5 transition-colors"
+                  title={!conn ? 'Sem conexão WhatsApp ativa' : 'Iniciar nova conversa'}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Nova
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setContactsOpen(true)}
+                  className="flex-1 h-8 rounded-md border border-border hover:bg-secondary text-xs font-medium inline-flex items-center justify-center gap-1.5 transition-colors"
+                  title="Agenda de contatos"
+                >
+                  <Contact2 className="w-3.5 h-3.5" />
+                  Contatos
+                </button>
               </div>
             </div>
             <ScrollArea className="flex-1">
