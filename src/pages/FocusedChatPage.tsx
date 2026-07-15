@@ -125,6 +125,8 @@ export default function FocusedChatPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [readers, setReaders] = useState<ReaderEntry[]>([]);
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
+  const [contactsOpen, setContactsOpen] = useState(false);
+  const [newConvOpen, setNewConvOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const keepScrollAnchor = useRef<{ prevHeight: number; prevTop: number } | null>(null);
 
