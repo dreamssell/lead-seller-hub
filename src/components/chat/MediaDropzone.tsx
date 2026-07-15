@@ -56,10 +56,17 @@ interface Props {
   onSendFile: (file: File, kind: Kind) => Promise<void>;
   /** Máximo de arquivos aceitos por lote. Default: 30 */
   maxFiles?: number;
-  /** Tamanho máx. por arquivo em bytes. Default: 20MB */
+  /** Tamanho máx. por arquivo em bytes (fallback global). Default: 20MB */
   maxBytes?: number;
+  /** Limites por tipo (imagem/vídeo/áudio/documento). Sobrepõe `maxBytes`. */
+  perKindMaxBytes?: Partial<Record<Kind, number>>;
   /** Formatos aceitos (accept do input). Default: aceita tudo. */
   accept?: string;
+  /**
+   * Allowlist de MIME/extensão. Se ausente, aceita todos exceto executáveis.
+   * Ex.: [/^image\//, /^application\/pdf$/, /\.docx?$/i]
+   */
+  allowedTypes?: RegExp[];
   /** Incrementar para abrir o painel manualmente (fallback mobile). */
   openSignal?: number;
 }
@@ -71,17 +78,31 @@ function kindOf(file: File): Kind {
   return 'document';
 }
 
+const KIND_LABEL: Record<Kind, string> = {
+  image: 'imagem', video: 'vídeo', audio: 'áudio', document: 'documento',
+};
+
 function isBlockedFormat(file: File): string | null {
   // Bloqueia apenas executáveis óbvios — WhatsApp aceita quase todos os tipos.
   const bad = /\.(exe|bat|cmd|com|msi|scr|ps1|sh|apk)$/i;
-  if (bad.test(file.name)) return 'Formato não permitido';
+  if (bad.test(file.name)) return 'Formato não permitido (executável bloqueado)';
   return null;
+}
+
+function matchesAllowlist(file: File, patterns?: RegExp[]): boolean {
+  if (!patterns || !patterns.length) return true;
+  const hay = `${file.type} ${file.name}`;
+  return patterns.some(p => p.test(file.type) || p.test(file.name) || p.test(hay));
 }
 
 function humanSize(n: number) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isPdf(file: File): boolean {
+  return file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
 }
 
 function KindIcon({ k, className }: { k: Kind; className?: string }) {
