@@ -46,6 +46,7 @@ import { MessageSearchDialog, type MessageSearchHit } from '@/components/chat/Me
 import { MediaDropzone } from '@/components/chat/MediaDropzone';
 import { ContactsDialog } from '@/components/chat/ContactsDialog';
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
+import { AttendanceFlowDialog } from '@/components/chat/AttendanceFlowDialog';
 
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import type { WhatsAppConnection } from '@/components/whatsapp/types';
