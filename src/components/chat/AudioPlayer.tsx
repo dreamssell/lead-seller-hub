@@ -151,6 +151,7 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     const next = (speedIdx + 1) % SPEEDS.length;
     setSpeedIdx(next);
     if (audioRef.current) audioRef.current.playbackRate = SPEEDS[next];
+    try { localStorage.setItem(SPEED_STORAGE_KEY, String(next)); } catch {}
   };
 
   const progress = total > 0 ? current / total : 0;
