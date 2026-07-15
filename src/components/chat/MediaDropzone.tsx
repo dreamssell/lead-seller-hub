@@ -642,6 +642,38 @@ export function MediaDropzone({
           </div>
         </div>
       )}
+
+      {/* Modal de pré-visualização (imagens, vídeos e PDFs) */}
+      <Dialog open={!!previewId} onOpenChange={(o) => { if (!o) setPreviewId(null); }}>
+        <DialogContent className="max-w-4xl w-[92vw] p-0 overflow-hidden">
+          {(() => {
+            const it = items.find(x => x.id === previewId);
+            if (!it || !it.previewUrl) return null;
+            return (
+              <>
+                <DialogHeader className="px-5 py-3 border-b border-border">
+                  <DialogTitle className="flex items-center gap-2 text-base">
+                    <KindIcon k={it.kind} className="w-4 h-4 text-primary" />
+                    <span className="truncate">{it.file.name}</span>
+                    <span className="text-xs text-muted-foreground ml-auto">{humanSize(it.file.size)}</span>
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="bg-black/70 flex items-center justify-center min-h-[60vh] max-h-[75vh]">
+                  {it.kind === 'image' ? (
+                    <img src={it.previewUrl} alt={it.file.name} className="max-h-[75vh] max-w-full object-contain" />
+                  ) : it.kind === 'video' ? (
+                    <video src={it.previewUrl} controls className="max-h-[75vh] max-w-full" />
+                  ) : isPdf(it.file) ? (
+                    <embed src={it.previewUrl} type="application/pdf" className="w-full h-[75vh] bg-white" />
+                  ) : (
+                    <div className="text-white text-sm p-8">Pré-visualização não disponível para este tipo.</div>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
