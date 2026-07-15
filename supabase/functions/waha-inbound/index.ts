@@ -902,7 +902,7 @@ Deno.serve(async (req) => {
     } else {
       const { data: created, error: createErr } = await supabase
         .from('customers')
-        .upsert({
+        .insert({
           name: pushName || (lidPseudoPhone ? `Contato ${(senderLid ?? '').replace(/\D/g, '').slice(-6) || 'novo'}` : phone),
           phone,
           channel: 'whatsapp',
@@ -910,7 +910,7 @@ Deno.serve(async (req) => {
           owner_id: conn.owner_id,
           sub_company_id: conn.sub_company_id,
           origin_connection_id: conn.id,
-        }, { onConflict: 'owner_id,phone', ignoreDuplicates: false })
+        })
         .select('id')
         .single();
       if (createErr) {
