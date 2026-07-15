@@ -3350,6 +3350,17 @@ export default function ChatPage() {
           setActiveChannel('whatsapp');
         }}
       />
+      <ContactsDialog
+        open={contactsOpen}
+        onOpenChange={setContactsOpen}
+        ownerId={activeOwnerId}
+        channel={activeChannel}
+        onSelect={(customerId) => {
+          setSelectedConvId(customerId);
+          if (!activeChannel) setActiveChannel('whatsapp');
+        }}
+        onCreateNew={() => setNewConversationOpen(true)}
+      />
     </AppLayout>
   );
 }
