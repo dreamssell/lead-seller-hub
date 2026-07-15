@@ -177,15 +177,25 @@ export function MediaDropzone({
       let status: Status = 'queued';
       let error: string | undefined;
       const blocked = isBlockedFormat(f);
-      if (blocked) { status = 'rejected'; error = blocked; }
-      else if (f.size > maxBytes) { status = 'rejected'; error = `Excede ${(maxBytes / (1024 * 1024)).toFixed(0)} MB`; }
-      const previewUrl = (k === 'image' || k === 'video') ? URL.createObjectURL(f) : null;
+      const limit = limitFor(k);
+      const limitMb = (limit / (1024 * 1024)).toFixed(0);
+      if (blocked) {
+        status = 'rejected'; error = blocked;
+      } else if (!matchesAllowlist(f, allowedTypes)) {
+        status = 'rejected';
+        error = `Tipo "${f.type || f.name.split('.').pop() || 'desconhecido'}" não é aceito neste canal`;
+      } else if (f.size > limit) {
+        status = 'rejected';
+        error = `${humanSize(f.size)} excede o limite de ${limitMb} MB para ${KIND_LABEL[k]}`;
+      }
+      const canPreview = k === 'image' || k === 'video' || isPdf(f);
+      const previewUrl = canPreview ? URL.createObjectURL(f) : null;
       return {
         id: `${f.name}-${f.size}-${f.lastModified}-${Math.random().toString(36).slice(2, 7)}`,
         file: f, kind: k, previewUrl, status, progress: 0, error,
       };
     });
-  }, [items.length, maxBytes, maxFiles]);
+  }, [items.length, maxFiles, allowedTypes, limitFor]);
 
   const addFiles = useCallback((files: File[]) => {
     if (!files.length) return;
