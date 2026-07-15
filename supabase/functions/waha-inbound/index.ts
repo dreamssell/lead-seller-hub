@@ -903,7 +903,7 @@ Deno.serve(async (req) => {
       const { data: created, error: createErr } = await supabase
         .from('customers')
         .upsert({
-          name: pushName || phone,
+          name: pushName || (lidPseudoPhone ? `Contato ${(senderLid ?? '').replace(/\D/g, '').slice(-6) || 'novo'}` : phone),
           phone,
           channel: 'whatsapp',
           created_by: conn.owner_id,
