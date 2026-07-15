@@ -2398,6 +2398,15 @@ export default function ChatPage() {
                   <Users className="w-4 h-4" />
                   Contatos
                 </Button>
+                <Button
+                  onClick={() => setFlowOpen(true)}
+                  variant="outline"
+                  className="h-9 gap-2 border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary"
+                  title="Fluxo de atendimento (Entrada Manual, Distribuição, Aguardando, Em Atendimento)"
+                >
+                  <Inbox className="w-4 h-4" />
+                  Fluxo
+                </Button>
               </div>
             )}
             <div className="flex flex-col gap-2 bg-secondary rounded-xl p-3">
