@@ -400,6 +400,58 @@ export default function FocusedChatPage() {
     }
   };
 
+  const handleSendMedia = async (file: File, kind: 'image' | 'video' | 'audio' | 'document') => {
+    if (!selected || !conn) {
+      toast({ title: 'Sem conexão WhatsApp ativa', variant: 'destructive' });
+      throw new Error('no-conn');
+    }
+    const adapter = getProviderAdapter(conn.provider);
+    if (!adapter.sendMedia) {
+      toast({ title: 'Este canal não suporta envio de mídia', variant: 'destructive' });
+      throw new Error('no-media');
+    }
+    const clientId = crypto.randomUUID();
+    const label = kind === 'audio' ? `🎤 ${file.name}` : `📎 ${file.name}`;
+    const optimistic: Msg = {
+      id: clientId,
+      customer_id: selected,
+      sender_type: 'agent',
+      content: label,
+      metadata: { status: 'sending', media_kind: kind, media_filename: file.name },
+      created_at: new Date().toISOString(),
+      client_msg_id: clientId,
+    };
+    setMsgs(prev => [...prev, optimistic]);
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }));
+    try {
+      await supabase.from('chat_messages').insert({
+        customer_id: selected,
+        sender_type: 'agent',
+        content: label,
+        channel: 'whatsapp',
+        connection_id: conn.id,
+        client_msg_id: clientId,
+        correlation_id: clientId,
+        metadata: { status: 'sending', media_kind: kind, media_filename: file.name },
+      });
+      const res = kind === 'audio' && adapter.sendAudio
+        ? await adapter.sendAudio(conn, selected, file)
+        : await adapter.sendMedia(conn, selected, file, '');
+      const providerId = res?.key?.id || res?.messages?.[0]?.id || res?.id || null;
+      await supabase.from('chat_messages')
+        .update({ uaz_msg_id: providerId, metadata: { status: 'sent', media_kind: kind, media_filename: file.name } })
+        .eq('client_msg_id', clientId);
+      setMsgs(prev => prev.map(m => m.client_msg_id === clientId
+        ? { ...m, uaz_msg_id: providerId, metadata: { status: 'sent', media_kind: kind, media_filename: file.name } } : m));
+      markRead(user?.id, selected, new Date().toISOString(), readerInfo);
+    } catch (err: any) {
+      setMsgs(prev => prev.map(m => m.client_msg_id === clientId
+        ? { ...m, metadata: { status: 'error', error: err?.message } } : m));
+      toast({ title: 'Falha ao enviar mídia', description: err?.message, variant: 'destructive' });
+      throw err;
+    }
+  };
+
   const filteredConvs = useMemo(() => {
     if (!filter.trim()) return convs;
     const q = filter.toLowerCase();
