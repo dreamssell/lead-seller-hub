@@ -629,6 +629,15 @@ export default function FocusedChatPage() {
                   <Contact2 className="w-3.5 h-3.5" />
                   Contatos
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setFlowOpen(true)}
+                  className="flex-1 h-8 rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-medium inline-flex items-center justify-center gap-1.5 transition-colors"
+                  title="Fluxo de atendimento (filas, distribuição, SLA)"
+                >
+                  <Inbox className="w-3.5 h-3.5" />
+                  Fluxo
+                </button>
               </div>
             </div>
             <ScrollArea className="flex-1">
