@@ -343,36 +343,10 @@ Deno.serve(async (req) => {
   if (isTest) return json({ ok: true, test: true, id: providerMsgId });
   if (bucket === 'ignore') return json({ ok: true, ignored: event });
 
-  // Idempotency for ACKs can happen immediately. For messages, wait until we
-  // know the event is a valid individual inbound; WAHA often emits message.any
-  // plus message, and status/group/no-phone variants must not consume the key.
-  if (providerMsgId && bucket === 'ack') {
-    const idemKey = `waha:ack:${providerMsgId}`;
-    const { data: existing } = await supabase
-      .from('webhook_idempotency_keys')
-      .select('id, hit_count')
-      .eq('webhook_id', connectionId)
-      .eq('idempotency_key', idemKey)
-      .maybeSingle();
-    if (existing) {
-      // Audit parallel/duplicate hit so we can spot double webhooks.
-      await supabase.from('webhook_idempotency_hits').insert({
-        webhook_id: connectionId,
-        idempotency_key: idemKey,
-        source: 'waha-inbound',
-        reason: 'ack_duplicate',
-        metadata: { event, session, event_log_id: eventLogId },
-      });
-      await supabase.from('webhook_idempotency_keys')
-        .update({ hit_count: (existing.hit_count ?? 1) + 1, last_hit_at: new Date().toISOString() })
-        .eq('id', existing.id);
-      return json({ ok: true, idempotent: true });
-    }
-    await supabase.from('webhook_idempotency_keys').insert({
-      webhook_id: connectionId,
-      idempotency_key: idemKey,
-    });
-  }
+  // WAHA inbound is scoped by whatsapp_connections. Do not use the generic
+  // webhook_idempotency_* tables here: those are FK-scoped to public.webhooks.
+  // ACK updates are naturally idempotent; message idempotency is handled by the
+  // chat_messages.uaz_msg_id unique key below.
 
 
   // ── SESSION STATUS ───────────────────────────────────────────────────────
@@ -849,30 +823,14 @@ Deno.serve(async (req) => {
   if (!phone) return json({ ok: true, skipped: 'no_individual_sender', rawFrom, senderAlt, from_me: fromMeFlag });
 
   if (providerMsgId) {
-    const idemKey = `waha:msg:${providerMsgId}`;
     const { data: existing } = await supabase
-      .from('webhook_idempotency_keys')
-      .select('id, hit_count')
-      .eq('webhook_id', connectionId)
-      .eq('idempotency_key', idemKey)
+      .from('chat_messages')
+      .select('id, customer_id')
+      .eq('uaz_msg_id', providerMsgId)
       .maybeSingle();
     if (existing) {
-      await supabase.from('webhook_idempotency_hits').insert({
-        webhook_id: connectionId,
-        idempotency_key: idemKey,
-        source: 'waha-inbound',
-        reason: 'message_duplicate',
-        metadata: { event, session, from_me: fromMeFlag, phone, event_log_id: eventLogId },
-      });
-      await supabase.from('webhook_idempotency_keys')
-        .update({ hit_count: (existing.hit_count ?? 1) + 1, last_hit_at: new Date().toISOString() })
-        .eq('id', existing.id);
-      return json({ ok: true, idempotent: true, message_id: providerMsgId, phone });
+      return json({ ok: true, idempotent: true, message_id: providerMsgId, phone, chat_message_id: existing.id });
     }
-    await supabase.from('webhook_idempotency_keys').insert({
-      webhook_id: connectionId,
-      idempotency_key: idemKey,
-    });
   }
 
   const pushName: string | null = fromMeFlag
@@ -1070,17 +1028,7 @@ Deno.serve(async (req) => {
   }).select('id').single();
   if (msgErr?.code === '23505') {
     // Unique-violation on uaz_msg_id → we already inserted this exact provider
-    // message before (parallel webhook or a same-second retry). Log the hit so
-    // duplicated deliveries are traceable per (webhook, providerMsgId).
-    if (providerMsgId) {
-      await supabase.from('webhook_idempotency_hits').insert({
-        webhook_id: connectionId,
-        idempotency_key: `waha:msg:${providerMsgId}`,
-        source: 'waha-inbound',
-        reason: 'unique_violation_uaz_msg_id',
-        metadata: { event, session, from_me: fromMeFlag, phone, customer_id: customerId },
-      });
-    }
+    // message before (parallel webhook or a same-second retry).
     return json({ ok: true, idempotent: true, message_id: providerMsgId, phone });
   }
 
