@@ -2301,7 +2301,29 @@ export default function ChatPage() {
           )}
         </AnimatePresence>
 
-        {isOwner && !whatsappStatus.loading && !whatsappStatus.connected && activeChannel === 'whatsapp' && (
+        {/*
+         * Aviso de status do WhatsApp — não bloqueia a UI.
+         * Antes: um overlay full-screen escondia a lista de conversas e as
+         * mensagens sempre que o status ficava "offline" (ex.: durante um
+         * "Reiniciar sessão" no WAHA), dando a falsa impressão de que o
+         * histórico havia sumido. Agora exibimos um banner discreto no topo
+         * enquanto a conexão se restabelece, mantendo o histórico visível.
+         * O modal completo só aparece quando NÃO existe conexão configurada
+         * (dbStatus === 'none'), caso em que a tela precisa mesmo instruir
+         * o usuário a configurar uma integração.
+         */}
+        {isOwner && !whatsappStatus.loading && !whatsappStatus.connected && activeChannel === 'whatsapp' && whatsappStatus.dbStatus === 'offline' && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
+            <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 backdrop-blur-md px-3 py-1.5 shadow-lg text-[11px] font-medium text-amber-700 dark:text-amber-300">
+              <RefreshCw className="w-3 h-3 animate-spin" />
+              <span>Conexão {activeWhatsAppConn?.provider?.toUpperCase() || 'WhatsApp'} reconectando… histórico permanece visível.</span>
+              <Link to="/whatsapp" className="underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100">
+                Detalhes
+              </Link>
+            </div>
+          </div>
+        )}
+        {isOwner && !whatsappStatus.loading && !whatsappStatus.connected && activeChannel === 'whatsapp' && whatsappStatus.dbStatus !== 'offline' && (
           <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-50 flex items-center justify-center p-6 text-center">
             <div className="glass-card p-8 max-w-md border-destructive/20 shadow-2xl animate-in fade-in zoom-in duration-300">
               <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
