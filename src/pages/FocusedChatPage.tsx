@@ -875,6 +875,12 @@ export default function FocusedChatPage() {
         </div>
       </div>
 
+      <MediaDropzone
+        active={!!selected}
+        maxFiles={30}
+        onSendFile={async (file, kind) => { await handleSendMedia(file, kind); }}
+      />
+
       <MessageSearchDialog
         open={searchOpen}
         onOpenChange={setSearchOpen}
