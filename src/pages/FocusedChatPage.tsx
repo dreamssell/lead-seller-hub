@@ -960,6 +960,15 @@ export default function FocusedChatPage() {
           setParams((prev) => { const p = new URLSearchParams(prev); p.set('c', customerId); return p; });
         }}
       />
+
+      <AttendanceFlowDialog
+        open={flowOpen}
+        onOpenChange={setFlowOpen}
+        onSelectCustomer={(customerId) => {
+          setSelected(customerId);
+          setParams((prev) => { const p = new URLSearchParams(prev); p.set('c', customerId); return p; });
+        }}
+      />
     </TooltipProvider>
   );
 }
