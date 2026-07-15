@@ -301,6 +301,7 @@ export default function ChatPage() {
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [contactsOpen, setContactsOpen] = useState(false);
+  const [flowOpen, setFlowOpen] = useState(false);
   const { isSupervisor, userId: currentUserId } = useIsSupervisor();
   const { access, accessLoading, reloadAccess } = useAuth();
   const { isOwner } = usePlatformOwner();
