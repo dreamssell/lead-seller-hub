@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Play, Pause, FileText, Download, Image as ImageIcon, Film, Music, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AudioPlayer } from './AudioPlayer';
+
 
 interface Props {
   url: string;
