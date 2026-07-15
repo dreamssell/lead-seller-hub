@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Upload, Files, X, Plus, Send, Loader2, CheckCircle2, AlertCircle,
   Image as ImageIcon, Video as VideoIcon, FileText, AudioLines, Trash2,
-  RotateCcw, Ban,
+  RotateCcw, Ban, Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 
 const QUEUE_META_KEY = 'chat:composerQueue:meta:v1';
