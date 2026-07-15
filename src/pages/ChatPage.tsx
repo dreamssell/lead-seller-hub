@@ -3372,6 +3372,14 @@ export default function ChatPage() {
         }}
         onCreateNew={() => setNewConversationOpen(true)}
       />
+      <AttendanceFlowDialog
+        open={flowOpen}
+        onOpenChange={setFlowOpen}
+        onSelectCustomer={(customerId) => {
+          setSelectedConvId(customerId);
+          if (!activeChannel) setActiveChannel('whatsapp');
+        }}
+      />
     </AppLayout>
   );
 }
