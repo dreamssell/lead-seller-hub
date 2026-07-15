@@ -269,12 +269,20 @@ Deno.serve(async (req) => {
     // and preserves webhook timestamps so refresh/realtime gaps do not hide chat.
     if (action === "backfill_inbound") {
       if (!conn?.id) return json({ ok: false, error: "connection_required" }, 400);
-      const limit = Math.max(1, Math.min(500, Number(body?.limit ?? 100)));
+      const limit = Math.max(1, Math.min(2000, Number(body?.limit ?? 500)));
+      // Default to the last 72h so recent leads are always covered, but let
+      // callers override with `since` (ISO string) or `since_hours`.
+      const sinceHours = Number(body?.since_hours ?? 72);
+      const sinceIso =
+        typeof body?.since === "string"
+          ? body.since
+          : new Date(Date.now() - Math.max(1, sinceHours) * 3600_000).toISOString();
       const { data: events, error: evErr } = await supabaseAdmin
         .from("connection_events")
         .select("id, created_at, event_type, status, payload, metadata_json")
         .eq("connection_id", conn.id)
         .like("event_type", "waha.%")
+        .gte("created_at", sinceIso)
         .order("created_at", { ascending: true })
         .limit(limit);
       if (evErr) return json({ ok: false, error: "events_read_failed", detail: evErr.message }, 500);
