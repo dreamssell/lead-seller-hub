@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Play, Pause, FileText, Download, Image as ImageIcon, Film, Music, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AudioPlayer } from './AudioPlayer';
+
 
 interface Props {
   url: string;
@@ -99,25 +101,9 @@ export function MediaMessageContent({ url, type, mime, filename, duration, mine,
   }
 
   if (type === 'audio') {
-    return (
-      <div
-        className={cn(
-          'my-1 flex items-center gap-2 rounded-2xl px-2 py-1.5 max-w-[320px]',
-          mine ? 'bg-primary-foreground/10' : 'bg-background/60 border border-border/60'
-        )}
-      >
-        <div
-          className={cn(
-            'w-8 h-8 rounded-full flex items-center justify-center shrink-0',
-            mine ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-primary/15 text-primary'
-          )}
-        >
-          <Music className="w-4 h-4" />
-        </div>
-        <audio controls preload="metadata" src={url} className="w-full h-8 max-w-[240px]" />
-      </div>
-    );
+    return <AudioPlayer url={url} mine={mine} filename={filename} duration={duration} />;
   }
+
 
   // document / fallback
   const ext = extOf(filename, mime);
