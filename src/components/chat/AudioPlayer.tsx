@@ -10,6 +10,17 @@ interface Props {
 }
 
 const SPEEDS = [1, 1.5, 2, 0.75] as const;
+const SPEED_STORAGE_KEY = 'chat_audio_player_speed_idx';
+
+function loadSpeedIdx(): number {
+  try {
+    const raw = localStorage.getItem(SPEED_STORAGE_KEY);
+    if (raw == null) return 0;
+    const n = parseInt(raw, 10);
+    if (Number.isFinite(n) && n >= 0 && n < SPEEDS.length) return n;
+  } catch {}
+  return 0;
+}
 
 function fmt(sec: number) {
   if (!isFinite(sec) || sec < 0) sec = 0;
