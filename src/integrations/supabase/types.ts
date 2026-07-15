@@ -194,6 +194,115 @@ export type Database = {
         }
         Relationships: []
       }
+      assignment_events: {
+        Row: {
+          actor_id: string | null
+          assignment_id: string | null
+          created_at: string
+          customer_id: string
+          details: Json
+          event_type: string
+          from_stage: Database["public"]["Enums"]["assignment_stage"] | null
+          from_user: string | null
+          id: string
+          owner_id: string
+          to_stage: Database["public"]["Enums"]["assignment_stage"] | null
+          to_user: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          assignment_id?: string | null
+          created_at?: string
+          customer_id: string
+          details?: Json
+          event_type: string
+          from_stage?: Database["public"]["Enums"]["assignment_stage"] | null
+          from_user?: string | null
+          id?: string
+          owner_id: string
+          to_stage?: Database["public"]["Enums"]["assignment_stage"] | null
+          to_user?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          assignment_id?: string | null
+          created_at?: string
+          customer_id?: string
+          details?: Json
+          event_type?: string
+          from_stage?: Database["public"]["Enums"]["assignment_stage"] | null
+          from_user?: string | null
+          id?: string
+          owner_id?: string
+          to_stage?: Database["public"]["Enums"]["assignment_stage"] | null
+          to_user?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assignment_events_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "lead_assignments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      attendance_queues: {
+        Row: {
+          created_at: string
+          description: string | null
+          fallback_queue_id: string | null
+          id: string
+          is_active: boolean
+          last_assigned_member_id: string | null
+          name: string
+          owner_id: string
+          pipeline_id: string | null
+          routing_strategy: Database["public"]["Enums"]["queue_routing_strategy"]
+          sla_overflow_seconds: number
+          sub_company_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          fallback_queue_id?: string | null
+          id?: string
+          is_active?: boolean
+          last_assigned_member_id?: string | null
+          name: string
+          owner_id: string
+          pipeline_id?: string | null
+          routing_strategy?: Database["public"]["Enums"]["queue_routing_strategy"]
+          sla_overflow_seconds?: number
+          sub_company_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          fallback_queue_id?: string | null
+          id?: string
+          is_active?: boolean
+          last_assigned_member_id?: string | null
+          name?: string
+          owner_id?: string
+          pipeline_id?: string | null
+          routing_strategy?: Database["public"]["Enums"]["queue_routing_strategy"]
+          sla_overflow_seconds?: number
+          sub_company_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_queues_fallback_queue_id_fkey"
+            columns: ["fallback_queue_id"]
+            isOneToOne: false
+            referencedRelation: "attendance_queues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
@@ -2180,6 +2289,80 @@ export type Database = {
           },
         ]
       }
+      lead_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_to: string | null
+          close_status_tag: string | null
+          close_value: number | null
+          closed_at: string | null
+          created_at: string
+          customer_id: string
+          first_note: string | null
+          first_response_at: string | null
+          id: string
+          metadata: Json
+          origin: string | null
+          owner_id: string
+          priority: string
+          queue_id: string | null
+          snoozed_until: string | null
+          stage: Database["public"]["Enums"]["assignment_stage"]
+          sub_company_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_to?: string | null
+          close_status_tag?: string | null
+          close_value?: number | null
+          closed_at?: string | null
+          created_at?: string
+          customer_id: string
+          first_note?: string | null
+          first_response_at?: string | null
+          id?: string
+          metadata?: Json
+          origin?: string | null
+          owner_id: string
+          priority?: string
+          queue_id?: string | null
+          snoozed_until?: string | null
+          stage?: Database["public"]["Enums"]["assignment_stage"]
+          sub_company_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_to?: string | null
+          close_status_tag?: string | null
+          close_value?: number | null
+          closed_at?: string | null
+          created_at?: string
+          customer_id?: string
+          first_note?: string | null
+          first_response_at?: string | null
+          id?: string
+          metadata?: Json
+          origin?: string | null
+          owner_id?: string
+          priority?: string
+          queue_id?: string | null
+          snoozed_until?: string | null
+          stage?: Database["public"]["Enums"]["assignment_stage"]
+          sub_company_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_assignments_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: false
+            referencedRelation: "attendance_queues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_events: {
         Row: {
           actor_id: string | null
@@ -3234,6 +3417,47 @@ export type Database = {
           locked_at?: string
         }
         Relationships: []
+      }
+      queue_members: {
+        Row: {
+          created_at: string
+          current_load: number
+          id: string
+          is_active: boolean
+          owner_id: string
+          queue_id: string
+          skills: string[]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_load?: number
+          id?: string
+          is_active?: boolean
+          owner_id: string
+          queue_id: string
+          skills?: string[]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_load?: number
+          id?: string
+          is_active?: boolean
+          owner_id?: string
+          queue_id?: string
+          skills?: string[]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "queue_members_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: false
+            referencedRelation: "attendance_queues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       quick_replies: {
         Row: {
@@ -6073,6 +6297,8 @@ export type Database = {
         Args: { _owner_id: string; _user_id: string }
         Returns: boolean
       }
+      is_manager_or_owner_of: { Args: { _owner: string }; Returns: boolean }
+      is_queue_member: { Args: { _queue_id: string }; Returns: boolean }
       is_signature_leader: {
         Args: { p_sub_company_id: string }
         Returns: boolean
@@ -6105,6 +6331,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      pick_next_queue_member: { Args: { _queue_id: string }; Returns: string }
       reconcile_wavoip_call_history: {
         Args: { p_call_id?: string; p_wavoip_call_id?: string }
         Returns: number
@@ -6205,6 +6432,7 @@ export type Database = {
           total_count: number
         }[]
       }
+      sla_overflow_scan: { Args: never; Returns: number }
       try_acquire_provision_lock: {
         Args: { p_email: string }
         Returns: boolean
@@ -6261,6 +6489,19 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "atendente" | "closer"
+      assignment_stage:
+        | "manual"
+        | "auto"
+        | "waiting"
+        | "active"
+        | "snoozed"
+        | "closed"
+        | "returned"
+      queue_routing_strategy:
+        | "round_robin"
+        | "skill"
+        | "load_balance"
+        | "manual"
       signature_method: "canvas" | "email" | "sms"
       signature_role: "agente" | "supervisor" | "coordenador" | "diretor"
       signature_status:
@@ -6413,6 +6654,21 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "atendente", "closer"],
+      assignment_stage: [
+        "manual",
+        "auto",
+        "waiting",
+        "active",
+        "snoozed",
+        "closed",
+        "returned",
+      ],
+      queue_routing_strategy: [
+        "round_robin",
+        "skill",
+        "load_balance",
+        "manual",
+      ],
       signature_method: ["canvas", "email", "sms"],
       signature_role: ["agente", "supervisor", "coordenador", "diretor"],
       signature_status: [
