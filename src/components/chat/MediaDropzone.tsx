@@ -118,7 +118,9 @@ export function MediaDropzone({
   onSendFile,
   maxFiles = 30,
   maxBytes = 20 * 1024 * 1024,
+  perKindMaxBytes,
   accept,
+  allowedTypes,
   openSignal = 0,
 }: Props) {
   const [over, setOver] = useState(false);
@@ -126,12 +128,17 @@ export function MediaDropzone({
   const [items, setItems] = useState<QueueItem[]>([]);
   const [sending, setSending] = useState(false);
   const [announcement, setAnnouncement] = useState('');
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const cancelRef = useRef(false);
   const canceledIdsRef = useRef<Set<string>>(new Set());
   const depthRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const lastOpenSignal = useRef(openSignal);
+
+  const limitFor = useCallback((k: Kind): number => {
+    return perKindMaxBytes?.[k] ?? maxBytes;
+  }, [perKindMaxBytes, maxBytes]);
 
   // Cleanup preview URLs
   useEffect(() => () => {
