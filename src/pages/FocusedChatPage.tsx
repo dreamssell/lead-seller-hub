@@ -912,6 +912,28 @@ export default function FocusedChatPage() {
         customerId={selected}
         onJump={handleJumpToMessage}
       />
+
+      <ContactsDialog
+        open={contactsOpen}
+        onOpenChange={setContactsOpen}
+        ownerId={conn?.owner_id ?? user?.id ?? null}
+        channel="whatsapp"
+        onSelect={(customerId) => {
+          setSelected(customerId);
+          setParams((prev) => { const p = new URLSearchParams(prev); p.set('c', customerId); return p; });
+        }}
+        onCreateNew={() => setNewConvOpen(true)}
+      />
+
+      <NewConversationDialog
+        open={newConvOpen}
+        onOpenChange={setNewConvOpen}
+        connection={conn}
+        onCreated={(customerId) => {
+          setSelected(customerId);
+          setParams((prev) => { const p = new URLSearchParams(prev); p.set('c', customerId); return p; });
+        }}
+      />
     </TooltipProvider>
   );
 }
