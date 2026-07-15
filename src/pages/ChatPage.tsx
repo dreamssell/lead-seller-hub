@@ -63,7 +63,7 @@ import { useIsSupervisor } from '@/hooks/useIsSupervisor';
 import { normalizeChatSendError, NormalizedChatError } from '@/lib/chatErrorMapper';
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
 import { ContactsDialog } from '@/components/chat/ContactsDialog';
-import { Plus, Archive, BellOff, Bell, Tag } from 'lucide-react';
+import { Plus, Archive, BellOff, Bell, Tag, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { applyConversationMessagesAfterSwitch, canUseTenantRecord, getActiveOwnerId } from '@/lib/chatTenantScope';
