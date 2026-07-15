@@ -44,6 +44,8 @@ import { AIInsightsPanel } from '@/components/chat/AIInsightsPanel';
 import { Customer360Timeline } from '@/components/chat/Customer360Timeline';
 import { MessageSearchDialog, type MessageSearchHit } from '@/components/chat/MessageSearchDialog';
 import { MediaDropzone } from '@/components/chat/MediaDropzone';
+import { ContactsDialog } from '@/components/chat/ContactsDialog';
+import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
 
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import type { WhatsAppConnection } from '@/components/whatsapp/types';
