@@ -56,7 +56,7 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
   const [loading, setLoading] = useState(false);
   const [current, setCurrent] = useState(0);
   const [total, setTotal] = useState(duration ?? 0);
-  const [speedIdx, setSpeedIdx] = useState(0);
+  const [speedIdx, setSpeedIdx] = useState<number>(() => loadSpeedIdx());
   const [error, setError] = useState(false);
   const bars = useBars(url);
 
