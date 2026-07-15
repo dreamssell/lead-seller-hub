@@ -3569,8 +3569,10 @@ export type Database = {
       }
       routing_rules: {
         Row: {
+          actions: Json
           active: boolean
           channel: string | null
+          conditions: Json
           created_at: string
           id: string
           max_load: number | null
@@ -3584,8 +3586,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          actions?: Json
           active?: boolean
           channel?: string | null
+          conditions?: Json
           created_at?: string
           id?: string
           max_load?: number | null
@@ -3599,8 +3603,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          actions?: Json
           active?: boolean
           channel?: string | null
+          conditions?: Json
           created_at?: string
           id?: string
           max_load?: number | null
@@ -6340,6 +6346,15 @@ export type Database = {
       revoke_wavoip_webhook_token: {
         Args: { p_token_id: string }
         Returns: boolean
+      }
+      route_inbound_lead: {
+        Args: {
+          _channel?: string
+          _customer_id: string
+          _keywords?: string[]
+          _origin?: string
+        }
+        Returns: string
       }
       search_audit_logs: {
         Args: {
