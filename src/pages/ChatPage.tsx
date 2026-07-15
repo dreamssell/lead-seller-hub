@@ -63,7 +63,8 @@ import { useIsSupervisor } from '@/hooks/useIsSupervisor';
 import { normalizeChatSendError, NormalizedChatError } from '@/lib/chatErrorMapper';
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
 import { ContactsDialog } from '@/components/chat/ContactsDialog';
-import { Plus, Archive, BellOff, Bell, Tag, Users } from 'lucide-react';
+import { Plus, Archive, BellOff, Bell, Tag, Users, Inbox } from 'lucide-react';
+import { AttendanceFlowDialog } from '@/components/chat/AttendanceFlowDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { applyConversationMessagesAfterSwitch, canUseTenantRecord, getActiveOwnerId } from '@/lib/chatTenantScope';
@@ -300,6 +301,7 @@ export default function ChatPage() {
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [contactsOpen, setContactsOpen] = useState(false);
+  const [flowOpen, setFlowOpen] = useState(false);
   const { isSupervisor, userId: currentUserId } = useIsSupervisor();
   const { access, accessLoading, reloadAccess } = useAuth();
   const { isOwner } = usePlatformOwner();
@@ -2398,6 +2400,15 @@ export default function ChatPage() {
                   <Users className="w-4 h-4" />
                   Contatos
                 </Button>
+                <Button
+                  onClick={() => setFlowOpen(true)}
+                  variant="outline"
+                  className="h-9 gap-2 border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary"
+                  title="Fluxo de atendimento (Entrada Manual, Distribuição, Aguardando, Em Atendimento)"
+                >
+                  <Inbox className="w-4 h-4" />
+                  Fluxo
+                </Button>
               </div>
             )}
             <div className="flex flex-col gap-2 bg-secondary rounded-xl p-3">
@@ -3360,6 +3371,14 @@ export default function ChatPage() {
           if (!activeChannel) setActiveChannel('whatsapp');
         }}
         onCreateNew={() => setNewConversationOpen(true)}
+      />
+      <AttendanceFlowDialog
+        open={flowOpen}
+        onOpenChange={setFlowOpen}
+        onSelectCustomer={(customerId) => {
+          setSelectedConvId(customerId);
+          if (!activeChannel) setActiveChannel('whatsapp');
+        }}
       />
     </AppLayout>
   );

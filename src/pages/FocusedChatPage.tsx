@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   MessageCircle, Search, Info, Images, Pin, Star, StickyNote,
-  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2, Eye, Contact2, Plus,
+  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2, Eye, Contact2, Plus, Inbox,
 } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { supabase } from '@/integrations/supabase/client';
@@ -46,6 +46,7 @@ import { MessageSearchDialog, type MessageSearchHit } from '@/components/chat/Me
 import { MediaDropzone } from '@/components/chat/MediaDropzone';
 import { ContactsDialog } from '@/components/chat/ContactsDialog';
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
+import { AttendanceFlowDialog } from '@/components/chat/AttendanceFlowDialog';
 
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import type { WhatsAppConnection } from '@/components/whatsapp/types';
@@ -127,6 +128,7 @@ export default function FocusedChatPage() {
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
   const [contactsOpen, setContactsOpen] = useState(false);
   const [newConvOpen, setNewConvOpen] = useState(false);
+  const [flowOpen, setFlowOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const keepScrollAnchor = useRef<{ prevHeight: number; prevTop: number } | null>(null);
 
@@ -627,6 +629,15 @@ export default function FocusedChatPage() {
                   <Contact2 className="w-3.5 h-3.5" />
                   Contatos
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setFlowOpen(true)}
+                  className="flex-1 h-8 rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-medium inline-flex items-center justify-center gap-1.5 transition-colors"
+                  title="Fluxo de atendimento (filas, distribuição, SLA)"
+                >
+                  <Inbox className="w-3.5 h-3.5" />
+                  Fluxo
+                </button>
               </div>
             </div>
             <ScrollArea className="flex-1">
@@ -945,6 +956,15 @@ export default function FocusedChatPage() {
         onOpenChange={setNewConvOpen}
         connection={conn}
         onCreated={(customerId) => {
+          setSelected(customerId);
+          setParams((prev) => { const p = new URLSearchParams(prev); p.set('c', customerId); return p; });
+        }}
+      />
+
+      <AttendanceFlowDialog
+        open={flowOpen}
+        onOpenChange={setFlowOpen}
+        onSelectCustomer={(customerId) => {
           setSelected(customerId);
           setParams((prev) => { const p = new URLSearchParams(prev); p.set('c', customerId); return p; });
         }}
