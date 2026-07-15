@@ -108,9 +108,16 @@ function eventToInboundCandidate(eventRow: any) {
     webPayload?._data?.Info?.SenderAlt;
   const isGroup = info?.IsGroup === true || (typeof rawFrom === "string" && rawFrom.endsWith("@g.us"));
   const rawFromIsLid = typeof rawFrom === "string" && rawFrom.includes("@lid");
-  const phone = rawFromIsLid
+  let phone = rawFromIsLid
     ? normalizePhone(senderAlt) || normalizePhone(rawFrom)
     : normalizePhone(rawFrom) || normalizePhone(senderAlt);
+  // Same LID-only fallback as waha-inbound so backfill also captures leads
+  // whose Sender/Chat is `<digits>@lid` and whose SenderAlt is empty.
+  const lidJid = rawFromIsLid ? rawFrom : (typeof senderAlt === "string" && senderAlt.includes("@lid") ? senderAlt : null);
+  if (!phone && lidJid) {
+    const lidDigits = lidJid.replace(/\D/g, "");
+    if (lidDigits) phone = `lid_${lidDigits}`;
+  }
   const extractedBody =
     webPayload?.body ||
     msgWrap?.conversation ||
@@ -262,12 +269,20 @@ Deno.serve(async (req) => {
     // and preserves webhook timestamps so refresh/realtime gaps do not hide chat.
     if (action === "backfill_inbound") {
       if (!conn?.id) return json({ ok: false, error: "connection_required" }, 400);
-      const limit = Math.max(1, Math.min(500, Number(body?.limit ?? 100)));
+      const limit = Math.max(1, Math.min(2000, Number(body?.limit ?? 500)));
+      // Default to the last 72h so recent leads are always covered, but let
+      // callers override with `since` (ISO string) or `since_hours`.
+      const sinceHours = Number(body?.since_hours ?? 72);
+      const sinceIso =
+        typeof body?.since === "string"
+          ? body.since
+          : new Date(Date.now() - Math.max(1, sinceHours) * 3600_000).toISOString();
       const { data: events, error: evErr } = await supabaseAdmin
         .from("connection_events")
         .select("id, created_at, event_type, status, payload, metadata_json")
         .eq("connection_id", conn.id)
         .like("event_type", "waha.%")
+        .gte("created_at", sinceIso)
         .order("created_at", { ascending: true })
         .limit(limit);
       if (evErr) return json({ ok: false, error: "events_read_failed", detail: evErr.message }, 500);
@@ -1133,20 +1148,52 @@ Deno.serve(async (req) => {
     }
 
     // ─── restart ───────────────────────────────────────────────────────────
+    // We reapply the webhook config as part of restart. WAHA occasionally
+    // drops the webhook subscription when a session is stopped/started, which
+    // silently breaks inbound message delivery (session shows "connected" on
+    // the server, but our waha-inbound never fires). Piggy-backing on
+    // applyWebhookConfig guarantees the webhook is programmed on every
+    // restart, then we validate after startup and auto-heal if it drifted.
     if (action === "restart") {
-      await fetch(`${base}/api/sessions/${encodeURIComponent(sess)}/stop`, {
-        method: "POST", headers,
-      }).catch(() => null);
-      const startRes = await fetch(`${base}/api/sessions/${encodeURIComponent(sess)}/start`, {
-        method: "POST", headers,
+      let restartResult: { ok: boolean; status_code: number; raw: string };
+      if (connectionId) {
+        restartResult = await applyWebhookConfig(base, sess, token, connectionId);
+      } else {
+        await fetch(`${base}/api/sessions/${encodeURIComponent(sess)}/stop`, {
+          method: "POST", headers,
+        }).catch(() => null);
+        const startRes = await fetch(`${base}/api/sessions/${encodeURIComponent(sess)}/start`, {
+          method: "POST", headers,
+        });
+        const raw = await startRes.text().catch(() => "");
+        restartResult = { ok: startRes.ok, status_code: startRes.status, raw };
+      }
+
+      // Give WAHA a moment to boot, then confirm the webhook is registered.
+      // If not, force a second apply. Never blocks the response for long.
+      let webhookValidated: boolean | null = null;
+      let webhookRepaired = false;
+      if (connectionId) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const st2 = await fetchStatus(base, sess, token);
+        webhookValidated = sessionHasOurWebhook(st2.data, connectionId);
+        if (!webhookValidated) {
+          const repair = await applyWebhookConfig(base, sess, token, connectionId);
+          webhookRepaired = repair.ok;
+        }
+      }
+
+      await logEvent("restart", restartResult.ok ? "success" : "failed", {
+        status_code: restartResult.status_code,
+        webhook_validated: webhookValidated,
+        webhook_repaired: webhookRepaired,
       });
-      const startText = await startRes.text();
-      let startData: any = {};
-      try { startData = startText ? JSON.parse(startText) : {}; } catch { /* keep */ }
-      await logEvent("restart", startRes.ok ? "success" : "failed", { status: startData?.status ?? "UNKNOWN" });
       return json({
-        ok: startRes.ok, action: "restart",
-        status: startData?.status ?? "UNKNOWN", raw: startData,
+        ok: restartResult.ok, action: "restart",
+        status_code: restartResult.status_code,
+        webhook_validated: webhookValidated,
+        webhook_repaired: webhookRepaired,
+        raw: restartResult.raw,
       });
     }
 

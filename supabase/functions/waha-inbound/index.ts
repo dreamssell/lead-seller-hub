@@ -826,9 +826,26 @@ Deno.serve(async (req) => {
   // makes the chat disappear after refresh because it no longer matches the
   // user's WhatsApp number.
   const rawFromIsLid = typeof rawFrom === 'string' && rawFrom.includes('@lid');
-  const phone = rawFromIsLid
+  let phone = rawFromIsLid
     ? normalizePhone(senderAlt) || normalizePhone(rawFrom)
     : normalizePhone(rawFrom) || normalizePhone(senderAlt);
+
+  // LID-only fallback: recent WAHA (Baileys) engines started delivering some
+  // real 1:1 messages with `Sender/Chat` as `<digits>@lid` and an empty
+  // `SenderAlt`, which used to fall through as "no_individual_sender" and
+  // silently dropped brand-new leads (e.g. after a session restart). To make
+  // sure we never lose a legitimate inbound, we key the conversation on a
+  // stable pseudo-phone derived from the LID digits (`lid_<digits>`). When the
+  // real phone surfaces later (contact.update / SenderAlt), a follow-up job
+  // can merge the two customers; for now the message is captured immediately.
+  let lidPseudoPhone: string | null = null;
+  if (!phone && senderLid) {
+    const lidDigits = senderLid.replace(/\D/g, '');
+    if (lidDigits) {
+      lidPseudoPhone = `lid_${lidDigits}`;
+      phone = lidPseudoPhone;
+    }
+  }
   if (!phone) return json({ ok: true, skipped: 'no_individual_sender', rawFrom, senderAlt, from_me: fromMeFlag });
 
   if (providerMsgId) {
@@ -886,7 +903,7 @@ Deno.serve(async (req) => {
       const { data: created, error: createErr } = await supabase
         .from('customers')
         .upsert({
-          name: pushName || phone,
+          name: pushName || (lidPseudoPhone ? `Contato ${(senderLid ?? '').replace(/\D/g, '').slice(-6) || 'novo'}` : phone),
           phone,
           channel: 'whatsapp',
           created_by: conn.owner_id,
