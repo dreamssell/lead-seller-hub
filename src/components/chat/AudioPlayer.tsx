@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Play, Pause, Download, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { Play, Pause, Download, Loader2, AlertCircle, RotateCcw, Scissors } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -11,6 +11,9 @@ interface Props {
 
 const SPEEDS = [1, 1.5, 2, 0.75] as const;
 const SPEED_STORAGE_KEY = 'chat_audio_player_speed_idx';
+const POSITION_STORAGE_PREFIX = 'chat_audio_pos::';
+const RANGE_STORAGE_PREFIX = 'chat_audio_range::';
+const BARS = 32;
 
 function loadSpeedIdx(): number {
   try {
@@ -22,6 +25,41 @@ function loadSpeedIdx(): number {
   return 0;
 }
 
+function loadPosition(url: string): number {
+  try {
+    const raw = localStorage.getItem(POSITION_STORAGE_PREFIX + url);
+    if (!raw) return 0;
+    const n = parseFloat(raw);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch { return 0; }
+}
+
+function savePosition(url: string, t: number) {
+  try {
+    if (t <= 0.5) localStorage.removeItem(POSITION_STORAGE_PREFIX + url);
+    else localStorage.setItem(POSITION_STORAGE_PREFIX + url, String(t));
+  } catch {}
+}
+
+function loadRange(url: string): [number, number] | null {
+  try {
+    const raw = localStorage.getItem(RANGE_STORAGE_PREFIX + url);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length === 2 && parsed.every((n) => Number.isFinite(n))) {
+      return [parsed[0], parsed[1]] as [number, number];
+    }
+  } catch {}
+  return null;
+}
+
+function saveRange(url: string, r: [number, number] | null) {
+  try {
+    if (!r) localStorage.removeItem(RANGE_STORAGE_PREFIX + url);
+    else localStorage.setItem(RANGE_STORAGE_PREFIX + url, JSON.stringify(r));
+  } catch {}
+}
+
 function fmt(sec: number) {
   if (!isFinite(sec) || sec < 0) sec = 0;
   const m = Math.floor(sec / 60);
@@ -29,9 +67,6 @@ function fmt(sec: number) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-const BARS = 32;
-
-/** Deterministic pseudo-random bar heights so the "waveform" is stable per url. */
 function useBars(url: string): number[] {
   const [bars] = useState(() => {
     let seed = 0;
@@ -40,7 +75,6 @@ function useBars(url: string): number[] {
     for (let i = 0; i < BARS; i++) {
       seed = (seed * 1103515245 + 12345) >>> 0;
       const v = (seed % 100) / 100;
-      // shape: never too small, slight center emphasis
       const center = 1 - Math.abs(i - BARS / 2) / (BARS / 2);
       out.push(0.25 + v * 0.6 + center * 0.15);
     }
@@ -57,8 +91,19 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
   const [current, setCurrent] = useState(0);
   const [total, setTotal] = useState(duration ?? 0);
   const [speedIdx, setSpeedIdx] = useState<number>(() => loadSpeedIdx());
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
+  const [range, setRange] = useState<[number, number] | null>(() => loadRange(url));
+  const [dragMode, setDragMode] = useState<'seek' | 'range' | null>(null);
+  const dragStartRef = useRef<number>(0);
+  const restoredRef = useRef(false);
   const bars = useBars(url);
+
+  // Load persisted range when url changes
+  useEffect(() => {
+    setRange(loadRange(url));
+    restoredRef.current = false;
+  }, [url]);
 
   useEffect(() => {
     const a = audioRef.current;
@@ -66,14 +111,34 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     const onLoaded = () => {
       if (isFinite(a.duration)) setTotal(a.duration);
       setLoading(false);
+      // Restore last position on first metadata load
+      if (!restoredRef.current) {
+        restoredRef.current = true;
+        const saved = loadPosition(url);
+        if (saved > 0 && isFinite(a.duration) && saved < a.duration - 0.5) {
+          try { a.currentTime = saved; setCurrent(saved); } catch {}
+        }
+      }
     };
-    const onTime = () => setCurrent(a.currentTime);
-    const onEnd = () => { setPlaying(false); setCurrent(0); };
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
+    const onTime = () => {
+      setCurrent(a.currentTime);
+      // Enforce range end
+      if (range && a.currentTime >= range[1]) {
+        a.pause();
+        try { a.currentTime = range[0]; } catch {}
+        setCurrent(range[0]);
+      }
+    };
+    const onEnd = () => { setPlaying(false); setCurrent(0); savePosition(url, 0); };
+    const onPlay = () => { setPlaying(true); setError(null); };
+    const onPause = () => { setPlaying(false); savePosition(url, a.currentTime); };
     const onWaiting = () => setLoading(true);
-    const onPlaying = () => setLoading(false);
-    const onErr = () => { setError(true); setLoading(false); setPlaying(false); };
+    const onPlaying = () => { setLoading(false); setError(null); };
+    const onErr = () => {
+      setError('Falha ao carregar áudio');
+      setLoading(false);
+      setPlaying(false);
+    };
     a.addEventListener('loadedmetadata', onLoaded);
     a.addEventListener('durationchange', onLoaded);
     a.addEventListener('timeupdate', onTime);
@@ -83,7 +148,10 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     a.addEventListener('waiting', onWaiting);
     a.addEventListener('playing', onPlaying);
     a.addEventListener('error', onErr);
+    a.addEventListener('stalled', onWaiting);
     return () => {
+      // Persist position on unmount
+      try { savePosition(url, a.currentTime); } catch {}
       a.removeEventListener('loadedmetadata', onLoaded);
       a.removeEventListener('durationchange', onLoaded);
       a.removeEventListener('timeupdate', onTime);
@@ -93,15 +161,14 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
       a.removeEventListener('waiting', onWaiting);
       a.removeEventListener('playing', onPlaying);
       a.removeEventListener('error', onErr);
+      a.removeEventListener('stalled', onWaiting);
     };
-  }, [url]);
+  }, [url, range, retryTick]);
 
-  // Apply persisted playback rate as soon as the audio element exists / url changes.
   useEffect(() => {
     if (audioRef.current) audioRef.current.playbackRate = SPEEDS[speedIdx];
-  }, [url, speedIdx]);
+  }, [url, speedIdx, retryTick]);
 
-  // Smooth waveform sync via rAF while playing (timeupdate only fires ~4x/s).
   useEffect(() => {
     if (!playing) return;
     let raf = 0;
@@ -114,37 +181,96 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     return () => cancelAnimationFrame(raf);
   }, [playing]);
 
-  const toggle = async () => {
+  const toggle = useCallback(async () => {
     const a = audioRef.current;
     if (!a) return;
     if (playing) { a.pause(); return; }
     try {
       setLoading(true);
+      if (range && (a.currentTime < range[0] || a.currentTime >= range[1])) {
+        a.currentTime = range[0];
+      }
       await a.play();
     } catch {
-      setError(true);
+      setError('Não foi possível reproduzir');
     } finally {
       setLoading(false);
     }
-  };
+  }, [playing, range]);
 
-  const seekFromClientX = (clientX: number) => {
+  const retry = useCallback(() => {
+    setError(null);
+    setLoading(true);
+    setRetryTick((n) => n + 1);
+    // Force reload
     const a = audioRef.current;
+    if (a) { try { a.load(); } catch {} }
+  }, []);
+
+  const clientXToTime = (clientX: number): number => {
     const track = trackRef.current;
-    if (!a || !track || !total) return;
+    if (!track || !total) return 0;
     const rect = track.getBoundingClientRect();
     const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    a.currentTime = ratio * total;
-    setCurrent(a.currentTime);
+    return ratio * total;
+  };
+
+  const seekTo = (t: number) => {
+    const a = audioRef.current;
+    if (!a) return;
+    a.currentTime = t;
+    setCurrent(t);
+    savePosition(url, t);
   };
 
   const onTrackPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-    seekFromClientX(e.clientX);
+    const t = clientXToTime(e.clientX);
+    if (e.shiftKey || e.altKey) {
+      setDragMode('range');
+      dragStartRef.current = t;
+      setRange([t, t]);
+    } else {
+      setDragMode('seek');
+      seekTo(t);
+    }
   };
   const onTrackPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.buttons !== 1) return;
-    seekFromClientX(e.clientX);
+    if (!dragMode) return;
+    const t = clientXToTime(e.clientX);
+    if (dragMode === 'seek') {
+      seekTo(t);
+    } else {
+      const start = Math.min(dragStartRef.current, t);
+      const end = Math.max(dragStartRef.current, t);
+      setRange([start, end]);
+    }
+  };
+  const onTrackPointerUp = () => {
+    if (dragMode === 'range') {
+      if (range && range[1] - range[0] < 0.3) {
+        setRange(null);
+        saveRange(url, null);
+      } else if (range) {
+        saveRange(url, range);
+        seekTo(range[0]);
+      }
+    }
+    setDragMode(null);
+  };
+
+  const clearRange = () => {
+    setRange(null);
+    saveRange(url, null);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!total) return;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); seekTo(Math.max(0, current - 5)); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); seekTo(Math.min(total, current + 5)); }
+    else if (e.key === 'Home') { e.preventDefault(); seekTo(range?.[0] ?? 0); }
+    else if (e.key === 'End') { e.preventDefault(); seekTo(range?.[1] ?? total); }
+    else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); }
   };
 
   const cycleSpeed = () => {
@@ -154,8 +280,17 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     try { localStorage.setItem(SPEED_STORAGE_KEY, String(next)); } catch {}
   };
 
+  const onSpeedKey = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      cycleSpeed();
+    }
+  };
+
   const progress = total > 0 ? current / total : 0;
   const activeBar = Math.floor(progress * BARS);
+  const rangeStartPct = range && total ? (range[0] / total) * 100 : 0;
+  const rangeWidthPct = range && total ? ((range[1] - range[0]) / total) * 100 : 0;
 
   return (
     <div
@@ -165,21 +300,28 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
           ? 'bg-primary-foreground/10'
           : 'bg-background/60 border border-border/60',
       )}
+      role="group"
+      aria-label={`Mensagem de áudio${filename ? `: ${filename}` : ''}`}
     >
       <audio ref={audioRef} src={url} preload="metadata" className="hidden" />
 
       <button
         type="button"
-        onClick={toggle}
-        aria-label={playing ? 'Pausar áudio' : 'Reproduzir áudio'}
+        onClick={error ? retry : toggle}
+        aria-label={error ? 'Tentar novamente' : playing ? 'Pausar áudio' : 'Reproduzir áudio'}
+        aria-pressed={playing}
         className={cn(
-          'w-11 h-11 rounded-full flex items-center justify-center shrink-0 transition active:scale-95',
-          mine
-            ? 'bg-primary-foreground text-primary hover:bg-primary-foreground/90'
-            : 'bg-primary text-primary-foreground hover:bg-primary/90',
+          'w-11 h-11 rounded-full flex items-center justify-center shrink-0 transition active:scale-95 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+          error
+            ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+            : mine
+              ? 'bg-primary-foreground text-primary hover:bg-primary-foreground/90'
+              : 'bg-primary text-primary-foreground hover:bg-primary/90',
         )}
       >
-        {loading ? (
+        {error ? (
+          <RotateCcw className="w-5 h-5" />
+        ) : loading ? (
           <Loader2 className="w-5 h-5 animate-spin" />
         ) : playing ? (
           <Pause className="w-5 h-5" />
@@ -192,14 +334,29 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
         <div
           ref={trackRef}
           role="slider"
-          aria-label="Posição do áudio"
+          tabIndex={0}
+          aria-label="Posição do áudio. Setas para navegar, Shift+arrastar para selecionar trecho"
           aria-valuemin={0}
           aria-valuemax={Math.round(total)}
           aria-valuenow={Math.round(current)}
+          aria-valuetext={`${fmt(current)} de ${fmt(total)}${range ? `, trecho selecionado de ${fmt(range[0])} a ${fmt(range[1])}` : ''}`}
           onPointerDown={onTrackPointerDown}
           onPointerMove={onTrackPointerMove}
-          className="h-8 flex items-center gap-[2px] cursor-pointer touch-none"
+          onPointerUp={onTrackPointerUp}
+          onPointerCancel={onTrackPointerUp}
+          onKeyDown={onKeyDown}
+          className="relative h-8 flex items-center gap-[2px] cursor-pointer touch-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none rounded"
         >
+          {range && (
+            <span
+              aria-hidden
+              className={cn(
+                'absolute inset-y-0 rounded pointer-events-none',
+                mine ? 'bg-primary-foreground/20 ring-1 ring-primary-foreground/40' : 'bg-primary/15 ring-1 ring-primary/40',
+              )}
+              style={{ left: `${rangeStartPct}%`, width: `${rangeWidthPct}%` }}
+            />
+          )}
           {bars.map((h, i) => (
             <span
               key={i}
@@ -215,7 +372,22 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
         </div>
         <div className="mt-0.5 flex items-center justify-between text-[10px] font-mono opacity-70">
           <span>{fmt(current)}</span>
-          <span>{fmt(total || duration || 0)}</span>
+          {error ? (
+            <span className="flex items-center gap-1 text-destructive font-sans font-medium normal-case">
+              <AlertCircle className="w-3 h-3" /> {error} · toque em ↻
+            </span>
+          ) : range ? (
+            <button
+              type="button"
+              onClick={clearRange}
+              className="flex items-center gap-1 font-sans hover:opacity-100 opacity-80"
+              aria-label="Limpar trecho selecionado"
+            >
+              <Scissors className="w-3 h-3" /> {fmt(range[0])}–{fmt(range[1])}
+            </button>
+          ) : (
+            <span>{fmt(total || duration || 0)}</span>
+          )}
         </div>
       </div>
 
@@ -223,9 +395,10 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
         <button
           type="button"
           onClick={cycleSpeed}
-          aria-label="Velocidade de reprodução"
+          onKeyDown={onSpeedKey}
+          aria-label={`Velocidade de reprodução ${SPEEDS[speedIdx]}x. Pressione para alternar.`}
           className={cn(
-            'text-[10px] font-semibold px-1.5 py-0.5 rounded-md transition',
+            'text-[10px] font-semibold px-1.5 py-0.5 rounded-md transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
             mine
               ? 'bg-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/30'
               : 'bg-primary/10 text-primary hover:bg-primary/20',
@@ -240,7 +413,7 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
           rel="noreferrer"
           aria-label="Baixar áudio"
           className={cn(
-            'p-1 rounded-md transition opacity-70 hover:opacity-100',
+            'p-1 rounded-md transition opacity-70 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
             mine ? 'hover:bg-primary-foreground/20' : 'hover:bg-primary/10',
           )}
           onClick={(e) => e.stopPropagation()}
@@ -248,10 +421,6 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
           <Download className="w-3.5 h-3.5" />
         </a>
       </div>
-
-      {error && (
-        <span className="sr-only">Erro ao carregar áudio</span>
-      )}
     </div>
   );
 }
