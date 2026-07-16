@@ -325,10 +325,12 @@ class WavoipAdapter implements WhatsAppProviderAdapter {
     return data;
   }
 
-  async sendMessage(conn: WhatsAppConnection, customerId: string, content: string) {
-    // Placeholder for Wavoip messaging
-    console.log('Sending via Wavoip', { customerId, content });
-    return { success: true };
+  async sendMessage(_conn: WhatsAppConnection, _customerId: string, _content: string) {
+    // Wavoip is a VoIP-only provider (softphone). It does NOT deliver WhatsApp
+    // text messages, so we must fail loudly instead of returning a fake
+    // success — otherwise messages appear "sent" in the UI while never
+    // reaching WhatsApp.
+    throw new Error('Wavoip é um canal de voz e não envia mensagens de WhatsApp. Selecione uma conexão WAHA, Evolution ou UAZ para enviar texto.');
   }
 
   async syncContacts(conn: WhatsAppConnection) {
