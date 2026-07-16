@@ -254,11 +254,12 @@ export function AttendanceFlowDialog({ open, onOpenChange, onSelectCustomer }: P
           </DialogTitle>
         </DialogHeader>
         <Tabs value={tab} onValueChange={setTab} className="flex-1 flex flex-col min-h-0">
-          <TabsList className="grid grid-cols-4">
+          <TabsList className="grid grid-cols-5">
             <TabsTrigger value="manual" className="gap-1.5"><UserPlus className="w-4 h-4" /> Entrada Manual</TabsTrigger>
             <TabsTrigger value="auto" className="gap-1.5"><Bot className="w-4 h-4" /> Distribuição<Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">{filtered.auto.length}</Badge></TabsTrigger>
             <TabsTrigger value="waiting" className="gap-1.5"><Inbox className="w-4 h-4" /> Aguardando<Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">{filtered.waiting.length}</Badge></TabsTrigger>
             <TabsTrigger value="active" className="gap-1.5"><MessageCircle className="w-4 h-4" /> Em Atendimento<Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">{filtered.active.length}</Badge></TabsTrigger>
+            <TabsTrigger value="closed" className="gap-1.5"><Archive className="w-4 h-4" /> Finalizados<Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">{filtered.closed.length}</Badge></TabsTrigger>
           </TabsList>
 
           <TabsContent value="manual" className="flex-1 overflow-auto mt-3 space-y-3">
