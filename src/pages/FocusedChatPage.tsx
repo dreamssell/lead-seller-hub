@@ -736,6 +736,19 @@ export default function FocusedChatPage() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
+                          onClick={() => setTransferOpen(true)}
+                          className="px-2.5 h-8 rounded-lg border border-border hover:bg-secondary transition text-xs font-medium inline-flex items-center gap-1.5 text-foreground"
+                          aria-label="Transferir atendimento"
+                        >
+                          <ArrowLeftRight className="w-3.5 h-3.5" />
+                          Transferir
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Transferir para colega ou fluxo</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
                           onClick={() => setSearchOpen(true)}
                           className="p-2 rounded-lg hover:bg-secondary transition text-muted-foreground"
                           aria-label="Buscar no histórico"
