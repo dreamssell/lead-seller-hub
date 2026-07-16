@@ -252,6 +252,10 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     if (playing) { a.pause(); return; }
     try {
       setLoading(true);
+      ensureAudioGraph();
+      if (audioCtxRef.current?.state === 'suspended') {
+        try { await audioCtxRef.current.resume(); } catch {}
+      }
       if (range && (a.currentTime < range[0] || a.currentTime >= range[1])) {
         a.currentTime = range[0];
       }
@@ -261,7 +265,7 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [playing, range]);
+  }, [playing, range, ensureAudioGraph]);
 
   const retry = useCallback(() => {
     setError(null);
