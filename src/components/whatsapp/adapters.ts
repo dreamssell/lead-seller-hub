@@ -288,12 +288,17 @@ class UazAdapter implements WhatsAppProviderAdapter {
     return data;
   }
 
-  async sendMessage(conn: WhatsAppConnection, customerId: string, content: string) {
+  async sendMessage(conn: WhatsAppConnection, customerId: string, content: string, correlationId?: string) {
+    // client_msg_id MUST be forwarded so the edge function's idempotency check
+    // ("did we already accept this message?") can short-circuit retries and
+    // prevent the recipient from getting the same WhatsApp message twice.
+    const clientMsgId = correlationId ?? (globalThis.crypto?.randomUUID?.() ?? String(Date.now()));
     const { data, error } = await supabase.functions.invoke('uaz-send-message', {
       body: {
         customer_id: customerId,
         content: content,
-        connection_id: conn.id
+        connection_id: conn.id,
+        client_msg_id: clientMsgId,
       }
     });
     if (error) throw error;
