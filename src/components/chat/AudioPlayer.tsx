@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, Download, Loader2, AlertCircle, RotateCcw, Scissors } from 'lucide-react';
+import { Play, Pause, Download, Loader2, AlertCircle, RotateCcw, Scissors, Volume2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -10,10 +10,22 @@ interface Props {
 }
 
 const SPEEDS = [1, 1.5, 2, 0.75] as const;
+const GAINS = [1, 1.5, 2, 3] as const;
 const SPEED_STORAGE_KEY = 'chat_audio_player_speed_idx';
+const GAIN_STORAGE_KEY = 'chat_audio_player_gain_idx';
 const POSITION_STORAGE_PREFIX = 'chat_audio_pos::';
 const RANGE_STORAGE_PREFIX = 'chat_audio_range::';
 const BARS = 32;
+
+function loadGainIdx(): number {
+  try {
+    const raw = localStorage.getItem(GAIN_STORAGE_KEY);
+    if (raw == null) return 0;
+    const n = parseInt(raw, 10);
+    if (Number.isFinite(n) && n >= 0 && n < GAINS.length) return n;
+  } catch {}
+  return 0;
+}
 
 function loadSpeedIdx(): number {
   try {
@@ -91,13 +103,20 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
   const [current, setCurrent] = useState(0);
   const [total, setTotal] = useState(duration ?? 0);
   const [speedIdx, setSpeedIdx] = useState<number>(() => loadSpeedIdx());
+  const [gainIdx, setGainIdx] = useState<number>(() => loadGainIdx());
   const [error, setError] = useState<string | null>(null);
   const [retryTick, setRetryTick] = useState(0);
   const [range, setRange] = useState<[number, number] | null>(() => loadRange(url));
   const [dragMode, setDragMode] = useState<'seek' | 'range' | null>(null);
   const dragStartRef = useRef<number>(0);
   const restoredRef = useRef(false);
+  const rangeRef = useRef<[number, number] | null>(range);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
   const bars = useBars(url);
+
+  useEffect(() => { rangeRef.current = range; }, [range]);
 
   // Load persisted range when url changes
   useEffect(() => {
@@ -115,8 +134,16 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
       if (!restoredRef.current) {
         restoredRef.current = true;
         const saved = loadPosition(url);
-        if (saved > 0 && isFinite(a.duration) && saved < a.duration - 0.5) {
-          try { a.currentTime = saved; setCurrent(saved); } catch {}
+        const r = rangeRef.current;
+        let target = saved;
+        if (r) {
+          // Resume inside persisted range; clamp saved position or start at range[0]
+          if (target < r[0] || target >= r[1] - 0.2) target = r[0];
+        }
+        if (target > 0 && isFinite(a.duration) && target < a.duration - 0.5) {
+          try { a.currentTime = target; setCurrent(target); } catch {}
+        } else if (r && r[0] > 0) {
+          try { a.currentTime = r[0]; setCurrent(r[0]); } catch {}
         }
       }
     };
@@ -169,6 +196,44 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     if (audioRef.current) audioRef.current.playbackRate = SPEEDS[speedIdx];
   }, [url, speedIdx, retryTick]);
 
+  // WebAudio: normalization (compressor) + gain boost. Built lazily on first play.
+  const ensureAudioGraph = useCallback(() => {
+    const a = audioRef.current;
+    if (!a || sourceNodeRef.current) return;
+    try {
+      const Ctx: typeof AudioContext =
+        (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!Ctx) return;
+      a.crossOrigin = a.crossOrigin || 'anonymous';
+      const ctx = new Ctx();
+      const src = ctx.createMediaElementSource(a);
+      // Soft compressor to normalize loudness across recordings
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -28;
+      comp.knee.value = 24;
+      comp.ratio.value = 6;
+      comp.attack.value = 0.005;
+      comp.release.value = 0.15;
+      const gain = ctx.createGain();
+      gain.gain.value = GAINS[gainIdx];
+      src.connect(comp).connect(gain).connect(ctx.destination);
+      audioCtxRef.current = ctx;
+      sourceNodeRef.current = src;
+      gainNodeRef.current = gain;
+    } catch {
+      // Silent — playback still works via native path
+    }
+  }, [gainIdx]);
+
+  useEffect(() => {
+    if (gainNodeRef.current) gainNodeRef.current.gain.value = GAINS[gainIdx];
+  }, [gainIdx]);
+
+  useEffect(() => () => {
+    try { audioCtxRef.current?.close(); } catch {}
+  }, []);
+
+
   useEffect(() => {
     if (!playing) return;
     let raf = 0;
@@ -187,6 +252,10 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     if (playing) { a.pause(); return; }
     try {
       setLoading(true);
+      ensureAudioGraph();
+      if (audioCtxRef.current?.state === 'suspended') {
+        try { await audioCtxRef.current.resume(); } catch {}
+      }
       if (range && (a.currentTime < range[0] || a.currentTime >= range[1])) {
         a.currentTime = range[0];
       }
@@ -196,7 +265,7 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [playing, range]);
+  }, [playing, range, ensureAudioGraph]);
 
   const retry = useCallback(() => {
     setError(null);
@@ -284,6 +353,19 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault();
       cycleSpeed();
+    }
+  };
+
+  const cycleGain = () => {
+    ensureAudioGraph();
+    const next = (gainIdx + 1) % GAINS.length;
+    setGainIdx(next);
+    try { localStorage.setItem(GAIN_STORAGE_KEY, String(next)); } catch {}
+  };
+  const onGainKey = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      cycleGain();
     }
   };
 
@@ -405,6 +487,22 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
           )}
         >
           {SPEEDS[speedIdx]}x
+        </button>
+        <button
+          type="button"
+          onClick={cycleGain}
+          onKeyDown={onGainKey}
+          aria-label={`Ganho de volume ${GAINS[gainIdx]}x com normalização. Pressione para alternar.`}
+          title={`Volume ${GAINS[gainIdx]}x`}
+          className={cn(
+            'flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-md transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+            mine
+              ? 'bg-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/30'
+              : 'bg-primary/10 text-primary hover:bg-primary/20',
+          )}
+        >
+          <Volume2 className="w-3 h-3" />
+          {GAINS[gainIdx]}x
         </button>
         <a
           href={url}
