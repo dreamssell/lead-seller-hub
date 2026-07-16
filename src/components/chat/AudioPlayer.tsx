@@ -103,13 +103,20 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
   const [current, setCurrent] = useState(0);
   const [total, setTotal] = useState(duration ?? 0);
   const [speedIdx, setSpeedIdx] = useState<number>(() => loadSpeedIdx());
+  const [gainIdx, setGainIdx] = useState<number>(() => loadGainIdx());
   const [error, setError] = useState<string | null>(null);
   const [retryTick, setRetryTick] = useState(0);
   const [range, setRange] = useState<[number, number] | null>(() => loadRange(url));
   const [dragMode, setDragMode] = useState<'seek' | 'range' | null>(null);
   const dragStartRef = useRef<number>(0);
   const restoredRef = useRef(false);
+  const rangeRef = useRef<[number, number] | null>(range);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
   const bars = useBars(url);
+
+  useEffect(() => { rangeRef.current = range; }, [range]);
 
   // Load persisted range when url changes
   useEffect(() => {
@@ -127,8 +134,16 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
       if (!restoredRef.current) {
         restoredRef.current = true;
         const saved = loadPosition(url);
-        if (saved > 0 && isFinite(a.duration) && saved < a.duration - 0.5) {
-          try { a.currentTime = saved; setCurrent(saved); } catch {}
+        const r = rangeRef.current;
+        let target = saved;
+        if (r) {
+          // Resume inside persisted range; clamp saved position or start at range[0]
+          if (target < r[0] || target >= r[1] - 0.2) target = r[0];
+        }
+        if (target > 0 && isFinite(a.duration) && target < a.duration - 0.5) {
+          try { a.currentTime = target; setCurrent(target); } catch {}
+        } else if (r && r[0] > 0) {
+          try { a.currentTime = r[0]; setCurrent(r[0]); } catch {}
         }
       }
     };
