@@ -2191,7 +2191,7 @@ export default function ChatPage() {
         )}
       </div>
 
-      <div className="flex h-[calc(100vh-13rem)] glass-card overflow-hidden relative">
+      <div className="flex h-[calc(100vh-13rem)] glass-card overflow-hidden relative min-w-0">
         {/* Painel de Diagnóstico */}
         <AnimatePresence>
           {showDebugPanel && (
