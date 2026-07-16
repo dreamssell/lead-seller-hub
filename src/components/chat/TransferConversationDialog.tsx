@@ -43,12 +43,10 @@ export function TransferConversationDialog({ open, onOpenChange, customerId, own
       // Coleta todos os usuários ativos do tenant (owner + user_account_access)
       const { data: acc } = await supabase
         .from('user_account_access')
-        .select('user_id, is_active')
+        .select('user_id')
         .eq('owner_id', ownerId);
       const activeIds = new Set<string>([ownerId]);
-      (acc || []).forEach((a: any) => {
-        if (a.is_active !== false) activeIds.add(a.user_id);
-      });
+      (acc || []).forEach((a: any) => activeIds.add(a.user_id));
       const ids = Array.from(activeIds);
       if (ids.length === 0) return setUsers([]);
       const { data: profs } = await supabase
