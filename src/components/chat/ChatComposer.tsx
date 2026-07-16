@@ -206,7 +206,7 @@ export function ChatComposer({
 
   return (
     <TooltipProvider>
-      <div className="border-t border-border p-3 relative">
+      <div className="border-t border-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] relative">
         {attachment && (
           <div className="mb-2 p-3 rounded-xl border border-border bg-secondary/40 flex items-start gap-3">
             <div className="w-14 h-14 rounded-lg overflow-hidden bg-black/10 flex items-center justify-center shrink-0">
