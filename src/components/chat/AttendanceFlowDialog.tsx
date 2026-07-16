@@ -139,6 +139,7 @@ export function AttendanceFlowDialog({ open, onOpenChange, onSelectCustomer }: P
     auto: assignments.filter(a => ['auto', 'waiting'].includes(a.stage)),
     waiting: assignments.filter(a => a.stage === 'waiting' && (!userId || a.assigned_to === userId)),
     active: assignments.filter(a => ['active', 'snoozed'].includes(a.stage) && (!userId || a.assigned_to === userId)),
+    closed: assignments.filter(a => a.stage === 'closed'),
   }), [assignments, userId]);
 
   const openCustomer = (id: string) => {
