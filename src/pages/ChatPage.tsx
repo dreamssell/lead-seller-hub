@@ -2386,7 +2386,7 @@ export default function ChatPage() {
                 <Button
                   onClick={() => setNewConversationOpen(true)}
                   size="sm"
-                  className="flex-1 min-w-0 h-8 px-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+                  className="flex-1 min-w-0 h-8 px-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
                   disabled={!activeWhatsAppConn || !activeOwnerId}
                   title={!activeWhatsAppConn ? 'Selecione uma conexão WhatsApp ativa' : !activeOwnerId ? 'Recarregue o access do owner' : 'Iniciar conversa a partir de um número'}
                 >
@@ -2397,7 +2397,7 @@ export default function ChatPage() {
                   onClick={() => setContactsOpen(true)}
                   variant="outline"
                   size="sm"
-                  className="flex-1 min-w-0 h-8 px-2 text-xs"
+                  className="flex-1 min-w-0 h-8 px-1.5 text-xs"
                   disabled={!activeOwnerId}
                   title="Abrir agenda de contatos"
                 >
@@ -2408,7 +2408,7 @@ export default function ChatPage() {
                   onClick={() => setFlowOpen(true)}
                   variant="outline"
                   size="sm"
-                  className="flex-1 min-w-0 h-8 px-2 border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary text-xs"
+                  className="flex-1 min-w-0 h-8 px-1.5 border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary text-xs"
                   title="Fluxo de atendimento (Entrada Manual, Distribuição, Aguardando, Em Atendimento)"
                 >
                   <Inbox className="w-3.5 h-3.5 shrink-0" />
