@@ -2379,39 +2379,42 @@ export default function ChatPage() {
 
 
         {/* Lista */}
-        <div className="w-72 lg:w-80 shrink-0 border-r border-border flex flex-col">
-          <div className="p-3 border-b border-border space-y-2">
+        <div className="w-72 lg:w-80 shrink-0 border-r border-border flex flex-col min-h-0">
+          <div className="sticky top-0 z-20 bg-card/95 backdrop-blur-sm p-3 border-b border-border space-y-2">
             {activeChannel === 'whatsapp' && (
-              <div className="flex gap-1.5 overflow-hidden">
+              <div className="flex gap-1.5 overflow-hidden" role="group" aria-label="Ações do WhatsApp">
                 <Button
                   onClick={() => setNewConversationOpen(true)}
                   size="sm"
-                  className="flex-1 min-w-0 h-8 px-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+                  className="flex-1 min-w-0 h-8 px-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   disabled={!activeWhatsAppConn || !activeOwnerId}
+                  aria-label="Iniciar nova conversa"
                   title={!activeWhatsAppConn ? 'Selecione uma conexão WhatsApp ativa' : !activeOwnerId ? 'Recarregue o access do owner' : 'Iniciar conversa a partir de um número'}
                 >
-                  <Plus className="w-3.5 h-3.5 shrink-0" />
+                  <Plus className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                   <span className="truncate">Nova</span>
                 </Button>
                 <Button
                   onClick={() => setContactsOpen(true)}
                   variant="outline"
                   size="sm"
-                  className="flex-1 min-w-0 h-8 px-1.5 text-xs"
+                  className="flex-1 min-w-0 h-8 px-1.5 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   disabled={!activeOwnerId}
+                  aria-label="Abrir agenda de contatos"
                   title="Abrir agenda de contatos"
                 >
-                  <Users className="w-3.5 h-3.5 shrink-0" />
+                  <Users className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                   <span className="truncate">Contatos</span>
                 </Button>
                 <Button
                   onClick={() => setFlowOpen(true)}
                   variant="outline"
                   size="sm"
-                  className="flex-1 min-w-0 h-8 px-1.5 border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary text-xs"
+                  className="flex-1 min-w-0 h-8 px-1.5 border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  aria-label="Abrir fluxo de atendimento"
                   title="Fluxo de atendimento (Entrada Manual, Distribuição, Aguardando, Em Atendimento)"
                 >
-                  <Inbox className="w-3.5 h-3.5 shrink-0" />
+                  <Inbox className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                   <span className="truncate">Fluxo</span>
                 </Button>
               </div>
