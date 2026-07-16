@@ -30,6 +30,11 @@ export default function WhatsAppPage() {
   const [loading, setLoading] = useState(true);
   const [auditFilters, setAuditFilters] = useState<{ tenantId?: string; logId?: string } | null>(null);
   const [activeTab, setActiveTab] = useState('connections');
+  const [reconnectOpen, setReconnectOpen] = useState(false);
+
+  const disconnectedCount = connections.filter(
+    (c) => ['uaz', 'waha'].includes(c.provider) && c.status !== 'connected',
+  ).length;
 
   const loadConnections = async () => {
     setLoading(true);
