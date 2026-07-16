@@ -2380,7 +2380,7 @@ export default function ChatPage() {
 
         {/* Lista */}
         <div className="w-72 lg:w-80 shrink-0 border-r border-border flex flex-col min-h-0">
-          <div className="sticky top-0 z-20 bg-card/95 backdrop-blur-sm p-3 border-b border-border space-y-2">
+          <div className="sticky top-0 z-20 bg-card supports-[backdrop-filter]:bg-card/90 supports-[backdrop-filter]:backdrop-blur-md p-3 border-b border-border space-y-2 pt-safe [transform:translateZ(0)]">
             {activeChannel === 'whatsapp' && (
               <div className="flex gap-1.5 overflow-hidden" role="group" aria-label="Ações do WhatsApp">
                 <Button
