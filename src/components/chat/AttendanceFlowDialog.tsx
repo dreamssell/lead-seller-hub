@@ -48,6 +48,9 @@ interface AssignmentRow {
   assigned_at: string;
   first_response_at: string | null;
   snoozed_until: string | null;
+  closed_at?: string | null;
+  close_value?: number | null;
+  close_status_tag?: string | null;
   metadata: any;
   customer?: { name: string | null; phone: string | null; avatar_url: string | null } | null;
   queue?: { name: string | null } | null;
