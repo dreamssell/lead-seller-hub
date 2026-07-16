@@ -26,7 +26,7 @@ import { SlaTimer } from '@/components/chat/SlaTimer';
 import { toast } from 'sonner';
 import {
   UserPlus, Bot, Inbox, MessageCircle, Clock, RotateCcw, PauseCircle,
-  CheckCircle2, Loader2, Sparkles, ArrowLeftRight,
+  CheckCircle2, Loader2, Sparkles, ArrowLeftRight, Archive,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
