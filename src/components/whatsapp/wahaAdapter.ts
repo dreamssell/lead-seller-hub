@@ -691,7 +691,8 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
     });
     try {
       const data = await wahaFetch(url, token, '/api/forwardMessage', {
-        method: 'POST', body: parsed.data, timeoutMs: 10_000, retries: 1,
+        // Non-idempotent forward: never auto-retry.
+        method: 'POST', body: parsed.data, timeoutMs: 10_000, retries: 0,
       });
       const messageId = data?.id?._serialized || data?.id || null;
       await writeWahaAudit(conn, {
