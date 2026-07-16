@@ -557,6 +557,8 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
         method: 'POST',
         body: parsed.data,
         timeoutMs: 30_000,
+        // Non-idempotent: never auto-retry to avoid duplicate voice notes.
+        retries: 0,
       });
       const messageId = data?.id?._serialized || data?.id || null;
       if (!messageId) {
