@@ -2620,7 +2620,7 @@ export default function ChatPage() {
         </div>
 
         {/* Chat */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-w-0">
           {selectedConv && (
             <>
               <div className="border-b border-border px-4 py-3 flex items-center justify-between flex-wrap gap-3">
