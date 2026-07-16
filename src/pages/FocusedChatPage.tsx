@@ -991,6 +991,15 @@ export default function FocusedChatPage() {
           setParams((prev) => { const p = new URLSearchParams(prev); p.set('c', customerId); return p; });
         }}
       />
+
+      {selectedConv && (
+        <TransferConversationDialog
+          open={transferOpen}
+          onOpenChange={setTransferOpen}
+          customerId={selectedConv.id}
+          ownerId={null}
+        />
+      )}
     </TooltipProvider>
   );
 }
