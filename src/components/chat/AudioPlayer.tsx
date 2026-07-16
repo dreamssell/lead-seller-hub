@@ -503,6 +503,7 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
         >
           <Volume2 className="w-3 h-3" />
           {GAINS[gainIdx]}x
+        </button>
         <a
           href={url}
           download={filename || 'audio'}
