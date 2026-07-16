@@ -26,7 +26,7 @@ import { SlaTimer } from '@/components/chat/SlaTimer';
 import { toast } from 'sonner';
 import {
   UserPlus, Bot, Inbox, MessageCircle, Clock, RotateCcw, PauseCircle,
-  CheckCircle2, Loader2, Sparkles, ArrowLeftRight,
+  CheckCircle2, Loader2, Sparkles, ArrowLeftRight, Archive,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -48,6 +48,9 @@ interface AssignmentRow {
   assigned_at: string;
   first_response_at: string | null;
   snoozed_until: string | null;
+  closed_at?: string | null;
+  close_value?: number | null;
+  close_status_tag?: string | null;
   metadata: any;
   customer?: { name: string | null; phone: string | null; avatar_url: string | null } | null;
   queue?: { name: string | null } | null;
@@ -107,7 +110,7 @@ export function AttendanceFlowDialog({ open, onOpenChange, onSelectCustomer }: P
     try {
       let q = supabase
         .from('lead_assignments')
-        .select('id, customer_id, assigned_to, queue_id, stage, priority, origin, first_note, assigned_at, first_response_at, snoozed_until, metadata, customer:customers(name, phone, avatar_url), queue:attendance_queues(name)')
+        .select('id, customer_id, assigned_to, queue_id, stage, priority, origin, first_note, assigned_at, first_response_at, snoozed_until, closed_at, close_value, close_status_tag, metadata, customer:customers(name, phone, avatar_url), queue:attendance_queues(name)')
         .eq('owner_id', ownerId)
         .order('assigned_at', { ascending: false })
         .limit(200);
@@ -139,6 +142,7 @@ export function AttendanceFlowDialog({ open, onOpenChange, onSelectCustomer }: P
     auto: assignments.filter(a => ['auto', 'waiting'].includes(a.stage)),
     waiting: assignments.filter(a => a.stage === 'waiting' && (!userId || a.assigned_to === userId)),
     active: assignments.filter(a => ['active', 'snoozed'].includes(a.stage) && (!userId || a.assigned_to === userId)),
+    closed: assignments.filter(a => a.stage === 'closed'),
   }), [assignments, userId]);
 
   const openCustomer = (id: string) => {
@@ -253,11 +257,12 @@ export function AttendanceFlowDialog({ open, onOpenChange, onSelectCustomer }: P
           </DialogTitle>
         </DialogHeader>
         <Tabs value={tab} onValueChange={setTab} className="flex-1 flex flex-col min-h-0">
-          <TabsList className="grid grid-cols-4">
+          <TabsList className="grid grid-cols-5">
             <TabsTrigger value="manual" className="gap-1.5"><UserPlus className="w-4 h-4" /> Entrada Manual</TabsTrigger>
             <TabsTrigger value="auto" className="gap-1.5"><Bot className="w-4 h-4" /> Distribuição<Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">{filtered.auto.length}</Badge></TabsTrigger>
             <TabsTrigger value="waiting" className="gap-1.5"><Inbox className="w-4 h-4" /> Aguardando<Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">{filtered.waiting.length}</Badge></TabsTrigger>
             <TabsTrigger value="active" className="gap-1.5"><MessageCircle className="w-4 h-4" /> Em Atendimento<Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">{filtered.active.length}</Badge></TabsTrigger>
+            <TabsTrigger value="closed" className="gap-1.5"><Archive className="w-4 h-4" /> Finalizados<Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">{filtered.closed.length}</Badge></TabsTrigger>
           </TabsList>
 
           <TabsContent value="manual" className="flex-1 overflow-auto mt-3 space-y-3">
@@ -369,7 +374,29 @@ export function AttendanceFlowDialog({ open, onOpenChange, onSelectCustomer }: P
               </div>
             </ScrollArea>
           </TabsContent>
+
+          <TabsContent value="closed" className="flex-1 overflow-hidden mt-3">
+            <ScrollArea className="h-[55vh] pr-2">
+              <div className="space-y-2">
+                {!loading && filtered.closed.length === 0 && (
+                  <div className="text-xs text-muted-foreground text-center py-8">
+                    <Archive className="w-6 h-6 mx-auto mb-2 opacity-60" />
+                    Nenhum atendimento finalizado ainda.
+                  </div>
+                )}
+                {filtered.closed.map(a => renderRow(a, (
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => openCustomer(a.customer_id)} className="h-7 text-xs">Abrir</Button>
+                    {a.close_value != null && (
+                      <Badge variant="secondary" className="text-[10px]">R$ {Number(a.close_value || 0).toLocaleString('pt-BR')}</Badge>
+                    )}
+                  </>
+                )))}
+              </div>
+            </ScrollArea>
+          </TabsContent>
         </Tabs>
+
 
         {closeId && (
           <div className="fixed inset-0 z-50 bg-background/80 flex items-center justify-center p-4" onClick={() => setCloseId(null)}>

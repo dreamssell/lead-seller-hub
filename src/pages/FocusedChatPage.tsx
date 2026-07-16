@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   MessageCircle, Search, Info, Images, Pin, Star, StickyNote,
-  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2, Eye, Contact2, Plus, Inbox,
+  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2, Eye, Contact2, Plus, Inbox, ArrowLeftRight,
 } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { supabase } from '@/integrations/supabase/client';
@@ -47,6 +47,8 @@ import { MediaDropzone } from '@/components/chat/MediaDropzone';
 import { ContactsDialog } from '@/components/chat/ContactsDialog';
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
 import { AttendanceFlowDialog } from '@/components/chat/AttendanceFlowDialog';
+import { MoveToFlowMenu } from '@/components/chat/MoveToFlowMenu';
+import { TransferConversationDialog } from '@/components/chat/TransferConversationDialog';
 
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import type { WhatsAppConnection } from '@/components/whatsapp/types';
@@ -129,6 +131,7 @@ export default function FocusedChatPage() {
   const [contactsOpen, setContactsOpen] = useState(false);
   const [newConvOpen, setNewConvOpen] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const keepScrollAnchor = useRef<{ prevHeight: number; prevTop: number } | null>(null);
 
@@ -647,11 +650,14 @@ export default function FocusedChatPage() {
                 <div className="p-6 text-xs text-muted-foreground text-center">Nenhuma conversa</div>
               ) : (
                 filteredConvs.map(c => (
-                  <button
+                  <div
                     key={c.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelected(c.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelected(c.id); }}
                     className={cn(
-                      'w-full flex items-center gap-3 px-3 py-2.5 hover:bg-secondary/60 transition text-left border-b border-border/40',
+                      'group w-full flex items-center gap-3 px-3 py-2.5 hover:bg-secondary/60 transition text-left border-b border-border/40 cursor-pointer',
                       selected === c.id && 'bg-primary/10 hover:bg-primary/10',
                     )}
                   >
@@ -662,7 +668,10 @@ export default function FocusedChatPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-medium truncate">{c.name}</span>
-                        <span className="text-[10px] text-muted-foreground shrink-0">{formatTime(c.last_at)}</span>
+                        <span className="text-[10px] text-muted-foreground shrink-0 inline-flex items-center gap-0.5">
+                          {formatTime(c.last_at)}
+                          <MoveToFlowMenu customerId={c.id} />
+                        </span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground truncate">{c.last_message}</span>
@@ -671,7 +680,7 @@ export default function FocusedChatPage() {
                         )}
                       </div>
                     </div>
-                  </button>
+                  </div>
                 ))
               )}
             </ScrollArea>
@@ -724,6 +733,19 @@ export default function FocusedChatPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setTransferOpen(true)}
+                          className="px-2.5 h-8 rounded-lg border border-border hover:bg-secondary transition text-xs font-medium inline-flex items-center gap-1.5 text-foreground"
+                          aria-label="Transferir atendimento"
+                        >
+                          <ArrowLeftRight className="w-3.5 h-3.5" />
+                          Transferir
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Transferir para colega ou fluxo</TooltipContent>
+                    </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
@@ -969,6 +991,15 @@ export default function FocusedChatPage() {
           setParams((prev) => { const p = new URLSearchParams(prev); p.set('c', customerId); return p; });
         }}
       />
+
+      {selectedConv && (
+        <TransferConversationDialog
+          open={transferOpen}
+          onOpenChange={setTransferOpen}
+          customerId={selectedConv.id}
+          ownerId={null}
+        />
+      )}
     </TooltipProvider>
   );
 }
