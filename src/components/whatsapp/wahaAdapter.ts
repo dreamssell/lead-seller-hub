@@ -379,7 +379,11 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
         // retries makes the UI sit on "enviando pelo servidor" forever whenever
         // WAHA is momentarily slow.
         timeoutMs: opts.timeoutMs ?? 8_000,
-        retries: opts.retries ?? 1,
+        // IMPORTANT: /api/sendText is NOT idempotent. If WAHA already dispatched
+        // the message and only the HTTP response was lost/slow, a retry causes
+        // the recipient to receive the SAME message twice. Never auto-retry
+        // sends — surface the timeout to the caller instead.
+        retries: opts.retries ?? 0,
         signal: opts.signal,
       });
       const messageId = data?.id?._serialized || data?.id || null;
