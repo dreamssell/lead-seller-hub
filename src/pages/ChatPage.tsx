@@ -2566,7 +2566,10 @@ export default function ChatPage() {
                       {(c as any).is_muted && <BellOff className="w-3 h-3 text-amber-500 shrink-0" />}
                       {(c as any).is_archived && <Archive className="w-3 h-3 text-muted-foreground shrink-0" />}
                     </p>
-                    <span className="text-[10px] text-muted-foreground shrink-0">{c.time}</span>
+                    <span className="text-[10px] text-muted-foreground shrink-0 inline-flex items-center gap-0.5">
+                      {c.time}
+                      <MoveToFlowMenu customerId={c.id} ownerId={(c as any).owner_id} />
+                    </span>
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{c.msg}</p>
                   <div className="flex items-center gap-1 mt-1 flex-wrap">
