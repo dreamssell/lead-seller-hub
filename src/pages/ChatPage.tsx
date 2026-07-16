@@ -1596,7 +1596,7 @@ export default function ChatPage() {
         if (!activeWhatsAppConn) throw new Error('Conexão ativa não encontrada');
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
         const t0 = Date.now();
-        const data = await adapter.sendMessage(activeWhatsAppConn, selectedConvId, currentText);
+        const data = await adapter.sendMessage(activeWhatsAppConn, selectedConvId, currentText, clientMsgId);
         const latency = Date.now() - t0;
         const evoId = extractProviderMessageId(data);
         setMessages(prev => prev.map(m => 
@@ -1661,7 +1661,7 @@ export default function ChatPage() {
     } catch {}
   };
 
-  const sendTextThroughActiveChannel = async (customerId: string, text: string, replyToProviderId?: string | null) => {
+  const sendTextThroughActiveChannel = async (customerId: string, text: string, replyToProviderId?: string | null, correlationId?: string) => {
     if (activeChannel === 'whatsapp') {
       if (!activeWhatsAppConn) throw new Error('Conexão ativa não encontrada');
       const adapter = getProviderAdapter(activeWhatsAppConn.provider);
@@ -1672,8 +1672,9 @@ export default function ChatPage() {
         text_length: text.length,
         has_text: text.trim().length > 0,
         reply_to: replyToProviderId || null,
+        correlation_id: correlationId || null,
       });
-      return adapter.sendMessage(activeWhatsAppConn, customerId, text, undefined, replyToProviderId ? { replyTo: replyToProviderId } : undefined);
+      return adapter.sendMessage(activeWhatsAppConn, customerId, text, correlationId, replyToProviderId ? { replyTo: replyToProviderId } : undefined);
     }
     await new Promise(r => setTimeout(r, 400));
     return { key: { id: crypto.randomUUID() } };
@@ -1702,7 +1703,7 @@ export default function ChatPage() {
     setReplyingTo(null);
     try {
       const t0 = Date.now();
-      const data = await sendTextThroughActiveChannel(selectedConvId, text, replyProviderId);
+      const data = await sendTextThroughActiveChannel(selectedConvId, text, replyProviderId, id);
       await markStatus(id, 'sent', extractProviderMessageId(data), {
         latency_ms: Date.now() - t0,
         accepted_at: new Date().toISOString(),
@@ -1768,7 +1769,7 @@ export default function ChatPage() {
 
     try {
       const t0 = Date.now();
-      const data = await sendTextThroughActiveChannel(message.customer_id || selectedConvId, message.content, (message._quoted?.message_id || meta?.quoted?.message_id) || null);
+      const data = await sendTextThroughActiveChannel(message.customer_id || selectedConvId, message.content, (message._quoted?.message_id || meta?.quoted?.message_id) || null, msgId);
       await markStatus(msgId, 'sent', extractProviderMessageId(data), {
         latency_ms: Date.now() - t0,
         accepted_at: new Date().toISOString(),

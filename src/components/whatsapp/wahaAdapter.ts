@@ -379,7 +379,11 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
         // retries makes the UI sit on "enviando pelo servidor" forever whenever
         // WAHA is momentarily slow.
         timeoutMs: opts.timeoutMs ?? 8_000,
-        retries: opts.retries ?? 1,
+        // IMPORTANT: /api/sendText is NOT idempotent. If WAHA already dispatched
+        // the message and only the HTTP response was lost/slow, a retry causes
+        // the recipient to receive the SAME message twice. Never auto-retry
+        // sends — surface the timeout to the caller instead.
+        retries: opts.retries ?? 0,
         signal: opts.signal,
       });
       const messageId = data?.id?._serialized || data?.id || null;
@@ -464,6 +468,8 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
         method: 'POST',
         body: parsed.data,
         timeoutMs: 30_000,
+        // Non-idempotent: never auto-retry to avoid duplicate deliveries.
+        retries: 0,
       });
       const messageId = data?.id?._serialized || data?.id || data?.key?.id || null;
       if (!messageId) {
@@ -551,6 +557,8 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
         method: 'POST',
         body: parsed.data,
         timeoutMs: 30_000,
+        // Non-idempotent: never auto-retry to avoid duplicate voice notes.
+        retries: 0,
       });
       const messageId = data?.id?._serialized || data?.id || null;
       if (!messageId) {
@@ -683,7 +691,8 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
     });
     try {
       const data = await wahaFetch(url, token, '/api/forwardMessage', {
-        method: 'POST', body: parsed.data, timeoutMs: 10_000, retries: 1,
+        // Non-idempotent forward: never auto-retry.
+        method: 'POST', body: parsed.data, timeoutMs: 10_000, retries: 0,
       });
       const messageId = data?.id?._serialized || data?.id || null;
       await writeWahaAudit(conn, {
