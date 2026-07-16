@@ -371,7 +371,29 @@ export function AttendanceFlowDialog({ open, onOpenChange, onSelectCustomer }: P
               </div>
             </ScrollArea>
           </TabsContent>
+
+          <TabsContent value="closed" className="flex-1 overflow-hidden mt-3">
+            <ScrollArea className="h-[55vh] pr-2">
+              <div className="space-y-2">
+                {!loading && filtered.closed.length === 0 && (
+                  <div className="text-xs text-muted-foreground text-center py-8">
+                    <Archive className="w-6 h-6 mx-auto mb-2 opacity-60" />
+                    Nenhum atendimento finalizado ainda.
+                  </div>
+                )}
+                {filtered.closed.map(a => renderRow(a, (
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => openCustomer(a.customer_id)} className="h-7 text-xs">Abrir</Button>
+                    {a.metadata?.close_value != null && (
+                      <Badge variant="secondary" className="text-[10px]">R$ {Number(a.metadata.close_value || 0).toLocaleString('pt-BR')}</Badge>
+                    )}
+                  </>
+                )))}
+              </div>
+            </ScrollArea>
+          </TabsContent>
         </Tabs>
+
 
         {closeId && (
           <div className="fixed inset-0 z-50 bg-background/80 flex items-center justify-center p-4" onClick={() => setCloseId(null)}>
