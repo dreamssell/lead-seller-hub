@@ -102,7 +102,7 @@ export function TransferConversationDialog({ open, onOpenChange, customerId, own
           actorId: u.user?.id,
           origin: 'flow_move',
         });
-        await logAssignment({ to_queue_id: null, metadata: { flow_stage: stage } as any });
+        await logAssignment({ to_queue_id: null });
         toast.success('Conversa movida para o fluxo');
       }
       onOpenChange(false);
