@@ -196,6 +196,44 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     if (audioRef.current) audioRef.current.playbackRate = SPEEDS[speedIdx];
   }, [url, speedIdx, retryTick]);
 
+  // WebAudio: normalization (compressor) + gain boost. Built lazily on first play.
+  const ensureAudioGraph = useCallback(() => {
+    const a = audioRef.current;
+    if (!a || sourceNodeRef.current) return;
+    try {
+      const Ctx: typeof AudioContext =
+        (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!Ctx) return;
+      a.crossOrigin = a.crossOrigin || 'anonymous';
+      const ctx = new Ctx();
+      const src = ctx.createMediaElementSource(a);
+      // Soft compressor to normalize loudness across recordings
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -28;
+      comp.knee.value = 24;
+      comp.ratio.value = 6;
+      comp.attack.value = 0.005;
+      comp.release.value = 0.15;
+      const gain = ctx.createGain();
+      gain.gain.value = GAINS[gainIdx];
+      src.connect(comp).connect(gain).connect(ctx.destination);
+      audioCtxRef.current = ctx;
+      sourceNodeRef.current = src;
+      gainNodeRef.current = gain;
+    } catch {
+      // Silent — playback still works via native path
+    }
+  }, [gainIdx]);
+
+  useEffect(() => {
+    if (gainNodeRef.current) gainNodeRef.current.gain.value = GAINS[gainIdx];
+  }, [gainIdx]);
+
+  useEffect(() => () => {
+    try { audioCtxRef.current?.close(); } catch {}
+  }, []);
+
+
   useEffect(() => {
     if (!playing) return;
     let raf = 0;
