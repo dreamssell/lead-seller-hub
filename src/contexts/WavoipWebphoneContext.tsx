@@ -642,8 +642,28 @@ export function WavoipWebphoneProvider({ children }: { children: React.ReactNode
         displayName: 'Lead Seller Hub',
       });
       if (err) {
+        const reasons: string[] = (err.devices || []).map((d: any) => String(d.reason || '').toUpperCase());
         const detail = err.devices?.map((d: any) => `${d.token.slice(0,8)}…: ${d.reason}`).join(' | ') || err.message;
-        toast.error(`Wavoip recusou a chamada: ${detail}`);
+        const isPhoneDontExist = reasons.includes('PHONE_DONT_EXIST');
+        if (isPhoneDontExist) {
+          toast.error('Wavoip: WhatsApp do tronco não está pareado', {
+            description:
+              'O device Wavoip está ativo, mas o WhatsApp vinculado a ele não foi encontrado. ' +
+              'Abra o painel Wavoip (app.wavoip.com), edite o device e escaneie o QR novamente com o WhatsApp do número do tronco. ' +
+              'Depois volte aqui e clique em "Validar conexão" em Configurações → Wavoip.',
+            duration: 12000,
+          });
+          try {
+            await (supabase as any).from('wavoip_devices').update({
+              last_validation_status: 'fail',
+              last_validation_error: 'PHONE_DONT_EXIST — reparear WhatsApp no painel Wavoip',
+              last_validated_at: new Date().toISOString(),
+            }).eq('token', device.token);
+          } catch {}
+        } else {
+          toast.error(`Wavoip recusou a chamada: ${detail}`);
+        }
+        await audit('call_rejected', 'error', { reason: detail, reasons });
         await finish('rejected');
         return false;
       }
