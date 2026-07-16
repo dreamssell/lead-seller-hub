@@ -47,6 +47,8 @@ import { MediaDropzone } from '@/components/chat/MediaDropzone';
 import { ContactsDialog } from '@/components/chat/ContactsDialog';
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
 import { AttendanceFlowDialog } from '@/components/chat/AttendanceFlowDialog';
+import { MoveToFlowMenu } from '@/components/chat/MoveToFlowMenu';
+import { TransferConversationDialog } from '@/components/chat/TransferConversationDialog';
 
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import type { WhatsAppConnection } from '@/components/whatsapp/types';
