@@ -110,7 +110,7 @@ export function AttendanceFlowDialog({ open, onOpenChange, onSelectCustomer }: P
     try {
       let q = supabase
         .from('lead_assignments')
-        .select('id, customer_id, assigned_to, queue_id, stage, priority, origin, first_note, assigned_at, first_response_at, snoozed_until, metadata, customer:customers(name, phone, avatar_url), queue:attendance_queues(name)')
+        .select('id, customer_id, assigned_to, queue_id, stage, priority, origin, first_note, assigned_at, first_response_at, snoozed_until, closed_at, close_value, close_status_tag, metadata, customer:customers(name, phone, avatar_url), queue:attendance_queues(name)')
         .eq('owner_id', ownerId)
         .order('assigned_at', { ascending: false })
         .limit(200);
