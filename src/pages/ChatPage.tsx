@@ -1596,7 +1596,7 @@ export default function ChatPage() {
         if (!activeWhatsAppConn) throw new Error('Conexão ativa não encontrada');
         const adapter = getProviderAdapter(activeWhatsAppConn.provider);
         const t0 = Date.now();
-        const data = await adapter.sendMessage(activeWhatsAppConn, selectedConvId, currentText);
+        const data = await adapter.sendMessage(activeWhatsAppConn, selectedConvId, currentText, clientMsgId);
         const latency = Date.now() - t0;
         const evoId = extractProviderMessageId(data);
         setMessages(prev => prev.map(m => 
