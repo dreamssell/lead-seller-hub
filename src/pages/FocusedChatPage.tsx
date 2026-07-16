@@ -650,11 +650,14 @@ export default function FocusedChatPage() {
                 <div className="p-6 text-xs text-muted-foreground text-center">Nenhuma conversa</div>
               ) : (
                 filteredConvs.map(c => (
-                  <button
+                  <div
                     key={c.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelected(c.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelected(c.id); }}
                     className={cn(
-                      'w-full flex items-center gap-3 px-3 py-2.5 hover:bg-secondary/60 transition text-left border-b border-border/40',
+                      'group w-full flex items-center gap-3 px-3 py-2.5 hover:bg-secondary/60 transition text-left border-b border-border/40 cursor-pointer',
                       selected === c.id && 'bg-primary/10 hover:bg-primary/10',
                     )}
                   >
@@ -665,7 +668,10 @@ export default function FocusedChatPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-medium truncate">{c.name}</span>
-                        <span className="text-[10px] text-muted-foreground shrink-0">{formatTime(c.last_at)}</span>
+                        <span className="text-[10px] text-muted-foreground shrink-0 inline-flex items-center gap-0.5">
+                          {formatTime(c.last_at)}
+                          <MoveToFlowMenu customerId={c.id} />
+                        </span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground truncate">{c.last_message}</span>
@@ -674,7 +680,7 @@ export default function FocusedChatPage() {
                         )}
                       </div>
                     </div>
-                  </button>
+                  </div>
                 ))
               )}
             </ScrollArea>
