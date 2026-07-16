@@ -1769,7 +1769,7 @@ export default function ChatPage() {
 
     try {
       const t0 = Date.now();
-      const data = await sendTextThroughActiveChannel(message.customer_id || selectedConvId, message.content, (message._quoted?.message_id || meta?.quoted?.message_id) || null);
+      const data = await sendTextThroughActiveChannel(message.customer_id || selectedConvId, message.content, (message._quoted?.message_id || meta?.quoted?.message_id) || null, msgId);
       await markStatus(msgId, 'sent', extractProviderMessageId(data), {
         latency_ms: Date.now() - t0,
         accepted_at: new Date().toISOString(),
