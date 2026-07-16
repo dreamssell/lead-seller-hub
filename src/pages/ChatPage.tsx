@@ -1703,7 +1703,7 @@ export default function ChatPage() {
     setReplyingTo(null);
     try {
       const t0 = Date.now();
-      const data = await sendTextThroughActiveChannel(selectedConvId, text, replyProviderId);
+      const data = await sendTextThroughActiveChannel(selectedConvId, text, replyProviderId, id);
       await markStatus(id, 'sent', extractProviderMessageId(data), {
         latency_ms: Date.now() - t0,
         accepted_at: new Date().toISOString(),
