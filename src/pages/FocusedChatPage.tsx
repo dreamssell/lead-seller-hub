@@ -156,7 +156,7 @@ export default function FocusedChatPage() {
       const { data } = await supabase
         .from('whatsapp_connections')
         .select('*')
-        .in('provider', WHATSAPP_PROVIDERS as unknown as string[])
+        .in('provider', WHATSAPP_PROVIDERS)
         .order('created_at', { ascending: false });
       if (cancelled || !data?.length) return;
       const active = (data as WhatsAppConnection[]).find(c => c.status === 'connected') || data[0] as WhatsAppConnection;
