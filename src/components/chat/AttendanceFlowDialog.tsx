@@ -387,8 +387,8 @@ export function AttendanceFlowDialog({ open, onOpenChange, onSelectCustomer }: P
                 {filtered.closed.map(a => renderRow(a, (
                   <>
                     <Button size="sm" variant="outline" onClick={() => openCustomer(a.customer_id)} className="h-7 text-xs">Abrir</Button>
-                    {a.metadata?.close_value != null && (
-                      <Badge variant="secondary" className="text-[10px]">R$ {Number(a.metadata.close_value || 0).toLocaleString('pt-BR')}</Badge>
+                    {a.close_value != null && (
+                      <Badge variant="secondary" className="text-[10px]">R$ {Number(a.close_value || 0).toLocaleString('pt-BR')}</Badge>
                     )}
                   </>
                 )))}
