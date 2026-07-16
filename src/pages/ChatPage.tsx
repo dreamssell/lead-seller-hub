@@ -2382,37 +2382,41 @@ export default function ChatPage() {
         <div className="w-80 border-r border-border flex flex-col">
           <div className="p-3 border-b border-border space-y-2">
             {activeChannel === 'whatsapp' && (
-              <div className="flex gap-2">
+              <div className="flex gap-1.5 min-w-0">
                 <Button
                   onClick={() => setNewConversationOpen(true)}
-                  className="flex-1 h-9 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                  size="sm"
+                  className="flex-1 min-w-0 h-8 gap-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
                   disabled={!activeWhatsAppConn || !activeOwnerId}
                   title={!activeWhatsAppConn ? 'Selecione uma conexão WhatsApp ativa' : !activeOwnerId ? 'Recarregue o access do owner' : 'Iniciar conversa a partir de um número'}
                 >
-                  <Plus className="w-4 h-4" />
-                  Nova conversa
+                  <Plus className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Nova</span>
                 </Button>
                 <Button
                   onClick={() => setContactsOpen(true)}
                   variant="outline"
-                  className="h-9 gap-2"
+                  size="sm"
+                  className="h-8 gap-1.5 px-2 text-xs"
                   disabled={!activeOwnerId}
                   title="Abrir agenda de contatos"
                 >
-                  <Users className="w-4 h-4" />
-                  Contatos
+                  <Users className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Contatos</span>
                 </Button>
                 <Button
                   onClick={() => setFlowOpen(true)}
                   variant="outline"
-                  className="h-9 gap-2 border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary"
+                  size="sm"
+                  className="h-8 gap-1.5 px-2 border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary text-xs"
                   title="Fluxo de atendimento (Entrada Manual, Distribuição, Aguardando, Em Atendimento)"
                 >
-                  <Inbox className="w-4 h-4" />
-                  Fluxo
+                  <Inbox className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Fluxo</span>
                 </Button>
               </div>
             )}
+
             <div className="flex flex-col gap-2 bg-secondary rounded-xl p-3">
               <div className="flex items-center gap-2">
                 <Search className="w-4 h-4 text-muted-foreground" />
