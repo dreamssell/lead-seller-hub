@@ -105,6 +105,28 @@ export default function WhatsAppPage() {
       subtitle="Gerencie suas instâncias de WhatsApp e redes sociais em um único lugar."
     >
       <div className="space-y-6">
+        {isOwner && disconnectedCount > 0 && (
+          <Alert className="border-amber-500/40 bg-amber-500/5">
+            <AlertTriangle className="w-4 h-4 text-amber-600" />
+            <AlertTitle className="flex items-center justify-between gap-2">
+              <span>{disconnectedCount} {disconnectedCount === 1 ? 'sessão precisa' : 'sessões precisam'} de reconexão</span>
+              <Button size="sm" onClick={() => setReconnectOpen(true)} className="gap-2 h-8">
+                <PlugZap className="w-4 h-4" /> Reconectar agora
+              </Button>
+            </AlertTitle>
+            <AlertDescription className="text-xs">
+              Enquanto a sessão estiver desconectada, o envio de mensagens não chega ao WhatsApp mesmo que apareça como "enviado".
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <ReconnectSessionDialog
+          open={reconnectOpen}
+          onOpenChange={setReconnectOpen}
+          connections={connections}
+          onChanged={loadConnections}
+        />
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <div className="flex items-center justify-between mb-4">
             <TabsList className="bg-secondary/50 border border-border/40">
