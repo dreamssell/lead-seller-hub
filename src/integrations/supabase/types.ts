@@ -4615,6 +4615,68 @@ export type Database = {
         }
         Relationships: []
       }
+      support_notification_test_logs: {
+        Row: {
+          audience: string
+          channel: string
+          created_at: string
+          event_type: string
+          fail_count: number
+          id: string
+          ok_count: number
+          owner_id: string
+          per_recipient: Json
+          recipients: string[]
+          rendered_body: string
+          sample_payload: Json
+          sub_company_id: string | null
+          template_id: string | null
+          triggered_by: string | null
+        }
+        Insert: {
+          audience: string
+          channel?: string
+          created_at?: string
+          event_type: string
+          fail_count?: number
+          id?: string
+          ok_count?: number
+          owner_id: string
+          per_recipient?: Json
+          recipients?: string[]
+          rendered_body: string
+          sample_payload?: Json
+          sub_company_id?: string | null
+          template_id?: string | null
+          triggered_by?: string | null
+        }
+        Update: {
+          audience?: string
+          channel?: string
+          created_at?: string
+          event_type?: string
+          fail_count?: number
+          id?: string
+          ok_count?: number
+          owner_id?: string
+          per_recipient?: Json
+          recipients?: string[]
+          rendered_body?: string
+          sample_payload?: Json
+          sub_company_id?: string | null
+          template_id?: string | null
+          triggered_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_notification_test_logs_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "support_notification_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_ticket_assignments: {
         Row: {
           changed_by: string

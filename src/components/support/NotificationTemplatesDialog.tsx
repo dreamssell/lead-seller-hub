@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/hooks/use-toast';
-import { Bell, Save, Send, History, AlertCircle, CheckCircle2, RotateCcw, Eye, XCircle } from 'lucide-react';
+import { Bell, Save, Send, History, AlertCircle, CheckCircle2, RotateCcw, Eye, XCircle, ClipboardList } from 'lucide-react';
 
 /** Client-side mirror of the server `{{var}}` render — used to preview text before firing the test. */
 function renderTemplate(tpl: string, vars: Record<string, string>): string {
@@ -14,6 +14,21 @@ function renderTemplate(tpl: string, vars: Record<string, string>): string {
 }
 
 type TestResult = { phone: string; ok: boolean; error?: string | null };
+
+type TestLog = {
+  id: string;
+  created_at: string;
+  event_type: string;
+  audience: string;
+  template_id: string | null;
+  rendered_body: string;
+  sample_payload: Record<string, any>;
+  recipients: string[];
+  per_recipient: TestResult[];
+  ok_count: number;
+  fail_count: number;
+  triggered_by: string | null;
+};
 
 type EventKey =
   | 'created' | 'assigned' | 'status_changed' | 'resolved'
@@ -86,8 +101,39 @@ function extractVars(tpl: string): string[] {
   return [...set];
 }
 
-function normalizePhone(p: string): string {
-  return p.replace(/\D/g, '');
+/**
+ * Normalize an operator-typed phone to E.164 (`+55DDNNNNNNNNN`).
+ * Rules geared to Brazil (default DDI 55) but tolerant of pre-prefixed inputs:
+ *   - strip everything non-digit, drop leading `00` (international dial prefix)
+ *   - if it already starts with `55` and length is 12–13 → keep
+ *   - if length is 10 (fixed) or 11 (mobile with 9) → prepend `55`
+ *   - if it starts with another 1–3 digit country code (11–15 digits) → keep as-is
+ * Returns `null` when nothing valid can be produced.
+ */
+function toE164(raw: string): string | null {
+  let d = (raw || '').replace(/\D/g, '');
+  if (!d) return null;
+  if (d.startsWith('00')) d = d.slice(2);
+  if (d.startsWith('55') && (d.length === 12 || d.length === 13)) return `+${d}`;
+  if (d.length === 10 || d.length === 11) return `+55${d}`;
+  if (d.length >= 11 && d.length <= 15) return `+${d}`;
+  return null;
+}
+
+/** Parse the operator's textarea into an ordered, deduped list of E.164 phones plus the invalid tokens. */
+function parseAndDedupe(raw: string): { valid: string[]; invalid: string[] } {
+  const tokens = (raw || '').split(/[,;\n]/).map((t) => t.trim()).filter(Boolean);
+  const valid: string[] = [];
+  const invalid: string[] = [];
+  const seen = new Set<string>();
+  for (const t of tokens) {
+    const e164 = toE164(t);
+    if (!e164) { invalid.push(t); continue; }
+    if (seen.has(e164)) continue;
+    seen.add(e164);
+    valid.push(e164);
+  }
+  return { valid, invalid };
 }
 
 export function NotificationTemplatesDialog({
@@ -107,6 +153,9 @@ export function NotificationTemplatesDialog({
   const [previewOpen, setPreviewOpen] = useState<Record<string, boolean>>({});
   const [versionsFor, setVersionsFor] = useState<string | null>(null);
   const [versions, setVersions] = useState<Version[]>([]);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<TestLog[]>([]);
+  const [auditFilter, setAuditFilter] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -214,12 +263,20 @@ export function NotificationTemplatesDialog({
     const d = drafts[key];
     if (!d?.id) return toast({ title: 'Salve o template antes de testar', variant: 'destructive' });
 
-    const phones = (testPhones[key] || '')
-      .split(/[,;\n]/)
-      .map((p) => normalizePhone(p))
-      .filter((p) => p.length >= 10);
+    const { valid: phones, invalid } = parseAndDedupe(testPhones[key] || '');
+    if (invalid.length > 0) {
+      return toast({
+        title: 'Telefones inválidos',
+        description: `Não foi possível normalizar para E.164: ${invalid.join(', ')}.`,
+        variant: 'destructive',
+      });
+    }
     if (phones.length === 0) {
-      return toast({ title: 'Informe ao menos um telefone', description: 'Números com DDI+DDD (ex.: 5511999998888). Separe múltiplos por vírgula ou nova linha.', variant: 'destructive' });
+      return toast({
+        title: 'Informe ao menos um telefone',
+        description: 'Números com DDD (BR) ou DDI internacional. Separe múltiplos por vírgula ou nova linha — duplicados são removidos automaticamente.',
+        variant: 'destructive',
+      });
     }
     const v = validate(row, d);
     if (!v.canEnable) {
@@ -241,13 +298,49 @@ export function NotificationTemplatesDialog({
       setTestResults((prev) => ({ ...prev, [key]: [...results] }));
     }
     setTesting(null);
+
+    // Audit log: one row per batch, readable in the "Auditoria de testes" panel.
+    const { data: { user } } = await supabase.auth.getUser();
     const okCount = results.filter((r) => r.ok).length;
+    const failCount = results.length - okCount;
+    await supabase.from('support_notification_test_logs' as any).insert({
+      owner_id: ownerId,
+      sub_company_id: subCompanyId ?? null,
+      template_id: d.id,
+      event_type: row.event_type,
+      audience: row.audience,
+      channel: 'whatsapp',
+      rendered_body: renderTemplate(d.body_template, row.sample),
+      sample_payload: row.sample,
+      recipients: phones,
+      per_recipient: results,
+      ok_count: okCount,
+      fail_count: failCount,
+      triggered_by: user?.id ?? null,
+    });
+
     toast({
       title: okCount === results.length ? `✅ ${okCount} teste(s) enviado(s)` : `${okCount}/${results.length} enviados`,
       description: okCount < results.length ? 'Confira os detalhes por destinatário abaixo.' : undefined,
       variant: okCount === 0 ? 'destructive' : 'default',
     });
     void load();
+    if (auditOpen) void loadAuditLogs(auditFilter);
+  }
+
+  /** Load the last 50 test-send audit rows for this owner (optionally scoped to one template). */
+  async function loadAuditLogs(templateId: string | null) {
+    let q = supabase.from('support_notification_test_logs' as any)
+      .select('*').eq('owner_id', ownerId).order('created_at', { ascending: false }).limit(50);
+    if (templateId) q = q.eq('template_id', templateId);
+    const { data } = await q;
+    setAuditLogs((data as any) || []);
+  }
+
+  function openAudit(templateId: string | null) {
+    setAuditFilter(templateId);
+    setAuditOpen(true);
+    void loadAuditLogs(templateId);
   }
 
   async function restoreVersion(v: Version) {
@@ -283,6 +376,12 @@ export function NotificationTemplatesDialog({
                 'Templates padrão desta empresa. Cada sub-empresa pode sobrescrever depois.'}
             </DialogDescription>
           </DialogHeader>
+
+          <div className="flex justify-end -mt-2">
+            <Button size="sm" variant="ghost" className="gap-1 h-8" onClick={() => openAudit(null)}>
+              <ClipboardList className="w-3.5 h-3.5"/> Auditoria de testes
+            </Button>
+          </div>
 
           {loading ? (
             <div className="h-40 rounded-xl bg-muted/40 animate-pulse" />
@@ -354,7 +453,9 @@ export function NotificationTemplatesDialog({
                     )}
 
                     {(() => {
-                      const rawPhones = (testPhones[key] || '').split(/[,;\n]/).map((p) => normalizePhone(p)).filter((p) => p.length >= 10);
+                      const parsed = parseAndDedupe(testPhones[key] || '');
+                      const rawPhones = parsed.valid;
+                      const invalidPhones = parsed.invalid;
                       const preview = renderTemplate(d.body_template, row.sample);
                       const results = testResults[key] || [];
                       const isPreviewOpen = !!previewOpen[key];
@@ -377,6 +478,23 @@ export function NotificationTemplatesDialog({
                               </Button>
                             </div>
                           </div>
+                          {(rawPhones.length > 0 || invalidPhones.length > 0) && (
+                            <div className="text-[11px] space-y-1">
+                              {rawPhones.length > 0 && (
+                                <p className="text-muted-foreground">
+                                  <span className="font-medium text-foreground">{rawPhones.length}</span> destinatário(s) após normalização E.164
+                                  {(testPhones[key] || '').split(/[,;\n]/).filter((t) => t.trim()).length > rawPhones.length + invalidPhones.length && ' · duplicados removidos'}:
+                                  <span className="ml-1 font-mono">{rawPhones.join(', ')}</span>
+                                </p>
+                              )}
+                              {invalidPhones.length > 0 && (
+                                <p className="text-red-500 flex items-start gap-1">
+                                  <AlertCircle className="w-3 h-3 mt-0.5 shrink-0"/>
+                                  Inválidos (não serão enviados): <span className="font-mono">{invalidPhones.join(', ')}</span>
+                                </p>
+                              )}
+                            </div>
+                          )}
                           {isPreviewOpen && (
                             <div className="rounded-lg border border-border bg-muted/40 p-2">
                               <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Prévia com o payload de exemplo</p>
@@ -396,9 +514,14 @@ export function NotificationTemplatesDialog({
                           )}
                           <div className="flex items-center gap-2">
                             {d.id && (
-                              <Button size="sm" variant="ghost" className="gap-1 h-8" onClick={() => loadVersions(d.id!)}>
-                                <History className="w-3.5 h-3.5"/> Versões
-                              </Button>
+                              <>
+                                <Button size="sm" variant="ghost" className="gap-1 h-8" onClick={() => loadVersions(d.id!)}>
+                                  <History className="w-3.5 h-3.5"/> Versões
+                                </Button>
+                                <Button size="sm" variant="ghost" className="gap-1 h-8" onClick={() => openAudit(d.id!)}>
+                                  <ClipboardList className="w-3.5 h-3.5"/> Auditoria
+                                </Button>
+                              </>
                             )}
                             <Button size="sm" className="gap-1 h-8 ml-auto" onClick={() => save(row)} disabled={saving === key}>
                               <Save className="w-3.5 h-3.5"/> {saving === key ? 'Salvando…' : 'Salvar'}
@@ -437,6 +560,62 @@ export function NotificationTemplatesDialog({
                   </div>
                   <pre className="text-[11px] whitespace-pre-wrap font-sans bg-muted/40 p-2 rounded">{v.body_template}</pre>
                 </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={auditOpen} onOpenChange={setAuditOpen}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><ClipboardList className="w-4 h-4"/> Auditoria de envios de teste</DialogTitle>
+            <DialogDescription>
+              {auditFilter ? 'Últimos 50 disparos deste template.' : 'Últimos 50 disparos de teste desta empresa.'}
+            </DialogDescription>
+          </DialogHeader>
+          {auditLogs.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-6 text-center">Nenhum envio de teste registrado ainda.</p>
+          ) : (
+            <div className="space-y-2">
+              {auditLogs.map((l) => (
+                <details key={l.id} className="rounded-xl border border-border bg-card">
+                  <summary className="cursor-pointer p-3 flex items-center gap-2 flex-wrap text-xs">
+                    <span className="text-muted-foreground">{new Date(l.created_at).toLocaleString('pt-BR')}</span>
+                    <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-secondary">{l.event_type} · {l.audience}</span>
+                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="w-3 h-3"/> {l.ok_count}
+                    </span>
+                    {l.fail_count > 0 && (
+                      <span className="flex items-center gap-1 text-red-500">
+                        <XCircle className="w-3 h-3"/> {l.fail_count}
+                      </span>
+                    )}
+                    <span className="ml-auto text-muted-foreground">{l.recipients.length} destinatário(s)</span>
+                  </summary>
+                  <div className="px-3 pb-3 space-y-2 text-[11px]">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Corpo renderizado</p>
+                      <pre className="whitespace-pre-wrap font-sans bg-muted/40 p-2 rounded">{l.rendered_body}</pre>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Payload de exemplo</p>
+                      <pre className="whitespace-pre-wrap font-mono text-[10px] bg-muted/40 p-2 rounded">{JSON.stringify(l.sample_payload, null, 2)}</pre>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Destinatários (E.164)</p>
+                      <ul className="space-y-0.5">
+                        {(l.per_recipient || []).map((r, i) => (
+                          <li key={`${l.id}-${i}`} className="flex items-center gap-2">
+                            {r.ok ? <CheckCircle2 className="w-3 h-3 text-emerald-500"/> : <XCircle className="w-3 h-3 text-red-500"/>}
+                            <span className="font-mono">{r.phone}</span>
+                            {!r.ok && r.error && <span className="text-red-500">— {r.error}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </details>
               ))}
             </div>
           )}
