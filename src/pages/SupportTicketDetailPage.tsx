@@ -77,6 +77,7 @@ export default function SupportTicketDetailPage() {
       .channel(`support-detail-${id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_ticket_messages', filter: `ticket_id=eq.${id}` }, load)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'support_tickets', filter: `id=eq.${id}` }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'support_notification_logs', filter: `ticket_id=eq.${id}` }, load)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
