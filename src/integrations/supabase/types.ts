@@ -4448,6 +4448,111 @@ export type Database = {
           },
         ]
       }
+      support_notification_logs: {
+        Row: {
+          audience: string
+          body: string
+          channel: string
+          created_at: string
+          error: string | null
+          event_type: string
+          id: string
+          provider_msg_id: string | null
+          recipient: string
+          status: string
+          template_id: string | null
+          ticket_id: string
+          updated_at: string
+        }
+        Insert: {
+          audience: string
+          body: string
+          channel?: string
+          created_at?: string
+          error?: string | null
+          event_type: string
+          id?: string
+          provider_msg_id?: string | null
+          recipient: string
+          status?: string
+          template_id?: string | null
+          ticket_id: string
+          updated_at?: string
+        }
+        Update: {
+          audience?: string
+          body?: string
+          channel?: string
+          created_at?: string
+          error?: string | null
+          event_type?: string
+          id?: string
+          provider_msg_id?: string | null
+          recipient?: string
+          status?: string
+          template_id?: string | null
+          ticket_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_notification_logs_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "support_notification_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_notification_logs_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_notification_templates: {
+        Row: {
+          audience: string
+          body_template: string
+          channel: string
+          created_at: string
+          enabled: boolean
+          event_type: string
+          extra_recipients: string[]
+          id: string
+          owner_id: string
+          sub_company_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          audience: string
+          body_template: string
+          channel?: string
+          created_at?: string
+          enabled?: boolean
+          event_type: string
+          extra_recipients?: string[]
+          id?: string
+          owner_id: string
+          sub_company_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          audience?: string
+          body_template?: string
+          channel?: string
+          created_at?: string
+          enabled?: boolean
+          event_type?: string
+          extra_recipients?: string[]
+          id?: string
+          owner_id?: string
+          sub_company_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       support_ticket_assignments: {
         Row: {
           changed_by: string
