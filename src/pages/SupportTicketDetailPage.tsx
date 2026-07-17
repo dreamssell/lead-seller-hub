@@ -30,6 +30,7 @@ export default function SupportTicketDetailPage() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [assignments, setAssignments] = useState<AssignmentLog[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [notifLogs, setNotifLogs] = useState<NotifLog[]>([]);
   const [reply, setReply] = useState('');
   const [note, setNote] = useState('');
   const [internalNotes, setInternalNotes] = useState('');
