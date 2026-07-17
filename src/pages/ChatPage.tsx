@@ -63,7 +63,7 @@ import { useIsSupervisor } from '@/hooks/useIsSupervisor';
 import { normalizeChatSendError, NormalizedChatError } from '@/lib/chatErrorMapper';
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
 import { ContactsDialog } from '@/components/chat/ContactsDialog';
-import { Plus, Archive, BellOff, Bell, Tag, Users, Inbox } from 'lucide-react';
+import { Plus, Archive, BellOff, Bell, Tag, Users, Inbox, Maximize2, Minimize2 } from 'lucide-react';
 import { AttendanceFlowDialog } from '@/components/chat/AttendanceFlowDialog';
 import { MoveToFlowMenu } from '@/components/chat/MoveToFlowMenu';
 import { useAuth } from '@/contexts/AuthContext';
