@@ -4538,6 +4538,7 @@ export type Database = {
         Row: {
           assigned_to: string | null
           closed_at: string | null
+          contact_phone: string | null
           created_at: string
           csat_comment: string | null
           csat_rating: number | null
@@ -4557,6 +4558,7 @@ export type Database = {
         Insert: {
           assigned_to?: string | null
           closed_at?: string | null
+          contact_phone?: string | null
           created_at?: string
           csat_comment?: string | null
           csat_rating?: number | null
@@ -4576,6 +4578,7 @@ export type Database = {
         Update: {
           assigned_to?: string | null
           closed_at?: string | null
+          contact_phone?: string | null
           created_at?: string
           csat_comment?: string | null
           csat_rating?: number | null
