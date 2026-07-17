@@ -2571,7 +2571,7 @@ export default function ChatPage() {
               </div>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto chat-scroll">
             {list.filter(c => {
               const q = searchTerm.toLowerCase();
               if (q && !(c.name.toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q) || (c.msg || '').toLowerCase().includes(q))) return false;
