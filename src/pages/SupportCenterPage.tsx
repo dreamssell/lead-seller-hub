@@ -30,11 +30,14 @@ type Ticket = {
 
 type QueuedFile = { file: File; kind: 'image' | 'video'; id: string };
 
+type WhiteLabel = { primary_color: string | null; logo_light_url: string | null; logo_dark_url: string | null; brand_name: string | null };
+
 export default function SupportCenterPage() {
   const { user, access } = useAuth();
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loadingList, setLoadingList] = useState(true);
+  const [brand, setBrand] = useState<WhiteLabel | null>(null);
 
   // form state
   const [title, setTitle] = useState('');
@@ -47,6 +50,19 @@ export default function SupportCenterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [uploadPct, setUploadPct] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // White label — aplica cor/logo da empresa dona quando o usuário é de sub-empresa
+  useEffect(() => {
+    if (!access?.sub_company_id || !access?.owner_id) { setBrand(null); return; }
+    void (async () => {
+      const { data } = await supabase
+        .from('white_label_settings' as any)
+        .select('primary_color, logo_light_url, logo_dark_url, brand_name')
+        .eq('owner_id', access.owner_id).maybeSingle();
+      setBrand(data as any);
+    })();
+  }, [access?.owner_id, access?.sub_company_id]);
+
 
   useEffect(() => {
     if (!user) return;
@@ -191,16 +207,32 @@ export default function SupportCenterPage() {
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
         >
           <header className="flex items-start gap-3">
-            <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
-              <LifeBuoy className="w-5 h-5" />
-            </div>
+            {brand?.logo_light_url ? (
+              <img
+                src={brand.logo_light_url}
+                alt={brand.brand_name || 'Logo'}
+                className="h-10 w-10 rounded-xl object-contain bg-white dark:bg-white/90 p-1 border border-border"
+              />
+            ) : (
+              <div
+                className="p-2.5 rounded-xl bg-primary/10 text-primary"
+                style={brand?.primary_color ? { backgroundColor: `${brand.primary_color}1A`, color: brand.primary_color } : undefined}
+              >
+                <LifeBuoy className="w-5 h-5" />
+              </div>
+            )}
             <div>
-              <h2 className="text-lg font-semibold">Olá, {user?.user_metadata?.display_name || user?.email?.split('@')[0]}! 👋</h2>
+              <h2 className="text-lg font-semibold">
+                Olá, {user?.user_metadata?.display_name || user?.email?.split('@')[0]}! 👋
+              </h2>
               <p className="text-sm text-muted-foreground">
-                Detalhe sua necessidade abaixo para que nossa equipe de especialistas resolva o mais rápido possível.
+                {brand?.brand_name
+                  ? `Atendimento ${brand.brand_name} — detalhe sua necessidade para que resolvamos rapidamente.`
+                  : 'Detalhe sua necessidade abaixo para que nossa equipe de especialistas resolva o mais rápido possível.'}
               </p>
             </div>
           </header>
+
 
           {/* Departamento */}
           <div className="space-y-2">

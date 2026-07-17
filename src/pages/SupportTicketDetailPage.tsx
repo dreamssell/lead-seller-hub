@@ -8,13 +8,15 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { STATUS_META, PRIORITY_META, DEPARTMENT_META, formatTicketNumber, type SupportStatus } from '@/lib/supportHelpers';
+import { STATUS_META, PRIORITY_META, DEPARTMENT_META, formatTicketNumber, slaState, SLA_META, slaRemainingLabel, type SupportStatus } from '@/lib/supportHelpers';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
-import { ArrowLeft, Send, StickyNote, Paperclip, Star, Download } from 'lucide-react';
+import { ArrowLeft, Send, StickyNote, Paperclip, Star, Download, UserCircle2, History, Save } from 'lucide-react';
 
 type Ticket = any;
 type Message = { id: string; ticket_id: string; sender_id: string; is_internal_note: boolean; message: string; created_at: string };
 type Attachment = { id: string; storage_path: string; file_name: string; file_type: string; file_size: number; message_id: string | null };
+type AssignmentLog = { id: string; from_user: string | null; to_user: string | null; changed_by: string; created_at: string };
+type Agent = { user_id: string; display_name: string | null; email: string | null };
 
 export default function SupportTicketDetailPage() {
   const { id } = useParams();
@@ -25,8 +27,12 @@ export default function SupportTicketDetailPage() {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [assignments, setAssignments] = useState<AssignmentLog[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [reply, setReply] = useState('');
   const [note, setNote] = useState('');
+  const [internalNotes, setInternalNotes] = useState('');
+  const [savingNotes, setSavingNotes] = useState(false);
   const [loading, setLoading] = useState(true);
   const [attachmentUrls, setAttachmentUrls] = useState<Record<string, string>>({});
 
@@ -39,6 +45,17 @@ export default function SupportTicketDetailPage() {
     setTicket(t as any);
     setMessages((m as any) || []);
     setAttachments((a as any) || []);
+    setInternalNotes(((t as any)?.internal_notes) || '');
+    if (isOwner) {
+      const [{ data: al }, { data: ag }] = await Promise.all([
+        supabase.from('support_ticket_assignments' as any).select('*').eq('ticket_id', id).order('created_at', { ascending: false }),
+        supabase.from('user_roles').select('user_id, profiles!inner(display_name, email)').eq('role', 'admin' as any),
+      ]);
+      setAssignments((al as any) || []);
+      setAgents((ag as any || []).map((r: any) => ({
+        user_id: r.user_id, display_name: r.profiles?.display_name, email: r.profiles?.email,
+      })));
+    }
     setLoading(false);
 
     // Signed URLs
@@ -99,6 +116,30 @@ export default function SupportTicketDetailPage() {
     if (!ticket) return;
     await supabase.from('support_tickets' as any).update({ csat_rating: rating, status: 'fechado', closed_at: new Date().toISOString() }).eq('id', ticket.id);
     toast({ title: 'Obrigado pelo seu feedback! ⭐' });
+  }
+
+  async function assignTo(userId: string | null) {
+    if (!ticket) return;
+    const { error } = await supabase.from('support_tickets' as any)
+      .update({ assigned_to: userId }).eq('id', ticket.id);
+    if (error) toast({ title: 'Erro ao atribuir', description: error.message, variant: 'destructive' });
+    else toast({ title: userId ? 'Responsável atualizado' : 'Atribuição removida' });
+  }
+
+  async function saveInternalNotes() {
+    if (!ticket) return;
+    setSavingNotes(true);
+    const { error } = await supabase.from('support_tickets' as any)
+      .update({ internal_notes: internalNotes }).eq('id', ticket.id);
+    setSavingNotes(false);
+    if (error) toast({ title: 'Erro ao salvar nota', description: error.message, variant: 'destructive' });
+    else toast({ title: 'Anotação salva' });
+  }
+
+  function agentName(userId: string | null) {
+    if (!userId) return '—';
+    const a = agents.find(x => x.user_id === userId);
+    return a?.display_name || a?.email || userId.slice(0, 8);
   }
 
   if (loading || !ticket) {
@@ -224,6 +265,70 @@ export default function SupportTicketDetailPage() {
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Contato</p>
               <p className="text-sm">{ticket.contact_phone}</p>
+            </div>
+          )}
+          {(() => {
+            const sla = slaState(ticket.resolution_due_at, ticket.status);
+            const meta = SLA_META[sla];
+            return (
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">SLA</p>
+                <span className={`text-xs px-2 py-1 rounded ${meta.badge}`}>
+                  {meta.label} · {slaRemainingLabel(ticket.resolution_due_at)}
+                </span>
+              </div>
+            );
+          })()}
+          {isOwner && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                <UserCircle2 className="w-3 h-3"/> Responsável
+              </p>
+              <Select value={ticket.assigned_to || 'none'} onValueChange={(v) => assignTo(v === 'none' ? null : v)}>
+                <SelectTrigger><SelectValue placeholder="Atribuir a…"/></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem responsável</SelectItem>
+                  {agents.map(a => (
+                    <SelectItem key={a.user_id} value={a.user_id}>{a.display_name || a.email || a.user_id.slice(0,8)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {isOwner && assignments.length > 0 && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                <History className="w-3 h-3"/> Histórico de atribuições
+              </p>
+              <ul className="space-y-1 mt-1 max-h-32 overflow-y-auto text-[11px]">
+                {assignments.map(al => (
+                  <li key={al.id} className="p-1.5 rounded bg-secondary/60">
+                    <span className="text-muted-foreground">{agentName(al.from_user)}</span>
+                    <span className="mx-1">→</span>
+                    <span className="font-medium">{agentName(al.to_user)}</span>
+                    <div className="text-[9px] text-muted-foreground">{new Date(al.created_at).toLocaleString('pt-BR')}</div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {isOwner && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                <StickyNote className="w-3 h-3"/> Anotação interna (só master)
+              </p>
+              <div className="relative mt-1">
+                <Textarea
+                  value={internalNotes}
+                  onChange={(e) => setInternalNotes(e.target.value)}
+                  rows={5}
+                  placeholder="Anote aqui contexto, ações tomadas, contatos externos…"
+                  className="bg-yellow-100 dark:bg-yellow-900/40 border-yellow-400/60 text-yellow-950 dark:text-yellow-50 placeholder:text-yellow-800/60 dark:placeholder:text-yellow-200/60 shadow-inner font-medium"
+                />
+              </div>
+              <Button size="sm" variant="outline" onClick={saveInternalNotes} disabled={savingNotes} className="mt-2 gap-1 w-full">
+                <Save className="w-3.5 h-3.5"/> {savingNotes ? 'Salvando…' : 'Salvar anotação'}
+              </Button>
             </div>
           )}
           {isOwner && ticket.csat_rating && (
