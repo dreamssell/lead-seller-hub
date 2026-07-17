@@ -19,7 +19,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 
 
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -63,7 +63,7 @@ import { useIsSupervisor } from '@/hooks/useIsSupervisor';
 import { normalizeChatSendError, NormalizedChatError } from '@/lib/chatErrorMapper';
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
 import { ContactsDialog } from '@/components/chat/ContactsDialog';
-import { Plus, Archive, BellOff, Bell, Tag, Users, Inbox } from 'lucide-react';
+import { Plus, Archive, BellOff, Bell, Tag, Users, Inbox, Maximize2, Minimize2 } from 'lucide-react';
 import { AttendanceFlowDialog } from '@/components/chat/AttendanceFlowDialog';
 import { MoveToFlowMenu } from '@/components/chat/MoveToFlowMenu';
 import { useAuth } from '@/contexts/AuthContext';
@@ -349,6 +349,34 @@ export default function ChatPage() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Fullscreen (Fullscreen API) para o WhatsApp Completo — otimiza uso em mobile.
+  const chatRootRef = useRef<HTMLDivElement | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange as any);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      document.removeEventListener('webkitfullscreenchange', onChange as any);
+    };
+  }, []);
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      const el: any = chatRootRef.current;
+      if (!document.fullscreenElement) {
+        if (el?.requestFullscreen) await el.requestFullscreen();
+        else if (el?.webkitRequestFullscreen) el.webkitRequestFullscreen();
+        else if ((el as any)?.webkitEnterFullscreen) (el as any).webkitEnterFullscreen();
+      } else {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen();
+      }
+    } catch (err) {
+      console.warn('[fullscreen] toggle falhou', err);
+    }
   }, []);
 
   // Global listeners: whispers + mentions for the current user
@@ -2138,6 +2166,17 @@ export default function ChatPage() {
             Recarregar access
           </Button>
         )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 text-xs ml-auto md:ml-0"
+          onClick={toggleFullscreen}
+          title={isFullscreen ? 'Sair da tela cheia' : 'Entrar em tela cheia'}
+          aria-label={isFullscreen ? 'Sair da tela cheia' : 'Entrar em tela cheia'}
+        >
+          {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          <span className="hidden sm:inline">{isFullscreen ? 'Sair' : 'Tela cheia'}</span>
+        </Button>
         {isOwner && !ownerScopeOk && selectedConv && (
           <Badge variant="outline" className="h-6 border-destructive/40 text-destructive">
             Conversa: {selectedOwnerShort}
@@ -2191,7 +2230,10 @@ export default function ChatPage() {
         )}
       </div>
 
-      <div className="flex h-[calc(100vh-13rem)] glass-card overflow-hidden relative min-w-0">
+      <div
+        ref={chatRootRef}
+        className={`flex glass-card overflow-hidden relative min-w-0 px-safe ${isFullscreen ? 'h-[100dvh] pt-safe pb-safe rounded-none' : 'h-[calc(100dvh-13rem)]'}`}
+      >
         {/* Painel de Diagnóstico */}
         <AnimatePresence>
           {showDebugPanel && (
@@ -2529,7 +2571,7 @@ export default function ChatPage() {
               </div>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto chat-scroll">
             {list.filter(c => {
               const q = searchTerm.toLowerCase();
               if (q && !(c.name.toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q) || (c.msg || '').toLowerCase().includes(q))) return false;
@@ -2879,7 +2921,7 @@ export default function ChatPage() {
                 onClose={() => { setInChatSearchOpen(false); setInChatSearchQuery(''); }}
               />
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col">
+              <div className="flex-1 overflow-y-auto chat-scroll p-4 space-y-3 flex flex-col">
                 {activeChannel === 'telegram' && hasMoreHistory && (
                   <div className="flex justify-center py-2">
                     <Button 
