@@ -514,9 +514,14 @@ export function NotificationTemplatesDialog({
                           )}
                           <div className="flex items-center gap-2">
                             {d.id && (
-                              <Button size="sm" variant="ghost" className="gap-1 h-8" onClick={() => loadVersions(d.id!)}>
-                                <History className="w-3.5 h-3.5"/> Versões
-                              </Button>
+                              <>
+                                <Button size="sm" variant="ghost" className="gap-1 h-8" onClick={() => loadVersions(d.id!)}>
+                                  <History className="w-3.5 h-3.5"/> Versões
+                                </Button>
+                                <Button size="sm" variant="ghost" className="gap-1 h-8" onClick={() => openAudit(d.id!)}>
+                                  <ClipboardList className="w-3.5 h-3.5"/> Auditoria
+                                </Button>
+                              </>
                             )}
                             <Button size="sm" className="gap-1 h-8 ml-auto" onClick={() => save(row)} disabled={saving === key}>
                               <Save className="w-3.5 h-3.5"/> {saving === key ? 'Salvando…' : 'Salvar'}
