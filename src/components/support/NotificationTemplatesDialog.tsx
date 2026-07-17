@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
@@ -6,26 +6,58 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/hooks/use-toast';
-import { Bell, Save } from 'lucide-react';
+import { Bell, Save, Send, History, AlertCircle, CheckCircle2, RotateCcw } from 'lucide-react';
 
-type EventKey = 'created' | 'assigned' | 'status_changed' | 'resolved' | 'daily_reminder_customer' | 'daily_reminder_owner';
+type EventKey =
+  | 'created' | 'assigned' | 'status_changed' | 'resolved'
+  | 'daily_reminder_customer' | 'daily_reminder_owner';
 type Audience = 'customer' | 'owner';
 
 type Row = {
   event_type: EventKey;
   audience: Audience;
   label: string;
-  vars: string;
+  allowedVars: string[];
+  sample: Record<string, string>;
 };
 
+/**
+ * Each row declares the full set of variables the server exposes for that
+ * event. We use this list twice:
+ *   1. Guard the "Ativo" switch: a template can only be enabled if every
+ *      `{{var}}` it references is in `allowedVars` (unknown vars would
+ *      render as empty strings in production).
+ *   2. Seed the sample payload used by the "Enviar teste" flow.
+ */
 const ROWS: Row[] = [
-  { event_type: 'created', audience: 'customer', label: 'Ticket criado → Cliente', vars: '{{number}} {{title}} {{department}} {{priority}}' },
-  { event_type: 'created', audience: 'owner', label: 'Ticket crítico criado → Dono / equipe', vars: '{{number}} {{title}} {{department}}' },
-  { event_type: 'assigned', audience: 'customer', label: 'Responsável designado → Cliente', vars: '{{number}} {{title}} {{assignee_name}}' },
-  { event_type: 'status_changed', audience: 'customer', label: 'Status alterado → Cliente', vars: '{{number}} {{title}} {{status_label}}' },
-  { event_type: 'resolved', audience: 'customer', label: 'Resolvido (CSAT) → Cliente', vars: '{{number}} {{title}}' },
-  { event_type: 'daily_reminder_customer', audience: 'customer', label: 'Lembrete diário → Cliente aguardando', vars: '{{number}} {{title}}' },
-  { event_type: 'daily_reminder_owner', audience: 'owner', label: 'Digest diário → Dono (SLA estourado)', vars: '{{count}} {{list}}' },
+  { event_type: 'created', audience: 'customer',
+    label: 'Ticket criado → Cliente',
+    allowedVars: ['number', 'title', 'department', 'priority', 'status', 'status_label'],
+    sample: { number: '1042', title: 'Boleto não recebido', department: 'financeiro', priority: 'alta', status: 'novo', status_label: '📥 Novo' } },
+  { event_type: 'created', audience: 'owner',
+    label: 'Ticket crítico criado → Dono / equipe',
+    allowedVars: ['number', 'title', 'department', 'priority'],
+    sample: { number: '1042', title: 'Sistema fora do ar', department: 'suporte', priority: 'critica' } },
+  { event_type: 'assigned', audience: 'customer',
+    label: 'Responsável designado → Cliente',
+    allowedVars: ['number', 'title', 'assignee_name'],
+    sample: { number: '1042', title: 'Boleto não recebido', assignee_name: 'Adriele' } },
+  { event_type: 'status_changed', audience: 'customer',
+    label: 'Status alterado → Cliente',
+    allowedVars: ['number', 'title', 'status', 'status_label'],
+    sample: { number: '1042', title: 'Boleto não recebido', status: 'em_analise', status_label: '🔎 Estamos analisando' } },
+  { event_type: 'resolved', audience: 'customer',
+    label: 'Resolvido (CSAT) → Cliente',
+    allowedVars: ['number', 'title'],
+    sample: { number: '1042', title: 'Boleto não recebido' } },
+  { event_type: 'daily_reminder_customer', audience: 'customer',
+    label: 'Lembrete diário → Cliente aguardando',
+    allowedVars: ['number', 'title'],
+    sample: { number: '1042', title: 'Boleto não recebido' } },
+  { event_type: 'daily_reminder_owner', audience: 'owner',
+    label: 'Digest diário → Dono (SLA estourado)',
+    allowedVars: ['count', 'list'],
+    sample: { count: '3', list: '• #1042 — Boleto não recebido\n• #1043 — Renovação atrasada' } },
 ];
 
 type Draft = {
@@ -33,7 +65,23 @@ type Draft = {
   body_template: string;
   extra_recipients: string;
   enabled: boolean;
+  current_version: number;
+  last_tested_at: string | null;
+  original: { body_template: string; extra_recipients: string; enabled: boolean };
 };
+
+type Version = { id: string; version: number; body_template: string; extra_recipients: string[]; notes: string | null; created_at: string };
+
+/** Return the `{{var}}` tokens present in a template. */
+function extractVars(tpl: string): string[] {
+  const set = new Set<string>();
+  for (const m of tpl.matchAll(/\{\{\s*(\w+)\s*\}\}/g)) set.add(m[1]);
+  return [...set];
+}
+
+function normalizePhone(p: string): string {
+  return p.replace(/\D/g, '');
+}
 
 export function NotificationTemplatesDialog({
   open, onOpenChange, ownerId, subCompanyId,
@@ -46,6 +94,10 @@ export function NotificationTemplatesDialog({
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
+  const [testing, setTesting] = useState<string | null>(null);
+  const [testPhones, setTestPhones] = useState<Record<string, string>>({});
+  const [versionsFor, setVersionsFor] = useState<string | null>(null);
+  const [versions, setVersions] = useState<Version[]>([]);
 
   async function load() {
     setLoading(true);
@@ -56,12 +108,18 @@ export function NotificationTemplatesDialog({
     for (const r of ROWS) {
       const key = `${r.event_type}_${r.audience}`;
       const existing = (data as any[] || []).find(t => t.event_type === r.event_type && t.audience === r.audience);
-      next[key] = existing ? {
-        id: existing.id,
-        body_template: existing.body_template,
-        extra_recipients: (existing.extra_recipients || []).join(', '),
-        enabled: existing.enabled,
-      } : { id: null, body_template: '', extra_recipients: '', enabled: true };
+      const body = existing?.body_template || '';
+      const recips = (existing?.extra_recipients || []).join(', ');
+      const enabled = existing?.enabled ?? true;
+      next[key] = {
+        id: existing?.id ?? null,
+        body_template: body,
+        extra_recipients: recips,
+        enabled,
+        current_version: existing?.current_version || 1,
+        last_tested_at: existing?.last_tested_at || null,
+        original: { body_template: body, extra_recipients: recips, enabled },
+      };
     }
     setDrafts(next);
     setLoading(false);
@@ -69,11 +127,40 @@ export function NotificationTemplatesDialog({
 
   useEffect(() => { if (open) void load(); /* eslint-disable-next-line */ }, [open, ownerId, subCompanyId]);
 
+  /** Compute variable-validation state for a row. */
+  function validate(row: Row, d: Draft): { unknown: string[]; canEnable: boolean } {
+    const used = extractVars(d.body_template || '');
+    const unknown = used.filter((v) => !row.allowedVars.includes(v));
+    return { unknown, canEnable: unknown.length === 0 && d.body_template.trim().length > 0 };
+  }
+
+  async function loadVersions(templateId: string) {
+    setVersionsFor(templateId);
+    const { data } = await supabase.from('support_notification_template_versions' as any)
+      .select('*').eq('template_id', templateId).order('version', { ascending: false });
+    setVersions((data as any) || []);
+  }
+
   async function save(row: Row) {
     const key = `${row.event_type}_${row.audience}`;
     const d = drafts[key];
     if (!d) return;
+    const v = validate(row, d);
+    if (d.enabled && !v.canEnable) {
+      toast({
+        title: 'Variáveis inválidas',
+        description: v.unknown.length > 0
+          ? `Removidas ou não suportadas: ${v.unknown.map((x) => `{{${x}}}`).join(', ')}`
+          : 'O corpo do template está vazio.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setSaving(key);
+    const bodyChanged = d.body_template !== d.original.body_template
+      || d.extra_recipients !== d.original.extra_recipients;
+    const newVersion = bodyChanged ? d.current_version + 1 : d.current_version;
+
     const payload = {
       owner_id: ownerId,
       sub_company_id: subCompanyId ?? null,
@@ -83,69 +170,215 @@ export function NotificationTemplatesDialog({
       body_template: d.body_template || '',
       extra_recipients: d.extra_recipients.split(',').map(s => s.trim()).filter(Boolean),
       enabled: d.enabled,
+      current_version: newVersion,
+      last_validated_at: new Date().toISOString(),
     };
-    const { error } = await supabase.from('support_notification_templates' as any)
-      .upsert(payload, { onConflict: 'owner_id,sub_company_id,event_type,audience' });
+    const { data: saved, error } = await supabase.from('support_notification_templates' as any)
+      .upsert(payload, { onConflict: 'owner_id,sub_company_id,event_type,audience' })
+      .select('id')
+      .maybeSingle();
+
+    if (!error && saved && bodyChanged) {
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('support_notification_template_versions' as any).insert({
+        template_id: (saved as any).id,
+        version: newVersion,
+        body_template: payload.body_template,
+        extra_recipients: payload.extra_recipients,
+        notes: d.original.body_template ? 'Editado no painel' : 'Versão inicial',
+        created_by: user?.id ?? null,
+      });
+    }
+
     setSaving(null);
     if (error) toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
-    else { toast({ title: 'Template salvo' }); void load(); }
+    else { toast({ title: bodyChanged ? `Template salvo · v${newVersion}` : 'Configuração salva' }); void load(); }
+  }
+
+  async function testSend(row: Row) {
+    const key = `${row.event_type}_${row.audience}`;
+    const d = drafts[key];
+    if (!d?.id) return toast({ title: 'Salve o template antes de testar', variant: 'destructive' });
+    const phone = normalizePhone(testPhones[key] || '');
+    if (phone.length < 10) return toast({ title: 'Telefone inválido', description: 'Digite o número com DDD (ex.: 5511999998888).', variant: 'destructive' });
+    setTesting(key);
+    const { data, error } = await supabase.functions.invoke('support-notify', {
+      body: { event: 'test_send', template_id: d.id, phone, sample: row.sample },
+    });
+    setTesting(null);
+    if (error) return toast({ title: 'Falha no envio', description: error.message, variant: 'destructive' });
+    const res = data as any;
+    if (res?.ok) {
+      toast({ title: '✅ Teste enviado', description: `Preview: ${(res.preview || '').slice(0, 80)}…` });
+      void load();
+    } else if (res?.error === 'missing_variables') {
+      toast({
+        title: 'Variáveis sem valor no exemplo',
+        description: `Complete: ${(res.missing || []).map((x: string) => `{{${x}}}`).join(', ')}`,
+        variant: 'destructive',
+      });
+    } else {
+      toast({ title: 'Provedor recusou o teste', description: res?.error || 'unknown', variant: 'destructive' });
+    }
+  }
+
+  async function restoreVersion(v: Version) {
+    if (!versionsFor) return;
+    const rowEntry = Object.entries(drafts).find(([, d]) => d.id === versionsFor);
+    if (!rowEntry) return;
+    const [key] = rowEntry;
+    patch(key, {
+      body_template: v.body_template,
+      extra_recipients: (v.extra_recipients || []).join(', '),
+    });
+    setVersionsFor(null);
+    toast({ title: `Versão v${v.version} carregada`, description: 'Clique em Salvar para publicar como nova versão.' });
   }
 
   function patch(key: string, p: Partial<Draft>) {
     setDrafts(prev => ({ ...prev, [key]: { ...prev[key], ...p } }));
   }
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Bell className="w-4 h-4"/> Templates de notificação · WhatsApp</DialogTitle>
-          <DialogDescription>
-            {subCompanyId ? 'Override para esta sub-empresa. Vazio = usa o template da empresa.' :
-              'Templates padrão desta empresa. Cada sub-empresa pode sobrescrever depois.'}
-          </DialogDescription>
-        </DialogHeader>
+  const versionsRow = useMemo(() => {
+    if (!versionsFor) return null;
+    return ROWS.find((r) => drafts[`${r.event_type}_${r.audience}`]?.id === versionsFor) || null;
+  }, [versionsFor, drafts]);
 
-        {loading ? (
-          <div className="h-40 rounded-xl bg-muted/40 animate-pulse" />
-        ) : (
-          <div className="space-y-3">
-            {ROWS.map(row => {
-              const key = `${row.event_type}_${row.audience}`;
-              const d = drafts[key];
-              if (!d) return null;
-              return (
-                <div key={key} className="p-3 rounded-xl border border-border bg-card space-y-2">
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{row.label}</p>
-                      <p className="text-[10px] text-muted-foreground font-mono">Variáveis: {row.vars}</p>
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Bell className="w-4 h-4"/> Templates de notificação · WhatsApp</DialogTitle>
+            <DialogDescription>
+              {subCompanyId ? 'Override para esta sub-empresa. Vazio = usa o template da empresa.' :
+                'Templates padrão desta empresa. Cada sub-empresa pode sobrescrever depois.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {loading ? (
+            <div className="h-40 rounded-xl bg-muted/40 animate-pulse" />
+          ) : (
+            <div className="space-y-3">
+              {ROWS.map(row => {
+                const key = `${row.event_type}_${row.audience}`;
+                const d = drafts[key];
+                if (!d) return null;
+                const v = validate(row, d);
+                const disabledReason = !v.canEnable && d.enabled;
+                return (
+                  <div key={key} className="p-3 rounded-xl border border-border bg-card space-y-2">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium">{row.label}</p>
+                          {d.id && <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">v{d.current_version}</span>}
+                          {d.last_tested_at && (
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3"/> Testado {new Date(d.last_tested_at).toLocaleDateString('pt-BR')}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                          Variáveis: {row.allowedVars.map((x) => `{{${x}}}`).join(' ')}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-muted-foreground">Ativo</span>
+                        <Switch
+                          checked={d.enabled}
+                          disabled={!v.canEnable && !d.enabled}
+                          onCheckedChange={(val) => {
+                            if (val && !v.canEnable) {
+                              toast({ title: 'Corrija as variáveis antes de habilitar', variant: 'destructive' });
+                              return;
+                            }
+                            patch(key, { enabled: val });
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-muted-foreground">Ativo</span>
-                      <Switch checked={d.enabled} onCheckedChange={(v) => patch(key, { enabled: v })} />
+
+                    <Textarea rows={3} value={d.body_template} onChange={(e) => patch(key, { body_template: e.target.value })}
+                      placeholder="Ex.: Recebemos seu ticket #{{number}}. Assunto: {{title}}"/>
+
+                    {v.unknown.length > 0 && (
+                      <div className="flex items-start gap-1.5 text-[11px] text-red-600 dark:text-red-400">
+                        <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0"/>
+                        <span>
+                          Variáveis não suportadas: {v.unknown.map((x) => `{{${x}}}`).join(', ')}.
+                          Corrija antes de ativar (elas rendem em branco em produção).
+                        </span>
+                      </div>
+                    )}
+                    {disabledReason && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                        Este template não pode ser habilitado até as variáveis serem válidas.
+                      </p>
+                    )}
+
+                    {row.audience === 'owner' && (
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Destinatários extras (telefones separados por vírgula)</label>
+                        <Input value={d.extra_recipients} onChange={(e) => patch(key, { extra_recipients: e.target.value })}
+                          placeholder="5511999998888, 5521988887777" className="text-xs mt-1" />
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <Input
+                        value={testPhones[key] || ''}
+                        onChange={(e) => setTestPhones((p) => ({ ...p, [key]: e.target.value }))}
+                        placeholder="Testar em 5511999998888"
+                        className="text-xs h-8 max-w-[220px]"
+                      />
+                      <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => testSend(row)} disabled={testing === key || !d.id}>
+                        <Send className="w-3.5 h-3.5"/> {testing === key ? 'Enviando…' : 'Enviar teste'}
+                      </Button>
+                      {d.id && (
+                        <Button size="sm" variant="ghost" className="gap-1 h-8" onClick={() => loadVersions(d.id!)}>
+                          <History className="w-3.5 h-3.5"/> Versões
+                        </Button>
+                      )}
+                      <Button size="sm" className="gap-1 h-8 ml-auto" onClick={() => save(row)} disabled={saving === key}>
+                        <Save className="w-3.5 h-3.5"/> {saving === key ? 'Salvando…' : 'Salvar'}
+                      </Button>
                     </div>
                   </div>
-                  <Textarea rows={3} value={d.body_template} onChange={(e) => patch(key, { body_template: e.target.value })}
-                    placeholder="Ex.: Recebemos seu ticket #{{number}}. Assunto: {{title}}"/>
-                  {row.audience === 'owner' && (
-                    <div>
-                      <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Destinatários extras (telefones separados por vírgula)</label>
-                      <Input value={d.extra_recipients} onChange={(e) => patch(key, { extra_recipients: e.target.value })}
-                        placeholder="5511999998888, 5521988887777" className="text-xs mt-1" />
-                    </div>
-                  )}
-                  <div className="flex justify-end">
-                    <Button size="sm" onClick={() => save(row)} disabled={saving === key} className="gap-1">
-                      <Save className="w-3.5 h-3.5"/> {saving === key ? 'Salvando…' : 'Salvar'}
+                );
+              })}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!versionsFor} onOpenChange={(v) => !v && setVersionsFor(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><History className="w-4 h-4"/> Histórico de versões</DialogTitle>
+            <DialogDescription>{versionsRow?.label}</DialogDescription>
+          </DialogHeader>
+          {versions.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-6 text-center">Sem versões anteriores salvas.</p>
+          ) : (
+            <div className="space-y-2">
+              {versions.map((v) => (
+                <div key={v.id} className="p-3 rounded-xl border border-border bg-card">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-secondary">v{v.version}</span>
+                    <span className="text-[11px] text-muted-foreground">{new Date(v.created_at).toLocaleString('pt-BR')}</span>
+                    {v.notes && <span className="text-[11px] text-muted-foreground italic">— {v.notes}</span>}
+                    <Button size="sm" variant="outline" className="ml-auto h-7 gap-1" onClick={() => restoreVersion(v)}>
+                      <RotateCcw className="w-3 h-3"/> Carregar
                     </Button>
                   </div>
+                  <pre className="text-[11px] whitespace-pre-wrap font-sans bg-muted/40 p-2 rounded">{v.body_template}</pre>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
