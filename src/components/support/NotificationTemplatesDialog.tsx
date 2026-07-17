@@ -565,6 +565,62 @@ export function NotificationTemplatesDialog({
           )}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={auditOpen} onOpenChange={setAuditOpen}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><ClipboardList className="w-4 h-4"/> Auditoria de envios de teste</DialogTitle>
+            <DialogDescription>
+              {auditFilter ? 'Últimos 50 disparos deste template.' : 'Últimos 50 disparos de teste desta empresa.'}
+            </DialogDescription>
+          </DialogHeader>
+          {auditLogs.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-6 text-center">Nenhum envio de teste registrado ainda.</p>
+          ) : (
+            <div className="space-y-2">
+              {auditLogs.map((l) => (
+                <details key={l.id} className="rounded-xl border border-border bg-card">
+                  <summary className="cursor-pointer p-3 flex items-center gap-2 flex-wrap text-xs">
+                    <span className="text-muted-foreground">{new Date(l.created_at).toLocaleString('pt-BR')}</span>
+                    <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-secondary">{l.event_type} · {l.audience}</span>
+                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="w-3 h-3"/> {l.ok_count}
+                    </span>
+                    {l.fail_count > 0 && (
+                      <span className="flex items-center gap-1 text-red-500">
+                        <XCircle className="w-3 h-3"/> {l.fail_count}
+                      </span>
+                    )}
+                    <span className="ml-auto text-muted-foreground">{l.recipients.length} destinatário(s)</span>
+                  </summary>
+                  <div className="px-3 pb-3 space-y-2 text-[11px]">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Corpo renderizado</p>
+                      <pre className="whitespace-pre-wrap font-sans bg-muted/40 p-2 rounded">{l.rendered_body}</pre>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Payload de exemplo</p>
+                      <pre className="whitespace-pre-wrap font-mono text-[10px] bg-muted/40 p-2 rounded">{JSON.stringify(l.sample_payload, null, 2)}</pre>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Destinatários (E.164)</p>
+                      <ul className="space-y-0.5">
+                        {(l.per_recipient || []).map((r, i) => (
+                          <li key={`${l.id}-${i}`} className="flex items-center gap-2">
+                            {r.ok ? <CheckCircle2 className="w-3 h-3 text-emerald-500"/> : <XCircle className="w-3 h-3 text-red-500"/>}
+                            <span className="font-mono">{r.phone}</span>
+                            {!r.ok && r.error && <span className="text-red-500">— {r.error}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </details>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
