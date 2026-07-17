@@ -135,6 +135,41 @@ export default function SupportTicketDetailPage() {
     }
   }
 
+  async function toggleFutureNotifications() {
+    if (!ticket || !user) return;
+    const cancelling = !ticket.notifications_cancelled_at;
+    if (cancelling) {
+      const reason = window.prompt('Motivo do cancelamento (ficará no histórico):', 'Cliente pediu para parar de receber lembretes');
+      if (reason === null) return;
+      const { error } = await supabase.from('support_tickets' as any).update({
+        notifications_cancelled_at: new Date().toISOString(),
+        notifications_cancelled_by: user.id,
+        notifications_cancelled_reason: reason,
+      }).eq('id', ticket.id);
+      if (error) return toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+      // Cancel already-queued retries so the retry cron drops them next cycle.
+      await supabase.from('support_notification_logs' as any).update({
+        status: 'cancelled', error: 'ticket_notifications_cancelled',
+      }).eq('ticket_id', ticket.id).eq('status', 'retrying');
+      // Register on the ticket timeline as an internal note.
+      await supabase.from('support_ticket_messages' as any).insert({
+        ticket_id: ticket.id, sender_id: user.id, is_internal_note: true,
+        message: `🔕 Notificações futuras canceladas por ${user.email || 'master'}.\nMotivo: ${reason || '(não informado)'}`,
+      });
+      toast({ title: 'Notificações futuras canceladas' });
+    } else {
+      const { error } = await supabase.from('support_tickets' as any).update({
+        notifications_cancelled_at: null, notifications_cancelled_by: null, notifications_cancelled_reason: null,
+      }).eq('id', ticket.id);
+      if (error) return toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+      await supabase.from('support_ticket_messages' as any).insert({
+        ticket_id: ticket.id, sender_id: user.id, is_internal_note: true,
+        message: `🔔 Notificações reativadas por ${user.email || 'master'}.`,
+      });
+      toast({ title: 'Notificações reativadas' });
+    }
+  }
+
   async function saveInternalNotes() {
     if (!ticket) return;
     setSavingNotes(true);
