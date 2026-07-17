@@ -103,6 +103,8 @@ export function NotificationTemplatesDialog({
   const [saving, setSaving] = useState<string | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
   const [testPhones, setTestPhones] = useState<Record<string, string>>({});
+  const [testResults, setTestResults] = useState<Record<string, TestResult[]>>({});
+  const [previewOpen, setPreviewOpen] = useState<Record<string, boolean>>({});
   const [versionsFor, setVersionsFor] = useState<string | null>(null);
   const [versions, setVersions] = useState<Version[]>([]);
 
