@@ -325,6 +325,22 @@ export function NotificationTemplatesDialog({
       variant: okCount === 0 ? 'destructive' : 'default',
     });
     void load();
+    if (auditOpen) void loadAuditLogs(auditFilter);
+  }
+
+  /** Load the last 50 test-send audit rows for this owner (optionally scoped to one template). */
+  async function loadAuditLogs(templateId: string | null) {
+    let q = supabase.from('support_notification_test_logs' as any)
+      .select('*').eq('owner_id', ownerId).order('created_at', { ascending: false }).limit(50);
+    if (templateId) q = q.eq('template_id', templateId);
+    const { data } = await q;
+    setAuditLogs((data as any) || []);
+  }
+
+  function openAudit(templateId: string | null) {
+    setAuditFilter(templateId);
+    setAuditOpen(true);
+    void loadAuditLogs(templateId);
   }
 
   async function restoreVersion(v: Version) {
