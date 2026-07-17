@@ -2921,7 +2921,7 @@ export default function ChatPage() {
                 onClose={() => { setInChatSearchOpen(false); setInChatSearchQuery(''); }}
               />
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col">
+              <div className="flex-1 overflow-y-auto chat-scroll p-4 space-y-3 flex flex-col">
                 {activeChannel === 'telegram' && hasMoreHistory && (
                   <div className="flex justify-center py-2">
                     <Button 
