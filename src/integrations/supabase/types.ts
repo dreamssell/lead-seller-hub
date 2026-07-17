@@ -4450,6 +4450,7 @@ export type Database = {
       }
       support_notification_logs: {
         Row: {
+          attempt: number
           audience: string
           body: string
           channel: string
@@ -4457,6 +4458,9 @@ export type Database = {
           error: string | null
           event_type: string
           id: string
+          last_error_at: string | null
+          max_attempts: number
+          next_retry_at: string | null
           provider_msg_id: string | null
           recipient: string
           status: string
@@ -4465,6 +4469,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          attempt?: number
           audience: string
           body: string
           channel?: string
@@ -4472,6 +4477,9 @@ export type Database = {
           error?: string | null
           event_type: string
           id?: string
+          last_error_at?: string | null
+          max_attempts?: number
+          next_retry_at?: string | null
           provider_msg_id?: string | null
           recipient: string
           status?: string
@@ -4480,6 +4488,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          attempt?: number
           audience?: string
           body?: string
           channel?: string
@@ -4487,6 +4496,9 @@ export type Database = {
           error?: string | null
           event_type?: string
           id?: string
+          last_error_at?: string | null
+          max_attempts?: number
+          next_retry_at?: string | null
           provider_msg_id?: string | null
           recipient?: string
           status?: string
@@ -4511,16 +4523,60 @@ export type Database = {
           },
         ]
       }
+      support_notification_template_versions: {
+        Row: {
+          body_template: string
+          created_at: string
+          created_by: string | null
+          extra_recipients: string[]
+          id: string
+          notes: string | null
+          template_id: string
+          version: number
+        }
+        Insert: {
+          body_template: string
+          created_at?: string
+          created_by?: string | null
+          extra_recipients?: string[]
+          id?: string
+          notes?: string | null
+          template_id: string
+          version: number
+        }
+        Update: {
+          body_template?: string
+          created_at?: string
+          created_by?: string | null
+          extra_recipients?: string[]
+          id?: string
+          notes?: string | null
+          template_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_notification_template_versions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "support_notification_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_notification_templates: {
         Row: {
           audience: string
           body_template: string
           channel: string
           created_at: string
+          current_version: number
           enabled: boolean
           event_type: string
           extra_recipients: string[]
           id: string
+          last_tested_at: string | null
+          last_validated_at: string | null
           owner_id: string
           sub_company_id: string | null
           updated_at: string
@@ -4530,10 +4586,13 @@ export type Database = {
           body_template: string
           channel?: string
           created_at?: string
+          current_version?: number
           enabled?: boolean
           event_type: string
           extra_recipients?: string[]
           id?: string
+          last_tested_at?: string | null
+          last_validated_at?: string | null
           owner_id: string
           sub_company_id?: string | null
           updated_at?: string
@@ -4543,10 +4602,13 @@ export type Database = {
           body_template?: string
           channel?: string
           created_at?: string
+          current_version?: number
           enabled?: boolean
           event_type?: string
           extra_recipients?: string[]
           id?: string
+          last_tested_at?: string | null
+          last_validated_at?: string | null
           owner_id?: string
           sub_company_id?: string | null
           updated_at?: string
@@ -4693,6 +4755,9 @@ export type Database = {
           internal_notes: string | null
           last_activity_at: string
           last_reminder_at: string | null
+          notifications_cancelled_at: string | null
+          notifications_cancelled_by: string | null
+          notifications_cancelled_reason: string | null
           number: number
           owner_id: string
           priority: Database["public"]["Enums"]["support_ticket_priority"]
@@ -4718,6 +4783,9 @@ export type Database = {
           internal_notes?: string | null
           last_activity_at?: string
           last_reminder_at?: string | null
+          notifications_cancelled_at?: string | null
+          notifications_cancelled_by?: string | null
+          notifications_cancelled_reason?: string | null
           number?: number
           owner_id: string
           priority?: Database["public"]["Enums"]["support_ticket_priority"]
@@ -4743,6 +4811,9 @@ export type Database = {
           internal_notes?: string | null
           last_activity_at?: string
           last_reminder_at?: string | null
+          notifications_cancelled_at?: string | null
+          notifications_cancelled_by?: string | null
+          notifications_cancelled_reason?: string | null
           number?: number
           owner_id?: string
           priority?: Database["public"]["Enums"]["support_ticket_priority"]
