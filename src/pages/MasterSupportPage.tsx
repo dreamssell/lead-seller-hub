@@ -9,8 +9,11 @@ import {
   type SupportStatus, type SupportPriority, type SupportDepartment, type SlaState,
 } from '@/lib/supportHelpers';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LifeBuoy, AlertCircle, UserCircle2, Clock3 } from 'lucide-react';
+import { LifeBuoy, AlertCircle, UserCircle2, Clock3, Bell } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { NotificationTemplatesDialog } from '@/components/support/NotificationTemplatesDialog';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Ticket = {
   id: string; number: number; title: string; status: SupportStatus; priority: SupportPriority;
