@@ -204,31 +204,50 @@ export function NotificationTemplatesDialog({
     else { toast({ title: bodyChanged ? `Template salvo · v${newVersion}` : 'Configuração salva' }); void load(); }
   }
 
+  /**
+   * Fire the server-side `test_send` once per recipient. Client-side we already
+   * validated the template body against `row.allowedVars`; the server still
+   * cross-checks the sample payload so we surface `missing_variables` per phone.
+   */
   async function testSend(row: Row) {
     const key = `${row.event_type}_${row.audience}`;
     const d = drafts[key];
     if (!d?.id) return toast({ title: 'Salve o template antes de testar', variant: 'destructive' });
-    const phone = normalizePhone(testPhones[key] || '');
-    if (phone.length < 10) return toast({ title: 'Telefone inválido', description: 'Digite o número com DDD (ex.: 5511999998888).', variant: 'destructive' });
-    setTesting(key);
-    const { data, error } = await supabase.functions.invoke('support-notify', {
-      body: { event: 'test_send', template_id: d.id, phone, sample: row.sample },
-    });
-    setTesting(null);
-    if (error) return toast({ title: 'Falha no envio', description: error.message, variant: 'destructive' });
-    const res = data as any;
-    if (res?.ok) {
-      toast({ title: '✅ Teste enviado', description: `Preview: ${(res.preview || '').slice(0, 80)}…` });
-      void load();
-    } else if (res?.error === 'missing_variables') {
-      toast({
-        title: 'Variáveis sem valor no exemplo',
-        description: `Complete: ${(res.missing || []).map((x: string) => `{{${x}}}`).join(', ')}`,
-        variant: 'destructive',
-      });
-    } else {
-      toast({ title: 'Provedor recusou o teste', description: res?.error || 'unknown', variant: 'destructive' });
+
+    const phones = (testPhones[key] || '')
+      .split(/[,;\n]/)
+      .map((p) => normalizePhone(p))
+      .filter((p) => p.length >= 10);
+    if (phones.length === 0) {
+      return toast({ title: 'Informe ao menos um telefone', description: 'Números com DDI+DDD (ex.: 5511999998888). Separe múltiplos por vírgula ou nova linha.', variant: 'destructive' });
     }
+    const v = validate(row, d);
+    if (!v.canEnable) {
+      return toast({ title: 'Corrija as variáveis antes de testar', description: v.unknown.length ? `Não suportadas: ${v.unknown.map((x) => `{{${x}}}`).join(', ')}` : 'Template vazio.', variant: 'destructive' });
+    }
+
+    setTesting(key);
+    setTestResults((prev) => ({ ...prev, [key]: [] }));
+    const results: TestResult[] = [];
+    for (const phone of phones) {
+      const { data, error } = await supabase.functions.invoke('support-notify', {
+        body: { event: 'test_send', template_id: d.id, phone, sample: row.sample },
+      });
+      const res = data as any;
+      if (error) results.push({ phone, ok: false, error: error.message });
+      else if (res?.ok) results.push({ phone, ok: true });
+      else if (res?.error === 'missing_variables') results.push({ phone, ok: false, error: `faltam: ${(res.missing || []).join(', ')}` });
+      else results.push({ phone, ok: false, error: res?.error || 'erro desconhecido' });
+      setTestResults((prev) => ({ ...prev, [key]: [...results] }));
+    }
+    setTesting(null);
+    const okCount = results.filter((r) => r.ok).length;
+    toast({
+      title: okCount === results.length ? `✅ ${okCount} teste(s) enviado(s)` : `${okCount}/${results.length} enviados`,
+      description: okCount < results.length ? 'Confira os detalhes por destinatário abaixo.' : undefined,
+      variant: okCount === 0 ? 'destructive' : 'default',
+    });
+    void load();
   }
 
   async function restoreVersion(v: Version) {
