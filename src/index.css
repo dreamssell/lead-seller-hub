@@ -186,12 +186,24 @@
     to { opacity: 1; transform: translateY(0); }
   }
 
-  /* Safe-area helpers para top/bottom (headers fixos, bottom nav, FABs). */
+  /* Safe-area helpers para top/bottom/laterais (headers fixos, bottom nav, FABs, notch). */
   .pt-safe { padding-top: env(safe-area-inset-top); }
   .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pl-safe { padding-left: env(safe-area-inset-left); }
+  .pr-safe { padding-right: env(safe-area-inset-right); }
+  .px-safe {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
   .min-h-screen-safe {
     min-height: 100vh;
     min-height: 100dvh;
   }
+  /* Rolagem inercial suave em iOS + evita que o overscroll "vaze" para a página, mantendo o sticky estável. */
+  .chat-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+}
 }
 
