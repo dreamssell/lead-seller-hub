@@ -10,14 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from '@/hooks/use-toast';
 import { STATUS_META, PRIORITY_META, DEPARTMENT_META, formatTicketNumber, slaState, SLA_META, slaRemainingLabel, type SupportStatus } from '@/lib/supportHelpers';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
-import { ArrowLeft, Send, StickyNote, Paperclip, Star, Download, UserCircle2, History, Save, Bell, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { ArrowLeft, Send, StickyNote, Paperclip, Star, Download, UserCircle2, History, Save, Bell, CheckCircle2, XCircle, Clock, BellOff, RefreshCw } from 'lucide-react';
 
 type Ticket = any;
 type Message = { id: string; ticket_id: string; sender_id: string; is_internal_note: boolean; message: string; created_at: string };
 type Attachment = { id: string; storage_path: string; file_name: string; file_type: string; file_size: number; message_id: string | null };
 type AssignmentLog = { id: string; from_user: string | null; to_user: string | null; changed_by: string; created_at: string };
 type Agent = { user_id: string; display_name: string | null; email: string | null };
-type NotifLog = { id: string; event_type: string; audience: string; channel: string; recipient: string; body: string; status: string; error: string | null; created_at: string };
+type NotifLog = { id: string; event_type: string; audience: string; channel: string; recipient: string; body: string; status: string; error: string | null; created_at: string; attempt?: number; max_attempts?: number; next_retry_at?: string | null };
 
 export default function SupportTicketDetailPage() {
   const { id } = useParams();
@@ -135,6 +135,41 @@ export default function SupportTicketDetailPage() {
     }
   }
 
+  async function toggleFutureNotifications() {
+    if (!ticket || !user) return;
+    const cancelling = !ticket.notifications_cancelled_at;
+    if (cancelling) {
+      const reason = window.prompt('Motivo do cancelamento (ficará no histórico):', 'Cliente pediu para parar de receber lembretes');
+      if (reason === null) return;
+      const { error } = await supabase.from('support_tickets' as any).update({
+        notifications_cancelled_at: new Date().toISOString(),
+        notifications_cancelled_by: user.id,
+        notifications_cancelled_reason: reason,
+      }).eq('id', ticket.id);
+      if (error) return toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+      // Cancel already-queued retries so the retry cron drops them next cycle.
+      await supabase.from('support_notification_logs' as any).update({
+        status: 'cancelled', error: 'ticket_notifications_cancelled',
+      }).eq('ticket_id', ticket.id).eq('status', 'retrying');
+      // Register on the ticket timeline as an internal note.
+      await supabase.from('support_ticket_messages' as any).insert({
+        ticket_id: ticket.id, sender_id: user.id, is_internal_note: true,
+        message: `🔕 Notificações futuras canceladas por ${user.email || 'master'}.\nMotivo: ${reason || '(não informado)'}`,
+      });
+      toast({ title: 'Notificações futuras canceladas' });
+    } else {
+      const { error } = await supabase.from('support_tickets' as any).update({
+        notifications_cancelled_at: null, notifications_cancelled_by: null, notifications_cancelled_reason: null,
+      }).eq('id', ticket.id);
+      if (error) return toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+      await supabase.from('support_ticket_messages' as any).insert({
+        ticket_id: ticket.id, sender_id: user.id, is_internal_note: true,
+        message: `🔔 Notificações reativadas por ${user.email || 'master'}.`,
+      });
+      toast({ title: 'Notificações reativadas' });
+    }
+  }
+
   async function saveInternalNotes() {
     if (!ticket) return;
     setSavingNotes(true);
@@ -216,35 +251,113 @@ export default function SupportTicketDetailPage() {
             })}
           </div>
 
-          {isOwner && notifLogs.length > 0 && (
+          {isOwner && (
             <div className="pt-3 border-t border-border">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1">
-                <Bell className="w-3 h-3"/> Notificações enviadas ({notifLogs.length})
-              </p>
-              <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                {notifLogs.map((n) => {
-                  const ok = n.status === 'sent' || n.status === 'delivered';
-                  const fail = n.status === 'failed';
-                  const Icon = ok ? CheckCircle2 : fail ? XCircle : Clock;
-                  const color = ok ? 'text-emerald-500' : fail ? 'text-red-500' : 'text-amber-500';
-                  return (
-                    <div key={n.id} className="flex items-start gap-2 text-[11px] p-2 rounded-lg bg-secondary/50">
-                      <Icon className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${color}`}/>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium">{n.event_type}</span>
-                          <span className="text-muted-foreground">→ {n.audience}</span>
-                          <span className="text-muted-foreground">· {n.channel}</span>
-                          <span className="text-muted-foreground">· {n.recipient}</span>
-                          <span className="ml-auto text-muted-foreground">{new Date(n.created_at).toLocaleString('pt-BR')}</span>
-                        </div>
-                        <p className="text-muted-foreground line-clamp-2 mt-0.5">{n.body}</p>
-                        {n.error && <p className="text-red-500 mt-0.5">Erro: {n.error}</p>}
-                      </div>
+              {(() => {
+                // Consolidated summary by channel × status (currently WhatsApp only, but
+                // the shape is future-proof for e-mail/SMS channels).
+                const byChannel = new Map<string, { sent: number; delivered: number; failed: number; retrying: number; skipped: number; cancelled: number; lastAt: string | null }>();
+                for (const n of notifLogs) {
+                  const ch = n.channel || 'whatsapp';
+                  const cur = byChannel.get(ch) || { sent: 0, delivered: 0, failed: 0, retrying: 0, skipped: 0, cancelled: 0, lastAt: null };
+                  const k = n.status as keyof typeof cur;
+                  if (typeof cur[k] === 'number') (cur[k] as number)++;
+                  if (!cur.lastAt || n.created_at > cur.lastAt) cur.lastAt = n.created_at;
+                  byChannel.set(ch, cur);
+                }
+                
+                return (
+                  <>
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                        <Bell className="w-3 h-3"/> Notificações · resumo por canal
+                      </p>
+                      <Button
+                        size="sm"
+                        variant={ticket.notifications_cancelled_at ? 'default' : 'outline'}
+                        className="ml-auto gap-1 h-7 text-[11px]"
+                        onClick={toggleFutureNotifications}
+                      >
+                        {ticket.notifications_cancelled_at ? <><Bell className="w-3 h-3"/> Reativar notificações</> : <><BellOff className="w-3 h-3"/> Cancelar futuras</>}
+                      </Button>
                     </div>
-                  );
-                })}
-              </div>
+                    {ticket.notifications_cancelled_at && (
+                      <div className="mb-2 text-[11px] p-2 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 flex items-start gap-1.5">
+                        <BellOff className="w-3.5 h-3.5 mt-0.5 shrink-0"/>
+                        <div>
+                          <p className="font-medium">Notificações futuras suspensas em {new Date(ticket.notifications_cancelled_at).toLocaleString('pt-BR')}.</p>
+                          {ticket.notifications_cancelled_reason && <p className="opacity-80">Motivo: {ticket.notifications_cancelled_reason}</p>}
+                        </div>
+                      </div>
+                    )}
+                    {byChannel.size === 0 ? (
+                      <p className="text-[11px] text-muted-foreground italic">Nenhuma notificação disparada ainda.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                        {[...byChannel.entries()].map(([ch, s]) => (
+                          <div key={ch} className="p-2.5 rounded-xl border border-border bg-card">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-xs font-medium uppercase tracking-wider">{ch}</span>
+                              {s.lastAt && <span className="text-[10px] text-muted-foreground">Último: {new Date(s.lastAt).toLocaleString('pt-BR')}</span>}
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 text-[10px]">
+                              <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">✓ Enviado {s.sent}</span>
+                              {s.delivered > 0 && <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-600 dark:text-sky-300">✓✓ Entregue {s.delivered}</span>}
+                              {s.retrying > 0 && <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-300">⟳ Retentando {s.retrying}</span>}
+                              {s.failed > 0 && <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-300">✗ Falhou {s.failed}</span>}
+                              {s.skipped > 0 && <span className="px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">− Ignorado {s.skipped}</span>}
+                              {s.cancelled > 0 && <span className="px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">🔕 Cancelado {s.cancelled}</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+
+              {notifLogs.length > 0 && (
+                <details className="group">
+                  <summary className="text-[11px] text-muted-foreground cursor-pointer hover:text-foreground flex items-center gap-1">
+                    <History className="w-3 h-3"/> Ver logs detalhados ({notifLogs.length})
+                  </summary>
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto mt-2">
+                    {notifLogs.map((n) => {
+                      const ok = n.status === 'sent' || n.status === 'delivered';
+                      const fail = n.status === 'failed';
+                      const retry = n.status === 'retrying';
+                      const Icon = ok ? CheckCircle2 : fail ? XCircle : retry ? RefreshCw : Clock;
+                      const color = ok ? 'text-emerald-500' : fail ? 'text-red-500' : retry ? 'text-amber-500' : 'text-muted-foreground';
+                      return (
+                        <div key={n.id} className="flex items-start gap-2 text-[11px] p-2 rounded-lg bg-secondary/50">
+                          <Icon className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${color} ${retry ? 'animate-spin-slow' : ''}`}/>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium">{n.event_type}</span>
+                              <span className="text-muted-foreground">→ {n.audience}</span>
+                              <span className="text-muted-foreground">· {n.channel}</span>
+                              <span className="text-muted-foreground">· {n.recipient}</span>
+                              {typeof n.attempt === 'number' && n.attempt > 1 && (
+                                <span className="text-[10px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-300">
+                                  tentativa {n.attempt}/{n.max_attempts ?? 4}
+                                </span>
+                              )}
+                              <span className="ml-auto text-muted-foreground">{new Date(n.created_at).toLocaleString('pt-BR')}</span>
+                            </div>
+                            <p className="text-muted-foreground line-clamp-2 mt-0.5">{n.body}</p>
+                            {retry && n.next_retry_at && (
+                              <p className="text-amber-600 dark:text-amber-400 mt-0.5">
+                                Próxima tentativa: {new Date(n.next_retry_at).toLocaleString('pt-BR')} — motivo: {n.error || 'falha temporária'}
+                              </p>
+                            )}
+                            {fail && n.error && <p className="text-red-500 mt-0.5">Erro final: {n.error}</p>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </details>
+              )}
             </div>
           )}
 
