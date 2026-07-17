@@ -27,8 +27,12 @@ export default function SupportTicketDetailPage() {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [assignments, setAssignments] = useState<AssignmentLog[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [reply, setReply] = useState('');
   const [note, setNote] = useState('');
+  const [internalNotes, setInternalNotes] = useState('');
+  const [savingNotes, setSavingNotes] = useState(false);
   const [loading, setLoading] = useState(true);
   const [attachmentUrls, setAttachmentUrls] = useState<Record<string, string>>({});
 
