@@ -212,6 +212,13 @@ export default function MasterSupportPage() {
           })}
         </div>
       )}
+      {user?.id && (
+        <NotificationTemplatesDialog
+          open={templatesOpen}
+          onOpenChange={setTemplatesOpen}
+          ownerId={user.id}
+        />
+      )}
     </AppLayout>
   );
 }
