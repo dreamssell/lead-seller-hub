@@ -821,6 +821,8 @@ export default function FocusedChatPage() {
                       {virtualizer.getVirtualItems().map((vi) => {
                         const m = msgs[vi.index];
                         if (!m) return null;
+                        const _meta = (m as any).metadata;
+                        const isCallEvt = isCallEventMessage(_meta);
                         const isMe = m.sender_type !== 'client';
                         const status = m.metadata?.status;
                         return (
