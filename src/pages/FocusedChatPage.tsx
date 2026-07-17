@@ -839,6 +839,9 @@ export default function FocusedChatPage() {
                               paddingBottom: 8,
                             }}
                           >
+                            {isCallEvt ? (
+                              <CallEventBubble metadata={_meta as any} createdAt={m.created_at} />
+                            ) : (
                             <div className={cn('flex', isMe ? 'justify-end' : 'justify-start')}>
                               <div
                                 className={cn(
@@ -860,6 +863,8 @@ export default function FocusedChatPage() {
                                 </div>
                               </div>
                             </div>
+                            )}
+                          </div>
                           </div>
                         );
                       })}
