@@ -48,3 +48,32 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+/** Estado de SLA de um ticket a partir do prazo de resolução. */
+export type SlaState = 'ok' | 'warn' | 'breach';
+export function slaState(dueIso: string | null | undefined, status: SupportStatus): SlaState {
+  if (!dueIso || status === 'resolvido' || status === 'fechado') return 'ok';
+  const due = new Date(dueIso).getTime();
+  const now = Date.now();
+  const remain = due - now;
+  if (remain <= 0) return 'breach';
+  if (remain <= 2 * 3600 * 1000) return 'warn';
+  return 'ok';
+}
+
+export const SLA_META: Record<SlaState, { label: string; badge: string; border: string }> = {
+  ok:     { label: 'No prazo',      badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300', border: 'border-border' },
+  warn:   { label: 'Perto do SLA',  badge: 'bg-amber-500/10 text-amber-600 dark:text-amber-300',       border: 'border-amber-400/60' },
+  breach: { label: 'SLA estourado', badge: 'bg-red-500/10 text-red-600 dark:text-red-300',              border: 'border-red-500/70' },
+};
+
+export function slaRemainingLabel(dueIso: string | null | undefined): string {
+  if (!dueIso) return '—';
+  const diff = new Date(dueIso).getTime() - Date.now();
+  const abs = Math.abs(diff);
+  const h = Math.floor(abs / 3600000);
+  const m = Math.floor((abs % 3600000) / 60000);
+  const s = h > 0 ? `${h}h${m.toString().padStart(2,'0')}` : `${m}m`;
+  return diff < 0 ? `-${s}` : s;
+}
+
