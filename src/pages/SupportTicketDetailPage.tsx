@@ -118,6 +118,30 @@ export default function SupportTicketDetailPage() {
     toast({ title: 'Obrigado pelo seu feedback! ⭐' });
   }
 
+  async function assignTo(userId: string | null) {
+    if (!ticket) return;
+    const { error } = await supabase.from('support_tickets' as any)
+      .update({ assigned_to: userId }).eq('id', ticket.id);
+    if (error) toast({ title: 'Erro ao atribuir', description: error.message, variant: 'destructive' });
+    else toast({ title: userId ? 'Responsável atualizado' : 'Atribuição removida' });
+  }
+
+  async function saveInternalNotes() {
+    if (!ticket) return;
+    setSavingNotes(true);
+    const { error } = await supabase.from('support_tickets' as any)
+      .update({ internal_notes: internalNotes }).eq('id', ticket.id);
+    setSavingNotes(false);
+    if (error) toast({ title: 'Erro ao salvar nota', description: error.message, variant: 'destructive' });
+    else toast({ title: 'Anotação salva' });
+  }
+
+  function agentName(userId: string | null) {
+    if (!userId) return '—';
+    const a = agents.find(x => x.user_id === userId);
+    return a?.display_name || a?.email || userId.slice(0, 8);
+  }
+
   if (loading || !ticket) {
     return (
       <AppLayout title="Ticket">
