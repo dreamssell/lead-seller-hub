@@ -6,7 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/hooks/use-toast';
-import { Bell, Save, Send, History, AlertCircle, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Bell, Save, Send, History, AlertCircle, CheckCircle2, RotateCcw, Eye, XCircle } from 'lucide-react';
+
+/** Client-side mirror of the server `{{var}}` render — used to preview text before firing the test. */
+function renderTemplate(tpl: string, vars: Record<string, string>): string {
+  return (tpl || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => (vars[k] ?? '').toString());
+}
+
+type TestResult = { phone: string; ok: boolean; error?: string | null };
 
 type EventKey =
   | 'created' | 'assigned' | 'status_changed' | 'resolved'
@@ -96,6 +103,8 @@ export function NotificationTemplatesDialog({
   const [saving, setSaving] = useState<string | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
   const [testPhones, setTestPhones] = useState<Record<string, string>>({});
+  const [testResults, setTestResults] = useState<Record<string, TestResult[]>>({});
+  const [previewOpen, setPreviewOpen] = useState<Record<string, boolean>>({});
   const [versionsFor, setVersionsFor] = useState<string | null>(null);
   const [versions, setVersions] = useState<Version[]>([]);
 
@@ -195,31 +204,50 @@ export function NotificationTemplatesDialog({
     else { toast({ title: bodyChanged ? `Template salvo · v${newVersion}` : 'Configuração salva' }); void load(); }
   }
 
+  /**
+   * Fire the server-side `test_send` once per recipient. Client-side we already
+   * validated the template body against `row.allowedVars`; the server still
+   * cross-checks the sample payload so we surface `missing_variables` per phone.
+   */
   async function testSend(row: Row) {
     const key = `${row.event_type}_${row.audience}`;
     const d = drafts[key];
     if (!d?.id) return toast({ title: 'Salve o template antes de testar', variant: 'destructive' });
-    const phone = normalizePhone(testPhones[key] || '');
-    if (phone.length < 10) return toast({ title: 'Telefone inválido', description: 'Digite o número com DDD (ex.: 5511999998888).', variant: 'destructive' });
-    setTesting(key);
-    const { data, error } = await supabase.functions.invoke('support-notify', {
-      body: { event: 'test_send', template_id: d.id, phone, sample: row.sample },
-    });
-    setTesting(null);
-    if (error) return toast({ title: 'Falha no envio', description: error.message, variant: 'destructive' });
-    const res = data as any;
-    if (res?.ok) {
-      toast({ title: '✅ Teste enviado', description: `Preview: ${(res.preview || '').slice(0, 80)}…` });
-      void load();
-    } else if (res?.error === 'missing_variables') {
-      toast({
-        title: 'Variáveis sem valor no exemplo',
-        description: `Complete: ${(res.missing || []).map((x: string) => `{{${x}}}`).join(', ')}`,
-        variant: 'destructive',
-      });
-    } else {
-      toast({ title: 'Provedor recusou o teste', description: res?.error || 'unknown', variant: 'destructive' });
+
+    const phones = (testPhones[key] || '')
+      .split(/[,;\n]/)
+      .map((p) => normalizePhone(p))
+      .filter((p) => p.length >= 10);
+    if (phones.length === 0) {
+      return toast({ title: 'Informe ao menos um telefone', description: 'Números com DDI+DDD (ex.: 5511999998888). Separe múltiplos por vírgula ou nova linha.', variant: 'destructive' });
     }
+    const v = validate(row, d);
+    if (!v.canEnable) {
+      return toast({ title: 'Corrija as variáveis antes de testar', description: v.unknown.length ? `Não suportadas: ${v.unknown.map((x) => `{{${x}}}`).join(', ')}` : 'Template vazio.', variant: 'destructive' });
+    }
+
+    setTesting(key);
+    setTestResults((prev) => ({ ...prev, [key]: [] }));
+    const results: TestResult[] = [];
+    for (const phone of phones) {
+      const { data, error } = await supabase.functions.invoke('support-notify', {
+        body: { event: 'test_send', template_id: d.id, phone, sample: row.sample },
+      });
+      const res = data as any;
+      if (error) results.push({ phone, ok: false, error: error.message });
+      else if (res?.ok) results.push({ phone, ok: true });
+      else if (res?.error === 'missing_variables') results.push({ phone, ok: false, error: `faltam: ${(res.missing || []).join(', ')}` });
+      else results.push({ phone, ok: false, error: res?.error || 'erro desconhecido' });
+      setTestResults((prev) => ({ ...prev, [key]: [...results] }));
+    }
+    setTesting(null);
+    const okCount = results.filter((r) => r.ok).length;
+    toast({
+      title: okCount === results.length ? `✅ ${okCount} teste(s) enviado(s)` : `${okCount}/${results.length} enviados`,
+      description: okCount < results.length ? 'Confira os detalhes por destinatário abaixo.' : undefined,
+      variant: okCount === 0 ? 'destructive' : 'default',
+    });
+    void load();
   }
 
   async function restoreVersion(v: Version) {
@@ -325,25 +353,60 @@ export function NotificationTemplatesDialog({
                       </div>
                     )}
 
-                    <div className="flex flex-wrap items-center gap-2 pt-1">
-                      <Input
-                        value={testPhones[key] || ''}
-                        onChange={(e) => setTestPhones((p) => ({ ...p, [key]: e.target.value }))}
-                        placeholder="Testar em 5511999998888"
-                        className="text-xs h-8 max-w-[220px]"
-                      />
-                      <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => testSend(row)} disabled={testing === key || !d.id}>
-                        <Send className="w-3.5 h-3.5"/> {testing === key ? 'Enviando…' : 'Enviar teste'}
-                      </Button>
-                      {d.id && (
-                        <Button size="sm" variant="ghost" className="gap-1 h-8" onClick={() => loadVersions(d.id!)}>
-                          <History className="w-3.5 h-3.5"/> Versões
-                        </Button>
-                      )}
-                      <Button size="sm" className="gap-1 h-8 ml-auto" onClick={() => save(row)} disabled={saving === key}>
-                        <Save className="w-3.5 h-3.5"/> {saving === key ? 'Salvando…' : 'Salvar'}
-                      </Button>
-                    </div>
+                    {(() => {
+                      const rawPhones = (testPhones[key] || '').split(/[,;\n]/).map((p) => normalizePhone(p)).filter((p) => p.length >= 10);
+                      const preview = renderTemplate(d.body_template, row.sample);
+                      const results = testResults[key] || [];
+                      const isPreviewOpen = !!previewOpen[key];
+                      return (
+                        <div className="space-y-2 pt-1">
+                          <div className="flex flex-wrap items-start gap-2">
+                            <Textarea
+                              rows={2}
+                              value={testPhones[key] || ''}
+                              onChange={(e) => setTestPhones((p) => ({ ...p, [key]: e.target.value }))}
+                              placeholder="Testar em múltiplos números — separe por vírgula ou nova linha (ex.: 5511999998888, 5521988887777)"
+                              className="text-xs flex-1 min-w-[220px]"
+                            />
+                            <div className="flex flex-col gap-2">
+                              <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => setPreviewOpen((p) => ({ ...p, [key]: !p[key] }))}>
+                                <Eye className="w-3.5 h-3.5"/> {isPreviewOpen ? 'Ocultar prévia' : 'Prévia renderizada'}
+                              </Button>
+                              <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => testSend(row)} disabled={testing === key || !d.id}>
+                                <Send className="w-3.5 h-3.5"/> {testing === key ? `Enviando (${(testResults[key] || []).length}/${rawPhones.length})…` : `Enviar teste${rawPhones.length > 1 ? ` (${rawPhones.length})` : ''}`}
+                              </Button>
+                            </div>
+                          </div>
+                          {isPreviewOpen && (
+                            <div className="rounded-lg border border-border bg-muted/40 p-2">
+                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Prévia com o payload de exemplo</p>
+                              <pre className="text-[11px] whitespace-pre-wrap font-sans">{preview || <span className="italic text-muted-foreground">(vazio)</span>}</pre>
+                            </div>
+                          )}
+                          {results.length > 0 && (
+                            <ul className="text-[11px] space-y-1">
+                              {results.map((r) => (
+                                <li key={r.phone} className="flex items-center gap-2">
+                                  {r.ok ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500"/> : <XCircle className="w-3.5 h-3.5 text-red-500"/>}
+                                  <span className="font-mono">{r.phone}</span>
+                                  {!r.ok && <span className="text-red-500">— {r.error}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          <div className="flex items-center gap-2">
+                            {d.id && (
+                              <Button size="sm" variant="ghost" className="gap-1 h-8" onClick={() => loadVersions(d.id!)}>
+                                <History className="w-3.5 h-3.5"/> Versões
+                              </Button>
+                            )}
+                            <Button size="sm" className="gap-1 h-8 ml-auto" onClick={() => save(row)} disabled={saving === key}>
+                              <Save className="w-3.5 h-3.5"/> {saving === key ? 'Salvando…' : 'Salvar'}
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
