@@ -413,7 +413,9 @@ export function NotificationTemplatesDialog({
                     )}
 
                     {(() => {
-                      const rawPhones = (testPhones[key] || '').split(/[,;\n]/).map((p) => normalizePhone(p)).filter((p) => p.length >= 10);
+                      const parsed = parseAndDedupe(testPhones[key] || '');
+                      const rawPhones = parsed.valid;
+                      const invalidPhones = parsed.invalid;
                       const preview = renderTemplate(d.body_template, row.sample);
                       const results = testResults[key] || [];
                       const isPreviewOpen = !!previewOpen[key];
