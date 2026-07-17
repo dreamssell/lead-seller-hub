@@ -3,28 +3,43 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { STATUS_META, PRIORITY_META, DEPARTMENT_META, KANBAN_COLUMNS, formatTicketNumber, type SupportStatus, type SupportPriority, type SupportDepartment } from '@/lib/supportHelpers';
+import {
+  STATUS_META, PRIORITY_META, DEPARTMENT_META, KANBAN_COLUMNS,
+  formatTicketNumber, slaState, SLA_META, slaRemainingLabel,
+  type SupportStatus, type SupportPriority, type SupportDepartment, type SlaState,
+} from '@/lib/supportHelpers';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LifeBuoy, AlertCircle } from 'lucide-react';
+import { LifeBuoy, AlertCircle, UserCircle2, Clock3 } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 type Ticket = {
   id: string; number: number; title: string; status: SupportStatus; priority: SupportPriority;
   department: SupportDepartment; created_at: string; last_activity_at: string;
   owner_id: string; sub_company_id: string | null; user_id: string; assigned_to: string | null;
+  resolution_due_at: string | null; first_response_due_at: string | null;
 };
+type Agent = { user_id: string; display_name: string | null; email: string | null };
 
 export default function MasterSupportPage() {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterDept, setFilterDept] = useState<'all' | SupportDepartment>('all');
   const [filterPrio, setFilterPrio] = useState<'all' | SupportPriority>('all');
+  const [filterType, setFilterType] = useState<'all' | 'company' | 'subcompany'>('all');
+  const [filterSla, setFilterSla] = useState<'all' | SlaState>('all');
 
   async function load() {
     setLoading(true);
-    const { data } = await supabase.from('support_tickets' as any)
-      .select('*').order('created_at', { ascending: false }).limit(200);
-    setTickets((data as any) || []);
+    const [{ data: t }, { data: a }] = await Promise.all([
+      supabase.from('support_tickets' as any).select('*').order('created_at', { ascending: false }).limit(300),
+      supabase.from('user_roles').select('user_id, profiles!inner(display_name, email)').eq('role', 'admin' as any),
+    ]);
+    setTickets((t as any) || []);
+    setAgents((a as any || []).map((r: any) => ({
+      user_id: r.user_id, display_name: r.profiles?.display_name, email: r.profiles?.email,
+    })));
     setLoading(false);
   }
 
@@ -33,19 +48,41 @@ export default function MasterSupportPage() {
     const ch = supabase.channel('support-master')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, load)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    // Recomputa a cada minuto para atualizar contadores de SLA
+    const iv = setInterval(() => setTickets((prev) => [...prev]), 60000);
+    return () => { supabase.removeChannel(ch); clearInterval(iv); };
   }, []);
 
-  const filtered = useMemo(() => tickets.filter(t =>
-    (filterDept === 'all' || t.department === filterDept) &&
-    (filterPrio === 'all' || t.priority === filterPrio)
-  ), [tickets, filterDept, filterPrio]);
+  const filtered = useMemo(() => tickets.filter(t => {
+    if (filterDept !== 'all' && t.department !== filterDept) return false;
+    if (filterPrio !== 'all' && t.priority !== filterPrio) return false;
+    if (filterType === 'company' && t.sub_company_id) return false;
+    if (filterType === 'subcompany' && !t.sub_company_id) return false;
+    if (filterSla !== 'all' && slaState(t.resolution_due_at, t.status) !== filterSla) return false;
+    return true;
+  }), [tickets, filterDept, filterPrio, filterType, filterSla]);
 
   const counts = useMemo(() => {
     const c: Record<SupportStatus, number> = { novo: 0, em_analise: 0, aguardando_cliente: 0, resolvido: 0, fechado: 0 };
     for (const t of filtered) c[t.status] = (c[t.status] || 0) + 1;
     return c;
   }, [filtered]);
+
+  const slaSummary = useMemo(() => {
+    let breach = 0, warn = 0;
+    for (const t of filtered) {
+      const s = slaState(t.resolution_due_at, t.status);
+      if (s === 'breach') breach++; else if (s === 'warn') warn++;
+    }
+    return { breach, warn };
+  }, [filtered]);
+
+  async function assignTo(ticket: Ticket, userId: string | null) {
+    const { error } = await supabase.from('support_tickets' as any)
+      .update({ assigned_to: userId }).eq('id', ticket.id);
+    if (error) toast({ title: 'Erro ao atribuir', description: error.message, variant: 'destructive' });
+    else toast({ title: userId ? 'Ticket atribuído' : 'Atribuição removida' });
+  }
 
   return (
     <AppLayout title="Central de Suporte · Master" subtitle="Todos os tickets abertos por Empresas e Sub-empresas">
@@ -54,19 +91,46 @@ export default function MasterSupportPage() {
           <LifeBuoy className="w-5 h-5 text-primary" />
           <span className="text-sm font-medium">{filtered.length} tickets</span>
         </div>
+        {slaSummary.breach > 0 && (
+          <span className="text-xs px-2 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-300 flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" /> {slaSummary.breach} estourou SLA
+          </span>
+        )}
+        {slaSummary.warn > 0 && (
+          <span className="text-xs px-2 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-300 flex items-center gap-1">
+            <Clock3 className="w-3 h-3" /> {slaSummary.warn} perto do SLA
+          </span>
+        )}
         <div className="ml-auto flex flex-wrap gap-2">
           <Select value={filterDept} onValueChange={(v: any) => setFilterDept(v)}>
-            <SelectTrigger className="w-[180px] h-9"><SelectValue placeholder="Departamento"/></SelectTrigger>
+            <SelectTrigger className="w-[170px] h-9"><SelectValue placeholder="Departamento"/></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos departamentos</SelectItem>
               {(Object.keys(DEPARTMENT_META) as SupportDepartment[]).map(d => <SelectItem key={d} value={d}>{DEPARTMENT_META[d].label}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
+            <SelectTrigger className="w-[160px] h-9"><SelectValue placeholder="Origem"/></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Empresas + Sub</SelectItem>
+              <SelectItem value="company">Só Empresas</SelectItem>
+              <SelectItem value="subcompany">Só Sub-empresas</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={filterPrio} onValueChange={(v: any) => setFilterPrio(v)}>
-            <SelectTrigger className="w-[160px] h-9"><SelectValue placeholder="Prioridade"/></SelectTrigger>
+            <SelectTrigger className="w-[150px] h-9"><SelectValue placeholder="Prioridade"/></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas prioridades</SelectItem>
               {(Object.keys(PRIORITY_META) as SupportPriority[]).map(p => <SelectItem key={p} value={p}>{PRIORITY_META[p].label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterSla} onValueChange={(v: any) => setFilterSla(v)}>
+            <SelectTrigger className="w-[160px] h-9"><SelectValue placeholder="SLA"/></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos SLAs</SelectItem>
+              <SelectItem value="breach">Estourados</SelectItem>
+              <SelectItem value="warn">Perto do prazo</SelectItem>
+              <SelectItem value="ok">No prazo</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -95,26 +159,43 @@ export default function MasterSupportPage() {
                   {items.map((t) => {
                     const pr = PRIORITY_META[t.priority];
                     const dept = DEPARTMENT_META[t.department];
-                    const critical = t.priority === 'critica';
+                    const sla = slaState(t.resolution_due_at, t.status);
+                    const slaMeta = SLA_META[sla];
+                    const isSub = !!t.sub_company_id;
                     return (
-                      <motion.button
-                        layout key={t.id}
-                        onClick={() => navigate(`/suporte/${t.id}`)}
-                        className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-md ${critical ? 'border-red-400/50 bg-red-500/5' : 'border-border bg-card'}`}
+                      <motion.div layout key={t.id}
+                        className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-md ${slaMeta.border} ${sla === 'breach' ? 'bg-red-500/5' : sla === 'warn' ? 'bg-amber-500/5' : 'bg-card'}`}
                         whileHover={{ y: -1 }}
                       >
-                        <div className="flex items-center gap-1.5 mb-1.5">
-                          {critical && <AlertCircle className="w-3.5 h-3.5 text-red-500 animate-pulse"/>}
-                          <span className="text-[10px] font-mono text-muted-foreground">{formatTicketNumber(t.number)}</span>
-                          <span className={`ml-auto text-[10px] px-1.5 rounded ${pr.badge}`}>{pr.label}</span>
+                        <button onClick={() => navigate(`/suporte/${t.id}`)} className="w-full text-left">
+                          <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                            {sla === 'breach' && <AlertCircle className="w-3.5 h-3.5 text-red-500 animate-pulse"/>}
+                            <span className="text-[10px] font-mono text-muted-foreground">{formatTicketNumber(t.number)}</span>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded ${isSub ? 'bg-violet-500/10 text-violet-600 dark:text-violet-300' : 'bg-sky-500/10 text-sky-600 dark:text-sky-300'}`}>
+                              {isSub ? 'Sub' : 'Empresa'}
+                            </span>
+                            <span className={`ml-auto text-[10px] px-1.5 rounded ${pr.badge}`}>{pr.label}</span>
+                          </div>
+                          <p className="text-xs font-medium line-clamp-2">{t.title}</p>
+                          <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
+                            <span>{dept.label}</span>
+                            <span>·</span>
+                            <span className={`px-1.5 py-0.5 rounded ${slaMeta.badge}`}>SLA {slaRemainingLabel(t.resolution_due_at)}</span>
+                          </div>
+                        </button>
+                        <div className="mt-2 pt-2 border-t border-border/60 flex items-center gap-1.5">
+                          <UserCircle2 className="w-3.5 h-3.5 text-muted-foreground shrink-0"/>
+                          <Select value={t.assigned_to || 'none'} onValueChange={(v) => assignTo(t, v === 'none' ? null : v)}>
+                            <SelectTrigger className="h-7 text-[11px] px-2"><SelectValue placeholder="Atribuir…"/></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Sem responsável</SelectItem>
+                              {agents.map(a => (
+                                <SelectItem key={a.user_id} value={a.user_id}>{a.display_name || a.email || a.user_id.slice(0,8)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
-                        <p className="text-xs font-medium line-clamp-2">{t.title}</p>
-                        <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
-                          <span>{dept.label}</span>
-                          <span>·</span>
-                          <span>{new Date(t.last_activity_at).toLocaleDateString('pt-BR')}</span>
-                        </div>
-                      </motion.button>
+                      </motion.div>
                     );
                   })}
                 </div>
