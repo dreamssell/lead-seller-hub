@@ -351,6 +351,34 @@ export default function ChatPage() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // Fullscreen (Fullscreen API) para o WhatsApp Completo — otimiza uso em mobile.
+  const chatRootRef = useRef<HTMLDivElement | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange as any);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      document.removeEventListener('webkitfullscreenchange', onChange as any);
+    };
+  }, []);
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      const el: any = chatRootRef.current;
+      if (!document.fullscreenElement) {
+        if (el?.requestFullscreen) await el.requestFullscreen();
+        else if (el?.webkitRequestFullscreen) el.webkitRequestFullscreen();
+        else if ((el as any)?.webkitEnterFullscreen) (el as any).webkitEnterFullscreen();
+      } else {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen();
+      }
+    } catch (err) {
+      console.warn('[fullscreen] toggle falhou', err);
+    }
+  }, []);
+
   // Global listeners: whispers + mentions for the current user
   useEffect(() => {
     if (!currentUserId) return;
