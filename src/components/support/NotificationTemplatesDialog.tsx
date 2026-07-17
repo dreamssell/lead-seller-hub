@@ -353,25 +353,60 @@ export function NotificationTemplatesDialog({
                       </div>
                     )}
 
-                    <div className="flex flex-wrap items-center gap-2 pt-1">
-                      <Input
-                        value={testPhones[key] || ''}
-                        onChange={(e) => setTestPhones((p) => ({ ...p, [key]: e.target.value }))}
-                        placeholder="Testar em 5511999998888"
-                        className="text-xs h-8 max-w-[220px]"
-                      />
-                      <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => testSend(row)} disabled={testing === key || !d.id}>
-                        <Send className="w-3.5 h-3.5"/> {testing === key ? 'Enviando…' : 'Enviar teste'}
-                      </Button>
-                      {d.id && (
-                        <Button size="sm" variant="ghost" className="gap-1 h-8" onClick={() => loadVersions(d.id!)}>
-                          <History className="w-3.5 h-3.5"/> Versões
-                        </Button>
-                      )}
-                      <Button size="sm" className="gap-1 h-8 ml-auto" onClick={() => save(row)} disabled={saving === key}>
-                        <Save className="w-3.5 h-3.5"/> {saving === key ? 'Salvando…' : 'Salvar'}
-                      </Button>
-                    </div>
+                    {(() => {
+                      const rawPhones = (testPhones[key] || '').split(/[,;\n]/).map((p) => normalizePhone(p)).filter((p) => p.length >= 10);
+                      const preview = renderTemplate(d.body_template, row.sample);
+                      const results = testResults[key] || [];
+                      const isPreviewOpen = !!previewOpen[key];
+                      return (
+                        <div className="space-y-2 pt-1">
+                          <div className="flex flex-wrap items-start gap-2">
+                            <Textarea
+                              rows={2}
+                              value={testPhones[key] || ''}
+                              onChange={(e) => setTestPhones((p) => ({ ...p, [key]: e.target.value }))}
+                              placeholder="Testar em múltiplos números — separe por vírgula ou nova linha (ex.: 5511999998888, 5521988887777)"
+                              className="text-xs flex-1 min-w-[220px]"
+                            />
+                            <div className="flex flex-col gap-2">
+                              <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => setPreviewOpen((p) => ({ ...p, [key]: !p[key] }))}>
+                                <Eye className="w-3.5 h-3.5"/> {isPreviewOpen ? 'Ocultar prévia' : 'Prévia renderizada'}
+                              </Button>
+                              <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => testSend(row)} disabled={testing === key || !d.id}>
+                                <Send className="w-3.5 h-3.5"/> {testing === key ? `Enviando (${(testResults[key] || []).length}/${rawPhones.length})…` : `Enviar teste${rawPhones.length > 1 ? ` (${rawPhones.length})` : ''}`}
+                              </Button>
+                            </div>
+                          </div>
+                          {isPreviewOpen && (
+                            <div className="rounded-lg border border-border bg-muted/40 p-2">
+                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Prévia com o payload de exemplo</p>
+                              <pre className="text-[11px] whitespace-pre-wrap font-sans">{preview || <span className="italic text-muted-foreground">(vazio)</span>}</pre>
+                            </div>
+                          )}
+                          {results.length > 0 && (
+                            <ul className="text-[11px] space-y-1">
+                              {results.map((r) => (
+                                <li key={r.phone} className="flex items-center gap-2">
+                                  {r.ok ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500"/> : <XCircle className="w-3.5 h-3.5 text-red-500"/>}
+                                  <span className="font-mono">{r.phone}</span>
+                                  {!r.ok && <span className="text-red-500">— {r.error}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          <div className="flex items-center gap-2">
+                            {d.id && (
+                              <Button size="sm" variant="ghost" className="gap-1 h-8" onClick={() => loadVersions(d.id!)}>
+                                <History className="w-3.5 h-3.5"/> Versões
+                              </Button>
+                            )}
+                            <Button size="sm" className="gap-1 h-8 ml-auto" onClick={() => save(row)} disabled={saving === key}>
+                              <Save className="w-3.5 h-3.5"/> {saving === key ? 'Salvando…' : 'Salvar'}
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
