@@ -216,6 +216,38 @@ export default function SupportTicketDetailPage() {
             })}
           </div>
 
+          {isOwner && notifLogs.length > 0 && (
+            <div className="pt-3 border-t border-border">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1">
+                <Bell className="w-3 h-3"/> Notificações enviadas ({notifLogs.length})
+              </p>
+              <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                {notifLogs.map((n) => {
+                  const ok = n.status === 'sent' || n.status === 'delivered';
+                  const fail = n.status === 'failed';
+                  const Icon = ok ? CheckCircle2 : fail ? XCircle : Clock;
+                  const color = ok ? 'text-emerald-500' : fail ? 'text-red-500' : 'text-amber-500';
+                  return (
+                    <div key={n.id} className="flex items-start gap-2 text-[11px] p-2 rounded-lg bg-secondary/50">
+                      <Icon className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${color}`}/>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{n.event_type}</span>
+                          <span className="text-muted-foreground">→ {n.audience}</span>
+                          <span className="text-muted-foreground">· {n.channel}</span>
+                          <span className="text-muted-foreground">· {n.recipient}</span>
+                          <span className="ml-auto text-muted-foreground">{new Date(n.created_at).toLocaleString('pt-BR')}</span>
+                        </div>
+                        <p className="text-muted-foreground line-clamp-2 mt-0.5">{n.body}</p>
+                        {n.error && <p className="text-red-500 mt-0.5">Erro: {n.error}</p>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Composers */}
           {ticket.status !== 'fechado' && (
             <div className="space-y-3 pt-2 border-t border-border">
