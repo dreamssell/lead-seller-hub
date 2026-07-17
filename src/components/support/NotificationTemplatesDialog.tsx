@@ -15,6 +15,21 @@ function renderTemplate(tpl: string, vars: Record<string, string>): string {
 
 type TestResult = { phone: string; ok: boolean; error?: string | null };
 
+type TestLog = {
+  id: string;
+  created_at: string;
+  event_type: string;
+  audience: string;
+  template_id: string | null;
+  rendered_body: string;
+  sample_payload: Record<string, any>;
+  recipients: string[];
+  per_recipient: TestResult[];
+  ok_count: number;
+  fail_count: number;
+  triggered_by: string | null;
+};
+
 type EventKey =
   | 'created' | 'assigned' | 'status_changed' | 'resolved'
   | 'daily_reminder_customer' | 'daily_reminder_owner';
