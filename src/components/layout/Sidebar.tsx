@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import logo from '@/assets/logo.png';
-import { LogOut } from 'lucide-react';
+import { LogOut, LifeBuoy, Shield } from 'lucide-react';
 import { navSections } from '@/lib/navigation';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -101,31 +101,60 @@ export function Sidebar({ onNavigate, collapsible = false, expanded = true }: Si
       </nav>
 
       {/* Footer */}
-      <div className="px-2 py-3 border-t border-border space-y-2">
+      <div className="px-2 py-3 border-t border-border space-y-1">
+        {/* Central de Ajuda — todos os usuários autenticados */}
+        {(() => {
+          const isActive = location.pathname.startsWith('/suporte') && !location.pathname.startsWith('/suporte/master');
+          const btn = (
+            <motion.button
+              onClick={() => go('/suporte')}
+              className={`sidebar-item w-full text-primary hover:bg-primary/10 ${isActive ? 'active' : ''} ${showLabels ? '' : 'justify-center px-0'}`}
+              whileTap={{ scale: 0.98 }} aria-label="Central de Ajuda"
+            >
+              <LifeBuoy className="w-4 h-4 shrink-0" />
+              {showLabels && <span>Central de Ajuda</span>}
+            </motion.button>
+          );
+          return showLabels ? btn : (
+            <Tooltip delayDuration={0}><TooltipTrigger asChild>{btn}</TooltipTrigger><TooltipContent side="right">Central de Ajuda</TooltipContent></Tooltip>
+          );
+        })()}
+
+        {/* Painel Master — apenas dono da plataforma */}
+        {isOwner && (() => {
+          const isActive = location.pathname === '/suporte/master';
+          const btn = (
+            <motion.button
+              onClick={() => go('/suporte/master')}
+              className={`sidebar-item w-full ${isActive ? 'active' : ''} ${showLabels ? '' : 'justify-center px-0'}`}
+              whileTap={{ scale: 0.98 }} aria-label="Suporte Master"
+            >
+              <Shield className="w-4 h-4 shrink-0" />
+              {showLabels && <span>Suporte Master</span>}
+            </motion.button>
+          );
+          return showLabels ? btn : (
+            <Tooltip delayDuration={0}><TooltipTrigger asChild>{btn}</TooltipTrigger><TooltipContent side="right">Suporte Master</TooltipContent></Tooltip>
+          );
+        })()}
+
         {(() => {
           const btn = (
             <motion.button
               onClick={signOut}
-              className={`sidebar-item w-full text-destructive hover:bg-destructive/10 ${
-                showLabels ? '' : 'justify-center px-0'
-              }`}
-              whileTap={{ scale: 0.98 }}
-              aria-label="Sair"
+              className={`sidebar-item w-full text-destructive hover:bg-destructive/10 ${showLabels ? '' : 'justify-center px-0'}`}
+              whileTap={{ scale: 0.98 }} aria-label="Sair"
             >
               <LogOut className="w-4 h-4 shrink-0" />
               {showLabels && <span>Sair</span>}
             </motion.button>
           );
-          if (showLabels) return btn;
-          return (
-            <Tooltip delayDuration={0}>
-              <TooltipTrigger asChild>{btn}</TooltipTrigger>
-              <TooltipContent side="right">Sair</TooltipContent>
-            </Tooltip>
+          return showLabels ? btn : (
+            <Tooltip delayDuration={0}><TooltipTrigger asChild>{btn}</TooltipTrigger><TooltipContent side="right">Sair</TooltipContent></Tooltip>
           );
         })()}
         {showLabels && (
-          <p className="text-[10px] text-muted-foreground text-center">© 2026 Lead Seller v1.0</p>
+          <p className="text-[10px] text-muted-foreground text-center pt-1">© 2026 Lead Seller v1.0</p>
         )}
       </div>
     </aside>
