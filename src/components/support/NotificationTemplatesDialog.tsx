@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/hooks/use-toast';
-import { Bell, Save, Send, History, AlertCircle, CheckCircle2, RotateCcw, Eye, XCircle } from 'lucide-react';
+import { Bell, Save, Send, History, AlertCircle, CheckCircle2, RotateCcw, Eye, XCircle, ClipboardList } from 'lucide-react';
 
 /** Client-side mirror of the server `{{var}}` render — used to preview text before firing the test. */
 function renderTemplate(tpl: string, vars: Record<string, string>): string {
