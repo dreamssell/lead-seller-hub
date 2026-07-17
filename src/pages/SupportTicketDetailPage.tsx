@@ -113,8 +113,9 @@ export default function SupportTicketDetailPage() {
     const patch: any = { status: s };
     if (s === 'fechado' || s === 'resolvido') patch.closed_at = new Date().toISOString();
     const { error } = await supabase.from('support_tickets' as any).update(patch).eq('id', ticket.id);
-    if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-    else void supabase.functions.invoke('support-notify', { body: { ticket_id: ticket.id, event: 'status_changed' } }).catch(() => {});
+    if (error) return toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+    const event = s === 'resolvido' ? 'resolved' : 'status_changed';
+    void supabase.functions.invoke('support-notify', { body: { ticket_id: ticket.id, event } }).catch(() => {});
   }
 
   async function submitCsat(rating: number) {
@@ -128,7 +129,10 @@ export default function SupportTicketDetailPage() {
     const { error } = await supabase.from('support_tickets' as any)
       .update({ assigned_to: userId }).eq('id', ticket.id);
     if (error) toast({ title: 'Erro ao atribuir', description: error.message, variant: 'destructive' });
-    else toast({ title: userId ? 'Responsável atualizado' : 'Atribuição removida' });
+    else {
+      toast({ title: userId ? 'Responsável atualizado' : 'Atribuição removida' });
+      if (userId) void supabase.functions.invoke('support-notify', { body: { ticket_id: ticket.id, event: 'assigned' } }).catch(() => {});
+    }
   }
 
   async function saveInternalNotes() {
