@@ -245,12 +245,20 @@ export function NotificationTemplatesDialog({
     const d = drafts[key];
     if (!d?.id) return toast({ title: 'Salve o template antes de testar', variant: 'destructive' });
 
-    const phones = (testPhones[key] || '')
-      .split(/[,;\n]/)
-      .map((p) => normalizePhone(p))
-      .filter((p) => p.length >= 10);
+    const { valid: phones, invalid } = parseAndDedupe(testPhones[key] || '');
+    if (invalid.length > 0) {
+      return toast({
+        title: 'Telefones inválidos',
+        description: `Não foi possível normalizar para E.164: ${invalid.join(', ')}.`,
+        variant: 'destructive',
+      });
+    }
     if (phones.length === 0) {
-      return toast({ title: 'Informe ao menos um telefone', description: 'Números com DDI+DDD (ex.: 5511999998888). Separe múltiplos por vírgula ou nova linha.', variant: 'destructive' });
+      return toast({
+        title: 'Informe ao menos um telefone',
+        description: 'Números com DDD (BR) ou DDI internacional. Separe múltiplos por vírgula ou nova linha — duplicados são removidos automaticamente.',
+        variant: 'destructive',
+      });
     }
     const v = validate(row, d);
     if (!v.canEnable) {
@@ -272,7 +280,27 @@ export function NotificationTemplatesDialog({
       setTestResults((prev) => ({ ...prev, [key]: [...results] }));
     }
     setTesting(null);
+
+    // Audit log: one row per batch, readable in the "Auditoria de testes" panel.
+    const { data: { user } } = await supabase.auth.getUser();
     const okCount = results.filter((r) => r.ok).length;
+    const failCount = results.length - okCount;
+    await supabase.from('support_notification_test_logs' as any).insert({
+      owner_id: ownerId,
+      sub_company_id: subCompanyId ?? null,
+      template_id: d.id,
+      event_type: row.event_type,
+      audience: row.audience,
+      channel: 'whatsapp',
+      rendered_body: renderTemplate(d.body_template, row.sample),
+      sample_payload: row.sample,
+      recipients: phones,
+      per_recipient: results,
+      ok_count: okCount,
+      fail_count: failCount,
+      triggered_by: user?.id ?? null,
+    });
+
     toast({
       title: okCount === results.length ? `✅ ${okCount} teste(s) enviado(s)` : `${okCount}/${results.length} enviados`,
       description: okCount < results.length ? 'Confira os detalhes por destinatário abaixo.' : undefined,
