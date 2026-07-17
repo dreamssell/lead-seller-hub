@@ -9,8 +9,11 @@ import {
   type SupportStatus, type SupportPriority, type SupportDepartment, type SlaState,
 } from '@/lib/supportHelpers';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LifeBuoy, AlertCircle, UserCircle2, Clock3 } from 'lucide-react';
+import { LifeBuoy, AlertCircle, UserCircle2, Clock3, Bell } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { NotificationTemplatesDialog } from '@/components/support/NotificationTemplatesDialog';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Ticket = {
   id: string; number: number; title: string; status: SupportStatus; priority: SupportPriority;
@@ -22,6 +25,7 @@ type Agent = { user_id: string; display_name: string | null; email: string | nul
 
 export default function MasterSupportPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +33,7 @@ export default function MasterSupportPage() {
   const [filterPrio, setFilterPrio] = useState<'all' | SupportPriority>('all');
   const [filterType, setFilterType] = useState<'all' | 'company' | 'subcompany'>('all');
   const [filterSla, setFilterSla] = useState<'all' | SlaState>('all');
+  const [templatesOpen, setTemplatesOpen] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -101,7 +106,10 @@ export default function MasterSupportPage() {
             <Clock3 className="w-3 h-3" /> {slaSummary.warn} perto do SLA
           </span>
         )}
-        <div className="ml-auto flex flex-wrap gap-2">
+        <div className="ml-auto flex flex-wrap gap-2 items-center">
+          <Button size="sm" variant="outline" className="gap-1 h-9" onClick={() => setTemplatesOpen(true)}>
+            <Bell className="w-3.5 h-3.5"/> Templates
+          </Button>
           <Select value={filterDept} onValueChange={(v: any) => setFilterDept(v)}>
             <SelectTrigger className="w-[170px] h-9"><SelectValue placeholder="Departamento"/></SelectTrigger>
             <SelectContent>
@@ -203,6 +211,13 @@ export default function MasterSupportPage() {
             );
           })}
         </div>
+      )}
+      {user?.id && (
+        <NotificationTemplatesDialog
+          open={templatesOpen}
+          onOpenChange={setTemplatesOpen}
+          ownerId={user.id}
+        />
       )}
     </AppLayout>
   );

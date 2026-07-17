@@ -10,13 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from '@/hooks/use-toast';
 import { STATUS_META, PRIORITY_META, DEPARTMENT_META, formatTicketNumber, slaState, SLA_META, slaRemainingLabel, type SupportStatus } from '@/lib/supportHelpers';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
-import { ArrowLeft, Send, StickyNote, Paperclip, Star, Download, UserCircle2, History, Save } from 'lucide-react';
+import { ArrowLeft, Send, StickyNote, Paperclip, Star, Download, UserCircle2, History, Save, Bell, CheckCircle2, XCircle, Clock } from 'lucide-react';
 
 type Ticket = any;
 type Message = { id: string; ticket_id: string; sender_id: string; is_internal_note: boolean; message: string; created_at: string };
 type Attachment = { id: string; storage_path: string; file_name: string; file_type: string; file_size: number; message_id: string | null };
 type AssignmentLog = { id: string; from_user: string | null; to_user: string | null; changed_by: string; created_at: string };
 type Agent = { user_id: string; display_name: string | null; email: string | null };
+type NotifLog = { id: string; event_type: string; audience: string; channel: string; recipient: string; body: string; status: string; error: string | null; created_at: string };
 
 export default function SupportTicketDetailPage() {
   const { id } = useParams();
@@ -29,6 +30,7 @@ export default function SupportTicketDetailPage() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [assignments, setAssignments] = useState<AssignmentLog[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [notifLogs, setNotifLogs] = useState<NotifLog[]>([]);
   const [reply, setReply] = useState('');
   const [note, setNote] = useState('');
   const [internalNotes, setInternalNotes] = useState('');
@@ -42,9 +44,11 @@ export default function SupportTicketDetailPage() {
     const { data: t } = await supabase.from('support_tickets' as any).select('*').eq('id', id).maybeSingle();
     const { data: m } = await supabase.from('support_ticket_messages' as any).select('*').eq('ticket_id', id).order('created_at');
     const { data: a } = await supabase.from('support_ticket_attachments' as any).select('*').eq('ticket_id', id);
+    const { data: nl } = await supabase.from('support_notification_logs' as any).select('*').eq('ticket_id', id).order('created_at');
     setTicket(t as any);
     setMessages((m as any) || []);
     setAttachments((a as any) || []);
+    setNotifLogs((nl as any) || []);
     setInternalNotes(((t as any)?.internal_notes) || '');
     if (isOwner) {
       const [{ data: al }, { data: ag }] = await Promise.all([
@@ -73,6 +77,7 @@ export default function SupportTicketDetailPage() {
       .channel(`support-detail-${id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_ticket_messages', filter: `ticket_id=eq.${id}` }, load)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'support_tickets', filter: `id=eq.${id}` }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'support_notification_logs', filter: `ticket_id=eq.${id}` }, load)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -108,8 +113,9 @@ export default function SupportTicketDetailPage() {
     const patch: any = { status: s };
     if (s === 'fechado' || s === 'resolvido') patch.closed_at = new Date().toISOString();
     const { error } = await supabase.from('support_tickets' as any).update(patch).eq('id', ticket.id);
-    if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-    else void supabase.functions.invoke('support-notify', { body: { ticket_id: ticket.id, event: 'status_changed' } }).catch(() => {});
+    if (error) return toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+    const event = s === 'resolvido' ? 'resolved' : 'status_changed';
+    void supabase.functions.invoke('support-notify', { body: { ticket_id: ticket.id, event } }).catch(() => {});
   }
 
   async function submitCsat(rating: number) {
@@ -123,7 +129,10 @@ export default function SupportTicketDetailPage() {
     const { error } = await supabase.from('support_tickets' as any)
       .update({ assigned_to: userId }).eq('id', ticket.id);
     if (error) toast({ title: 'Erro ao atribuir', description: error.message, variant: 'destructive' });
-    else toast({ title: userId ? 'Responsável atualizado' : 'Atribuição removida' });
+    else {
+      toast({ title: userId ? 'Responsável atualizado' : 'Atribuição removida' });
+      if (userId) void supabase.functions.invoke('support-notify', { body: { ticket_id: ticket.id, event: 'assigned' } }).catch(() => {});
+    }
   }
 
   async function saveInternalNotes() {
@@ -206,6 +215,38 @@ export default function SupportTicketDetailPage() {
               );
             })}
           </div>
+
+          {isOwner && notifLogs.length > 0 && (
+            <div className="pt-3 border-t border-border">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1">
+                <Bell className="w-3 h-3"/> Notificações enviadas ({notifLogs.length})
+              </p>
+              <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                {notifLogs.map((n) => {
+                  const ok = n.status === 'sent' || n.status === 'delivered';
+                  const fail = n.status === 'failed';
+                  const Icon = ok ? CheckCircle2 : fail ? XCircle : Clock;
+                  const color = ok ? 'text-emerald-500' : fail ? 'text-red-500' : 'text-amber-500';
+                  return (
+                    <div key={n.id} className="flex items-start gap-2 text-[11px] p-2 rounded-lg bg-secondary/50">
+                      <Icon className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${color}`}/>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{n.event_type}</span>
+                          <span className="text-muted-foreground">→ {n.audience}</span>
+                          <span className="text-muted-foreground">· {n.channel}</span>
+                          <span className="text-muted-foreground">· {n.recipient}</span>
+                          <span className="ml-auto text-muted-foreground">{new Date(n.created_at).toLocaleString('pt-BR')}</span>
+                        </div>
+                        <p className="text-muted-foreground line-clamp-2 mt-0.5">{n.body}</p>
+                        {n.error && <p className="text-red-500 mt-0.5">Erro: {n.error}</p>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Composers */}
           {ticket.status !== 'fechado' && (
