@@ -138,6 +138,9 @@ export function NotificationTemplatesDialog({
   const [previewOpen, setPreviewOpen] = useState<Record<string, boolean>>({});
   const [versionsFor, setVersionsFor] = useState<string | null>(null);
   const [versions, setVersions] = useState<Version[]>([]);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<TestLog[]>([]);
+  const [auditFilter, setAuditFilter] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
