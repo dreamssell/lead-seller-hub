@@ -377,6 +377,12 @@ export function NotificationTemplatesDialog({
             </DialogDescription>
           </DialogHeader>
 
+          <div className="flex justify-end -mt-2">
+            <Button size="sm" variant="ghost" className="gap-1 h-8" onClick={() => openAudit(null)}>
+              <ClipboardList className="w-3.5 h-3.5"/> Auditoria de testes
+            </Button>
+          </div>
+
           {loading ? (
             <div className="h-40 rounded-xl bg-muted/40 animate-pulse" />
           ) : (
