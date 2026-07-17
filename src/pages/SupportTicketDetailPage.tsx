@@ -267,6 +267,70 @@ export default function SupportTicketDetailPage() {
               <p className="text-sm">{ticket.contact_phone}</p>
             </div>
           )}
+          {(() => {
+            const sla = slaState(ticket.resolution_due_at, ticket.status);
+            const meta = SLA_META[sla];
+            return (
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">SLA</p>
+                <span className={`text-xs px-2 py-1 rounded ${meta.badge}`}>
+                  {meta.label} · {slaRemainingLabel(ticket.resolution_due_at)}
+                </span>
+              </div>
+            );
+          })()}
+          {isOwner && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                <UserCircle2 className="w-3 h-3"/> Responsável
+              </p>
+              <Select value={ticket.assigned_to || 'none'} onValueChange={(v) => assignTo(v === 'none' ? null : v)}>
+                <SelectTrigger><SelectValue placeholder="Atribuir a…"/></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem responsável</SelectItem>
+                  {agents.map(a => (
+                    <SelectItem key={a.user_id} value={a.user_id}>{a.display_name || a.email || a.user_id.slice(0,8)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {isOwner && assignments.length > 0 && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                <History className="w-3 h-3"/> Histórico de atribuições
+              </p>
+              <ul className="space-y-1 mt-1 max-h-32 overflow-y-auto text-[11px]">
+                {assignments.map(al => (
+                  <li key={al.id} className="p-1.5 rounded bg-secondary/60">
+                    <span className="text-muted-foreground">{agentName(al.from_user)}</span>
+                    <span className="mx-1">→</span>
+                    <span className="font-medium">{agentName(al.to_user)}</span>
+                    <div className="text-[9px] text-muted-foreground">{new Date(al.created_at).toLocaleString('pt-BR')}</div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {isOwner && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                <StickyNote className="w-3 h-3"/> Anotação interna (só master)
+              </p>
+              <div className="relative mt-1">
+                <Textarea
+                  value={internalNotes}
+                  onChange={(e) => setInternalNotes(e.target.value)}
+                  rows={5}
+                  placeholder="Anote aqui contexto, ações tomadas, contatos externos…"
+                  className="bg-yellow-100 dark:bg-yellow-900/40 border-yellow-400/60 text-yellow-950 dark:text-yellow-50 placeholder:text-yellow-800/60 dark:placeholder:text-yellow-200/60 shadow-inner font-medium"
+                />
+              </div>
+              <Button size="sm" variant="outline" onClick={saveInternalNotes} disabled={savingNotes} className="mt-2 gap-1 w-full">
+                <Save className="w-3.5 h-3.5"/> {savingNotes ? 'Salvando…' : 'Salvar anotação'}
+              </Button>
+            </div>
+          )}
           {isOwner && ticket.csat_rating && (
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">CSAT</p>
