@@ -2166,6 +2166,17 @@ export default function ChatPage() {
             Recarregar access
           </Button>
         )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 text-xs ml-auto md:ml-0"
+          onClick={toggleFullscreen}
+          title={isFullscreen ? 'Sair da tela cheia' : 'Entrar em tela cheia'}
+          aria-label={isFullscreen ? 'Sair da tela cheia' : 'Entrar em tela cheia'}
+        >
+          {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          <span className="hidden sm:inline">{isFullscreen ? 'Sair' : 'Tela cheia'}</span>
+        </Button>
         {isOwner && !ownerScopeOk && selectedConv && (
           <Badge variant="outline" className="h-6 border-destructive/40 text-destructive">
             Conversa: {selectedOwnerShort}
