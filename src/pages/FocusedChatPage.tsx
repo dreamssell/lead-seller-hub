@@ -865,7 +865,6 @@ export default function FocusedChatPage() {
                             </div>
                             )}
                           </div>
-                          </div>
                         );
                       })}
                     </div>
