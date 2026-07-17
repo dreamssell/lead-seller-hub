@@ -2219,7 +2219,10 @@ export default function ChatPage() {
         )}
       </div>
 
-      <div className="flex h-[calc(100vh-13rem)] glass-card overflow-hidden relative min-w-0">
+      <div
+        ref={chatRootRef}
+        className={`flex glass-card overflow-hidden relative min-w-0 px-safe ${isFullscreen ? 'h-[100dvh] pt-safe pb-safe rounded-none' : 'h-[calc(100dvh-13rem)]'}`}
+      >
         {/* Painel de Diagnóstico */}
         <AnimatePresence>
           {showDebugPanel && (
