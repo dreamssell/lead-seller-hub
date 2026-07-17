@@ -44,9 +44,11 @@ export default function SupportTicketDetailPage() {
     const { data: t } = await supabase.from('support_tickets' as any).select('*').eq('id', id).maybeSingle();
     const { data: m } = await supabase.from('support_ticket_messages' as any).select('*').eq('ticket_id', id).order('created_at');
     const { data: a } = await supabase.from('support_ticket_attachments' as any).select('*').eq('ticket_id', id);
+    const { data: nl } = await supabase.from('support_notification_logs' as any).select('*').eq('ticket_id', id).order('created_at');
     setTicket(t as any);
     setMessages((m as any) || []);
     setAttachments((a as any) || []);
+    setNotifLogs((nl as any) || []);
     setInternalNotes(((t as any)?.internal_notes) || '');
     if (isOwner) {
       const [{ data: al }, { data: ag }] = await Promise.all([
