@@ -4448,6 +4448,44 @@ export type Database = {
           },
         ]
       }
+      support_ticket_assignments: {
+        Row: {
+          changed_by: string
+          created_at: string
+          from_user: string | null
+          id: string
+          reason: string | null
+          ticket_id: string
+          to_user: string | null
+        }
+        Insert: {
+          changed_by: string
+          created_at?: string
+          from_user?: string | null
+          id?: string
+          reason?: string | null
+          ticket_id: string
+          to_user?: string | null
+        }
+        Update: {
+          changed_by?: string
+          created_at?: string
+          from_user?: string | null
+          id?: string
+          reason?: string | null
+          ticket_id?: string
+          to_user?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_ticket_assignments_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_ticket_attachments: {
         Row: {
           created_at: string
@@ -4544,11 +4582,16 @@ export type Database = {
           csat_rating: number | null
           department: Database["public"]["Enums"]["support_ticket_department"]
           description: string
+          first_responded_at: string | null
+          first_response_due_at: string | null
           id: string
+          internal_notes: string | null
           last_activity_at: string
+          last_reminder_at: string | null
           number: number
           owner_id: string
           priority: Database["public"]["Enums"]["support_ticket_priority"]
+          resolution_due_at: string | null
           status: Database["public"]["Enums"]["support_ticket_status"]
           sub_company_id: string | null
           title: string
@@ -4564,11 +4607,16 @@ export type Database = {
           csat_rating?: number | null
           department: Database["public"]["Enums"]["support_ticket_department"]
           description: string
+          first_responded_at?: string | null
+          first_response_due_at?: string | null
           id?: string
+          internal_notes?: string | null
           last_activity_at?: string
+          last_reminder_at?: string | null
           number?: number
           owner_id: string
           priority?: Database["public"]["Enums"]["support_ticket_priority"]
+          resolution_due_at?: string | null
           status?: Database["public"]["Enums"]["support_ticket_status"]
           sub_company_id?: string | null
           title: string
@@ -4584,11 +4632,16 @@ export type Database = {
           csat_rating?: number | null
           department?: Database["public"]["Enums"]["support_ticket_department"]
           description?: string
+          first_responded_at?: string | null
+          first_response_due_at?: string | null
           id?: string
+          internal_notes?: string | null
           last_activity_at?: string
+          last_reminder_at?: string | null
           number?: number
           owner_id?: string
           priority?: Database["public"]["Enums"]["support_ticket_priority"]
+          resolution_due_at?: string | null
           status?: Database["public"]["Enums"]["support_ticket_status"]
           sub_company_id?: string | null
           title?: string
