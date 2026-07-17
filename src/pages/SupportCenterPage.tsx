@@ -30,11 +30,14 @@ type Ticket = {
 
 type QueuedFile = { file: File; kind: 'image' | 'video'; id: string };
 
+type WhiteLabel = { primary_color: string | null; logo_light_url: string | null; logo_dark_url: string | null; brand_name: string | null };
+
 export default function SupportCenterPage() {
   const { user, access } = useAuth();
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loadingList, setLoadingList] = useState(true);
+  const [brand, setBrand] = useState<WhiteLabel | null>(null);
 
   // form state
   const [title, setTitle] = useState('');
@@ -47,6 +50,19 @@ export default function SupportCenterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [uploadPct, setUploadPct] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // White label — aplica cor/logo da empresa dona quando o usuário é de sub-empresa
+  useEffect(() => {
+    if (!access?.sub_company_id || !access?.owner_id) { setBrand(null); return; }
+    void (async () => {
+      const { data } = await supabase
+        .from('white_label_settings' as any)
+        .select('primary_color, logo_light_url, logo_dark_url, brand_name')
+        .eq('owner_id', access.owner_id).maybeSingle();
+      setBrand(data as any);
+    })();
+  }, [access?.owner_id, access?.sub_company_id]);
+
 
   useEffect(() => {
     if (!user) return;
