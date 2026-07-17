@@ -86,8 +86,39 @@ function extractVars(tpl: string): string[] {
   return [...set];
 }
 
-function normalizePhone(p: string): string {
-  return p.replace(/\D/g, '');
+/**
+ * Normalize an operator-typed phone to E.164 (`+55DDNNNNNNNNN`).
+ * Rules geared to Brazil (default DDI 55) but tolerant of pre-prefixed inputs:
+ *   - strip everything non-digit, drop leading `00` (international dial prefix)
+ *   - if it already starts with `55` and length is 12–13 → keep
+ *   - if length is 10 (fixed) or 11 (mobile with 9) → prepend `55`
+ *   - if it starts with another 1–3 digit country code (11–15 digits) → keep as-is
+ * Returns `null` when nothing valid can be produced.
+ */
+function toE164(raw: string): string | null {
+  let d = (raw || '').replace(/\D/g, '');
+  if (!d) return null;
+  if (d.startsWith('00')) d = d.slice(2);
+  if (d.startsWith('55') && (d.length === 12 || d.length === 13)) return `+${d}`;
+  if (d.length === 10 || d.length === 11) return `+55${d}`;
+  if (d.length >= 11 && d.length <= 15) return `+${d}`;
+  return null;
+}
+
+/** Parse the operator's textarea into an ordered, deduped list of E.164 phones plus the invalid tokens. */
+function parseAndDedupe(raw: string): { valid: string[]; invalid: string[] } {
+  const tokens = (raw || '').split(/[,;\n]/).map((t) => t.trim()).filter(Boolean);
+  const valid: string[] = [];
+  const invalid: string[] = [];
+  const seen = new Set<string>();
+  for (const t of tokens) {
+    const e164 = toE164(t);
+    if (!e164) { invalid.push(t); continue; }
+    if (seen.has(e164)) continue;
+    seen.add(e164);
+    valid.push(e164);
+  }
+  return { valid, invalid };
 }
 
 export function NotificationTemplatesDialog({
