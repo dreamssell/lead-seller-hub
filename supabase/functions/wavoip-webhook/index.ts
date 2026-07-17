@@ -387,6 +387,71 @@ Deno.serve(async (req) => {
     updateError = 'missing wavoip_call_id/call_id in payload';
   }
 
+  // Registra evento da chamada no chat do cliente (WhatsApp) — assim uma
+  // ligação perdida/atendida aparece direto na conversa sem precisar abrir
+  // o histórico. Idempotente via client_msg_id = wavoip_call:<id>:<status>.
+  try {
+    if (status && (status === 'answered' || FINAL_STATUSES.has(status)) && phone && (wavoipCallId || callId)) {
+      const callKey = wavoipCallId || callId!;
+      const clientMsgId = `wavoip_call:${callKey}:${status}`;
+      const digits = String(phone).replace(/\D/g, '');
+      const scopedCust = (q: any) => {
+        q = q.eq('owner_id', ownerId);
+        return subCompanyId ? q.eq('sub_company_id', subCompanyId) : q.is('sub_company_id', null);
+      };
+      let customerId: string | null = null;
+      const { data: exact } = await scopedCust(
+        admin.from('customers').select('id').eq('phone', digits).order('updated_at', { ascending: false }).limit(1),
+      );
+      customerId = (exact as any[] | null)?.[0]?.id ?? null;
+      if (!customerId && digits.length >= 8) {
+        const suffix = digits.slice(-8);
+        const { data: fuzzy } = await scopedCust(
+          admin.from('customers').select('id,phone').ilike('phone', `%${suffix}`).order('updated_at', { ascending: false }).limit(1),
+        );
+        customerId = (fuzzy as any[] | null)?.[0]?.id ?? null;
+      }
+      if (customerId) {
+        const isFinal = FINAL_STATUSES.has(status);
+        const dirNorm = direction === 'inbound' || direction === 'in' ? 'inbound' : 'outbound';
+        const durSec = duration && duration > 0
+          ? Math.round(duration)
+          : secondsBetween(answeredAt ?? receivedAt, endedAt ?? receivedAt) ?? 0;
+        let content = 'Ligação de voz';
+        if (status === 'missed') content = dirNorm === 'inbound' ? '📞 Ligação de voz perdida' : '📞 Ligação não atendida';
+        else if (status === 'failed' || status === 'rejected') content = dirNorm === 'inbound' ? '📞 Ligação recusada' : '📞 Ligação não completada';
+        else if (durSec > 0) {
+          const mm = String(Math.floor(durSec / 60)).padStart(2, '0');
+          const ss = String(durSec % 60).padStart(2, '0');
+          content = `📞 ${dirNorm === 'inbound' ? 'Ligação recebida' : 'Ligação efetuada'} · ${mm}:${ss}`;
+        } else {
+          content = dirNorm === 'inbound' ? '📞 Ligação de voz recebida' : '📞 Ligação de voz efetuada';
+        }
+        await admin.from('chat_messages').upsert({
+          customer_id: customerId,
+          sub_company_id: subCompanyId,
+          channel: 'whatsapp',
+          sender_type: 'system',
+          content,
+          client_msg_id: clientMsgId,
+          metadata: {
+            kind: 'call_event',
+            call_status: status,
+            direction: dirNorm,
+            duration_seconds: isFinal ? durSec : null,
+            wavoip_call_id: wavoipCallId ?? null,
+            call_id: callId ?? null,
+            phone: digits,
+            call_history_id: matchedId,
+          },
+        }, { onConflict: 'client_msg_id', ignoreDuplicates: true });
+      }
+    }
+  } catch (chatErr) {
+    console.warn('[wavoip-webhook] chat_messages insert failed', (chatErr as any)?.message);
+  }
+
+
   await admin
     .from('wavoip_webhook_tokens')
     .update({ last_used_at: new Date().toISOString() })

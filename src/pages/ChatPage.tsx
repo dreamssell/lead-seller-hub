@@ -41,6 +41,7 @@ import { useVoip } from '@/contexts/VoipContext';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
 import { ChatRightPanel } from '@/components/chat/ChatRightPanel';
 import { MediaMessageContent } from '@/components/chat/MediaMessageContent';
+import { CallEventBubble, isCallEventMessage } from '@/components/chat/CallEventBubble';
 import { MediaViewerDialog, type MediaItem } from '@/components/chat/MediaViewerDialog';
 import { SignatureDocumentModal } from '@/components/signature/SignatureDocumentModal';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -2942,6 +2943,28 @@ export default function ChatPage() {
                 )}
                 
                 {messages.map((m) => {
+                  const _meta = getMessageMetadata(m);
+                  if (isCallEventMessage(_meta)) {
+                    return (
+                      <CallEventBubble
+                        key={m.id}
+                        metadata={_meta as any}
+                        createdAt={m.created_at}
+                        onCallBack={selectedConv?.phone ? () => {
+                          if (!wavoip.config.enabled || wavoip.config.devices.length === 0) {
+                            toast({ title: 'Wavoip não configurado', description: 'Cadastre um Device Token em Configurações > Wavoip.', variant: 'destructive' });
+                            return;
+                          }
+                          wavoip.callWhatsApp(selectedConv.phone!, undefined, {
+                            customerId: selectedConv.id,
+                            contactName: selectedConv.name,
+                            ownerId: activeOwnerId,
+                            subCompanyId: (selectedConv as any)?.sub_company_id ?? activeWhatsAppConn?.sub_company_id ?? null,
+                          });
+                        } : undefined}
+                      />
+                    );
+                  }
                   const errorInfo = getMessageErrorInfo(m);
                   return (
                     <motion.div

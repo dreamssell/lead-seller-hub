@@ -44,6 +44,7 @@ import { AIInsightsPanel } from '@/components/chat/AIInsightsPanel';
 import { Customer360Timeline } from '@/components/chat/Customer360Timeline';
 import { MessageSearchDialog, type MessageSearchHit } from '@/components/chat/MessageSearchDialog';
 import { MediaDropzone } from '@/components/chat/MediaDropzone';
+import { CallEventBubble, isCallEventMessage } from '@/components/chat/CallEventBubble';
 import { ContactsDialog } from '@/components/chat/ContactsDialog';
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
 import { AttendanceFlowDialog } from '@/components/chat/AttendanceFlowDialog';
@@ -820,6 +821,8 @@ export default function FocusedChatPage() {
                       {virtualizer.getVirtualItems().map((vi) => {
                         const m = msgs[vi.index];
                         if (!m) return null;
+                        const _meta = (m as any).metadata;
+                        const isCallEvt = isCallEventMessage(_meta);
                         const isMe = m.sender_type !== 'client';
                         const status = m.metadata?.status;
                         return (
@@ -836,6 +839,9 @@ export default function FocusedChatPage() {
                               paddingBottom: 8,
                             }}
                           >
+                            {isCallEvt ? (
+                              <CallEventBubble metadata={_meta as any} createdAt={m.created_at} />
+                            ) : (
                             <div className={cn('flex', isMe ? 'justify-end' : 'justify-start')}>
                               <div
                                 className={cn(
@@ -857,6 +863,7 @@ export default function FocusedChatPage() {
                                 </div>
                               </div>
                             </div>
+                            )}
                           </div>
                         );
                       })}
