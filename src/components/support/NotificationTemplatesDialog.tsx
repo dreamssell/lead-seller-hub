@@ -438,6 +438,23 @@ export function NotificationTemplatesDialog({
                               </Button>
                             </div>
                           </div>
+                          {(rawPhones.length > 0 || invalidPhones.length > 0) && (
+                            <div className="text-[11px] space-y-1">
+                              {rawPhones.length > 0 && (
+                                <p className="text-muted-foreground">
+                                  <span className="font-medium text-foreground">{rawPhones.length}</span> destinatário(s) após normalização E.164
+                                  {(testPhones[key] || '').split(/[,;\n]/).filter((t) => t.trim()).length > rawPhones.length + invalidPhones.length && ' · duplicados removidos'}:
+                                  <span className="ml-1 font-mono">{rawPhones.join(', ')}</span>
+                                </p>
+                              )}
+                              {invalidPhones.length > 0 && (
+                                <p className="text-red-500 flex items-start gap-1">
+                                  <AlertCircle className="w-3 h-3 mt-0.5 shrink-0"/>
+                                  Inválidos (não serão enviados): <span className="font-mono">{invalidPhones.join(', ')}</span>
+                                </p>
+                              )}
+                            </div>
+                          )}
                           {isPreviewOpen && (
                             <div className="rounded-lg border border-border bg-muted/40 p-2">
                               <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Prévia com o payload de exemplo</p>
