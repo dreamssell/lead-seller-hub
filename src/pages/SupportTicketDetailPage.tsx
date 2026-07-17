@@ -265,7 +265,7 @@ export default function SupportTicketDetailPage() {
                   if (!cur.lastAt || n.created_at > cur.lastAt) cur.lastAt = n.created_at;
                   byChannel.set(ch, cur);
                 }
-                const [showAll, setShow] = [true, (v: boolean) => v]; // static: rendered inline
+                
                 return (
                   <>
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
