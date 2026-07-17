@@ -25,6 +25,7 @@ type Agent = { user_id: string; display_name: string | null; email: string | nul
 
 export default function MasterSupportPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,6 +33,7 @@ export default function MasterSupportPage() {
   const [filterPrio, setFilterPrio] = useState<'all' | SupportPriority>('all');
   const [filterType, setFilterType] = useState<'all' | 'company' | 'subcompany'>('all');
   const [filterSla, setFilterSla] = useState<'all' | SlaState>('all');
+  const [templatesOpen, setTemplatesOpen] = useState(false);
 
   async function load() {
     setLoading(true);
