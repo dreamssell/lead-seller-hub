@@ -10,13 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from '@/hooks/use-toast';
 import { STATUS_META, PRIORITY_META, DEPARTMENT_META, formatTicketNumber, slaState, SLA_META, slaRemainingLabel, type SupportStatus } from '@/lib/supportHelpers';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
-import { ArrowLeft, Send, StickyNote, Paperclip, Star, Download, UserCircle2, History, Save } from 'lucide-react';
+import { ArrowLeft, Send, StickyNote, Paperclip, Star, Download, UserCircle2, History, Save, Bell, CheckCircle2, XCircle, Clock } from 'lucide-react';
 
 type Ticket = any;
 type Message = { id: string; ticket_id: string; sender_id: string; is_internal_note: boolean; message: string; created_at: string };
 type Attachment = { id: string; storage_path: string; file_name: string; file_type: string; file_size: number; message_id: string | null };
 type AssignmentLog = { id: string; from_user: string | null; to_user: string | null; changed_by: string; created_at: string };
 type Agent = { user_id: string; display_name: string | null; email: string | null };
+type NotifLog = { id: string; event_type: string; audience: string; channel: string; recipient: string; body: string; status: string; error: string | null; created_at: string };
 
 export default function SupportTicketDetailPage() {
   const { id } = useParams();
