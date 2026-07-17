@@ -4448,6 +4448,163 @@ export type Database = {
           },
         ]
       }
+      support_ticket_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_size: number
+          file_type: string
+          id: string
+          message_id: string | null
+          storage_path: string
+          ticket_id: string
+          uploaded_by: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_size: number
+          file_type: string
+          id?: string
+          message_id?: string | null
+          storage_path: string
+          ticket_id: string
+          uploaded_by: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          id?: string
+          message_id?: string | null
+          storage_path?: string
+          ticket_id?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_ticket_attachments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "support_ticket_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_ticket_attachments_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_ticket_messages: {
+        Row: {
+          created_at: string
+          id: string
+          is_internal_note: boolean
+          message: string
+          sender_id: string
+          ticket_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_internal_note?: boolean
+          message: string
+          sender_id: string
+          ticket_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_internal_note?: boolean
+          message?: string
+          sender_id?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_ticket_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_tickets: {
+        Row: {
+          assigned_to: string | null
+          closed_at: string | null
+          contact_phone: string | null
+          created_at: string
+          csat_comment: string | null
+          csat_rating: number | null
+          department: Database["public"]["Enums"]["support_ticket_department"]
+          description: string
+          id: string
+          last_activity_at: string
+          number: number
+          owner_id: string
+          priority: Database["public"]["Enums"]["support_ticket_priority"]
+          status: Database["public"]["Enums"]["support_ticket_status"]
+          sub_company_id: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          closed_at?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          csat_comment?: string | null
+          csat_rating?: number | null
+          department: Database["public"]["Enums"]["support_ticket_department"]
+          description: string
+          id?: string
+          last_activity_at?: string
+          number?: number
+          owner_id: string
+          priority?: Database["public"]["Enums"]["support_ticket_priority"]
+          status?: Database["public"]["Enums"]["support_ticket_status"]
+          sub_company_id?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assigned_to?: string | null
+          closed_at?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          csat_comment?: string | null
+          csat_rating?: number | null
+          department?: Database["public"]["Enums"]["support_ticket_department"]
+          description?: string
+          id?: string
+          last_activity_at?: string
+          number?: number
+          owner_id?: string
+          priority?: Database["public"]["Enums"]["support_ticket_priority"]
+          status?: Database["public"]["Enums"]["support_ticket_status"]
+          sub_company_id?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_tickets_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           assigned_to: string | null
@@ -6527,6 +6684,14 @@ export type Database = {
         | "signed"
         | "expired"
         | "cancelled"
+      support_ticket_department: "administrativo" | "financeiro" | "ti"
+      support_ticket_priority: "baixa" | "media" | "alta" | "critica"
+      support_ticket_status:
+        | "novo"
+        | "em_analise"
+        | "aguardando_cliente"
+        | "resolvido"
+        | "fechado"
       whatsapp_provider:
         | "uaz"
         | "meta"
@@ -6694,6 +6859,15 @@ export const Constants = {
         "signed",
         "expired",
         "cancelled",
+      ],
+      support_ticket_department: ["administrativo", "financeiro", "ti"],
+      support_ticket_priority: ["baixa", "media", "alta", "critica"],
+      support_ticket_status: [
+        "novo",
+        "em_analise",
+        "aguardando_cliente",
+        "resolvido",
+        "fechado",
       ],
       whatsapp_provider: [
         "uaz",

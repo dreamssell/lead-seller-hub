@@ -67,6 +67,9 @@ const InternalMessageDetailPage = lazy(() => import("./pages/InternalMessageDeta
 const InternalCommsAuditPage = lazy(() => import("./pages/owner/InternalCommsAuditPage"));
 const WavoipWebhookAdminPage = lazy(() => import("./pages/owner/WavoipWebhookAdminPage"));
 const FocusedChatPage = lazy(() => import("./pages/FocusedChatPage"));
+const SupportCenterPage = lazy(() => import("./pages/SupportCenterPage"));
+const SupportTicketDetailPage = lazy(() => import("./pages/SupportTicketDetailPage"));
+const MasterSupportPage = lazy(() => import("./pages/MasterSupportPage"));
 
 /**
  * React Query com defaults calibrados para reduzir refetches redundantes.
@@ -167,6 +170,11 @@ const App = () => (
               <Route path="/settings/wavoip-webhook" element={<ProtectedRoute><WavoipWebhookAdminPage /></ProtectedRoute>} />
               <Route path="/configuracoes/wavoip-webhook" element={<ProtectedRoute><WavoipWebhookAdminPage /></ProtectedRoute>} />
               <Route path="/configura%C3%A7%C3%B5es/wavoip-webhook" element={<ProtectedRoute><WavoipWebhookAdminPage /></ProtectedRoute>} />
+
+              {/* Central de Ajuda — todos usuários autenticados abrem/consultam tickets */}
+              <Route path="/suporte" element={<ProtectedRoute><SupportCenterPage /></ProtectedRoute>} />
+              <Route path="/suporte/master" element={<ProtectedRoute ownerOnly><MasterSupportPage /></ProtectedRoute>} />
+              <Route path="/suporte/:id" element={<ProtectedRoute><SupportTicketDetailPage /></ProtectedRoute>} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>
