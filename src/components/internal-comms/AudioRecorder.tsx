@@ -14,6 +14,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Mic, Send, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { MAX_ATTACHMENT_BYTES } from '@/lib/internalCommsAttachments';
+
+/** Limite de duração da gravação (5 minutos). Acima disso paramos e alertamos. */
+export const MAX_AUDIO_DURATION_MS = 5 * 60 * 1000;
+/** Limite de tamanho por gravação em bytes (usa o mesmo teto de anexos). */
+export const MAX_AUDIO_BYTES = MAX_ATTACHMENT_BYTES;
 
 function fmt(ms: number) {
   const s = Math.floor(ms / 1000);
@@ -75,7 +81,18 @@ export function AudioRecorder({
       const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
       mediaRef.current = rec;
       chunksRef.current = [];
-      rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
+      rec.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          chunksRef.current.push(e.data);
+          // Auto-stop se ultrapassar o teto de tamanho (defesa antes do teto de tempo).
+          const total = chunksRef.current.reduce((n, c: any) => n + (c.size || 0), 0);
+          if (total > MAX_AUDIO_BYTES && mediaRef.current && mediaRef.current.state !== 'inactive') {
+            toast.error(`Gravação atingiu o limite de ${Math.round(MAX_AUDIO_BYTES / (1024 * 1024))} MB. Enviando o que foi gravado.`);
+            shouldEmitRef.current = true;
+            try { mediaRef.current.stop(); } catch {}
+          }
+        }
+      };
       rec.onstop = async () => {
         const durationMs = Date.now() - startTsRef.current;
         const type = rec.mimeType || mime || 'audio/webm';
@@ -85,6 +102,8 @@ export function AudioRecorder({
           if (shouldEmitRef.current) {
             if (blob.size <= 500) {
               toast.error('Gravação muito curta.');
+            } else if (blob.size > MAX_AUDIO_BYTES) {
+              toast.error(`Áudio excede ${Math.round(MAX_AUDIO_BYTES / (1024 * 1024))} MB e não será enviado.`);
             } else {
               await onRecorded({ blob, mime: type, durationMs });
             }
@@ -114,9 +133,18 @@ export function AudioRecorder({
         let sum = 0;
         for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
         setLevel(Math.min(1, Math.sqrt(sum / buf.length) * 2));
-        setElapsedMs(Date.now() - startTsRef.current);
+        const el = Date.now() - startTsRef.current;
+        setElapsedMs(el);
+        // Auto-stop ao atingir o limite de duração.
+        if (el >= MAX_AUDIO_DURATION_MS && mediaRef.current && mediaRef.current.state !== 'inactive') {
+          toast.error(`Gravação atingiu o limite de ${Math.round(MAX_AUDIO_DURATION_MS / 60000)} min. Enviando…`);
+          shouldEmitRef.current = true;
+          try { mediaRef.current.stop(); } catch {}
+          return;
+        }
         rafRef.current = requestAnimationFrame(tick);
       };
+
 
       rec.start(250);
       startTsRef.current = Date.now();
@@ -164,7 +192,9 @@ export function AudioRecorder({
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75" />
         <span className="relative inline-flex rounded-full h-2 w-2 bg-destructive" />
       </span>
-      <span className="text-xs font-medium tabular-nums text-destructive">{fmt(elapsedMs)}</span>
+      <span className="text-xs font-medium tabular-nums text-destructive" title={`Limite ${Math.round(MAX_AUDIO_DURATION_MS / 60000)} min`}>
+        {fmt(elapsedMs)} / {fmt(MAX_AUDIO_DURATION_MS)}
+      </span>
       <div className="w-16 h-2 bg-destructive/20 rounded-full overflow-hidden" aria-hidden="true">
         <div
           className="h-full bg-destructive transition-[width] duration-75"
