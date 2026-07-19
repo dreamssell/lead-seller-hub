@@ -527,7 +527,7 @@ export default function InternalCommsPage() {
                   </Button>
                   <AudioRecorder disabled={composerBusy} onRecorded={handleAudioRecorded} />
                   <Input
-                    placeholder={hasPendingUploads ? 'Escreva uma legenda (opcional)…' : 'Escreva sua mensagem...'}
+                    placeholder={hasPendingUploads ? 'Escreva sua mensagem (legenda opcional)…' : 'Escreva sua mensagem...'}
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
