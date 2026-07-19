@@ -14,6 +14,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Mic, Send, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { MAX_ATTACHMENT_BYTES } from '@/lib/internalCommsAttachments';
+
+/** Limite de duração da gravação (5 minutos). Acima disso paramos e alertamos. */
+export const MAX_AUDIO_DURATION_MS = 5 * 60 * 1000;
+/** Limite de tamanho por gravação em bytes (usa o mesmo teto de anexos). */
+export const MAX_AUDIO_BYTES = MAX_ATTACHMENT_BYTES;
 
 function fmt(ms: number) {
   const s = Math.floor(ms / 1000);
