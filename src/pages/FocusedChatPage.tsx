@@ -37,6 +37,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
+import { toast as sonnerToast } from 'sonner';
+import { logCallUi } from '@/lib/callTelemetry';
+import { CallEventFailedIndicator } from '@/components/chat/CallEventFailedIndicator';
 import { renderWhatsAppText } from '@/lib/whatsappFormat';
 import { ChatComposer } from '@/components/chat/ChatComposer';
 import { ChatRightPanel } from '@/components/chat/ChatRightPanel';
