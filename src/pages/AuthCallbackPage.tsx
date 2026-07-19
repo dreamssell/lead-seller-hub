@@ -154,32 +154,31 @@ export default function AuthCallbackPage() {
     setSessionFromTokens();
   }, [searchParams, navigate]);
 
+  if (error) {
+    // Mensagem tranquilizadora para o usuário final — sem expor detalhes técnicos.
+    // O log completo (debugLog + erro) já foi enviado ao painel do dono via reportError.
+    return (
+      <ErrorPage
+        onRetry={() => {
+          // Volta para a página de login externa preservando o destino desejado
+          const referrer = document.referrer;
+          if (referrer && !referrer.includes(window.location.host)) {
+            window.location.href = referrer;
+          } else {
+            window.location.href = '/';
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="text-center space-y-4 max-w-2xl w-full">
-        {error ? (
-          <div className="space-y-3">
-            <div className="text-destructive text-lg font-medium">{error}</div>
-            <p className="text-sm text-muted-foreground">
-              Entre em contato com o administrador ou tente novamente.
-            </p>
-            {debugLog.length > 0 && (
-              <details className="text-left mt-4">
-                <summary className="cursor-pointer text-xs text-muted-foreground">
-                  Detalhes técnicos ({debugLog.length} eventos)
-                </summary>
-                <pre className="mt-2 p-3 rounded bg-muted text-[10px] overflow-auto max-h-64 text-left">
-                  {debugLog.join('\n')}
-                </pre>
-              </details>
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-muted-foreground">Autenticando...</span>
-          </div>
-        )}
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm text-muted-foreground">Autenticando...</span>
+        </div>
       </div>
     </div>
   );
