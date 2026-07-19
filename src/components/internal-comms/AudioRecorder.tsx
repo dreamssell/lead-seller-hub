@@ -192,7 +192,9 @@ export function AudioRecorder({
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75" />
         <span className="relative inline-flex rounded-full h-2 w-2 bg-destructive" />
       </span>
-      <span className="text-xs font-medium tabular-nums text-destructive">{fmt(elapsedMs)}</span>
+      <span className="text-xs font-medium tabular-nums text-destructive" title={`Limite ${Math.round(MAX_AUDIO_DURATION_MS / 60000)} min`}>
+        {fmt(elapsedMs)} / {fmt(MAX_AUDIO_DURATION_MS)}
+      </span>
       <div className="w-16 h-2 bg-destructive/20 rounded-full overflow-hidden" aria-hidden="true">
         <div
           className="h-full bg-destructive transition-[width] duration-75"
