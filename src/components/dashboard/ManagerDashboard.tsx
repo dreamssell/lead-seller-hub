@@ -55,7 +55,7 @@ export function ManagerDashboard() {
         <CallHistoryTable
           title="Chamadas recentes da equipe"
           description="Histórico consolidado — VoIP e Wavoip"
-          filter={{ limit: 50 }}
+          filter={{ limit: 10 }}
         />
       </div>
 
