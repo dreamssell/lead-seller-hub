@@ -41,6 +41,14 @@ interface Props {
   compact?: boolean;
   customerId?: string | null;
   showFilters?: boolean;
+  /** Persistência de página/tamanho por gestor em localStorage (ex.: "manager-dashboard"). */
+  persistKey?: string;
+  /** Opções de tamanho de página; quando definido, exibe seletor. */
+  pageSizeOptions?: number[];
+  /** Renderiza a paginação também no topo do card. */
+  showTopPagination?: boolean;
+  /** Exibe um seletor amigável "Mais recentes / Mais antigos" para a data. */
+  showDateSort?: boolean;
 }
 
 interface Row {
