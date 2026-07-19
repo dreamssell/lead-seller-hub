@@ -92,8 +92,39 @@ export function CallHistoryTable({
   compact,
   customerId,
   showFilters = true,
+  persistKey,
+  pageSizeOptions,
+  showTopPagination = false,
+  showDateSort = false,
 }: Props) {
-  const pageSize = filter?.limit ?? 25;
+  // localStorage por gestor: chaveia por user_id + persistKey para isolar entre contas.
+  const [meId, setMeId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    supabase.auth.getUser().then(({ data }) => { if (!cancelled) setMeId(data.user?.id ?? null); });
+    return () => { cancelled = true; };
+  }, []);
+  const lsKey = persistKey && meId ? `callHistoryTable:${persistKey}:${meId}` : null;
+  const readLs = <T,>(field: 'page' | 'pageSize', fallback: T): T => {
+    if (!lsKey || typeof window === 'undefined') return fallback;
+    try {
+      const raw = window.localStorage.getItem(lsKey);
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      return (parsed?.[field] ?? fallback) as T;
+    } catch { return fallback; }
+  };
+  const writeLs = (patch: { page?: number; pageSize?: number }) => {
+    if (!lsKey || typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(lsKey);
+      const prev = raw ? JSON.parse(raw) : {};
+      window.localStorage.setItem(lsKey, JSON.stringify({ ...prev, ...patch }));
+    } catch { /* quota/JSON — silencioso */ }
+  };
+
+  const defaultPageSize = filter?.limit ?? 25;
+  const [pageSize, setPageSize] = useState<number>(defaultPageSize);
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
