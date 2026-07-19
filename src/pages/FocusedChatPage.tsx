@@ -15,8 +15,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   MessageCircle, Search, Info, Images, Pin, Star, StickyNote,
-  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2, Eye, Contact2, Plus, Inbox, ArrowLeftRight,
+  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2, Eye, Contact2, Plus, Inbox, ArrowLeftRight, Phone,
 } from 'lucide-react';
+import { useVoip } from '@/contexts/VoipContext';
+import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -143,6 +145,61 @@ export default function FocusedChatPage() {
   }) : null, [user]);
 
   const selectedConv = useMemo(() => convs.find(c => c.id === selected) || null, [convs, selected]);
+
+  // VoIP (SIP) + Wavoip (WhatsApp call) integrations for header dial buttons.
+  const voip = useVoip();
+  const wavoip = useWavoipWebphone();
+
+  // Realtime detection of "line busy": any user in the current tenant scope
+  // currently on a Wavoip call. RLS already limits rows to the same tenant.
+  const [lineBusy, setLineBusy] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const { count } = await (supabase as any)
+          .from('wavoip_line_state')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'in_call');
+        if (!cancelled) setLineBusy((count ?? 0) > 0);
+      } catch { /* ignore — never break chat UI */ }
+    };
+    refresh();
+    const ch = (supabase as any)
+      .channel('wavoip-line-state-focused')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wavoip_line_state' }, refresh)
+      .subscribe();
+    const iv = setInterval(refresh, 15000);
+    return () => { cancelled = true; clearInterval(iv); try { (supabase as any).removeChannel(ch); } catch {} };
+  }, []);
+
+  const dialSip = useCallback((phone?: string | null) => {
+    const target = (phone || '').replace(/\D/g, '');
+    if (!target) { toast({ title: 'Contato sem telefone', variant: 'destructive' as any }); return; }
+    if (voip.status !== 'connected') {
+      toast({ title: 'SIP não conectado', description: 'Configure o ramal SIP para realizar ligações VoIP.' });
+      return;
+    }
+    voip.makeCall(target);
+  }, [voip]);
+
+  const dialWhatsApp = useCallback(async (phone?: string | null) => {
+    const target = (phone || '').replace(/\D/g, '');
+    if (!target) { toast({ title: 'Contato sem telefone', variant: 'destructive' as any }); return; }
+    if (lineBusy) {
+      toast({ title: 'Linha ocupada', description: 'Outro usuário está em uma ligação Wavoip no momento.' });
+      return;
+    }
+    try {
+      const ok = await wavoip.callWhatsApp(target, undefined, {
+        customer_id: selectedConv?.id,
+        customer_name: selectedConv?.name,
+      } as any);
+      if (!ok) toast({ title: 'Falha ao iniciar ligação', description: 'Verifique o pareamento Wavoip.' });
+    } catch (e: any) {
+      toast({ title: 'Erro Wavoip', description: e?.message || 'Falha ao iniciar ligação.', variant: 'destructive' as any });
+    }
+  }, [wavoip, selectedConv, lineBusy]);
 
   // Load first active WhatsApp connection.
   useEffect(() => {
@@ -741,6 +798,47 @@ export default function FocusedChatPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => dialSip(selectedConv.phone)}
+                          disabled={voip.status !== 'connected'}
+                          className={cn(
+                            'p-2 rounded-lg transition inline-flex items-center justify-center border',
+                            lineBusy
+                              ? 'text-red-500 border-red-500/40 hover:bg-red-500/10'
+                              : 'text-blue-500 border-blue-500/30 hover:bg-blue-500/10',
+                            voip.status !== 'connected' && 'opacity-50 cursor-not-allowed',
+                          )}
+                          aria-label="Ligar via VoIP (SIP)"
+                        >
+                          <Phone className="w-4 h-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {lineBusy ? 'Linha Wavoip ocupada' : voip.status === 'connected' ? 'Ligar via VoIP (SIP)' : 'SIP não conectado'}
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => dialWhatsApp(selectedConv.phone)}
+                          disabled={lineBusy}
+                          className={cn(
+                            'p-2 rounded-lg transition inline-flex items-center justify-center border',
+                            lineBusy
+                              ? 'text-red-500 border-red-500/40 hover:bg-red-500/10 cursor-not-allowed'
+                              : 'text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/10',
+                          )}
+                          aria-label="Ligar via WhatsApp (Wavoip)"
+                        >
+                          <Phone className="w-4 h-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {lineBusy ? 'Linha Wavoip ocupada por outro usuário' : 'Ligar via WhatsApp (Wavoip)'}
+                      </TooltipContent>
+                    </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
