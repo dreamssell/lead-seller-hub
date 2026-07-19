@@ -38,8 +38,9 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { toast as sonnerToast } from 'sonner';
-import { logCallUi } from '@/lib/callTelemetry';
+import { logCallUi, callTelemetryUrl } from '@/lib/callTelemetry';
 import { CallEventFailedIndicator } from '@/components/chat/CallEventFailedIndicator';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { renderWhatsAppText } from '@/lib/whatsappFormat';
 import { ChatComposer } from '@/components/chat/ChatComposer';
 import { ChatRightPanel } from '@/components/chat/ChatRightPanel';
@@ -114,6 +115,7 @@ function computeUnread(latestAt: string | null, lastRead: string | null): number
 
 export default function FocusedChatPage() {
   const { user } = useAuth();
+  const { isOwner } = usePlatformOwner();
   const [params, setParams] = useSearchParams();
   const initialConv = params.get('c');
   const initialToolParam = params.get('tool');
@@ -200,43 +202,47 @@ export default function FocusedChatPage() {
     return () => { cancelled = true; clearInterval(iv); try { (supabase as any).removeChannel(ch); } catch {} };
   }, []);
 
-  const dialSip = useCallback((phone?: string | null) => {
+  const dialSip = useCallback(async (phone?: string | null) => {
     const target = (phone || '').replace(/\D/g, '');
-    logCallUi({ event: 'sip_click', metadata: { hasPhone: !!target, sipStatus: voip.status } });
+    const corr = await logCallUi({ event: 'sip_click', metadata: { hasPhone: !!target, sipStatus: voip.status } });
     if (!target) {
-      logCallUi({ event: 'sip_no_phone' });
+      logCallUi({ event: 'sip_no_phone', correlationId: corr });
       toast({ title: 'Contato sem telefone', variant: 'destructive' as any });
       return;
     }
     if (voip.status !== 'connected') {
-      logCallUi({ event: 'sip_blocked_disconnected', metadata: { sipStatus: voip.status } });
+      logCallUi({ event: 'sip_blocked_disconnected', correlationId: corr, metadata: { sipStatus: voip.status } });
       toast({ title: 'SIP não conectado', description: 'Configure o ramal SIP para realizar ligações VoIP.' });
       return;
     }
-    logCallUi({ event: 'sip_dial_start', metadata: { target: target.slice(-4) } });
+    logCallUi({ event: 'sip_dial_start', correlationId: corr, metadata: { target: target.slice(-4) } });
     voip.makeCall(target);
   }, [voip]);
 
   const dialWhatsApp = useCallback(async (phone?: string | null) => {
     const target = (phone || '').replace(/\D/g, '');
-    logCallUi({ event: 'wa_click', metadata: { hasPhone: !!target, lineBusy } });
+    const corr = await logCallUi({ event: 'wa_click', metadata: { hasPhone: !!target, lineBusy } });
     if (!target) {
-      logCallUi({ event: 'wa_no_phone' });
+      logCallUi({ event: 'wa_no_phone', correlationId: corr });
       toast({ title: 'Contato sem telefone', variant: 'destructive' as any });
       return;
     }
     if (lineBusy) {
-      logCallUi({ event: 'wa_blocked_busy' });
+      logCallUi({ event: 'wa_blocked_busy', correlationId: corr });
       // Toast não intrusivo (sonner) com ação "Aguardar" — arma um watcher
       // que dispara uma notificação assim que a linha for liberada.
+      // Owner enxerga o correlation_id + link direto para o painel de telemetria.
+      const shortCorr = corr.slice(0, 8);
       sonnerToast('Linha Wavoip ocupada', {
         id: 'wavoip-line-busy',
-        description: 'Outro usuário está em ligação. Aguarde a linha ficar livre.',
+        description: isOwner
+          ? `Outro usuário está em ligação. Aguarde a linha ficar livre. · corr ${shortCorr}`
+          : 'Outro usuário está em ligação. Aguarde a linha ficar livre.',
         action: {
           label: 'Aguardar',
           onClick: () => {
             waitingForLineRef.current = true;
-            logCallUi({ event: 'line_wait_armed' });
+            logCallUi({ event: 'line_wait_armed', correlationId: corr });
             sonnerToast('Aguardando linha…', {
               id: 'wavoip-line-wait',
               description: 'Vamos avisar assim que a linha ficar disponível.',
@@ -244,27 +250,37 @@ export default function FocusedChatPage() {
             });
           },
         },
+        // Owners recebem um segundo botão que abre a página de telemetria já
+        // filtrada por este correlation_id — direto ao ponto de auditoria.
+        ...(isOwner
+          ? {
+              cancel: {
+                label: 'Abrir telemetria',
+                onClick: () => window.open(callTelemetryUrl(corr), '_blank', 'noopener'),
+              },
+            }
+          : {}),
         duration: 6000,
       });
       return;
     }
-    logCallUi({ event: 'wa_dial_start', metadata: { target: target.slice(-4) } });
+    logCallUi({ event: 'wa_dial_start', correlationId: corr, metadata: { target: target.slice(-4) } });
     try {
       const ok = await wavoip.callWhatsApp(target, undefined, {
         customer_id: selectedConv?.id,
         customer_name: selectedConv?.name,
       } as any);
       if (!ok) {
-        logCallUi({ event: 'wa_dial_fail', metadata: { reason: 'callWhatsApp_returned_false' } });
+        logCallUi({ event: 'wa_dial_fail', correlationId: corr, metadata: { reason: 'callWhatsApp_returned_false' } });
         toast({ title: 'Falha ao iniciar ligação', description: 'Verifique o pareamento Wavoip.' });
       } else {
-        logCallUi({ event: 'wa_dial_ok' });
+        logCallUi({ event: 'wa_dial_ok', correlationId: corr });
       }
     } catch (e: any) {
-      logCallUi({ event: 'wa_dial_fail', metadata: { reason: String(e?.message || e) } });
+      logCallUi({ event: 'wa_dial_fail', correlationId: corr, metadata: { reason: String(e?.message || e) } });
       toast({ title: 'Erro Wavoip', description: e?.message || 'Falha ao iniciar ligação.', variant: 'destructive' as any });
     }
-  }, [wavoip, selectedConv, lineBusy]);
+  }, [wavoip, selectedConv, lineBusy, isOwner]);
 
   // Load first active WhatsApp connection.
   useEffect(() => {
@@ -869,7 +885,16 @@ export default function FocusedChatPage() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
+                          type="button"
                           onClick={() => dialSip(selectedConv.phone)}
+                          onKeyDown={(e) => {
+                            // A11y: garante ativação via teclado mesmo se algum
+                            // ancestral chamar preventDefault no keypress padrão.
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              (e.currentTarget as HTMLButtonElement).click();
+                            }
+                          }}
                           disabled={voip.status !== 'connected'}
                           data-testid="dial-sip-btn"
                           data-state={
@@ -878,10 +903,11 @@ export default function FocusedChatPage() {
                             : 'ready'
                           }
                           className={cn(
-                            'p-2 rounded-lg transition inline-flex items-center justify-center border',
+                            'p-2 min-w-11 min-h-11 md:min-w-9 md:min-h-9 rounded-lg transition inline-flex items-center justify-center border',
+                            'focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                             lineBusy
-                              ? 'text-red-500 border-red-500/40 hover:bg-red-500/10'
-                              : 'text-blue-500 border-blue-500/30 hover:bg-blue-500/10',
+                              ? 'text-red-500 border-red-500/40 hover:bg-red-500/10 focus-visible:ring-red-500'
+                              : 'text-blue-500 border-blue-500/30 hover:bg-blue-500/10 focus-visible:ring-blue-500',
                             voip.status !== 'connected' && 'opacity-50 cursor-not-allowed',
                           )}
                           aria-label={
@@ -891,11 +917,12 @@ export default function FocusedChatPage() {
                                 ? 'Ligar por VoIP (SIP) — atenção: linha Wavoip em uso por outro usuário'
                                 : 'Ligar por VoIP (SIP)'
                           }
+                          aria-disabled={voip.status !== 'connected'}
                         >
-                          <Phone className="w-4 h-4" />
+                          <Phone className="w-4 h-4" aria-hidden="true" />
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent className="max-w-[240px] text-xs">
+                      <TooltipContent className="max-w-[240px] text-xs" role="tooltip">
                         <div className="font-medium">Ligar por VoIP (SIP)</div>
                         <div className="text-muted-foreground mt-0.5">
                           {voip.status !== 'connected'
@@ -909,23 +936,32 @@ export default function FocusedChatPage() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
+                          type="button"
                           onClick={() => dialWhatsApp(selectedConv.phone)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              (e.currentTarget as HTMLButtonElement).click();
+                            }
+                          }}
                           disabled={lineBusy}
                           data-testid="dial-wa-btn"
                           data-state={lineBusy ? 'busy' : 'ready'}
                           className={cn(
-                            'p-2 rounded-lg transition inline-flex items-center justify-center border',
+                            'p-2 min-w-11 min-h-11 md:min-w-9 md:min-h-9 rounded-lg transition inline-flex items-center justify-center border',
+                            'focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                             lineBusy
-                              ? 'text-red-500 border-red-500/40 hover:bg-red-500/10 cursor-not-allowed'
-                              : 'text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/10',
+                              ? 'text-red-500 border-red-500/40 hover:bg-red-500/10 cursor-not-allowed focus-visible:ring-red-500'
+                              : 'text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/10 focus-visible:ring-emerald-500',
                           )}
                           aria-label={
                             lineBusy
                               ? 'Ligar por WhatsApp — indisponível: linha Wavoip em uso por outro usuário'
                               : 'Ligar por WhatsApp (via Wavoip)'
                           }
+                          aria-disabled={lineBusy}
                         >
-                          <Phone className="w-4 h-4" />
+                          <Phone className="w-4 h-4" aria-hidden="true" />
                         </button>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-[240px] text-xs">

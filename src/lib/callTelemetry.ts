@@ -43,10 +43,13 @@ function safeCorrId(): string {
 }
 
 let seq = 0;
-export async function logCallUi({ event, correlationId, metadata, message }: Payload): Promise<void> {
+/**
+ * Retorna o `correlation_id` usado (útil para propagar ao toast/UI para que o
+ * dono consiga achar o evento no painel de telemetria `/internal/call-telemetry`).
+ */
+export async function logCallUi({ event, correlationId, metadata, message }: Payload): Promise<string> {
   const corr = correlationId || safeCorrId();
   seq++;
-  // Console breadcrumb — sempre presente, invisível em produção mas útil no DevTools.
   try {
     // eslint-disable-next-line no-console
     console.info(`[callUi:${event}] #${seq}`, { corr, ...metadata });
@@ -68,4 +71,10 @@ export async function logCallUi({ event, correlationId, metadata, message }: Pay
   } catch {
     // Silencioso — telemetria nunca quebra fluxo do usuário.
   }
+  return corr;
+}
+
+/** URL do painel de telemetria filtrado por correlation_id (owner-only). */
+export function callTelemetryUrl(correlationId: string): string {
+  return `/internal/call-telemetry?corr=${encodeURIComponent(correlationId)}`;
 }
