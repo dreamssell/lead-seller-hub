@@ -155,6 +155,7 @@ const App = () => (
               <Route path="/status" element={<ProtectedRoute ownerOnly><BackendStatusPage /></ProtectedRoute>} />
               <Route path="/documentation" element={<ProtectedRoute pageKey="documentation"><DocumentationPage /></ProtectedRoute>} />
               <Route path="/internal/telemetry" element={<ProtectedRoute ownerOnly><InternalTelemetryPage /></ProtectedRoute>} />
+              <Route path="/internal/call-telemetry" element={<ProtectedRoute ownerOnly><CallTelemetryPage /></ProtectedRoute>} />
               <Route path="/internal/role-label-audit" element={<ProtectedRoute ownerOnly><RoleLabelAuditPage /></ProtectedRoute>} />
               <Route path="/bot-flows" element={<ProtectedRoute><BotFlowsPage /></ProtectedRoute>} />
               <Route path="/automations/flows" element={<ProtectedRoute><FlowBuilderPage /></ProtectedRoute>} />
