@@ -95,15 +95,33 @@ export default function AuthCallbackPage() {
             status: (sessionError as { status?: number }).status ?? null,
             message: sessionError.message,
           });
-          setError(`Falha ao autenticar: ${sessionError.message}`);
+          reportError({
+            message: `[AuthCallback] setSession falhou: ${sessionError.message}`,
+            severity: 'error',
+            source: 'manual',
+            metadata: {
+              stage: 'setSession',
+              name: sessionError.name,
+              status: (sessionError as { status?: number }).status ?? null,
+              expectedUserId,
+              debugLog,
+            },
+          });
+          setError(sessionError.message);
           return;
         }
 
         const receivedUserId = data.session?.user?.id ?? null;
         if (expectedUserId && receivedUserId && receivedUserId !== expectedUserId) {
           log('session_user_mismatch', { expectedUserId, receivedUserId });
-          await supabase.auth.signOut().catch(() => undefined);
-          setError('Falha de segurança: a sessão retornada não corresponde ao usuário autenticado. Faça login novamente.');
+          reportError({
+            message: '[AuthCallback] Mismatch entre usuário do token e sessão retornada',
+            severity: 'fatal',
+            source: 'manual',
+            metadata: { expectedUserId, receivedUserId, debugLog },
+          });
+          await supabase.auth.signOut({ scope: 'local' } as any).catch(() => undefined);
+          setError('session_user_mismatch');
           return;
         }
 
@@ -112,8 +130,6 @@ export default function AuthCallbackPage() {
           expiresAt: data.session?.expires_at ?? null,
           durationMs: Math.round(performance.now() - started),
         });
-
-
 
         // Redireciona para destino salvo (se houver) ou dashboard
         const next = searchParams.get('next') || sessionStorage.getItem('auth:next') || '/';
@@ -124,7 +140,14 @@ export default function AuthCallbackPage() {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         log('setSession:exception', { message });
-        setError(`Erro inesperado ao autenticar: ${message}`);
+        reportError({
+          message: `[AuthCallback] Exceção inesperada: ${message}`,
+          stack: err instanceof Error ? err.stack : null,
+          severity: 'fatal',
+          source: 'manual',
+          metadata: { debugLog },
+        });
+        setError(message);
       }
     };
 
