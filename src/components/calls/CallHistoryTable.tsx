@@ -580,6 +580,7 @@ export function CallHistoryTable({
       missed: r.direction === 'inbound' ? 'Perdida' : 'Não atendida',
       failed: 'Falhou',
       rejected: 'Rejeitada',
+      transferred: 'Transferida',
       initiated: 'Em ligação',
       ringing: 'Em ligação',
     };
@@ -589,6 +590,7 @@ export function CallHistoryTable({
 
   const statusFilterLabel = (status: string) => {
     if (status === 'initiated' || status === 'ringing') return 'Em ligação';
+    if (status === 'transferred') return 'Transferida';
     return statusLabelPt({ status, direction: 'outbound', ended_at: new Date().toISOString() } as Row);
   };
 
