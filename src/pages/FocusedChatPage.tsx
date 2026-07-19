@@ -146,6 +146,61 @@ export default function FocusedChatPage() {
 
   const selectedConv = useMemo(() => convs.find(c => c.id === selected) || null, [convs, selected]);
 
+  // VoIP (SIP) + Wavoip (WhatsApp call) integrations for header dial buttons.
+  const voip = useVoip();
+  const wavoip = useWavoipWebphone();
+
+  // Realtime detection of "line busy": any user in the current tenant scope
+  // currently on a Wavoip call. RLS already limits rows to the same tenant.
+  const [lineBusy, setLineBusy] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const { count } = await (supabase as any)
+          .from('wavoip_line_state')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'in_call');
+        if (!cancelled) setLineBusy((count ?? 0) > 0);
+      } catch { /* ignore — never break chat UI */ }
+    };
+    refresh();
+    const ch = (supabase as any)
+      .channel('wavoip-line-state-focused')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wavoip_line_state' }, refresh)
+      .subscribe();
+    const iv = setInterval(refresh, 15000);
+    return () => { cancelled = true; clearInterval(iv); try { (supabase as any).removeChannel(ch); } catch {} };
+  }, []);
+
+  const dialSip = useCallback((phone?: string | null) => {
+    const target = (phone || '').replace(/\D/g, '');
+    if (!target) { toast({ title: 'Contato sem telefone', variant: 'destructive' as any }); return; }
+    if (voip.status !== 'connected') {
+      toast({ title: 'SIP não conectado', description: 'Configure o ramal SIP para realizar ligações VoIP.' });
+      return;
+    }
+    voip.makeCall(target);
+  }, [voip]);
+
+  const dialWhatsApp = useCallback(async (phone?: string | null) => {
+    const target = (phone || '').replace(/\D/g, '');
+    if (!target) { toast({ title: 'Contato sem telefone', variant: 'destructive' as any }); return; }
+    if (lineBusy) {
+      toast({ title: 'Linha ocupada', description: 'Outro usuário está em uma ligação Wavoip no momento.' });
+      return;
+    }
+    try {
+      const ok = await wavoip.callWhatsApp(target, undefined, {
+        customer_id: selectedConv?.id,
+        customer_name: selectedConv?.name,
+      } as any);
+      if (!ok) toast({ title: 'Falha ao iniciar ligação', description: 'Verifique o pareamento Wavoip.' });
+    } catch (e: any) {
+      toast({ title: 'Erro Wavoip', description: e?.message || 'Falha ao iniciar ligação.', variant: 'destructive' as any });
+    }
+  }, [wavoip, selectedConv, lineBusy]);
+
   // Load first active WhatsApp connection.
   useEffect(() => {
     let cancelled = false;
