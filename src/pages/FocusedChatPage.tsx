@@ -115,6 +115,7 @@ function computeUnread(latestAt: string | null, lastRead: string | null): number
 
 export default function FocusedChatPage() {
   const { user } = useAuth();
+  const { isOwner } = usePlatformOwner();
   const [params, setParams] = useSearchParams();
   const initialConv = params.get('c');
   const initialToolParam = params.get('tool');
