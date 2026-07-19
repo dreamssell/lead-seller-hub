@@ -384,7 +384,42 @@ export default function InternalCommsPage() {
                     </div>
                   );
                 })}
+
+                {/* Bolhas de anexos que falharam — reenvio direto na conversa */}
+                {queue.filter((q) => q.status === 'failed').map((q) => (
+                  <div key={`failed-${q.id}`} className="flex justify-end" data-testid="failed-message-bubble">
+                    <div className="max-w-[75%] rounded-2xl rounded-br-md px-3 py-2 text-sm shadow-sm space-y-2 bg-destructive/10 border border-destructive/40 text-foreground">
+                      <div className="flex items-center gap-2 text-xs font-medium text-destructive">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        Falha ao enviar “{q.file.name}”
+                      </div>
+                      {q.error && <p className="text-[11px] text-destructive/90 break-words">{q.error}</p>}
+                      <div className="flex items-center gap-2 pt-1">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => retryOne(q.id)}
+                          disabled={composerBusy}
+                          aria-label={`Reenviar ${q.file.name}`}
+                        >
+                          <RotateCcw className="w-3 h-3 mr-1" /> Reenviar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => removeFromQueue(q.id)}
+                          disabled={composerBusy}
+                        >
+                          Descartar
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
+
 
               <div className="border-t border-border">
                 {attachmentError && (
