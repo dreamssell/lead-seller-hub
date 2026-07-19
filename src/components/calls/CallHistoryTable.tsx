@@ -601,6 +601,7 @@ export function CallHistoryTable({
       missed: 'bg-destructive/10 text-destructive border-destructive/30',
       failed: 'bg-destructive/10 text-destructive border-destructive/30',
       rejected: 'bg-amber-500/10 text-amber-600 border-amber-500/30',
+      transferred: 'bg-sky-500/10 text-sky-600 border-sky-500/30',
       initiated: 'bg-primary/10 text-primary border-primary/30',
       ringing: 'bg-primary/10 text-primary border-primary/30',
     };
