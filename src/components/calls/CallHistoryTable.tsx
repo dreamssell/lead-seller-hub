@@ -259,8 +259,12 @@ export function CallHistoryTable({
           return true;
         };
         if (payload.eventType === 'INSERT' && scoped(nrow)) {
-          setRows((prev) => (prev.some((x) => x.id === nrow!.id) ? prev : [nrow as Row, ...prev]));
-          enrich([nrow as Row]);
+          if (liveEnabledRef.current) {
+            setRows((prev) => (prev.some((x) => x.id === nrow!.id) ? prev : [nrow as Row, ...prev]));
+            enrich([nrow as Row]);
+          } else {
+            setPendingInserts((prev) => (prev.some((x) => x.id === nrow!.id) ? prev : [nrow as Row, ...prev]));
+          }
         } else if (payload.eventType === 'UPDATE' && scoped(nrow)) {
           setRows((prev) => prev.map((x) => (x.id === nrow!.id ? { ...x, ...(nrow as Row) } : x)));
         } else if (payload.eventType === 'DELETE' && orow) {
