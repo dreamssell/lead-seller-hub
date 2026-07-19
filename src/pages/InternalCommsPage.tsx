@@ -84,9 +84,37 @@ export default function InternalCommsPage() {
     }
     if ((!draft.trim() && !pendingFile) || sending) return;
     setSending(true);
-    const res = await sendMessage(draft);
+    const outgoing: OutgoingAttachment | null = pendingFile
+      ? {
+          file: pendingFile,
+          filename: pendingFile.name,
+          mime: pendingFile.type || 'application/octet-stream',
+          size: pendingFile.size,
+          kind: attachmentKindFor(pendingFile.type || ''),
+        }
+      : null;
+    const res = await sendMessage(draft, outgoing);
     setSending(false);
-    if (!res.error) { setDraft(''); clearAttachment(); }
+    if (res.error) toast.error(`Falha ao enviar: ${res.error}`);
+    else { setDraft(''); clearAttachment(); }
+  };
+
+  const handleAudioRecorded = async (payload: { blob: Blob; mime: string; durationMs: number }) => {
+    if (sending) return;
+    setSending(true);
+    const ext = payload.mime.includes('mp4') ? 'm4a' : payload.mime.includes('ogg') ? 'ogg' : 'webm';
+    const filename = `audio-${new Date().toISOString().replace(/[:.]/g, '-')}.${ext}`;
+    const outgoing: OutgoingAttachment = {
+      file: payload.blob,
+      filename,
+      mime: payload.mime,
+      size: payload.blob.size,
+      kind: 'audio',
+      durationMs: payload.durationMs,
+    };
+    const res = await sendMessage('', outgoing);
+    setSending(false);
+    if (res.error) toast.error(`Falha ao enviar áudio: ${res.error}`);
   };
 
   return (
