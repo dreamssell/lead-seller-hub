@@ -156,6 +156,10 @@ export default function FocusedChatPage() {
   // Realtime detection of "line busy": any user in the current tenant scope
   // currently on a Wavoip call. RLS already limits rows to the same tenant.
   const [lineBusy, setLineBusy] = useState(false);
+  // "Wait & notify" — quando a linha está ocupada e o usuário clica em
+  // "Aguardar", armamos um watcher que dispara um toast assim que a linha
+  // volta a ficar livre. Um toast único (id fixo) evita spam.
+  const waitingForLineRef = useRef(false);
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
@@ -164,7 +168,27 @@ export default function FocusedChatPage() {
           .from('wavoip_line_state')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'in_call');
-        if (!cancelled) setLineBusy((count ?? 0) > 0);
+        if (cancelled) return;
+        const busy = (count ?? 0) > 0;
+        setLineBusy((prev) => {
+          if (prev !== busy) {
+            logCallUi({
+              event: 'line_busy_change',
+              metadata: { from: prev, to: busy, count: count ?? 0 },
+            });
+            // Se estávamos aguardando e a linha ficou livre → avisa o usuário.
+            if (prev && !busy && waitingForLineRef.current) {
+              waitingForLineRef.current = false;
+              logCallUi({ event: 'line_wait_fired' });
+              sonnerToast.success('Linha Wavoip livre', {
+                id: 'wavoip-line-wait',
+                description: 'A linha está disponível agora. Você pode ligar.',
+                duration: 6000,
+              });
+            }
+          }
+          return busy;
+        });
       } catch { /* ignore — never break chat UI */ }
     };
     refresh();
@@ -178,28 +202,66 @@ export default function FocusedChatPage() {
 
   const dialSip = useCallback((phone?: string | null) => {
     const target = (phone || '').replace(/\D/g, '');
-    if (!target) { toast({ title: 'Contato sem telefone', variant: 'destructive' as any }); return; }
+    logCallUi({ event: 'sip_click', metadata: { hasPhone: !!target, sipStatus: voip.status } });
+    if (!target) {
+      logCallUi({ event: 'sip_no_phone' });
+      toast({ title: 'Contato sem telefone', variant: 'destructive' as any });
+      return;
+    }
     if (voip.status !== 'connected') {
+      logCallUi({ event: 'sip_blocked_disconnected', metadata: { sipStatus: voip.status } });
       toast({ title: 'SIP não conectado', description: 'Configure o ramal SIP para realizar ligações VoIP.' });
       return;
     }
+    logCallUi({ event: 'sip_dial_start', metadata: { target: target.slice(-4) } });
     voip.makeCall(target);
   }, [voip]);
 
   const dialWhatsApp = useCallback(async (phone?: string | null) => {
     const target = (phone || '').replace(/\D/g, '');
-    if (!target) { toast({ title: 'Contato sem telefone', variant: 'destructive' as any }); return; }
-    if (lineBusy) {
-      toast({ title: 'Linha ocupada', description: 'Outro usuário está em uma ligação Wavoip no momento.' });
+    logCallUi({ event: 'wa_click', metadata: { hasPhone: !!target, lineBusy } });
+    if (!target) {
+      logCallUi({ event: 'wa_no_phone' });
+      toast({ title: 'Contato sem telefone', variant: 'destructive' as any });
       return;
     }
+    if (lineBusy) {
+      logCallUi({ event: 'wa_blocked_busy' });
+      // Toast não intrusivo (sonner) com ação "Aguardar" — arma um watcher
+      // que dispara uma notificação assim que a linha for liberada.
+      sonnerToast('Linha Wavoip ocupada', {
+        id: 'wavoip-line-busy',
+        description: 'Outro usuário está em ligação. Aguarde a linha ficar livre.',
+        action: {
+          label: 'Aguardar',
+          onClick: () => {
+            waitingForLineRef.current = true;
+            logCallUi({ event: 'line_wait_armed' });
+            sonnerToast('Aguardando linha…', {
+              id: 'wavoip-line-wait',
+              description: 'Vamos avisar assim que a linha ficar disponível.',
+              duration: 4000,
+            });
+          },
+        },
+        duration: 6000,
+      });
+      return;
+    }
+    logCallUi({ event: 'wa_dial_start', metadata: { target: target.slice(-4) } });
     try {
       const ok = await wavoip.callWhatsApp(target, undefined, {
         customer_id: selectedConv?.id,
         customer_name: selectedConv?.name,
       } as any);
-      if (!ok) toast({ title: 'Falha ao iniciar ligação', description: 'Verifique o pareamento Wavoip.' });
+      if (!ok) {
+        logCallUi({ event: 'wa_dial_fail', metadata: { reason: 'callWhatsApp_returned_false' } });
+        toast({ title: 'Falha ao iniciar ligação', description: 'Verifique o pareamento Wavoip.' });
+      } else {
+        logCallUi({ event: 'wa_dial_ok' });
+      }
     } catch (e: any) {
+      logCallUi({ event: 'wa_dial_fail', metadata: { reason: String(e?.message || e) } });
       toast({ title: 'Erro Wavoip', description: e?.message || 'Falha ao iniciar ligação.', variant: 'destructive' as any });
     }
   }, [wavoip, selectedConv, lineBusy]);
