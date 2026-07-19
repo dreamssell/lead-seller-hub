@@ -202,43 +202,47 @@ export default function FocusedChatPage() {
     return () => { cancelled = true; clearInterval(iv); try { (supabase as any).removeChannel(ch); } catch {} };
   }, []);
 
-  const dialSip = useCallback((phone?: string | null) => {
+  const dialSip = useCallback(async (phone?: string | null) => {
     const target = (phone || '').replace(/\D/g, '');
-    logCallUi({ event: 'sip_click', metadata: { hasPhone: !!target, sipStatus: voip.status } });
+    const corr = await logCallUi({ event: 'sip_click', metadata: { hasPhone: !!target, sipStatus: voip.status } });
     if (!target) {
-      logCallUi({ event: 'sip_no_phone' });
+      logCallUi({ event: 'sip_no_phone', correlationId: corr });
       toast({ title: 'Contato sem telefone', variant: 'destructive' as any });
       return;
     }
     if (voip.status !== 'connected') {
-      logCallUi({ event: 'sip_blocked_disconnected', metadata: { sipStatus: voip.status } });
+      logCallUi({ event: 'sip_blocked_disconnected', correlationId: corr, metadata: { sipStatus: voip.status } });
       toast({ title: 'SIP não conectado', description: 'Configure o ramal SIP para realizar ligações VoIP.' });
       return;
     }
-    logCallUi({ event: 'sip_dial_start', metadata: { target: target.slice(-4) } });
+    logCallUi({ event: 'sip_dial_start', correlationId: corr, metadata: { target: target.slice(-4) } });
     voip.makeCall(target);
   }, [voip]);
 
   const dialWhatsApp = useCallback(async (phone?: string | null) => {
     const target = (phone || '').replace(/\D/g, '');
-    logCallUi({ event: 'wa_click', metadata: { hasPhone: !!target, lineBusy } });
+    const corr = await logCallUi({ event: 'wa_click', metadata: { hasPhone: !!target, lineBusy } });
     if (!target) {
-      logCallUi({ event: 'wa_no_phone' });
+      logCallUi({ event: 'wa_no_phone', correlationId: corr });
       toast({ title: 'Contato sem telefone', variant: 'destructive' as any });
       return;
     }
     if (lineBusy) {
-      logCallUi({ event: 'wa_blocked_busy' });
+      logCallUi({ event: 'wa_blocked_busy', correlationId: corr });
       // Toast não intrusivo (sonner) com ação "Aguardar" — arma um watcher
       // que dispara uma notificação assim que a linha for liberada.
+      // Owner enxerga o correlation_id + link direto para o painel de telemetria.
+      const shortCorr = corr.slice(0, 8);
       sonnerToast('Linha Wavoip ocupada', {
         id: 'wavoip-line-busy',
-        description: 'Outro usuário está em ligação. Aguarde a linha ficar livre.',
+        description: isOwner
+          ? `Outro usuário está em ligação. Aguarde a linha ficar livre. · corr ${shortCorr}`
+          : 'Outro usuário está em ligação. Aguarde a linha ficar livre.',
         action: {
           label: 'Aguardar',
           onClick: () => {
             waitingForLineRef.current = true;
-            logCallUi({ event: 'line_wait_armed' });
+            logCallUi({ event: 'line_wait_armed', correlationId: corr });
             sonnerToast('Aguardando linha…', {
               id: 'wavoip-line-wait',
               description: 'Vamos avisar assim que a linha ficar disponível.',
@@ -246,27 +250,37 @@ export default function FocusedChatPage() {
             });
           },
         },
+        // Owners recebem um segundo botão que abre a página de telemetria já
+        // filtrada por este correlation_id — direto ao ponto de auditoria.
+        ...(isOwner
+          ? {
+              cancel: {
+                label: 'Abrir telemetria',
+                onClick: () => window.open(callTelemetryUrl(corr), '_blank', 'noopener'),
+              },
+            }
+          : {}),
         duration: 6000,
       });
       return;
     }
-    logCallUi({ event: 'wa_dial_start', metadata: { target: target.slice(-4) } });
+    logCallUi({ event: 'wa_dial_start', correlationId: corr, metadata: { target: target.slice(-4) } });
     try {
       const ok = await wavoip.callWhatsApp(target, undefined, {
         customer_id: selectedConv?.id,
         customer_name: selectedConv?.name,
       } as any);
       if (!ok) {
-        logCallUi({ event: 'wa_dial_fail', metadata: { reason: 'callWhatsApp_returned_false' } });
+        logCallUi({ event: 'wa_dial_fail', correlationId: corr, metadata: { reason: 'callWhatsApp_returned_false' } });
         toast({ title: 'Falha ao iniciar ligação', description: 'Verifique o pareamento Wavoip.' });
       } else {
-        logCallUi({ event: 'wa_dial_ok' });
+        logCallUi({ event: 'wa_dial_ok', correlationId: corr });
       }
     } catch (e: any) {
-      logCallUi({ event: 'wa_dial_fail', metadata: { reason: String(e?.message || e) } });
+      logCallUi({ event: 'wa_dial_fail', correlationId: corr, metadata: { reason: String(e?.message || e) } });
       toast({ title: 'Erro Wavoip', description: e?.message || 'Falha ao iniciar ligação.', variant: 'destructive' as any });
     }
-  }, [wavoip, selectedConv, lineBusy]);
+  }, [wavoip, selectedConv, lineBusy, isOwner]);
 
   // Load first active WhatsApp connection.
   useEffect(() => {
