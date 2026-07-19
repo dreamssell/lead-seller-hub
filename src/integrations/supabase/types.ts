@@ -6794,6 +6794,16 @@ export type Database = {
           user_id: string
         }[]
       }
+      list_mentionable_users: {
+        Args: { _owner_id: string }
+        Returns: {
+          avatar_url: string
+          display_name: string
+          email: string
+          is_active: boolean
+          user_id: string
+        }[]
+      }
       log_video_action: {
         Args: {
           p_action: string
