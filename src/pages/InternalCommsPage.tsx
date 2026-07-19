@@ -15,6 +15,7 @@ import {
   validateInternalAttachment, ALLOWED_ATTACHMENT_MIMES,
   MAX_ATTACHMENT_BYTES, attachmentKindFor,
 } from '@/lib/internalCommsAttachments';
+import { compressImageFile } from '@/lib/imageCompression';
 import { AudioRecorder } from '@/components/internal-comms/AudioRecorder';
 import { AttachmentBubble } from '@/components/internal-comms/AttachmentBubble';
 
