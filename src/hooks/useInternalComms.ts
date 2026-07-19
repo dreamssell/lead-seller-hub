@@ -19,6 +19,21 @@ export interface InternalMessage {
   content: string;
   read_at: string | null;
   created_at: string;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
+  attachment_mime?: string | null;
+  attachment_size?: number | null;
+  attachment_kind?: 'image' | 'audio' | 'file' | null;
+  audio_duration_ms?: number | null;
+}
+
+export interface OutgoingAttachment {
+  file: Blob;
+  filename: string;
+  mime: string;
+  size: number;
+  kind: 'image' | 'audio' | 'file';
+  durationMs?: number;
 }
 
 /**
