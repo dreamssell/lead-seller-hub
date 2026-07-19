@@ -286,6 +286,7 @@ export default function InternalCommsPage() {
                   >
                     <Paperclip className="w-4 h-4" />
                   </Button>
+                  <AudioRecorder disabled={sending} onRecorded={handleAudioRecorded} />
                   <Input
                     placeholder="Escreva sua mensagem..."
                     value={draft}
@@ -299,7 +300,7 @@ export default function InternalCommsPage() {
                     size="icon"
                     aria-label="Enviar"
                   >
-                    <Send className="w-4 h-4" />
+                    {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   </Button>
                 </div>
               </div>
