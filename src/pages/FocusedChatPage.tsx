@@ -863,11 +863,20 @@ export default function FocusedChatPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    {/* Indicador de eventos de ligação com falha ao renderizar (badge âmbar).
+                        Aparece silenciosamente somente se houver eventos problemáticos. */}
+                    <CallEventFailedIndicator phone={selectedConv.phone} customerId={selectedConv.id} />
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
                           onClick={() => dialSip(selectedConv.phone)}
                           disabled={voip.status !== 'connected'}
+                          data-testid="dial-sip-btn"
+                          data-state={
+                            voip.status !== 'connected' ? 'disconnected'
+                            : lineBusy ? 'busy'
+                            : 'ready'
+                          }
                           className={cn(
                             'p-2 rounded-lg transition inline-flex items-center justify-center border',
                             lineBusy
@@ -875,13 +884,26 @@ export default function FocusedChatPage() {
                               : 'text-blue-500 border-blue-500/30 hover:bg-blue-500/10',
                             voip.status !== 'connected' && 'opacity-50 cursor-not-allowed',
                           )}
-                          aria-label="Ligar via VoIP (SIP)"
+                          aria-label={
+                            voip.status !== 'connected'
+                              ? 'Ligar por VoIP (SIP) — indisponível: ramal SIP não conectado'
+                              : lineBusy
+                                ? 'Ligar por VoIP (SIP) — atenção: linha Wavoip em uso por outro usuário'
+                                : 'Ligar por VoIP (SIP)'
+                          }
                         >
                           <Phone className="w-4 h-4" />
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent>
-                        {lineBusy ? 'Linha Wavoip ocupada' : voip.status === 'connected' ? 'Ligar via VoIP (SIP)' : 'SIP não conectado'}
+                      <TooltipContent className="max-w-[240px] text-xs">
+                        <div className="font-medium">Ligar por VoIP (SIP)</div>
+                        <div className="text-muted-foreground mt-0.5">
+                          {voip.status !== 'connected'
+                            ? 'Ramal SIP desconectado — configure em Ferramentas → SIP para habilitar.'
+                            : lineBusy
+                              ? 'A linha Wavoip está em uso por outro usuário. Sua ligação SIP ainda pode ser realizada normalmente — o ícone fica vermelho apenas para sinalizar ocupação do canal WhatsApp.'
+                              : 'Discagem via ramal SIP (tronco VoIP).'}
+                        </div>
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip>
@@ -889,19 +911,30 @@ export default function FocusedChatPage() {
                         <button
                           onClick={() => dialWhatsApp(selectedConv.phone)}
                           disabled={lineBusy}
+                          data-testid="dial-wa-btn"
+                          data-state={lineBusy ? 'busy' : 'ready'}
                           className={cn(
                             'p-2 rounded-lg transition inline-flex items-center justify-center border',
                             lineBusy
                               ? 'text-red-500 border-red-500/40 hover:bg-red-500/10 cursor-not-allowed'
                               : 'text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/10',
                           )}
-                          aria-label="Ligar via WhatsApp (Wavoip)"
+                          aria-label={
+                            lineBusy
+                              ? 'Ligar por WhatsApp — indisponível: linha Wavoip em uso por outro usuário'
+                              : 'Ligar por WhatsApp (via Wavoip)'
+                          }
                         >
                           <Phone className="w-4 h-4" />
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent>
-                        {lineBusy ? 'Linha Wavoip ocupada por outro usuário' : 'Ligar via WhatsApp (Wavoip)'}
+                      <TooltipContent className="max-w-[240px] text-xs">
+                        <div className="font-medium">Ligar por WhatsApp</div>
+                        <div className="text-muted-foreground mt-0.5">
+                          {lineBusy
+                            ? 'A linha Wavoip só permite uma chamada simultânea por conta. Aguarde outro operador finalizar — você pode clicar em "Aguardar" no aviso e receberá uma notificação assim que ficar livre.'
+                            : 'Chamada de voz pelo WhatsApp usando a conexão Wavoip da conta.'}
+                        </div>
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip>
