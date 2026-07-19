@@ -14,7 +14,15 @@ export const ALLOWED_ATTACHMENT_MIMES = [
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'text/plain', 'text/csv',
+  // Áudio (gravação por microfone e uploads comuns)
+  'audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-m4a', 'audio/aac',
 ] as const;
+
+export function attachmentKindFor(mime: string): 'image' | 'audio' | 'file' {
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('audio/')) return 'audio';
+  return 'file';
+}
 
 // Nome: 1..180 chars, sem separadores de path, sem null byte, sem control chars.
 const FILENAME_RE = /^[^\/\\\x00-\x1f]{1,180}$/;

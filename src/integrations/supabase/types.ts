@@ -2059,6 +2059,12 @@ export type Database = {
       }
       internal_messages: {
         Row: {
+          attachment_kind: string | null
+          attachment_mime: string | null
+          attachment_name: string | null
+          attachment_size: number | null
+          attachment_url: string | null
+          audio_duration_ms: number | null
           content: string
           created_at: string
           id: string
@@ -2069,6 +2075,12 @@ export type Database = {
           sub_company_id: string | null
         }
         Insert: {
+          attachment_kind?: string | null
+          attachment_mime?: string | null
+          attachment_name?: string | null
+          attachment_size?: number | null
+          attachment_url?: string | null
+          audio_duration_ms?: number | null
           content: string
           created_at?: string
           id?: string
@@ -2079,6 +2091,12 @@ export type Database = {
           sub_company_id?: string | null
         }
         Update: {
+          attachment_kind?: string | null
+          attachment_mime?: string | null
+          attachment_name?: string | null
+          attachment_size?: number | null
+          attachment_url?: string | null
+          audio_duration_ms?: number | null
           content?: string
           created_at?: string
           id?: string
@@ -6729,6 +6747,7 @@ export type Database = {
           webhook_id: string
         }[]
       }
+      has_internal_scope_for_key: { Args: { _key: string }; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

@@ -19,6 +19,21 @@ export interface InternalMessage {
   content: string;
   read_at: string | null;
   created_at: string;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
+  attachment_mime?: string | null;
+  attachment_size?: number | null;
+  attachment_kind?: 'image' | 'audio' | 'file' | null;
+  audio_duration_ms?: number | null;
+}
+
+export interface OutgoingAttachment {
+  file: Blob;
+  filename: string;
+  mime: string;
+  size: number;
+  kind: 'image' | 'audio' | 'file';
+  durationMs?: number;
 }
 
 /**
@@ -129,9 +144,37 @@ export function useInternalComms() {
     return () => { supabase.removeChannel(channel); };
   }, [user?.id, activePeerId, ownerId, subCompanyId]);
 
-  const sendMessage = useCallback(async (content: string) => {
-    const text = content.trim();
-    if (!text || !user || !activePeerId || !ownerId) return { error: 'missing_context' };
+  const sendMessage = useCallback(async (content: string, attachment?: OutgoingAttachment | null) => {
+    const text = (content || '').trim();
+    if (!user || !activePeerId || !ownerId) return { error: 'missing_context' };
+    if (!text && !attachment) return { error: 'empty_message' };
+
+    let attachment_url: string | null = null;
+    let attachment_name: string | null = null;
+    let attachment_mime: string | null = null;
+    let attachment_size: number | null = null;
+    let attachment_kind: 'image' | 'audio' | 'file' | null = null;
+    let audio_duration_ms: number | null = null;
+
+    if (attachment) {
+      const now = new Date();
+      const ext = (attachment.filename.match(/\.[a-z0-9]+$/i)?.[0] || '').toLowerCase();
+      const safeExt = ext || (attachment.mime.startsWith('audio/') ? '.webm' : '');
+      const subSeg = subCompanyId || 'root';
+      const uid = (crypto as any)?.randomUUID?.() || Math.random().toString(36).slice(2);
+      const key = `${ownerId}/${subSeg}/${user.id}/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}/${uid}${safeExt}`;
+      const { error: upErr } = await supabase.storage
+        .from('internal-comms')
+        .upload(key, attachment.file, { contentType: attachment.mime, upsert: false });
+      if (upErr) return { error: `upload_failed: ${upErr.message}` };
+      attachment_url = key;
+      attachment_name = attachment.filename;
+      attachment_mime = attachment.mime;
+      attachment_size = attachment.size;
+      attachment_kind = attachment.kind;
+      audio_duration_ms = attachment.durationMs ?? null;
+    }
+
     const { data, error } = await supabase
       .from('internal_messages')
       .insert({
@@ -139,11 +182,23 @@ export function useInternalComms() {
         sub_company_id: subCompanyId,
         sender_id: user.id,
         recipient_id: activePeerId,
-        content: text,
-      })
+        content: text || '',
+        attachment_url,
+        attachment_name,
+        attachment_mime,
+        attachment_size,
+        attachment_kind,
+        audio_duration_ms,
+      } as any)
       .select()
       .single();
-    if (error) return { error: error.message };
+    if (error) {
+      // Rollback do arquivo se o INSERT falhar (evita órfãos no bucket).
+      if (attachment_url) {
+        try { await supabase.storage.from('internal-comms').remove([attachment_url]); } catch {}
+      }
+      return { error: error.message };
+    }
     setMessages((prev) => prev.some((m) => m.id === (data as any).id) ? prev : [...prev, data as any]);
     return { data };
   }, [user?.id, activePeerId, ownerId, subCompanyId]);

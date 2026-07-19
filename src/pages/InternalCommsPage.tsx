@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { useInternalComms } from '@/hooks/useInternalComms';
+import { useInternalComms, type OutgoingAttachment } from '@/hooks/useInternalComms';
 import { useInternalCommsUnread } from '@/hooks/useInternalCommsUnread';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MessagesSquare, Send, Search, Users, Paperclip, X } from 'lucide-react';
+import { MessagesSquare, Send, Search, Users, Paperclip, X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { validateInternalAttachment, ALLOWED_ATTACHMENT_MIMES, MAX_ATTACHMENT_BYTES } from '@/lib/internalCommsAttachments';
+import { validateInternalAttachment, ALLOWED_ATTACHMENT_MIMES, MAX_ATTACHMENT_BYTES, attachmentKindFor } from '@/lib/internalCommsAttachments';
+import { AudioRecorder } from '@/components/internal-comms/AudioRecorder';
+import { AttachmentBubble } from '@/components/internal-comms/AttachmentBubble';
 
 function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join('') || 'U';
@@ -82,9 +84,37 @@ export default function InternalCommsPage() {
     }
     if ((!draft.trim() && !pendingFile) || sending) return;
     setSending(true);
-    const res = await sendMessage(draft);
+    const outgoing: OutgoingAttachment | null = pendingFile
+      ? {
+          file: pendingFile,
+          filename: pendingFile.name,
+          mime: pendingFile.type || 'application/octet-stream',
+          size: pendingFile.size,
+          kind: attachmentKindFor(pendingFile.type || ''),
+        }
+      : null;
+    const res = await sendMessage(draft, outgoing);
     setSending(false);
-    if (!res.error) { setDraft(''); clearAttachment(); }
+    if (res.error) toast.error(`Falha ao enviar: ${res.error}`);
+    else { setDraft(''); clearAttachment(); }
+  };
+
+  const handleAudioRecorded = async (payload: { blob: Blob; mime: string; durationMs: number }) => {
+    if (sending) return;
+    setSending(true);
+    const ext = payload.mime.includes('mp4') ? 'm4a' : payload.mime.includes('ogg') ? 'ogg' : 'webm';
+    const filename = `audio-${new Date().toISOString().replace(/[:.]/g, '-')}.${ext}`;
+    const outgoing: OutgoingAttachment = {
+      file: payload.blob,
+      filename,
+      mime: payload.mime,
+      size: payload.blob.size,
+      kind: 'audio',
+      durationMs: payload.durationMs,
+    };
+    const res = await sendMessage('', outgoing);
+    setSending(false);
+    if (res.error) toast.error(`Falha ao enviar áudio: ${res.error}`);
   };
 
   return (
@@ -185,13 +215,27 @@ export default function InternalCommsPage() {
                   </div>
                 ) : messages.map((msg) => {
                   const mine = msg.sender_id === me?.id;
+                  const hasAttachment = !!msg.attachment_url;
                   return (
                     <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-sm ${
+                      <div className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-sm space-y-2 ${
                         mine ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-card border border-border rounded-bl-md'
                       }`}>
-                        <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-                        <p className={`text-[10px] mt-1 ${mine ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                        {hasAttachment && (
+                          <AttachmentBubble
+                            url={msg.attachment_url!}
+                            name={msg.attachment_name}
+                            mime={msg.attachment_mime}
+                            size={msg.attachment_size}
+                            kind={msg.attachment_kind}
+                            durationMs={msg.audio_duration_ms}
+                            mine={mine}
+                          />
+                        )}
+                        {msg.content && (
+                          <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                        )}
+                        <p className={`text-[10px] ${mine ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                           {formatTime(msg.created_at)}
                         </p>
                       </div>
@@ -242,6 +286,7 @@ export default function InternalCommsPage() {
                   >
                     <Paperclip className="w-4 h-4" />
                   </Button>
+                  <AudioRecorder disabled={sending} onRecorded={handleAudioRecorded} />
                   <Input
                     placeholder="Escreva sua mensagem..."
                     value={draft}
@@ -255,7 +300,7 @@ export default function InternalCommsPage() {
                     size="icon"
                     aria-label="Enviar"
                   >
-                    <Send className="w-4 h-4" />
+                    {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   </Button>
                 </div>
               </div>
