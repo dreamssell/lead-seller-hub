@@ -353,8 +353,12 @@ export function CallHistoryTable({
     return arr;
   }, [filtered, sortKey, sortDir]);
 
-  // Reset página ao mudar filtros/ordenação
-  useEffect(() => { setPage(0); }, [period, userFilter, connFilter, statusFilter, directionFilter, search, sortKey, sortDir]);
+  // Reset página ao mudar filtros/ordenação — pula a primeira execução para preservar a página restaurada do localStorage.
+  const skipFirstResetRef = useRef(true);
+  useEffect(() => {
+    if (skipFirstResetRef.current) { skipFirstResetRef.current = false; return; }
+    setPage(0);
+  }, [period, userFilter, connFilter, statusFilter, directionFilter, search, sortKey, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const pageRows = useMemo(
