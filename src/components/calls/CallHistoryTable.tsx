@@ -675,8 +675,8 @@ export function CallHistoryTable({
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-2 top-2.5 text-muted-foreground" />
               <Input value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por contato ou número (origem/destino)"
-                aria-label="Buscar histórico de chamadas"
+                placeholder="Buscar por contato, número, agente ou ID"
+                aria-label="Buscar chamadas por contato, número, agente ou identificador"
                 className="h-8 pl-7 w-72 text-xs" />
             </div>
             <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
