@@ -14,13 +14,14 @@
  * A UI é intencionalmente discreta — não bloqueia o fluxo de atendimento.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, RefreshCcw, ExternalLink } from 'lucide-react';
+import { AlertTriangle, RefreshCcw, ExternalLink, Copy } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { logCallUi } from '@/lib/callTelemetry';
+import { logCallUi, callTelemetryUrl } from '@/lib/callTelemetry';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 
 interface Props {
   /** Telefone (dígitos) do contato da conversa selecionada. */
