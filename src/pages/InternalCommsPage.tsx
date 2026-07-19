@@ -148,9 +148,14 @@ export default function InternalCommsPage() {
     const res = await sendMessage(textForFirst, outgoing);
     if (res.error) {
       setQueue((prev) => prev.map((q) => q.id === item.id ? { ...q, status: 'failed', error: res.error! } : q));
+      toast.error(`Falha ao enviar “${item.file.name}”`, {
+        description: res.error,
+        action: { label: 'Reenviar', onClick: () => { void retryOne(item.id); } },
+      });
       return false;
     }
     setQueue((prev) => prev.map((q) => q.id === item.id ? { ...q, status: 'sent' } : q));
+    toast.success(`“${item.file.name}” enviado`);
     return true;
   };
 
@@ -178,7 +183,6 @@ export default function InternalCommsPage() {
       // Limpa somente enviados; mantém falhados para retry.
       setQueue((prev) => prev.filter((q) => q.status !== 'sent'));
       if (!anyFailed) { setDraft(''); setAttachmentError(null); }
-      else toast.error('Alguns anexos falharam. Toque em "Tentar novamente" para reenviar.');
     } finally {
       setSending(false);
     }
@@ -204,6 +208,7 @@ export default function InternalCommsPage() {
     const res = await sendMessage('', outgoing);
     setSending(false);
     if (res.error) toast.error(`Falha ao enviar áudio: ${res.error}`);
+    else toast.success('Áudio enviado');
   };
 
   // Drag & drop no painel da conversa.
