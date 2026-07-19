@@ -133,9 +133,18 @@ export function AudioRecorder({
         let sum = 0;
         for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
         setLevel(Math.min(1, Math.sqrt(sum / buf.length) * 2));
-        setElapsedMs(Date.now() - startTsRef.current);
+        const el = Date.now() - startTsRef.current;
+        setElapsedMs(el);
+        // Auto-stop ao atingir o limite de duração.
+        if (el >= MAX_AUDIO_DURATION_MS && mediaRef.current && mediaRef.current.state !== 'inactive') {
+          toast.error(`Gravação atingiu o limite de ${Math.round(MAX_AUDIO_DURATION_MS / 60000)} min. Enviando…`);
+          shouldEmitRef.current = true;
+          try { mediaRef.current.stop(); } catch {}
+          return;
+        }
         rafRef.current = requestAnimationFrame(tick);
       };
+
 
       rec.start(250);
       startTsRef.current = Date.now();
