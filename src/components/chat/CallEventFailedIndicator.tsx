@@ -88,31 +88,47 @@ export function CallEventFailedIndicator({ phone, customerId }: Props) {
 
   const reprocess = useCallback(async (ev: FailedEvent) => {
     setBusyId(ev.id);
-    logCallUi({ event: 'call_event_reprocess_click', metadata: { event_id: ev.id, status: ev.status } });
+    const corr = await logCallUi({
+      event: 'call_event_reprocess_click',
+      metadata: { event_id: ev.id, status: ev.status, wavoip_call_id: ev.wavoip_call_id },
+    });
     try {
       const { data, error } = await supabase.functions.invoke('wavoip-event-reprocess', {
-        body: { event_id: ev.id },
+        body: { event_id: ev.id, correlation_id: corr },
       });
       if (error) throw error;
       const ok = (data as any)?.ok !== false;
+      const shortCorr = corr.slice(0, 8);
       if (ok) {
         toast.success('Evento reprocessado', {
-          description: 'A bolha da ligação foi (re)inserida na conversa.',
+          description: isOwner
+            ? `A bolha da ligação foi (re)inserida na conversa. · corr ${shortCorr}`
+            : 'A bolha da ligação foi (re)inserida na conversa.',
+          ...(isOwner
+            ? {
+                action: {
+                  label: 'Ver telemetria',
+                  onClick: () => window.open(callTelemetryUrl(corr), '_blank', 'noopener'),
+                },
+              }
+            : {}),
         });
-        logCallUi({ event: 'call_event_reprocess_ok', metadata: { event_id: ev.id, result: data } });
+        logCallUi({ event: 'call_event_reprocess_ok', correlationId: corr, metadata: { event_id: ev.id, result: data } });
         await load();
       } else {
         const reason = (data as any)?.reason || 'Motivo desconhecido';
-        toast.error('Não foi possível reprocessar', { description: reason });
-        logCallUi({ event: 'call_event_reprocess_fail', metadata: { event_id: ev.id, reason } });
+        toast.error('Não foi possível reprocessar', {
+          description: isOwner ? `${reason} · corr ${shortCorr}` : reason,
+        });
+        logCallUi({ event: 'call_event_reprocess_fail', correlationId: corr, metadata: { event_id: ev.id, reason } });
       }
     } catch (e: any) {
       toast.error('Falha ao reprocessar', { description: e?.message || 'Erro inesperado.' });
-      logCallUi({ event: 'call_event_reprocess_fail', metadata: { event_id: ev.id, error: String(e?.message || e) } });
+      logCallUi({ event: 'call_event_reprocess_fail', correlationId: corr, metadata: { event_id: ev.id, error: String(e?.message || e) } });
     } finally {
       setBusyId(null);
     }
-  }, [load]);
+  }, [load, isOwner]);
 
   if (!events.length) return null;
 
