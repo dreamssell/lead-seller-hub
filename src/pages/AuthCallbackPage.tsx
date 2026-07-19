@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { reportError } from '@/lib/errorReporter';
+import { ErrorPage } from '@/components/ErrorPage';
 
 /**
  * Página de callback de autenticação.
@@ -74,11 +76,12 @@ export default function AuthCallbackPage() {
           log('token_decode_failed');
         }
 
-        // Clear any pre-existing session before applying the new one to prevent
-        // cross-account bleed on shared browsers (e.g. platform owner testing
-        // a client login on the same tab).
-        log('signOut:previous');
-        try { await (supabase.auth as any).signOut?.(); } catch { /* ignore */ }
+        // Limpa somente o estado local (localStorage) sem chamar o endpoint
+        // /logout — um signOut com escopo padrão/global revoga TODAS as sessões
+        // do usuário no servidor, inclusive o token recém emitido que estamos
+        // prestes a aplicar, causando "Auth session missing!" no setSession.
+        log('signOut:local');
+        try { await supabase.auth.signOut({ scope: 'local' } as any); } catch { /* ignore */ }
 
         log('setSession:start', { expectedUserId });
         const { data, error: sessionError } = await supabase.auth.setSession({
@@ -92,15 +95,33 @@ export default function AuthCallbackPage() {
             status: (sessionError as { status?: number }).status ?? null,
             message: sessionError.message,
           });
-          setError(`Falha ao autenticar: ${sessionError.message}`);
+          reportError({
+            message: `[AuthCallback] setSession falhou: ${sessionError.message}`,
+            severity: 'error',
+            source: 'manual',
+            metadata: {
+              stage: 'setSession',
+              name: sessionError.name,
+              status: (sessionError as { status?: number }).status ?? null,
+              expectedUserId,
+              debugLog,
+            },
+          });
+          setError(sessionError.message);
           return;
         }
 
         const receivedUserId = data.session?.user?.id ?? null;
         if (expectedUserId && receivedUserId && receivedUserId !== expectedUserId) {
           log('session_user_mismatch', { expectedUserId, receivedUserId });
-          await supabase.auth.signOut().catch(() => undefined);
-          setError('Falha de segurança: a sessão retornada não corresponde ao usuário autenticado. Faça login novamente.');
+          reportError({
+            message: '[AuthCallback] Mismatch entre usuário do token e sessão retornada',
+            severity: 'fatal',
+            source: 'manual',
+            metadata: { expectedUserId, receivedUserId, debugLog },
+          });
+          await supabase.auth.signOut({ scope: 'local' } as any).catch(() => undefined);
+          setError('session_user_mismatch');
           return;
         }
 
@@ -109,8 +130,6 @@ export default function AuthCallbackPage() {
           expiresAt: data.session?.expires_at ?? null,
           durationMs: Math.round(performance.now() - started),
         });
-
-
 
         // Redireciona para destino salvo (se houver) ou dashboard
         const next = searchParams.get('next') || sessionStorage.getItem('auth:next') || '/';
@@ -121,39 +140,45 @@ export default function AuthCallbackPage() {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         log('setSession:exception', { message });
-        setError(`Erro inesperado ao autenticar: ${message}`);
+        reportError({
+          message: `[AuthCallback] Exceção inesperada: ${message}`,
+          stack: err instanceof Error ? err.stack : null,
+          severity: 'fatal',
+          source: 'manual',
+          metadata: { debugLog },
+        });
+        setError(message);
       }
     };
 
     setSessionFromTokens();
   }, [searchParams, navigate]);
 
+  if (error) {
+    // Mensagem tranquilizadora para o usuário final — sem expor detalhes técnicos.
+    // O log completo (debugLog + erro) já foi enviado ao painel do dono via reportError.
+    return (
+      <ErrorPage
+        onRetry={() => {
+          // Volta para a página de login externa preservando o destino desejado
+          const referrer = document.referrer;
+          if (referrer && !referrer.includes(window.location.host)) {
+            window.location.href = referrer;
+          } else {
+            window.location.href = '/';
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="text-center space-y-4 max-w-2xl w-full">
-        {error ? (
-          <div className="space-y-3">
-            <div className="text-destructive text-lg font-medium">{error}</div>
-            <p className="text-sm text-muted-foreground">
-              Entre em contato com o administrador ou tente novamente.
-            </p>
-            {debugLog.length > 0 && (
-              <details className="text-left mt-4">
-                <summary className="cursor-pointer text-xs text-muted-foreground">
-                  Detalhes técnicos ({debugLog.length} eventos)
-                </summary>
-                <pre className="mt-2 p-3 rounded bg-muted text-[10px] overflow-auto max-h-64 text-left">
-                  {debugLog.join('\n')}
-                </pre>
-              </details>
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-muted-foreground">Autenticando...</span>
-          </div>
-        )}
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm text-muted-foreground">Autenticando...</span>
+        </div>
       </div>
     </div>
   );
