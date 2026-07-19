@@ -636,7 +636,34 @@ export function CallHistoryTable({
           <CardTitle className="text-base flex items-center gap-2"><PhoneCall className="w-4 h-4" />{title}</CardTitle>
           <CardDescription>{description}</CardDescription>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setLiveEnabled((v) => !v)}
+            aria-pressed={liveEnabled}
+            title={liveEnabled ? 'Atualização em tempo real ativa — clique para pausar' : 'Pausado — clique para retomar'}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 h-7 text-[11px] font-medium transition-colors ${liveEnabled ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600' : 'border-border bg-muted text-muted-foreground'}`}
+          >
+            <Radio className={`w-3 h-3 ${liveEnabled ? 'animate-pulse' : ''}`} />
+            {liveEnabled ? 'Ao vivo' : 'Pausado'}
+          </button>
+          {pendingInserts.length > 0 && (
+            <Button
+              size="sm" variant="outline"
+              className="h-7 text-[11px] border-primary/40 text-primary"
+              onClick={() => {
+                setRows((prev) => {
+                  const seen = new Set(prev.map((x) => x.id));
+                  const merged = [...pendingInserts.filter((x) => !seen.has(x.id)), ...prev];
+                  return merged;
+                });
+                enrich(pendingInserts);
+                setPendingInserts([]);
+              }}
+            >
+              {pendingInserts.length} nova{pendingInserts.length > 1 ? 's' : ''} — mostrar
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={load}><RefreshCw className="w-4 h-4" /></Button>
           <Button variant="outline" size="sm" onClick={exportCsv}><Download className="w-4 h-4 mr-1" />CSV</Button>
           <Button variant="outline" size="sm" onClick={exportPdf}><FileText className="w-4 h-4 mr-1" />PDF</Button>
