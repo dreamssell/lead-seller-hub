@@ -801,6 +801,47 @@ export default function FocusedChatPage() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
+                          onClick={() => dialSip(selectedConv.phone)}
+                          disabled={voip.status !== 'connected'}
+                          className={cn(
+                            'p-2 rounded-lg transition inline-flex items-center justify-center border',
+                            lineBusy
+                              ? 'text-red-500 border-red-500/40 hover:bg-red-500/10'
+                              : 'text-blue-500 border-blue-500/30 hover:bg-blue-500/10',
+                            voip.status !== 'connected' && 'opacity-50 cursor-not-allowed',
+                          )}
+                          aria-label="Ligar via VoIP (SIP)"
+                        >
+                          <Phone className="w-4 h-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {lineBusy ? 'Linha Wavoip ocupada' : voip.status === 'connected' ? 'Ligar via VoIP (SIP)' : 'SIP não conectado'}
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => dialWhatsApp(selectedConv.phone)}
+                          disabled={lineBusy}
+                          className={cn(
+                            'p-2 rounded-lg transition inline-flex items-center justify-center border',
+                            lineBusy
+                              ? 'text-red-500 border-red-500/40 hover:bg-red-500/10 cursor-not-allowed'
+                              : 'text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/10',
+                          )}
+                          aria-label="Ligar via WhatsApp (Wavoip)"
+                        >
+                          <Phone className="w-4 h-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {lineBusy ? 'Linha Wavoip ocupada por outro usuário' : 'Ligar via WhatsApp (Wavoip)'}
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
                           onClick={() => setTransferOpen(true)}
                           className="px-2.5 h-8 rounded-lg border border-border hover:bg-secondary transition text-xs font-medium inline-flex items-center gap-1.5 text-foreground"
                           aria-label="Transferir atendimento"
