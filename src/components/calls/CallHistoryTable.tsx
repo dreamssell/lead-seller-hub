@@ -361,6 +361,8 @@ export function CallHistoryTable({
   }, [period, userFilter, connFilter, statusFilter, directionFilter, search, sortKey, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  // Clampa a página quando a paginação encolhe (mudança de tamanho, remoção de linhas em realtime, etc.).
+  useEffect(() => { if (page > totalPages - 1) setPage(Math.max(0, totalPages - 1)); }, [page, totalPages]);
   const pageRows = useMemo(
     () => sorted.slice(page * pageSize, page * pageSize + pageSize),
     [sorted, page, pageSize],
