@@ -3,13 +3,14 @@
  *
  * Como o bucket `internal-comms` é privado, geramos uma signed URL sob demanda
  * (cache local por URL/expiração para evitar tempestade de chamadas quando a
- * conversa tem várias mídias). Imagem abre em preview clicável, áudio usa
- * <audio> nativo com preload=metadata, e arquivos genéricos exibem cartão
- * com nome/tamanho e botão para baixar.
+ * conversa tem várias mídias). Imagem abre em modal com zoom ajustável (roda do
+ * mouse, botões +/-, atalhos de teclado e arraste para pan). Áudio usa <audio>
+ * nativo com preload=metadata, e arquivos genéricos exibem cartão com nome/tamanho
+ * e botão para baixar.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { FileText, Download, Loader2, ImageOff } from 'lucide-react';
+import { FileText, Download, Loader2, ImageOff, ZoomIn, ZoomOut, RotateCcw, X } from 'lucide-react';
 
 // Cache simples: chave = objectKey, valor = { url, exp (epoch ms) }.
 const signedCache = new Map<string, { url: string; exp: number }>();
@@ -50,11 +51,112 @@ export interface AttachmentBubbleProps {
   mine?: boolean;
 }
 
+function ImageLightbox({ src, name, onClose }: { src: string; name?: string | null; onClose: () => void }) {
+  const [scale, setScale] = useState(1);
+  const [tx, setTx] = useState(0);
+  const [ty, setTy] = useState(0);
+  const dragRef = useRef<{ x: number; y: number; sx: number; sy: number } | null>(null);
+
+  const reset = useCallback(() => { setScale(1); setTx(0); setTy(0); }, []);
+  const zoomBy = useCallback((delta: number) => {
+    setScale((s) => Math.min(6, Math.max(1, +(s + delta).toFixed(2))));
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === '+' || e.key === '=') zoomBy(0.25);
+      else if (e.key === '-' || e.key === '_') zoomBy(-0.25);
+      else if (e.key === '0') reset();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, zoomBy, reset]);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  const onWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    zoomBy(e.deltaY > 0 ? -0.15 : 0.15);
+  };
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (scale <= 1) return;
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    dragRef.current = { x: e.clientX, y: e.clientY, sx: tx, sy: ty };
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    setTx(dragRef.current.sx + (e.clientX - dragRef.current.x));
+    setTy(dragRef.current.sy + (e.clientY - dragRef.current.y));
+  };
+  const onPointerUp = () => { dragRef.current = null; };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Visualizar ${name || 'imagem'}`}
+      className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm flex items-center justify-center"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="absolute top-3 right-3 flex items-center gap-1 z-10">
+        <button
+          type="button" onClick={() => zoomBy(0.25)}
+          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white"
+          aria-label="Aumentar zoom"
+        ><ZoomIn className="w-4 h-4" /></button>
+        <button
+          type="button" onClick={() => zoomBy(-0.25)}
+          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white"
+          aria-label="Diminuir zoom"
+        ><ZoomOut className="w-4 h-4" /></button>
+        <button
+          type="button" onClick={reset}
+          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white"
+          aria-label="Redefinir zoom"
+        ><RotateCcw className="w-4 h-4" /></button>
+        <button
+          type="button" onClick={onClose}
+          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white"
+          aria-label="Fechar visualização"
+        ><X className="w-4 h-4" /></button>
+      </div>
+      <div className="absolute top-3 left-3 text-white/80 text-xs bg-white/10 rounded px-2 py-1">
+        {Math.round(scale * 100)}%
+      </div>
+      <div
+        className="w-full h-full flex items-center justify-center overflow-hidden select-none"
+        onWheel={onWheel}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        style={{ cursor: scale > 1 ? (dragRef.current ? 'grabbing' : 'grab') : 'zoom-in' }}
+        onDoubleClick={() => (scale === 1 ? setScale(2) : reset())}
+      >
+        <img
+          src={src}
+          alt={name || 'anexo'}
+          draggable={false}
+          className="max-w-[95vw] max-h-[92vh] object-contain transition-transform will-change-transform"
+          style={{ transform: `translate(${tx}px, ${ty}px) scale(${scale})` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function AttachmentBubble({
   url, name, mime, size, kind, durationMs, mine,
 }: AttachmentBubbleProps) {
   const [signed, setSigned] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const derivedKind: 'image' | 'audio' | 'file' = useMemo(() => {
     if (kind) return kind;
@@ -87,21 +189,26 @@ export function AttachmentBubble({
 
   if (derivedKind === 'image') {
     return (
-      <a
-        href={signed || undefined}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block max-w-[260px] rounded-lg overflow-hidden bg-black/5"
-        aria-label={`Abrir imagem ${name || ''}`.trim()}
-      >
-        {signed ? (
-          <img src={signed} alt={name || 'anexo'} className="w-full h-auto object-cover" loading="lazy" />
-        ) : (
-          <div className="w-[260px] h-[160px] flex items-center justify-center">
-            <Loader2 className="w-5 h-5 animate-spin opacity-70" />
-          </div>
+      <>
+        <button
+          type="button"
+          onClick={() => signed && setLightboxOpen(true)}
+          className="block max-w-[260px] rounded-lg overflow-hidden bg-black/5 focus:outline-none focus:ring-2 focus:ring-primary"
+          aria-label={`Abrir imagem ${name || ''}`.trim()}
+          disabled={!signed}
+        >
+          {signed ? (
+            <img src={signed} alt={name || 'anexo'} className="w-full h-auto object-cover cursor-zoom-in" loading="lazy" />
+          ) : (
+            <div className="w-[260px] h-[160px] flex items-center justify-center">
+              <Loader2 className="w-5 h-5 animate-spin opacity-70" />
+            </div>
+          )}
+        </button>
+        {lightboxOpen && signed && (
+          <ImageLightbox src={signed} name={name} onClose={() => setLightboxOpen(false)} />
         )}
-      </a>
+      </>
     );
   }
 
