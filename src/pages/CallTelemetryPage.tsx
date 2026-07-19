@@ -185,7 +185,7 @@ export default function CallTelemetryPage() {
   };
 
   return (
-    <AppLayout>
+    <AppLayout title="Telemetria de ligações" subtitle="Auditoria de UI (SIP/WhatsApp) e linha Wavoip">
       <main className="p-4 md:p-6 space-y-4 max-w-7xl mx-auto">
         <header className="flex items-center justify-between flex-wrap gap-2">
           <div>
