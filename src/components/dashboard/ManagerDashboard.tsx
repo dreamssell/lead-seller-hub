@@ -56,6 +56,10 @@ export function ManagerDashboard() {
           title="Chamadas recentes da equipe"
           description="Histórico consolidado — VoIP e Wavoip"
           filter={{ limit: 10 }}
+          persistKey="manager-dashboard"
+          pageSizeOptions={[5, 10, 25, 50]}
+          showTopPagination
+          showDateSort
         />
       </div>
 
