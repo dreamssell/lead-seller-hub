@@ -15,6 +15,7 @@ import {
   validateInternalAttachment, ALLOWED_ATTACHMENT_MIMES,
   MAX_ATTACHMENT_BYTES, attachmentKindFor,
 } from '@/lib/internalCommsAttachments';
+import { compressImageFile } from '@/lib/imageCompression';
 import { AudioRecorder } from '@/components/internal-comms/AudioRecorder';
 import { AttachmentBubble } from '@/components/internal-comms/AttachmentBubble';
 
@@ -80,7 +81,7 @@ export default function InternalCommsPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const addFiles = (files: File[]) => {
+  const addFiles = async (files: File[]) => {
     if (!files.length) return;
     setAttachmentError(null);
     const remaining = MAX_ATTACHMENTS_PER_MESSAGE - queue.length;
@@ -94,7 +95,23 @@ export default function InternalCommsPage() {
       toast.error(`Apenas os primeiros ${remaining} arquivos foram anexados (limite ${MAX_ATTACHMENTS_PER_MESSAGE}).`);
     }
     const accepted: QueueItem[] = [];
-    for (const file of toConsider) {
+    for (const rawFile of toConsider) {
+      // Compressão automática para imagens (silenciosa; falha volta ao original).
+      let file = rawFile;
+      if (rawFile.type.startsWith('image/') && rawFile.type !== 'image/gif') {
+        try {
+          const res = await compressImageFile(rawFile);
+          if (res.compressed) {
+            file = res.file;
+            const saved = Math.round((1 - res.newSize / res.originalSize) * 100);
+            if (saved >= 10) {
+              toast.message(`${rawFile.name} otimizada`, {
+                description: `${fmtSize(res.originalSize)} → ${fmtSize(res.newSize)} (−${saved}%)`,
+              });
+            }
+          }
+        } catch { /* mantém original */ }
+      }
       const result = validateInternalAttachment({ filename: file.name, mime: file.type, size: file.size });
       if (result.ok === true) {
         accepted.push({
@@ -131,9 +148,14 @@ export default function InternalCommsPage() {
     const res = await sendMessage(textForFirst, outgoing);
     if (res.error) {
       setQueue((prev) => prev.map((q) => q.id === item.id ? { ...q, status: 'failed', error: res.error! } : q));
+      toast.error(`Falha ao enviar “${item.file.name}”`, {
+        description: res.error,
+        action: { label: 'Reenviar', onClick: () => { void retryOne(item.id); } },
+      });
       return false;
     }
     setQueue((prev) => prev.map((q) => q.id === item.id ? { ...q, status: 'sent' } : q));
+    toast.success(`“${item.file.name}” enviado`);
     return true;
   };
 
@@ -161,7 +183,6 @@ export default function InternalCommsPage() {
       // Limpa somente enviados; mantém falhados para retry.
       setQueue((prev) => prev.filter((q) => q.status !== 'sent'));
       if (!anyFailed) { setDraft(''); setAttachmentError(null); }
-      else toast.error('Alguns anexos falharam. Toque em "Tentar novamente" para reenviar.');
     } finally {
       setSending(false);
     }
@@ -187,6 +208,7 @@ export default function InternalCommsPage() {
     const res = await sendMessage('', outgoing);
     setSending(false);
     if (res.error) toast.error(`Falha ao enviar áudio: ${res.error}`);
+    else toast.success('Áudio enviado');
   };
 
   // Drag & drop no painel da conversa.
@@ -362,7 +384,42 @@ export default function InternalCommsPage() {
                     </div>
                   );
                 })}
+
+                {/* Bolhas de anexos que falharam — reenvio direto na conversa */}
+                {queue.filter((q) => q.status === 'failed').map((q) => (
+                  <div key={`failed-${q.id}`} className="flex justify-end" data-testid="failed-message-bubble">
+                    <div className="max-w-[75%] rounded-2xl rounded-br-md px-3 py-2 text-sm shadow-sm space-y-2 bg-destructive/10 border border-destructive/40 text-foreground">
+                      <div className="flex items-center gap-2 text-xs font-medium text-destructive">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        Falha ao enviar “{q.file.name}”
+                      </div>
+                      {q.error && <p className="text-[11px] text-destructive/90 break-words">{q.error}</p>}
+                      <div className="flex items-center gap-2 pt-1">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => retryOne(q.id)}
+                          disabled={composerBusy}
+                          aria-label={`Reenviar ${q.file.name}`}
+                        >
+                          <RotateCcw className="w-3 h-3 mr-1" /> Reenviar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => removeFromQueue(q.id)}
+                          disabled={composerBusy}
+                        >
+                          Descartar
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
+
 
               <div className="border-t border-border">
                 {attachmentError && (
@@ -470,7 +527,7 @@ export default function InternalCommsPage() {
                   </Button>
                   <AudioRecorder disabled={composerBusy} onRecorded={handleAudioRecorded} />
                   <Input
-                    placeholder={hasPendingUploads ? 'Escreva uma legenda (opcional)…' : 'Escreva sua mensagem...'}
+                    placeholder={hasPendingUploads ? 'Escreva sua mensagem (legenda opcional)…' : 'Escreva sua mensagem...'}
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
