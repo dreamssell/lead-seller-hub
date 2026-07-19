@@ -164,6 +164,10 @@ export function CallHistoryTable({
   const [detail, setDetail] = useState<Row | null>(null);
   const [wavoipEvents, setWavoipEvents] = useState<WavoipEventRow[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
+  const [liveEnabled, setLiveEnabled] = useState(true);
+  const [pendingInserts, setPendingInserts] = useState<Row[]>([]);
+  const liveEnabledRef = useRef(liveEnabled);
+  liveEnabledRef.current = liveEnabled;
   const rowsRef = useRef<Row[]>([]);
   rowsRef.current = rows;
   const hydratedRef = useRef(false);
