@@ -81,7 +81,18 @@ export function AudioRecorder({
       const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
       mediaRef.current = rec;
       chunksRef.current = [];
-      rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
+      rec.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          chunksRef.current.push(e.data);
+          // Auto-stop se ultrapassar o teto de tamanho (defesa antes do teto de tempo).
+          const total = chunksRef.current.reduce((n, c: any) => n + (c.size || 0), 0);
+          if (total > MAX_AUDIO_BYTES && mediaRef.current && mediaRef.current.state !== 'inactive') {
+            toast.error(`Gravação atingiu o limite de ${Math.round(MAX_AUDIO_BYTES / (1024 * 1024))} MB. Enviando o que foi gravado.`);
+            shouldEmitRef.current = true;
+            try { mediaRef.current.stop(); } catch {}
+          }
+        }
+      };
       rec.onstop = async () => {
         const durationMs = Date.now() - startTsRef.current;
         const type = rec.mimeType || mime || 'audio/webm';
@@ -91,6 +102,8 @@ export function AudioRecorder({
           if (shouldEmitRef.current) {
             if (blob.size <= 500) {
               toast.error('Gravação muito curta.');
+            } else if (blob.size > MAX_AUDIO_BYTES) {
+              toast.error(`Áudio excede ${Math.round(MAX_AUDIO_BYTES / (1024 * 1024))} MB e não será enviado.`);
             } else {
               await onRecorded({ blob, mime: type, durationMs });
             }
