@@ -885,7 +885,16 @@ export default function FocusedChatPage() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
+                          type="button"
                           onClick={() => dialSip(selectedConv.phone)}
+                          onKeyDown={(e) => {
+                            // A11y: garante ativação via teclado mesmo se algum
+                            // ancestral chamar preventDefault no keypress padrão.
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              (e.currentTarget as HTMLButtonElement).click();
+                            }
+                          }}
                           disabled={voip.status !== 'connected'}
                           data-testid="dial-sip-btn"
                           data-state={
@@ -894,10 +903,11 @@ export default function FocusedChatPage() {
                             : 'ready'
                           }
                           className={cn(
-                            'p-2 rounded-lg transition inline-flex items-center justify-center border',
+                            'p-2 min-w-11 min-h-11 md:min-w-9 md:min-h-9 rounded-lg transition inline-flex items-center justify-center border',
+                            'focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                             lineBusy
-                              ? 'text-red-500 border-red-500/40 hover:bg-red-500/10'
-                              : 'text-blue-500 border-blue-500/30 hover:bg-blue-500/10',
+                              ? 'text-red-500 border-red-500/40 hover:bg-red-500/10 focus-visible:ring-red-500'
+                              : 'text-blue-500 border-blue-500/30 hover:bg-blue-500/10 focus-visible:ring-blue-500',
                             voip.status !== 'connected' && 'opacity-50 cursor-not-allowed',
                           )}
                           aria-label={
@@ -907,11 +917,12 @@ export default function FocusedChatPage() {
                                 ? 'Ligar por VoIP (SIP) — atenção: linha Wavoip em uso por outro usuário'
                                 : 'Ligar por VoIP (SIP)'
                           }
+                          aria-disabled={voip.status !== 'connected'}
                         >
-                          <Phone className="w-4 h-4" />
+                          <Phone className="w-4 h-4" aria-hidden="true" />
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent className="max-w-[240px] text-xs">
+                      <TooltipContent className="max-w-[240px] text-xs" role="tooltip">
                         <div className="font-medium">Ligar por VoIP (SIP)</div>
                         <div className="text-muted-foreground mt-0.5">
                           {voip.status !== 'connected'
@@ -925,23 +936,32 @@ export default function FocusedChatPage() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
+                          type="button"
                           onClick={() => dialWhatsApp(selectedConv.phone)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              (e.currentTarget as HTMLButtonElement).click();
+                            }
+                          }}
                           disabled={lineBusy}
                           data-testid="dial-wa-btn"
                           data-state={lineBusy ? 'busy' : 'ready'}
                           className={cn(
-                            'p-2 rounded-lg transition inline-flex items-center justify-center border',
+                            'p-2 min-w-11 min-h-11 md:min-w-9 md:min-h-9 rounded-lg transition inline-flex items-center justify-center border',
+                            'focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                             lineBusy
-                              ? 'text-red-500 border-red-500/40 hover:bg-red-500/10 cursor-not-allowed'
-                              : 'text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/10',
+                              ? 'text-red-500 border-red-500/40 hover:bg-red-500/10 cursor-not-allowed focus-visible:ring-red-500'
+                              : 'text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/10 focus-visible:ring-emerald-500',
                           )}
                           aria-label={
                             lineBusy
                               ? 'Ligar por WhatsApp — indisponível: linha Wavoip em uso por outro usuário'
                               : 'Ligar por WhatsApp (via Wavoip)'
                           }
+                          aria-disabled={lineBusy}
                         >
-                          <Phone className="w-4 h-4" />
+                          <Phone className="w-4 h-4" aria-hidden="true" />
                         </button>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-[240px] text-xs">
