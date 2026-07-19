@@ -698,17 +698,17 @@ export function CallHistoryTable({
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos status</SelectItem>
                 <SelectItem value="answered">Atendida</SelectItem>
-                <SelectItem value="ended">Encerrada</SelectItem>
                 <SelectItem value="missed">Perdida / Não atendida</SelectItem>
+                <SelectItem value="transferred">Transferida</SelectItem>
+                <SelectItem value="ended">Encerrada</SelectItem>
                 <SelectItem value="rejected">Rejeitada</SelectItem>
                 <SelectItem value="failed">Falhou</SelectItem>
                 <SelectItem value="initiated">Em ligação</SelectItem>
                 <SelectItem value="ringing">Em ligação (chamando)</SelectItem>
-
               </SelectContent>
             </Select>
             <Select value={userFilter} onValueChange={setUserFilter}>
