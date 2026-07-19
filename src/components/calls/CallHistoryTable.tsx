@@ -300,6 +300,14 @@ export function CallHistoryTable({
   }, []);
 
   const isInProgress = (r: Pick<Row, 'status' | 'ended_at'>) => ['initiated', 'ringing', 'answered'].includes(r.status) && !r.ended_at;
+  const isTransferred = (r: Row) => {
+    const meta = (r.metadata || {}) as any;
+    return r.status === 'transferred'
+      || meta.transferred === true
+      || Boolean(meta.transfer_type)
+      || Boolean(meta.transferred_to)
+      || Boolean(meta.transferred_from);
+  };
 
   const filtered = useMemo(() => {
     const now = Date.now();
@@ -313,32 +321,36 @@ export function CallHistoryTable({
       if (connFilter !== 'all' && (r.connection_label || '') !== connFilter) return false;
       if (directionFilter !== 'all' && r.direction !== directionFilter) return false;
       if (statusFilter !== 'all') {
-        const bucket = isInProgress(r) ? 'initiated' : (r.status === 'ended' && r.answered_at ? 'answered' : r.status);
-        if (bucket !== statusFilter) return false;
+        if (statusFilter === 'transferred') {
+          if (!isTransferred(r)) return false;
+        } else {
+          const bucket = isInProgress(r) ? 'initiated' : (r.status === 'ended' && r.answered_at ? 'answered' : r.status);
+          if (bucket !== statusFilter) return false;
+        }
       }
       if (search) {
         const q = search.toLowerCase().trim();
         const digits = q.replace(/\D+/g, '');
         const phoneDigits = r.phone_number.replace(/\D+/g, '');
-        const metadataPhones = [
-          (r.metadata as any)?.caller,
-          (r.metadata as any)?.callee,
-          (r.metadata as any)?.receiver,
-          (r.metadata as any)?.from,
-          (r.metadata as any)?.to,
-        ].map((v) => String(v || ''));
+        const meta = (r.metadata || {}) as any;
+        const metadataPhones = [meta.caller, meta.callee, meta.receiver, meta.from, meta.to].map((v) => String(v || ''));
+        const agentName = String(profiles[r.user_id || ''] || '').toLowerCase();
+        const callIds = [r.id, meta.call_id, meta.wavoip_call_id, meta.session_id]
+          .filter(Boolean).map((v) => String(v).toLowerCase());
         const matchContact = (r.contact_name || '').toLowerCase().includes(q);
+        const matchAgent = agentName.includes(q);
+        const matchIds = callIds.some((v) => v.includes(q));
         const matchPhone = r.phone_number.toLowerCase().includes(q)
           || metadataPhones.some((v) => v.toLowerCase().includes(q))
           || (digits.length > 0 && (
             phoneDigits.includes(digits)
             || metadataPhones.some((v) => v.replace(/\D+/g, '').includes(digits))
           ));
-        if (!matchContact && !matchPhone) return false;
+        if (!matchContact && !matchPhone && !matchAgent && !matchIds) return false;
       }
       return true;
     });
-  }, [rows, period, userFilter, connFilter, statusFilter, directionFilter, search]);
+  }, [rows, period, userFilter, connFilter, statusFilter, directionFilter, search, profiles]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
