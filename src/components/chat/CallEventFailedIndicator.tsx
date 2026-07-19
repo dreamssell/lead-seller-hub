@@ -46,6 +46,7 @@ interface FailedEvent {
 const FAIL_STATUSES = ['bad_payload', 'not_found', 'update_error', 'unauthorized'];
 
 export function CallEventFailedIndicator({ phone, customerId }: Props) {
+  const { isOwner } = usePlatformOwner();
   const [events, setEvents] = useState<FailedEvent[]>([]);
   const [open, setOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
