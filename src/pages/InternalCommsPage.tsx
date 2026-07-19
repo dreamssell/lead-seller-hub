@@ -81,7 +81,7 @@ export default function InternalCommsPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const addFiles = (files: File[]) => {
+  const addFiles = async (files: File[]) => {
     if (!files.length) return;
     setAttachmentError(null);
     const remaining = MAX_ATTACHMENTS_PER_MESSAGE - queue.length;
@@ -95,7 +95,23 @@ export default function InternalCommsPage() {
       toast.error(`Apenas os primeiros ${remaining} arquivos foram anexados (limite ${MAX_ATTACHMENTS_PER_MESSAGE}).`);
     }
     const accepted: QueueItem[] = [];
-    for (const file of toConsider) {
+    for (const rawFile of toConsider) {
+      // Compressão automática para imagens (silenciosa; falha volta ao original).
+      let file = rawFile;
+      if (rawFile.type.startsWith('image/') && rawFile.type !== 'image/gif') {
+        try {
+          const res = await compressImageFile(rawFile);
+          if (res.compressed) {
+            file = res.file;
+            const saved = Math.round((1 - res.newSize / res.originalSize) * 100);
+            if (saved >= 10) {
+              toast.message(`${rawFile.name} otimizada`, {
+                description: `${fmtSize(res.originalSize)} → ${fmtSize(res.newSize)} (−${saved}%)`,
+              });
+            }
+          }
+        } catch { /* mantém original */ }
+      }
       const result = validateInternalAttachment({ filename: file.name, mime: file.type, size: file.size });
       if (result.ok === true) {
         accepted.push({
