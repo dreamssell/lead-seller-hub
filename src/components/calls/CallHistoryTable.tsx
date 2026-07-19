@@ -166,6 +166,24 @@ export function CallHistoryTable({
   const [eventsLoading, setEventsLoading] = useState(false);
   const rowsRef = useRef<Row[]>([]);
   rowsRef.current = rows;
+  const hydratedRef = useRef(false);
+
+  // Hidrata página/tamanho do localStorage quando o gestor é conhecido (uma vez).
+  useEffect(() => {
+    if (!lsKey || hydratedRef.current) return;
+    const savedSize = readLs<number>('pageSize', defaultPageSize);
+    const savedPage = readLs<number>('page', 0);
+    if (Number.isFinite(savedSize) && savedSize > 0) setPageSize(savedSize);
+    if (Number.isFinite(savedPage) && savedPage >= 0) setPage(savedPage);
+    // Marca hidratação no próximo tick para evitar que o reset-por-filtro apague o valor restaurado.
+    queueMicrotask(() => { hydratedRef.current = true; });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lsKey]);
+
+  // Persiste alterações de página/tamanho.
+  useEffect(() => { if (lsKey && hydratedRef.current) writeLs({ page }); /* eslint-disable-next-line */ }, [page, lsKey]);
+  useEffect(() => { if (lsKey && hydratedRef.current) writeLs({ pageSize }); /* eslint-disable-next-line */ }, [pageSize, lsKey]);
+
 
   // Sincroniza estado -> URL (debounced para busca via effect padrão do React)
   useEffect(() => {
