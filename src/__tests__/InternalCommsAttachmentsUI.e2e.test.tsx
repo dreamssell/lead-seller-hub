@@ -138,6 +138,9 @@ describe('E2E · UI · anexos inválidos bloqueiam envio', () => {
     const send = screen.getByRole('button', { name: /enviar/i });
     expect(send).not.toBeDisabled();
     await act(async () => { fireEvent.click(send); });
-    expect(sendMessageMock).toHaveBeenCalledWith('segue anexo');
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      'segue anexo',
+      expect.objectContaining({ filename: 'relatorio.pdf', mime: 'application/pdf', kind: 'file' }),
+    );
   });
 });
