@@ -678,107 +678,184 @@ export function CallHistoryTable({
             </Select>
           </div>
         )}
-        {loading ? (
-          <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-        ) : sorted.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">Sem chamadas no filtro atual.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Contato</TableHead>
-                  <TableHead>Número</TableHead>
-                  <TableHead>Conexão</TableHead>
-                  {!compact && <TableHead>Usuário</TableHead>}
-                  <SortableHead col="direction">Direção</SortableHead>
-                  <SortableHead col="duration_seconds">Duração</SortableHead>
-                  <SortableHead col="answered_at">Atendida em</SortableHead>
-                  <SortableHead col="status">Status</SortableHead>
-                  <SortableHead col="started_at">Data</SortableHead>
-                  <TableHead className="text-right">Gravação</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pageRows.map((r) => (
-                  <TableRow
-                    key={r.id}
-                    className="cursor-pointer hover:bg-muted/40"
-                    onClick={() => setDetail(r)}
-                  >
-                    <TableCell className="font-medium">{r.contact_name || '—'}</TableCell>
-                    <TableCell className="font-mono text-xs">{r.phone_number}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="text-[10px]">{r.connection_label || r.channel}</Badge>
-                    </TableCell>
-                    {!compact && <TableCell className="text-xs">{profiles[r.user_id || ''] || '—'}</TableCell>}
-                    <TableCell className="text-xs">{directionLabel(r.direction)}</TableCell>
-                    <TableCell className="font-mono text-xs"><DurationCell call={r} /></TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{formatCallTime(r.answered_at)}</TableCell>
-                    <TableCell>{statusBadge(r)}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{formatCallShort(r.started_at)}</TableCell>
-                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                      {(r.recording_url || r.recording_path || (r.metadata as any)?.wavoip_call_id) ? (
-                        <div className="flex flex-col items-end gap-0.5">
-                          <div className="flex items-center gap-1 justify-end">
-                            <Button size="icon" variant="ghost" className="h-7 w-7"
-                              disabled={audioLoading === r.id}
-                              onClick={() => handlePlay(r)} title="Ouvir">
-                              {audioLoading === r.id
-                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                : playingId === r.id ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7"
-                              disabled={downloadingId === r.id}
-                              onClick={() => handleDownload(r)} title="Baixar">
-                              {downloadingId === r.id
-                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                : <Download className="w-3.5 h-3.5" />}
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7"
-                              onClick={() => toast({ title: 'Google Drive em breve', description: 'A integração será configurada em uma próxima etapa.' })}
-                              title="Enviar ao Google Drive">
-                              <Cloud className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                          {audioErrors[r.id] && (
-                            <span className="text-[10px] text-destructive">{audioErrors[r.id]}</span>
-                          )}
-                        </div>
-                      ) : (
-                        <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground border-dashed">
-                          Aguardando gravação
-                        </Badge>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-
-            {/* Paginação */}
-            <div className="flex items-center justify-between pt-3 text-xs text-muted-foreground">
+        {(() => {
+          const PaginationBar = ({ position }: { position: 'top' | 'bottom' }) => (
+            <div
+              data-testid={`call-history-pagination-${position}`}
+              className={`flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground ${position === 'top' ? 'pb-3' : 'pt-3'}`}
+            >
               <div>
-                Mostrando {page * pageSize + 1}–{Math.min((page + 1) * pageSize, sorted.length)} de {sorted.length}
+                Mostrando {sorted.length === 0 ? 0 : page * pageSize + 1}–{Math.min((page + 1) * pageSize, sorted.length)} de {sorted.length}
               </div>
               <div className="flex items-center gap-1">
+                {pageSizeOptions && pageSizeOptions.length > 0 && (
+                  <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(0); }}>
+                    <SelectTrigger className="h-7 w-24 text-xs" aria-label="Itens por página">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {pageSizeOptions.map((n) => (
+                        <SelectItem key={n} value={String(n)}>{n} / pág.</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 <Button variant="outline" size="sm" className="h-7"
+                  aria-label="Primeira página"
                   onClick={() => setPage(0)} disabled={page === 0}>«</Button>
                 <Button variant="outline" size="sm" className="h-7"
+                  aria-label="Página anterior"
                   onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </Button>
                 <span className="px-2">Página {page + 1} / {totalPages}</span>
                 <Button variant="outline" size="sm" className="h-7"
+                  aria-label="Próxima página"
                   onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}>
                   <ChevronRight className="w-3.5 h-3.5" />
                 </Button>
                 <Button variant="outline" size="sm" className="h-7"
+                  aria-label="Última página"
                   onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1}>»</Button>
               </div>
             </div>
-          </div>
-        )}
+          );
+
+          const DateSortSelector = () => (
+            <div className="flex items-center gap-2 pb-3">
+              <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Ordenar por data</span>
+              <Select
+                value={sortKey === 'started_at' && sortDir === 'desc' ? 'newest' : sortKey === 'started_at' && sortDir === 'asc' ? 'oldest' : 'custom'}
+                onValueChange={(v) => {
+                  if (v === 'newest') { setSortKey('started_at'); setSortDir('desc'); }
+                  else if (v === 'oldest') { setSortKey('started_at'); setSortDir('asc'); }
+                }}
+              >
+                <SelectTrigger className="h-7 w-44 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Mais recentes primeiro</SelectItem>
+                  <SelectItem value="oldest">Mais antigas primeiro</SelectItem>
+                  {sortKey !== 'started_at' && <SelectItem value="custom">Personalizada ({sortKey})</SelectItem>}
+                </SelectContent>
+              </Select>
+            </div>
+          );
+
+          if (loading) {
+            return (
+              <div data-testid="call-history-skeleton" className="space-y-2 py-2" aria-busy="true" aria-live="polite">
+                <span className="sr-only">Carregando chamadas…</span>
+                {Array.from({ length: Math.min(pageSize, 6) }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-md bg-muted/40 animate-pulse h-10 px-3">
+                    <div className="h-3 w-32 bg-muted rounded" />
+                    <div className="h-3 w-24 bg-muted rounded" />
+                    <div className="h-3 w-20 bg-muted rounded ml-auto" />
+                  </div>
+                ))}
+              </div>
+            );
+          }
+
+          if (sorted.length === 0) {
+            return (
+              <div
+                data-testid="call-history-empty"
+                className="flex flex-col items-center justify-center text-center py-10 gap-2"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center">
+                  <PhoneOff className="w-5 h-5 text-muted-foreground" />
+                </div>
+                <p className="text-sm font-medium text-foreground">Nenhuma chamada recente</p>
+                <p className="text-xs text-muted-foreground max-w-sm">
+                  Assim que a equipe realizar ou receber ligações, elas aparecerão aqui em tempo real.
+                </p>
+                <Button variant="outline" size="sm" className="mt-1 h-8" onClick={load}>
+                  <RefreshCw className="w-3.5 h-3.5 mr-1" /> Atualizar
+                </Button>
+              </div>
+            );
+          }
+
+          return (
+            <div className="overflow-x-auto">
+              {showDateSort && <DateSortSelector />}
+              {showTopPagination && <PaginationBar position="top" />}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Contato</TableHead>
+                    <TableHead>Número</TableHead>
+                    <TableHead>Conexão</TableHead>
+                    {!compact && <TableHead>Usuário</TableHead>}
+                    <SortableHead col="direction">Direção</SortableHead>
+                    <SortableHead col="duration_seconds">Duração</SortableHead>
+                    <SortableHead col="answered_at">Atendida em</SortableHead>
+                    <SortableHead col="status">Status</SortableHead>
+                    <SortableHead col="started_at">Data</SortableHead>
+                    <TableHead className="text-right">Gravação</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pageRows.map((r) => (
+                    <TableRow
+                      key={r.id}
+                      className="cursor-pointer hover:bg-muted/40"
+                      onClick={() => setDetail(r)}
+                    >
+                      <TableCell className="font-medium">{r.contact_name || '—'}</TableCell>
+                      <TableCell className="font-mono text-xs">{r.phone_number}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="text-[10px]">{r.connection_label || r.channel}</Badge>
+                      </TableCell>
+                      {!compact && <TableCell className="text-xs">{profiles[r.user_id || ''] || '—'}</TableCell>}
+                      <TableCell className="text-xs">{directionLabel(r.direction)}</TableCell>
+                      <TableCell className="font-mono text-xs"><DurationCell call={r} /></TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{formatCallTime(r.answered_at)}</TableCell>
+                      <TableCell>{statusBadge(r)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{formatCallShort(r.started_at)}</TableCell>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        {(r.recording_url || r.recording_path || (r.metadata as any)?.wavoip_call_id) ? (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <div className="flex items-center gap-1 justify-end">
+                              <Button size="icon" variant="ghost" className="h-7 w-7"
+                                disabled={audioLoading === r.id}
+                                onClick={() => handlePlay(r)} title="Ouvir">
+                                {audioLoading === r.id
+                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  : playingId === r.id ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                              </Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7"
+                                disabled={downloadingId === r.id}
+                                onClick={() => handleDownload(r)} title="Baixar">
+                                {downloadingId === r.id
+                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  : <Download className="w-3.5 h-3.5" />}
+                              </Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7"
+                                onClick={() => toast({ title: 'Google Drive em breve', description: 'A integração será configurada em uma próxima etapa.' })}
+                                title="Enviar ao Google Drive">
+                                <Cloud className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                            {audioErrors[r.id] && (
+                              <span className="text-[10px] text-destructive">{audioErrors[r.id]}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground border-dashed">
+                            Aguardando gravação
+                          </Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+
+              <PaginationBar position="bottom" />
+            </div>
+          );
+        })()}
       </CardContent>
 
       {/* Modal de detalhes da chamada */}
