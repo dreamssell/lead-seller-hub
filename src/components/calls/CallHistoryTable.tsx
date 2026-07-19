@@ -14,7 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import {
   Loader2, Play, Pause, Download, Cloud, Search, RefreshCw, PhoneCall, FileText,
   ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, PhoneIncoming, PhoneOutgoing,
-  ShieldCheck, Sigma, Clock, PhoneOff,
+  ShieldCheck, Sigma, Clock, PhoneOff, Radio,
 } from 'lucide-react';
 import {
   formatDuration, getRecordingSignedUrl, getCallDurationDetails, getReliableCallDurationSeconds,
@@ -164,6 +164,10 @@ export function CallHistoryTable({
   const [detail, setDetail] = useState<Row | null>(null);
   const [wavoipEvents, setWavoipEvents] = useState<WavoipEventRow[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
+  const [liveEnabled, setLiveEnabled] = useState(true);
+  const [pendingInserts, setPendingInserts] = useState<Row[]>([]);
+  const liveEnabledRef = useRef(liveEnabled);
+  liveEnabledRef.current = liveEnabled;
   const rowsRef = useRef<Row[]>([]);
   rowsRef.current = rows;
   const hydratedRef = useRef(false);
@@ -255,8 +259,12 @@ export function CallHistoryTable({
           return true;
         };
         if (payload.eventType === 'INSERT' && scoped(nrow)) {
-          setRows((prev) => (prev.some((x) => x.id === nrow!.id) ? prev : [nrow as Row, ...prev]));
-          enrich([nrow as Row]);
+          if (liveEnabledRef.current) {
+            setRows((prev) => (prev.some((x) => x.id === nrow!.id) ? prev : [nrow as Row, ...prev]));
+            enrich([nrow as Row]);
+          } else {
+            setPendingInserts((prev) => (prev.some((x) => x.id === nrow!.id) ? prev : [nrow as Row, ...prev]));
+          }
         } else if (payload.eventType === 'UPDATE' && scoped(nrow)) {
           setRows((prev) => prev.map((x) => (x.id === nrow!.id ? { ...x, ...(nrow as Row) } : x)));
         } else if (payload.eventType === 'DELETE' && orow) {
@@ -292,6 +300,14 @@ export function CallHistoryTable({
   }, []);
 
   const isInProgress = (r: Pick<Row, 'status' | 'ended_at'>) => ['initiated', 'ringing', 'answered'].includes(r.status) && !r.ended_at;
+  const isTransferred = (r: Row) => {
+    const meta = (r.metadata || {}) as any;
+    return r.status === 'transferred'
+      || meta.transferred === true
+      || Boolean(meta.transfer_type)
+      || Boolean(meta.transferred_to)
+      || Boolean(meta.transferred_from);
+  };
 
   const filtered = useMemo(() => {
     const now = Date.now();
@@ -305,32 +321,36 @@ export function CallHistoryTable({
       if (connFilter !== 'all' && (r.connection_label || '') !== connFilter) return false;
       if (directionFilter !== 'all' && r.direction !== directionFilter) return false;
       if (statusFilter !== 'all') {
-        const bucket = isInProgress(r) ? 'initiated' : (r.status === 'ended' && r.answered_at ? 'answered' : r.status);
-        if (bucket !== statusFilter) return false;
+        if (statusFilter === 'transferred') {
+          if (!isTransferred(r)) return false;
+        } else {
+          const bucket = isInProgress(r) ? 'initiated' : (r.status === 'ended' && r.answered_at ? 'answered' : r.status);
+          if (bucket !== statusFilter) return false;
+        }
       }
       if (search) {
         const q = search.toLowerCase().trim();
         const digits = q.replace(/\D+/g, '');
         const phoneDigits = r.phone_number.replace(/\D+/g, '');
-        const metadataPhones = [
-          (r.metadata as any)?.caller,
-          (r.metadata as any)?.callee,
-          (r.metadata as any)?.receiver,
-          (r.metadata as any)?.from,
-          (r.metadata as any)?.to,
-        ].map((v) => String(v || ''));
+        const meta = (r.metadata || {}) as any;
+        const metadataPhones = [meta.caller, meta.callee, meta.receiver, meta.from, meta.to].map((v) => String(v || ''));
+        const agentName = String(profiles[r.user_id || ''] || '').toLowerCase();
+        const callIds = [r.id, meta.call_id, meta.wavoip_call_id, meta.session_id]
+          .filter(Boolean).map((v) => String(v).toLowerCase());
         const matchContact = (r.contact_name || '').toLowerCase().includes(q);
+        const matchAgent = agentName.includes(q);
+        const matchIds = callIds.some((v) => v.includes(q));
         const matchPhone = r.phone_number.toLowerCase().includes(q)
           || metadataPhones.some((v) => v.toLowerCase().includes(q))
           || (digits.length > 0 && (
             phoneDigits.includes(digits)
             || metadataPhones.some((v) => v.replace(/\D+/g, '').includes(digits))
           ));
-        if (!matchContact && !matchPhone) return false;
+        if (!matchContact && !matchPhone && !matchAgent && !matchIds) return false;
       }
       return true;
     });
-  }, [rows, period, userFilter, connFilter, statusFilter, directionFilter, search]);
+  }, [rows, period, userFilter, connFilter, statusFilter, directionFilter, search, profiles]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -560,6 +580,7 @@ export function CallHistoryTable({
       missed: r.direction === 'inbound' ? 'Perdida' : 'Não atendida',
       failed: 'Falhou',
       rejected: 'Rejeitada',
+      transferred: 'Transferida',
       initiated: 'Em ligação',
       ringing: 'Em ligação',
     };
@@ -569,6 +590,7 @@ export function CallHistoryTable({
 
   const statusFilterLabel = (status: string) => {
     if (status === 'initiated' || status === 'ringing') return 'Em ligação';
+    if (status === 'transferred') return 'Transferida';
     return statusLabelPt({ status, direction: 'outbound', ended_at: new Date().toISOString() } as Row);
   };
 
@@ -579,6 +601,7 @@ export function CallHistoryTable({
       missed: 'bg-destructive/10 text-destructive border-destructive/30',
       failed: 'bg-destructive/10 text-destructive border-destructive/30',
       rejected: 'bg-amber-500/10 text-amber-600 border-amber-500/30',
+      transferred: 'bg-sky-500/10 text-sky-600 border-sky-500/30',
       initiated: 'bg-primary/10 text-primary border-primary/30',
       ringing: 'bg-primary/10 text-primary border-primary/30',
     };
@@ -616,7 +639,34 @@ export function CallHistoryTable({
           <CardTitle className="text-base flex items-center gap-2"><PhoneCall className="w-4 h-4" />{title}</CardTitle>
           <CardDescription>{description}</CardDescription>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setLiveEnabled((v) => !v)}
+            aria-pressed={liveEnabled}
+            title={liveEnabled ? 'Atualização em tempo real ativa — clique para pausar' : 'Pausado — clique para retomar'}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 h-7 text-[11px] font-medium transition-colors ${liveEnabled ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600' : 'border-border bg-muted text-muted-foreground'}`}
+          >
+            <Radio className={`w-3 h-3 ${liveEnabled ? 'animate-pulse' : ''}`} />
+            {liveEnabled ? 'Ao vivo' : 'Pausado'}
+          </button>
+          {pendingInserts.length > 0 && (
+            <Button
+              size="sm" variant="outline"
+              className="h-7 text-[11px] border-primary/40 text-primary"
+              onClick={() => {
+                setRows((prev) => {
+                  const seen = new Set(prev.map((x) => x.id));
+                  const merged = [...pendingInserts.filter((x) => !seen.has(x.id)), ...prev];
+                  return merged;
+                });
+                enrich(pendingInserts);
+                setPendingInserts([]);
+              }}
+            >
+              {pendingInserts.length} nova{pendingInserts.length > 1 ? 's' : ''} — mostrar
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={load}><RefreshCw className="w-4 h-4" /></Button>
           <Button variant="outline" size="sm" onClick={exportCsv}><Download className="w-4 h-4 mr-1" />CSV</Button>
           <Button variant="outline" size="sm" onClick={exportPdf}><FileText className="w-4 h-4 mr-1" />PDF</Button>
@@ -628,8 +678,8 @@ export function CallHistoryTable({
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-2 top-2.5 text-muted-foreground" />
               <Input value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por contato ou número (origem/destino)"
-                aria-label="Buscar histórico de chamadas"
+                placeholder="Buscar por contato, número, agente ou ID"
+                aria-label="Buscar chamadas por contato, número, agente ou identificador"
                 className="h-8 pl-7 w-72 text-xs" />
             </div>
             <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
@@ -651,17 +701,17 @@ export function CallHistoryTable({
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos status</SelectItem>
                 <SelectItem value="answered">Atendida</SelectItem>
-                <SelectItem value="ended">Encerrada</SelectItem>
                 <SelectItem value="missed">Perdida / Não atendida</SelectItem>
+                <SelectItem value="transferred">Transferida</SelectItem>
+                <SelectItem value="ended">Encerrada</SelectItem>
                 <SelectItem value="rejected">Rejeitada</SelectItem>
                 <SelectItem value="failed">Falhou</SelectItem>
                 <SelectItem value="initiated">Em ligação</SelectItem>
                 <SelectItem value="ringing">Em ligação (chamando)</SelectItem>
-
               </SelectContent>
             </Select>
             <Select value={userFilter} onValueChange={setUserFilter}>
