@@ -76,11 +76,12 @@ export default function AuthCallbackPage() {
           log('token_decode_failed');
         }
 
-        // Clear any pre-existing session before applying the new one to prevent
-        // cross-account bleed on shared browsers (e.g. platform owner testing
-        // a client login on the same tab).
-        log('signOut:previous');
-        try { await (supabase.auth as any).signOut?.(); } catch { /* ignore */ }
+        // Limpa somente o estado local (localStorage) sem chamar o endpoint
+        // /logout — um signOut com escopo padrão/global revoga TODAS as sessões
+        // do usuário no servidor, inclusive o token recém emitido que estamos
+        // prestes a aplicar, causando "Auth session missing!" no setSession.
+        log('signOut:local');
+        try { await supabase.auth.signOut({ scope: 'local' } as any); } catch { /* ignore */ }
 
         log('setSession:start', { expectedUserId });
         const { data, error: sessionError } = await supabase.auth.setSession({
