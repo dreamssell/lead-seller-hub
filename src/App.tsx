@@ -54,6 +54,7 @@ const LandingBuilderPage = lazy(() => import("./pages/LandingBuilderPage"));
 const LandingPreviewPage = lazy(() => import("./pages/LandingPreviewPage"));
 const PublicLandingPage = lazy(() => import("./pages/PublicLandingPage"));
 const InternalTelemetryPage = lazy(() => import("./pages/InternalTelemetryPage"));
+const CallTelemetryPage = lazy(() => import("./pages/CallTelemetryPage"));
 const RoleLabelAuditPage = lazy(() => import("./pages/RoleLabelAuditPage"));
 const BotFlowsPage = lazy(() => import("./pages/BotFlowsPage"));
 const FlowBuilderPage = lazy(() => import("./pages/FlowBuilderPage"));
