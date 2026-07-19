@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.wavoip-webhook-config]
 verify_jwt = false
+
+[functions.wavoip-event-reprocess]
+verify_jwt = true
