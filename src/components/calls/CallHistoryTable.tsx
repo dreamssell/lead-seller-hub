@@ -14,7 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import {
   Loader2, Play, Pause, Download, Cloud, Search, RefreshCw, PhoneCall, FileText,
   ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, PhoneIncoming, PhoneOutgoing,
-  ShieldCheck, Sigma, Clock,
+  ShieldCheck, Sigma, Clock, PhoneOff,
 } from 'lucide-react';
 import {
   formatDuration, getRecordingSignedUrl, getCallDurationDetails, getReliableCallDurationSeconds,
