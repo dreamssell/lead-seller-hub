@@ -482,11 +482,42 @@ export default function InternalCommsPage() {
                   {activePeer.avatar_url && <AvatarImage src={activePeer.avatar_url} alt={activePeer.display_name} />}
                   <AvatarFallback className="text-xs">{initials(activePeer.display_name)}</AvatarFallback>
                 </Avatar>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold truncate">{activePeer.display_name}</p>
                   {activePeer.email && <p className="text-xs text-muted-foreground truncate">{activePeer.email}</p>}
                 </div>
+                {messages.some((m) => !!m.attachment_url) && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1.5"
+                        disabled={!!downloadingAll}
+                        aria-label="Baixar anexos da conversa"
+                      >
+                        {downloadingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Archive className="w-3.5 h-3.5" />}
+                        <span className="hidden sm:inline">Baixar anexos</span>
+                        <ChevronDown className="w-3 h-3 opacity-70" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel className="text-xs">Empacotar em .zip</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => downloadAllAttachments('compressed')}>
+                        <Download className="w-4 h-4 mr-2" /> Otimizados
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => downloadAllAttachments('original')}
+                        disabled={!messages.some((m) => !!(m as any).attachment_original_url)}
+                      >
+                        <Download className="w-4 h-4 mr-2" /> Originais
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
+
 
               <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-2 bg-muted/20">
                 {loadingMessages ? (
