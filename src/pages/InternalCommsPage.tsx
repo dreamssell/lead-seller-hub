@@ -37,6 +37,9 @@ function fmtSize(bytes: number) {
 type QueueItem = {
   id: string;
   file: File;
+  originalFile?: File;
+  originalSize?: number;
+  previewUrl?: string;
   status: 'pending' | 'uploading' | 'sent' | 'failed';
   error?: string;
 };
