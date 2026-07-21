@@ -101,11 +101,15 @@ export default function InternalCommsPage() {
     for (const rawFile of toConsider) {
       // Compressão automática para imagens (silenciosa; falha volta ao original).
       let file = rawFile;
+      let originalFile: File | undefined;
+      let originalSize: number | undefined;
       if (rawFile.type.startsWith('image/') && rawFile.type !== 'image/gif') {
         try {
           const res = await compressImageFile(rawFile);
           if (res.compressed) {
             file = res.file;
+            originalFile = rawFile;
+            originalSize = res.originalSize;
             const saved = Math.round((1 - res.newSize / res.originalSize) * 100);
             if (saved >= 10) {
               toast.message(`${rawFile.name} otimizada`, {
@@ -117,9 +121,10 @@ export default function InternalCommsPage() {
       }
       const result = validateInternalAttachment({ filename: file.name, mime: file.type, size: file.size });
       if (result.ok === true) {
+        const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
         accepted.push({
           id: (crypto as any)?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
-          file, status: 'pending',
+          file, originalFile, originalSize, previewUrl, status: 'pending',
         });
       } else {
         setAttachmentError(result.message);
