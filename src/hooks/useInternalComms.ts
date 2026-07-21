@@ -25,6 +25,8 @@ export interface InternalMessage {
   attachment_size?: number | null;
   attachment_kind?: 'image' | 'audio' | 'file' | null;
   audio_duration_ms?: number | null;
+  attachment_original_url?: string | null;
+  attachment_original_size?: number | null;
 }
 
 export interface OutgoingAttachment {
@@ -34,6 +36,11 @@ export interface OutgoingAttachment {
   size: number;
   kind: 'image' | 'audio' | 'file';
   durationMs?: number;
+  /** Arquivo original (não comprimido) — quando presente, é enviado em paralelo
+   *  para permitir download da versão original a partir da bolha de mensagem. */
+  originalFile?: Blob;
+  originalFilename?: string;
+  originalSize?: number;
 }
 
 /**
