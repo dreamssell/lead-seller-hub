@@ -162,6 +162,8 @@ export function useInternalComms() {
     let attachment_size: number | null = null;
     let attachment_kind: 'image' | 'audio' | 'file' | null = null;
     let audio_duration_ms: number | null = null;
+    let attachment_original_url: string | null = null;
+    let attachment_original_size: number | null = null;
 
     if (attachment) {
       const now = new Date();
@@ -169,7 +171,9 @@ export function useInternalComms() {
       const safeExt = ext || (attachment.mime.startsWith('audio/') ? '.webm' : '');
       const subSeg = subCompanyId || 'root';
       const uid = (crypto as any)?.randomUUID?.() || Math.random().toString(36).slice(2);
-      const key = `${ownerId}/${subSeg}/${user.id}/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}/${uid}${safeExt}`;
+      const yyyy = now.getUTCFullYear();
+      const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
+      const key = `${ownerId}/${subSeg}/${user.id}/${yyyy}/${mm}/${uid}${safeExt}`;
       const { error: upErr } = await supabase.storage
         .from('internal-comms')
         .upload(key, attachment.file, { contentType: attachment.mime, upsert: false });
@@ -180,6 +184,19 @@ export function useInternalComms() {
       attachment_size = attachment.size;
       attachment_kind = attachment.kind;
       audio_duration_ms = attachment.durationMs ?? null;
+
+      // Upload opcional do arquivo original (para download da versão sem compressão).
+      if (attachment.originalFile && attachment.originalSize && attachment.originalSize > attachment.size) {
+        const origExt = (attachment.originalFilename?.match(/\.[a-z0-9]+$/i)?.[0] || safeExt).toLowerCase();
+        const origKey = `${ownerId}/${subSeg}/${user.id}/${yyyy}/${mm}/${uid}.orig${origExt}`;
+        const { error: origErr } = await supabase.storage
+          .from('internal-comms')
+          .upload(origKey, attachment.originalFile, { contentType: attachment.mime, upsert: false });
+        if (!origErr) {
+          attachment_original_url = origKey;
+          attachment_original_size = attachment.originalSize;
+        }
+      }
     }
 
     const { data, error } = await supabase
@@ -196,13 +213,16 @@ export function useInternalComms() {
         attachment_size,
         attachment_kind,
         audio_duration_ms,
+        attachment_original_url,
+        attachment_original_size,
       } as any)
       .select()
       .single();
     if (error) {
-      // Rollback do arquivo se o INSERT falhar (evita órfãos no bucket).
-      if (attachment_url) {
-        try { await supabase.storage.from('internal-comms').remove([attachment_url]); } catch {}
+      // Rollback dos arquivos se o INSERT falhar (evita órfãos no bucket).
+      const orphans = [attachment_url, attachment_original_url].filter(Boolean) as string[];
+      if (orphans.length) {
+        try { await supabase.storage.from('internal-comms').remove(orphans); } catch {}
       }
       return { error: error.message };
     }
