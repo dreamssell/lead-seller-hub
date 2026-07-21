@@ -414,6 +414,8 @@ export default function InternalCommsPage() {
                             size={msg.attachment_size}
                             kind={msg.attachment_kind}
                             durationMs={msg.audio_duration_ms}
+                            originalUrl={(msg as any).attachment_original_url}
+                            originalSize={(msg as any).attachment_original_size}
                             mine={mine}
                           />
                         )}
