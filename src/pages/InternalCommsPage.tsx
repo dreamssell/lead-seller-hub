@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import JSZip from 'jszip';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useInternalComms, type OutgoingAttachment } from '@/hooks/useInternalComms';
 import { useInternalCommsUnread } from '@/hooks/useInternalCommsUnread';
@@ -7,8 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenuRadioGroup, DropdownMenuRadioItem,
+} from '@/components/ui/dropdown-menu';
+import {
   MessagesSquare, Send, Search, Users, Paperclip, X, Loader2,
   UploadCloud, RotateCcw, CheckCircle2, AlertCircle,
+  GripVertical, Download, Settings2, ChevronDown, Archive,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -18,6 +25,15 @@ import {
 import { compressImageFile } from '@/lib/imageCompression';
 import { AudioRecorder } from '@/components/internal-comms/AudioRecorder';
 import { AttachmentBubble } from '@/components/internal-comms/AttachmentBubble';
+import { supabase } from '@/integrations/supabase/client';
+
+type CompressionQuality = 'high' | 'balanced' | 'light';
+const QUALITY_PRESETS: Record<CompressionQuality, { maxDim: number; quality: number; label: string; hint: string }> = {
+  high:     { maxDim: 2560, quality: 0.92, label: 'Mais qualidade', hint: 'Até 2560px · 92%' },
+  balanced: { maxDim: 1920, quality: 0.82, label: 'Equilibrado',    hint: 'Até 1920px · 82% (padrão)' },
+  light:    { maxDim: 1280, quality: 0.70, label: 'Mais leve',      hint: 'Até 1280px · 70%' },
+};
+const QUALITY_STORAGE_KEY = 'internalComms:compressionQuality';
 
 const MAX_ATTACHMENTS_PER_MESSAGE = 10;
 
