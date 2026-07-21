@@ -42,13 +42,16 @@ function fmtDuration(ms?: number | null) {
 }
 
 export interface AttachmentBubbleProps {
-  url: string; // objectKey no bucket
+  url: string; // objectKey no bucket (versão exibível / comprimida)
   name?: string | null;
   mime?: string | null;
   size?: number | null;
   kind?: 'image' | 'audio' | 'file' | null;
   durationMs?: number | null;
   mine?: boolean;
+  /** Chave do arquivo original (sem compressão), quando disponível. */
+  originalUrl?: string | null;
+  originalSize?: number | null;
 }
 
 function ImageLightbox({ src, name, onClose }: { src: string; name?: string | null; onClose: () => void }) {
