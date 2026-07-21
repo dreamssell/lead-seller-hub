@@ -430,39 +430,68 @@ export default function InternalCommsPage() {
                   );
                 })}
 
-                {/* Bolhas de anexos que falharam — reenvio direto na conversa */}
-                {queue.filter((q) => q.status === 'failed').map((q) => (
-                  <div key={`failed-${q.id}`} className="flex justify-end" data-testid="failed-message-bubble">
-                    <div className="max-w-[75%] rounded-2xl rounded-br-md px-3 py-2 text-sm shadow-sm space-y-2 bg-destructive/10 border border-destructive/40 text-foreground">
-                      <div className="flex items-center gap-2 text-xs font-medium text-destructive">
-                        <AlertCircle className="w-3.5 h-3.5" />
-                        Falha ao enviar “{q.file.name}”
-                      </div>
-                      {q.error && <p className="text-[11px] text-destructive/90 break-words">{q.error}</p>}
-                      <div className="flex items-center gap-2 pt-1">
-                        <Button
-                          size="sm"
-                          variant="default"
-                          className="h-7 px-2 text-xs"
-                          onClick={() => retryOne(q.id)}
-                          disabled={composerBusy}
-                          aria-label={`Reenviar ${q.file.name}`}
+                {(() => {
+                  const failedItems = queue.filter((q) => q.status === 'failed');
+                  if (failedItems.length === 0) return null;
+                  return (
+                    <>
+                      {failedItems.length > 1 && (
+                        <div
+                          className="flex justify-end"
+                          data-testid="failed-batch-banner"
                         >
-                          <RotateCcw className="w-3 h-3 mr-1" /> Reenviar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2 text-xs"
-                          onClick={() => removeFromQueue(q.id)}
-                          disabled={composerBusy}
-                        >
-                          Descartar
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                          <div className="max-w-[75%] rounded-2xl rounded-br-md px-3 py-2 text-xs bg-destructive/5 border border-destructive/30 flex items-center gap-2">
+                            <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0" />
+                            <span className="text-foreground">
+                              {failedItems.length} anexos falharam
+                            </span>
+                            <Button
+                              size="sm"
+                              className="h-7 px-2 text-xs ml-1"
+                              onClick={retryAllFailed}
+                              disabled={composerBusy}
+                              aria-label="Reenviar todos os anexos que falharam"
+                            >
+                              <RotateCcw className="w-3 h-3 mr-1" /> Reenviar todos
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      {failedItems.map((q) => (
+                        <div key={`failed-${q.id}`} className="flex justify-end" data-testid="failed-message-bubble">
+                          <div className="max-w-[75%] rounded-2xl rounded-br-md px-3 py-2 text-sm shadow-sm space-y-2 bg-destructive/10 border border-destructive/40 text-foreground">
+                            <div className="flex items-center gap-2 text-xs font-medium text-destructive">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              Falha ao enviar “{q.file.name}”
+                            </div>
+                            {q.error && <p className="text-[11px] text-destructive/90 break-words">{q.error}</p>}
+                            <div className="flex items-center gap-2 pt-1">
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => retryOne(q.id)}
+                                disabled={composerBusy}
+                                aria-label={`Reenviar ${q.file.name}`}
+                              >
+                                <RotateCcw className="w-3 h-3 mr-1" /> Reenviar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => removeFromQueue(q.id)}
+                                disabled={composerBusy}
+                              >
+                                Descartar
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  );
+                })()}
               </div>
 
 
