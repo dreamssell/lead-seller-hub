@@ -802,6 +802,32 @@ export default function InternalCommsPage() {
                   >
                     <Paperclip className="w-4 h-4" />
                   </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Qualidade de compressão: ${QUALITY_PRESETS[quality].label}`}
+                        title={`Compressão: ${QUALITY_PRESETS[quality].label} (${QUALITY_PRESETS[quality].hint})`}
+                        disabled={composerBusy}
+                      >
+                        <Settings2 className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-64">
+                      <DropdownMenuLabel className="text-xs">Qualidade das imagens</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuRadioGroup value={quality} onValueChange={(v) => setQuality(v as CompressionQuality)}>
+                        {(Object.keys(QUALITY_PRESETS) as CompressionQuality[]).map((k) => (
+                          <DropdownMenuRadioItem key={k} value={k} className="flex-col items-start gap-0.5">
+                            <span className="text-sm">{QUALITY_PRESETS[k].label}</span>
+                            <span className="text-[11px] text-muted-foreground">{QUALITY_PRESETS[k].hint}</span>
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <AudioRecorder disabled={composerBusy} onRecorded={handleAudioRecorded} />
                   <Input
                     placeholder={hasPendingUploads ? 'Escreva sua mensagem (legenda opcional)…' : 'Escreva sua mensagem...'}
