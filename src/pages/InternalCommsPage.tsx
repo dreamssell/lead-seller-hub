@@ -79,10 +79,19 @@ export default function InternalCommsPage() {
   }, [messages, activePeerId]);
 
   const clearAllAttachments = () => {
-    setQueue([]);
+    setQueue((prev) => {
+      prev.forEach((q) => { if (q.previewUrl) URL.revokeObjectURL(q.previewUrl); });
+      return [];
+    });
     setAttachmentError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
+
+  // Revoga object URLs pendentes ao desmontar (evita vazamento de memória).
+  useEffect(() => () => {
+    queue.forEach((q) => { if (q.previewUrl) URL.revokeObjectURL(q.previewUrl); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const addFiles = async (files: File[]) => {
     if (!files.length) return;
