@@ -5,6 +5,21 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Mirror of waha-inbound's canonicalMsgId: WAHA/UAZ backends echo the same
+// WhatsApp message as `true_<jid>_3EB0...` on one path and bare `3EB0...` on
+// another. Storing whichever form UAZ returned leaves the inbound webhook
+// unable to dedupe (it canonicalises to bare hex), producing a second row and
+// a "duplicated conversation" bubble. Always persist the canonical bare id.
+function canonicalMsgId(raw: string | null | undefined): string | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const parts = raw.split('_');
+  const tail = parts[parts.length - 1];
+  if (parts.length >= 3 && /^[A-F0-9]{16,}$/i.test(tail)) return tail.toUpperCase();
+  return /^[A-F0-9]{16,}$/i.test(raw) ? raw.toUpperCase() : raw;
+}
+
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -100,7 +115,7 @@ Deno.serve(async (req) => {
       throw new Error(`UAZ HTTP ${res.status}: ${JSON.stringify(responseData ?? {}).slice(0, 300)}`);
     }
 
-    const uazMsgId = responseData?.data?.key?.id || responseData?.id || responseData?.key?.id || null;
+    const uazMsgId = canonicalMsgId(responseData?.data?.key?.id || responseData?.id || responseData?.key?.id || null);
 
     // 5. Persist — UPSERT on client_msg_id so a caller retry never inserts a
     //    duplicate row, and a caller that already inserted an optimistic row
