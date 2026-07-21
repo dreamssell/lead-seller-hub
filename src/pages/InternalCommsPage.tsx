@@ -531,6 +531,14 @@ export default function InternalCommsPage() {
                     </div>
                     {queue.map((q) => (
                       <div key={q.id} className="flex items-center gap-2 text-xs bg-background/80 rounded-md px-2 py-1.5 border border-border">
+                        {q.previewUrl ? (
+                          <img
+                            src={q.previewUrl}
+                            alt={q.file.name}
+                            className="w-10 h-10 rounded object-cover border border-border shrink-0"
+                            data-testid="attachment-thumbnail"
+                          />
+                        ) : null}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
                             {q.status === 'sent' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
