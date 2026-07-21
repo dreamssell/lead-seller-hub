@@ -2062,6 +2062,8 @@ export type Database = {
           attachment_kind: string | null
           attachment_mime: string | null
           attachment_name: string | null
+          attachment_original_size: number | null
+          attachment_original_url: string | null
           attachment_size: number | null
           attachment_url: string | null
           audio_duration_ms: number | null
@@ -2078,6 +2080,8 @@ export type Database = {
           attachment_kind?: string | null
           attachment_mime?: string | null
           attachment_name?: string | null
+          attachment_original_size?: number | null
+          attachment_original_url?: string | null
           attachment_size?: number | null
           attachment_url?: string | null
           audio_duration_ms?: number | null
@@ -2094,6 +2098,8 @@ export type Database = {
           attachment_kind?: string | null
           attachment_mime?: string | null
           attachment_name?: string | null
+          attachment_original_size?: number | null
+          attachment_original_url?: string | null
           attachment_size?: number | null
           attachment_url?: string | null
           audio_duration_ms?: number | null

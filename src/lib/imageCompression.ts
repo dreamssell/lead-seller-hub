@@ -3,6 +3,10 @@
  *
  * Regras:
  *  - Aplica apenas em image/* (exceto image/gif, que pode ser animado).
+ *  - Corrige a orientação EXIF automaticamente (usa `imageOrientation: 'from-image'`
+ *    quando disponível; fallback via <img> — os browsers modernos já aplicam EXIF
+ *    ao renderizar tags <img>). O bitmap final é sempre desenhado em pixels reais,
+ *    o que naturalmente descarta metadados EXIF de rotação no reencode.
  *  - Reduz o maior lado para no máximo `maxDim` (default 1920px), preservando aspecto.
  *  - Reencoda em JPEG quality ~0.82 (ou WebP se a origem já for webp), com fallback
  *    para o arquivo original quando o resultado ficar maior que o original.
@@ -27,7 +31,14 @@ function shouldCompress(file: File): boolean {
 
 async function loadBitmap(file: File): Promise<{ w: number; h: number; draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void; close: () => void }> {
   if (typeof createImageBitmap === 'function') {
-    const bmp = await createImageBitmap(file);
+    // `imageOrientation: 'from-image'` respeita a orientação EXIF (rotação/flip)
+    // ao decodificar. Sem isso, fotos de celular podem ficar deitadas.
+    let bmp: ImageBitmap;
+    try {
+      bmp = await createImageBitmap(file, { imageOrientation: 'from-image' } as any);
+    } catch {
+      bmp = await createImageBitmap(file);
+    }
     return {
       w: bmp.width, h: bmp.height,
       draw: (ctx, w, h) => ctx.drawImage(bmp, 0, 0, w, h),
@@ -37,6 +48,8 @@ async function loadBitmap(file: File): Promise<{ w: number; h: number; draw: (ct
   return await new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
+    // Browsers modernos aplicam EXIF orientation em <img> por padrão.
+    (img as any).style && ((img as any).style.imageOrientation = 'from-image');
     img.onload = () => resolve({
       w: img.naturalWidth, h: img.naturalHeight,
       draw: (ctx, w, h) => ctx.drawImage(img, 0, 0, w, h),

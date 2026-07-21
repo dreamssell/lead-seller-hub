@@ -37,6 +37,9 @@ function fmtSize(bytes: number) {
 type QueueItem = {
   id: string;
   file: File;
+  originalFile?: File;
+  originalSize?: number;
+  previewUrl?: string;
   status: 'pending' | 'uploading' | 'sent' | 'failed';
   error?: string;
 };
@@ -76,10 +79,19 @@ export default function InternalCommsPage() {
   }, [messages, activePeerId]);
 
   const clearAllAttachments = () => {
-    setQueue([]);
+    setQueue((prev) => {
+      prev.forEach((q) => { if (q.previewUrl) URL.revokeObjectURL(q.previewUrl); });
+      return [];
+    });
     setAttachmentError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
+
+  // Revoga object URLs pendentes ao desmontar (evita vazamento de memória).
+  useEffect(() => () => {
+    queue.forEach((q) => { if (q.previewUrl) URL.revokeObjectURL(q.previewUrl); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const addFiles = async (files: File[]) => {
     if (!files.length) return;
@@ -98,11 +110,15 @@ export default function InternalCommsPage() {
     for (const rawFile of toConsider) {
       // Compressão automática para imagens (silenciosa; falha volta ao original).
       let file = rawFile;
+      let originalFile: File | undefined;
+      let originalSize: number | undefined;
       if (rawFile.type.startsWith('image/') && rawFile.type !== 'image/gif') {
         try {
           const res = await compressImageFile(rawFile);
           if (res.compressed) {
             file = res.file;
+            originalFile = rawFile;
+            originalSize = res.originalSize;
             const saved = Math.round((1 - res.newSize / res.originalSize) * 100);
             if (saved >= 10) {
               toast.message(`${rawFile.name} otimizada`, {
@@ -114,9 +130,10 @@ export default function InternalCommsPage() {
       }
       const result = validateInternalAttachment({ filename: file.name, mime: file.type, size: file.size });
       if (result.ok === true) {
+        const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
         accepted.push({
           id: (crypto as any)?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
-          file, status: 'pending',
+          file, originalFile, originalSize, previewUrl, status: 'pending',
         });
       } else {
         setAttachmentError(result.message);
@@ -133,7 +150,11 @@ export default function InternalCommsPage() {
   };
 
   const removeFromQueue = (id: string) => {
-    setQueue((prev) => prev.filter((q) => q.id !== id));
+    setQueue((prev) => {
+      const target = prev.find((q) => q.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((q) => q.id !== id);
+    });
   };
 
   const uploadOne = async (item: QueueItem, textForFirst: string): Promise<boolean> => {
@@ -144,6 +165,9 @@ export default function InternalCommsPage() {
       mime: item.file.type || 'application/octet-stream',
       size: item.file.size,
       kind: attachmentKindFor(item.file.type || ''),
+      originalFile: item.originalFile,
+      originalFilename: item.originalFile?.name,
+      originalSize: item.originalSize,
     };
     const res = await sendMessage(textForFirst, outgoing);
     if (res.error) {
@@ -154,6 +178,7 @@ export default function InternalCommsPage() {
       });
       return false;
     }
+    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
     setQueue((prev) => prev.map((q) => q.id === item.id ? { ...q, status: 'sent' } : q));
     toast.success(`“${item.file.name}” enviado`);
     return true;
@@ -194,6 +219,24 @@ export default function InternalCommsPage() {
     setSending(true);
     try { await uploadOne(item, ''); }
     finally { setSending(false); setQueue((prev) => prev.filter((q) => q.status !== 'sent')); }
+  };
+
+  const retryAllFailed = async () => {
+    if (sending) return;
+    const failed = queue.filter((q) => q.status === 'failed');
+    if (failed.length === 0) return;
+    setSending(true);
+    try {
+      let anyFailed = false;
+      for (const item of failed) {
+        const ok = await uploadOne(item, '');
+        if (!ok) anyFailed = true;
+      }
+      setQueue((prev) => prev.filter((q) => q.status !== 'sent'));
+      if (!anyFailed) toast.success('Todos os anexos foram reenviados.');
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleAudioRecorded = async (payload: { blob: Blob; mime: string; durationMs: number }) => {
@@ -371,6 +414,8 @@ export default function InternalCommsPage() {
                             size={msg.attachment_size}
                             kind={msg.attachment_kind}
                             durationMs={msg.audio_duration_ms}
+                            originalUrl={(msg as any).attachment_original_url}
+                            originalSize={(msg as any).attachment_original_size}
                             mine={mine}
                           />
                         )}
@@ -385,39 +430,68 @@ export default function InternalCommsPage() {
                   );
                 })}
 
-                {/* Bolhas de anexos que falharam — reenvio direto na conversa */}
-                {queue.filter((q) => q.status === 'failed').map((q) => (
-                  <div key={`failed-${q.id}`} className="flex justify-end" data-testid="failed-message-bubble">
-                    <div className="max-w-[75%] rounded-2xl rounded-br-md px-3 py-2 text-sm shadow-sm space-y-2 bg-destructive/10 border border-destructive/40 text-foreground">
-                      <div className="flex items-center gap-2 text-xs font-medium text-destructive">
-                        <AlertCircle className="w-3.5 h-3.5" />
-                        Falha ao enviar “{q.file.name}”
-                      </div>
-                      {q.error && <p className="text-[11px] text-destructive/90 break-words">{q.error}</p>}
-                      <div className="flex items-center gap-2 pt-1">
-                        <Button
-                          size="sm"
-                          variant="default"
-                          className="h-7 px-2 text-xs"
-                          onClick={() => retryOne(q.id)}
-                          disabled={composerBusy}
-                          aria-label={`Reenviar ${q.file.name}`}
+                {(() => {
+                  const failedItems = queue.filter((q) => q.status === 'failed');
+                  if (failedItems.length === 0) return null;
+                  return (
+                    <>
+                      {failedItems.length > 1 && (
+                        <div
+                          className="flex justify-end"
+                          data-testid="failed-batch-banner"
                         >
-                          <RotateCcw className="w-3 h-3 mr-1" /> Reenviar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2 text-xs"
-                          onClick={() => removeFromQueue(q.id)}
-                          disabled={composerBusy}
-                        >
-                          Descartar
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                          <div className="max-w-[75%] rounded-2xl rounded-br-md px-3 py-2 text-xs bg-destructive/5 border border-destructive/30 flex items-center gap-2">
+                            <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0" />
+                            <span className="text-foreground">
+                              {failedItems.length} anexos falharam
+                            </span>
+                            <Button
+                              size="sm"
+                              className="h-7 px-2 text-xs ml-1"
+                              onClick={retryAllFailed}
+                              disabled={composerBusy}
+                              aria-label="Reenviar todos os anexos que falharam"
+                            >
+                              <RotateCcw className="w-3 h-3 mr-1" /> Reenviar todos
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      {failedItems.map((q) => (
+                        <div key={`failed-${q.id}`} className="flex justify-end" data-testid="failed-message-bubble">
+                          <div className="max-w-[75%] rounded-2xl rounded-br-md px-3 py-2 text-sm shadow-sm space-y-2 bg-destructive/10 border border-destructive/40 text-foreground">
+                            <div className="flex items-center gap-2 text-xs font-medium text-destructive">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              Falha ao enviar “{q.file.name}”
+                            </div>
+                            {q.error && <p className="text-[11px] text-destructive/90 break-words">{q.error}</p>}
+                            <div className="flex items-center gap-2 pt-1">
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => retryOne(q.id)}
+                                disabled={composerBusy}
+                                aria-label={`Reenviar ${q.file.name}`}
+                              >
+                                <RotateCcw className="w-3 h-3 mr-1" /> Reenviar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => removeFromQueue(q.id)}
+                                disabled={composerBusy}
+                              >
+                                Descartar
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  );
+                })()}
               </div>
 
 
@@ -457,6 +531,14 @@ export default function InternalCommsPage() {
                     </div>
                     {queue.map((q) => (
                       <div key={q.id} className="flex items-center gap-2 text-xs bg-background/80 rounded-md px-2 py-1.5 border border-border">
+                        {q.previewUrl ? (
+                          <img
+                            src={q.previewUrl}
+                            alt={q.file.name}
+                            className="w-10 h-10 rounded object-cover border border-border shrink-0"
+                            data-testid="attachment-thumbnail"
+                          />
+                        ) : null}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
                             {q.status === 'sent' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
