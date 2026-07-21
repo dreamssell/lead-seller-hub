@@ -269,6 +269,73 @@ export default function InternalCommsPage() {
     }
   };
 
+  // Reordenação das miniaturas via drag & drop no composer.
+  const moveQueueItem = (fromId: string, toId: string) => {
+    if (fromId === toId) return;
+    setQueue((prev) => {
+      const from = prev.findIndex((q) => q.id === fromId);
+      const to = prev.findIndex((q) => q.id === toId);
+      if (from < 0 || to < 0) return prev;
+      const next = prev.slice();
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  };
+
+  // Baixar todos anexos da conversa (comprimidos ou originais) como .zip.
+  const downloadAllAttachments = async (variant: 'compressed' | 'original') => {
+    if (!activePeer || downloadingAll) return;
+    const items = messages
+      .filter((m) => !!m.attachment_url)
+      .map((m) => {
+        const useOriginal = variant === 'original' && (m as any).attachment_original_url;
+        const key = useOriginal ? (m as any).attachment_original_url as string : m.attachment_url!;
+        return { key, name: m.attachment_name || key.split('/').pop() || 'arquivo' };
+      });
+    if (items.length === 0) { toast.message('Nenhum anexo nesta conversa.'); return; }
+    setDownloadingAll(variant);
+    const toastId = toast.loading(`Preparando ${items.length} anexo(s)…`);
+    try {
+      const zip = new JSZip();
+      const usedNames = new Map<string, number>();
+      let ok = 0, fail = 0;
+      for (const it of items) {
+        try {
+          const { data, error } = await supabase.storage
+            .from('internal-comms').createSignedUrl(it.key, 300);
+          if (error || !data?.signedUrl) throw error || new Error('signed_url_failed');
+          const resp = await fetch(data.signedUrl);
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const blob = await resp.blob();
+          let name = it.name;
+          const n = (usedNames.get(name) || 0) + 1;
+          usedNames.set(name, n);
+          if (n > 1) {
+            const dot = name.lastIndexOf('.');
+            name = dot > 0 ? `${name.slice(0, dot)} (${n})${name.slice(dot)}` : `${name} (${n})`;
+          }
+          zip.file(name, blob);
+          ok++;
+        } catch { fail++; }
+      }
+      if (ok === 0) throw new Error('Nenhum anexo pôde ser baixado.');
+      const out = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(out);
+      const a = document.createElement('a');
+      const safePeer = (activePeer.display_name || 'conversa').replace(/[^\w-]+/g, '_');
+      a.href = url;
+      a.download = `anexos-${safePeer}-${variant === 'original' ? 'originais' : 'otimizados'}.zip`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast.success(`${ok} anexo(s) baixado(s)${fail ? ` · ${fail} falharam` : ''}.`, { id: toastId });
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao gerar o ZIP.', { id: toastId });
+    } finally {
+      setDownloadingAll(null);
+    }
+  };
+
   const handleAudioRecorded = async (payload: { blob: Blob; mime: string; durationMs: number }) => {
     if (sending) return;
     setSending(true);
