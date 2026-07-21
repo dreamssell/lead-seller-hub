@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
       throw new Error(`UAZ HTTP ${res.status}: ${JSON.stringify(responseData ?? {}).slice(0, 300)}`);
     }
 
-    const uazMsgId = responseData?.data?.key?.id || responseData?.id || responseData?.key?.id || null;
+    const uazMsgId = canonicalMsgId(responseData?.data?.key?.id || responseData?.id || responseData?.key?.id || null);
 
     // 5. Persist — UPSERT on client_msg_id so a caller retry never inserts a
     //    duplicate row, and a caller that already inserted an optimistic row
