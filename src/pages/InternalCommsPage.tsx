@@ -141,7 +141,11 @@ export default function InternalCommsPage() {
   };
 
   const removeFromQueue = (id: string) => {
-    setQueue((prev) => prev.filter((q) => q.id !== id));
+    setQueue((prev) => {
+      const target = prev.find((q) => q.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((q) => q.id !== id);
+    });
   };
 
   const uploadOne = async (item: QueueItem, textForFirst: string): Promise<boolean> => {
@@ -152,6 +156,9 @@ export default function InternalCommsPage() {
       mime: item.file.type || 'application/octet-stream',
       size: item.file.size,
       kind: attachmentKindFor(item.file.type || ''),
+      originalFile: item.originalFile,
+      originalFilename: item.originalFile?.name,
+      originalSize: item.originalSize,
     };
     const res = await sendMessage(textForFirst, outgoing);
     if (res.error) {
@@ -162,6 +169,7 @@ export default function InternalCommsPage() {
       });
       return false;
     }
+    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
     setQueue((prev) => prev.map((q) => q.id === item.id ? { ...q, status: 'sent' } : q));
     toast.success(`“${item.file.name}” enviado`);
     return true;
@@ -202,6 +210,24 @@ export default function InternalCommsPage() {
     setSending(true);
     try { await uploadOne(item, ''); }
     finally { setSending(false); setQueue((prev) => prev.filter((q) => q.status !== 'sent')); }
+  };
+
+  const retryAllFailed = async () => {
+    if (sending) return;
+    const failed = queue.filter((q) => q.status === 'failed');
+    if (failed.length === 0) return;
+    setSending(true);
+    try {
+      let anyFailed = false;
+      for (const item of failed) {
+        const ok = await uploadOne(item, '');
+        if (!ok) anyFailed = true;
+      }
+      setQueue((prev) => prev.filter((q) => q.status !== 'sent'));
+      if (!anyFailed) toast.success('Todos os anexos foram reenviados.');
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleAudioRecorded = async (payload: { blob: Blob; mime: string; durationMs: number }) => {
