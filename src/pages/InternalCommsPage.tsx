@@ -657,8 +657,50 @@ export default function InternalCommsPage() {
                         Remover todos
                       </button>
                     </div>
-                    {queue.map((q) => (
-                      <div key={q.id} className="flex items-center gap-2 text-xs bg-background/80 rounded-md px-2 py-1.5 border border-border">
+                    {queue.map((q) => {
+                      const canReorder = queue.length > 1 && q.status !== 'uploading' && !composerBusy;
+                      const isDropTarget = reorderDragId && reorderDragId !== q.id;
+                      const progressPct = q.status === 'sent' ? 100 : q.status === 'uploading' ? 60 : q.status === 'failed' ? 100 : 0;
+                      const progressColor = q.status === 'sent'
+                        ? 'bg-emerald-500'
+                        : q.status === 'failed'
+                          ? 'bg-destructive'
+                          : 'bg-primary';
+                      return (
+                      <div
+                        key={q.id}
+                        className={`flex items-center gap-2 text-xs bg-background/80 rounded-md px-2 py-1.5 border transition-colors ${
+                          reorderDragId === q.id ? 'opacity-50 border-primary' : isDropTarget ? 'border-primary/60' : 'border-border'
+                        }`}
+                        draggable={canReorder}
+                        onDragStart={(e) => {
+                          if (!canReorder) return;
+                          setReorderDragId(q.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                          try { e.dataTransfer.setData('text/plain', q.id); } catch { /* ignore */ }
+                        }}
+                        onDragOver={(e) => {
+                          if (!reorderDragId || reorderDragId === q.id) return;
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                        }}
+                        onDrop={(e) => {
+                          if (!reorderDragId || reorderDragId === q.id) return;
+                          e.preventDefault(); e.stopPropagation();
+                          moveQueueItem(reorderDragId, q.id);
+                          setReorderDragId(null);
+                        }}
+                        onDragEnd={() => setReorderDragId(null)}
+                      >
+                        {canReorder && (
+                          <span
+                            className="p-1 -ml-1 cursor-grab active:cursor-grabbing text-muted-foreground"
+                            aria-label="Arraste para reordenar"
+                            title="Arraste para reordenar"
+                          >
+                            <GripVertical className="w-3.5 h-3.5" />
+                          </span>
+                        )}
                         {q.previewUrl ? (
                           <img
                             src={q.previewUrl}
@@ -674,16 +716,41 @@ export default function InternalCommsPage() {
                             {q.status === 'uploading' && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
                             <span className="truncate font-medium text-foreground">{q.file.name}</span>
                             <span className="text-muted-foreground shrink-0">· {fmtSize(q.file.size)}</span>
+                            <span
+                              className={`ml-auto shrink-0 text-[10px] uppercase tracking-wide ${
+                                q.status === 'sent' ? 'text-emerald-600' :
+                                q.status === 'failed' ? 'text-destructive' :
+                                q.status === 'uploading' ? 'text-primary' : 'text-muted-foreground'
+                              }`}
+                              data-testid={`attachment-status-${q.status}`}
+                            >
+                              {q.status === 'sent' ? 'Concluído'
+                                : q.status === 'uploading' ? 'Enviando…'
+                                : q.status === 'failed' ? 'Falhou'
+                                : 'Pronto'}
+                            </span>
                           </div>
-                          {q.status === 'uploading' && (
-                            <div className="h-1 mt-1 rounded-full bg-muted overflow-hidden" aria-label="Enviando anexo">
-                              <div className="h-full w-1/3 bg-primary animate-[shimmer_1.2s_infinite]" style={{
-                                animation: 'shimmer 1.2s linear infinite',
-                                background: 'linear-gradient(90deg, hsl(var(--primary)/0.3), hsl(var(--primary)), hsl(var(--primary)/0.3))',
-                                backgroundSize: '200% 100%',
-                              }} />
-                            </div>
-                          )}
+                          <div
+                            className="h-1 mt-1 rounded-full bg-muted overflow-hidden"
+                            role="progressbar"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={progressPct}
+                            aria-label={`Progresso de ${q.file.name}`}
+                          >
+                            {q.status === 'uploading' ? (
+                              <div
+                                className="h-full w-1/3"
+                                style={{
+                                  animation: 'shimmer 1.2s linear infinite',
+                                  background: 'linear-gradient(90deg, hsl(var(--primary)/0.3), hsl(var(--primary)), hsl(var(--primary)/0.3))',
+                                  backgroundSize: '200% 100%',
+                                }}
+                              />
+                            ) : (
+                              <div className={`h-full ${progressColor}`} style={{ width: `${progressPct}%` }} />
+                            )}
+                          </div>
                           {q.status === 'failed' && q.error && (
                             <p className="text-[10px] text-destructive truncate mt-0.5">{q.error}</p>
                           )}
@@ -711,7 +778,7 @@ export default function InternalCommsPage() {
                           </button>
                         )}
                       </div>
-                    ))}
+                    );})}
                   </div>
                 )}
                 <div className="p-3 flex items-center gap-2">
