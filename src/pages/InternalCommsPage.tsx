@@ -143,7 +143,8 @@ export default function InternalCommsPage() {
       let originalSize: number | undefined;
       if (rawFile.type.startsWith('image/') && rawFile.type !== 'image/gif') {
         try {
-          const res = await compressImageFile(rawFile);
+          const preset = QUALITY_PRESETS[quality];
+          const res = await compressImageFile(rawFile, { maxDim: preset.maxDim, quality: preset.quality });
           if (res.compressed) {
             file = res.file;
             originalFile = rawFile;
