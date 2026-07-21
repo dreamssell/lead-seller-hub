@@ -156,6 +156,7 @@ function ImageLightbox({ src, name, onClose }: { src: string; name?: string | nu
 
 export function AttachmentBubble({
   url, name, mime, size, kind, durationMs, mine,
+  originalUrl, originalSize,
 }: AttachmentBubbleProps) {
   const [signed, setSigned] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -168,6 +169,9 @@ export function AttachmentBubble({
     return 'file';
   }, [kind, mime]);
 
+  const hasOriginal = !!originalUrl && !!originalSize && !!size && originalSize > size;
+  const savedPct = hasOriginal ? Math.round((1 - (size as number) / (originalSize as number)) * 100) : 0;
+
   useEffect(() => {
     let cancelled = false;
     setSigned(null); setFailed(false);
@@ -175,11 +179,22 @@ export function AttachmentBubble({
     return () => { cancelled = true; };
   }, [url]);
 
-  const download = async () => {
-    if (!signed) return;
+  const triggerDownload = (href: string, filename: string) => {
     const a = document.createElement('a');
-    a.href = signed; a.download = name || 'anexo'; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    a.href = href; a.download = filename; a.target = '_blank'; a.rel = 'noopener noreferrer';
     document.body.appendChild(a); a.click(); a.remove();
+  };
+
+  const downloadCompressed = async () => {
+    if (!signed) return;
+    triggerDownload(signed, name || 'anexo');
+  };
+
+  const downloadOriginal = async () => {
+    if (!originalUrl) return;
+    const u = await getSignedUrl(originalUrl);
+    if (!u) return;
+    triggerDownload(u, `original-${name || 'anexo'}`);
   };
 
   if (failed) {
@@ -190,9 +205,18 @@ export function AttachmentBubble({
     );
   }
 
+  const sizeLine = hasOriginal ? (
+    <span>
+      {humanSize(originalSize as number)} → <strong>{humanSize(size as number)}</strong>
+      {savedPct >= 1 && <> (−{savedPct}%)</>}
+    </span>
+  ) : (
+    <span>{humanSize(size)}</span>
+  );
+
   if (derivedKind === 'image') {
     return (
-      <>
+      <div className="flex flex-col gap-1">
         <button
           type="button"
           onClick={() => signed && setLightboxOpen(true)}
@@ -208,10 +232,32 @@ export function AttachmentBubble({
             </div>
           )}
         </button>
+        <div className={`flex items-center flex-wrap gap-x-2 gap-y-0.5 text-[10px] ${mine ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+          {sizeLine}
+          <button
+            type="button"
+            onClick={downloadCompressed}
+            disabled={!signed}
+            className="inline-flex items-center gap-1 hover:underline disabled:opacity-50"
+            aria-label="Baixar imagem otimizada"
+          >
+            <Download className="w-3 h-3" /> Otimizada
+          </button>
+          {hasOriginal && (
+            <button
+              type="button"
+              onClick={downloadOriginal}
+              className="inline-flex items-center gap-1 hover:underline"
+              aria-label="Baixar imagem original sem compressão"
+            >
+              <Download className="w-3 h-3" /> Original
+            </button>
+          )}
+        </div>
         {lightboxOpen && signed && (
           <ImageLightbox src={signed} name={name} onClose={() => setLightboxOpen(false)} />
         )}
-      </>
+      </div>
     );
   }
 
@@ -235,7 +281,7 @@ export function AttachmentBubble({
   return (
     <button
       type="button"
-      onClick={download}
+      onClick={downloadCompressed}
       disabled={!signed}
       className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition ${
         mine ? 'bg-primary-foreground/10 hover:bg-primary-foreground/20' : 'bg-muted hover:bg-muted/70'
