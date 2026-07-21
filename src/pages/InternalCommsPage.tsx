@@ -80,9 +80,22 @@ export default function InternalCommsPage() {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [quality, setQuality] = useState<CompressionQuality>(() => {
+    try {
+      const v = localStorage.getItem(QUALITY_STORAGE_KEY);
+      if (v === 'high' || v === 'balanced' || v === 'light') return v;
+    } catch { /* ignore */ }
+    return 'balanced';
+  });
+  const [reorderDragId, setReorderDragId] = useState<string | null>(null);
+  const [downloadingAll, setDownloadingAll] = useState<'compressed' | 'original' | null>(null);
   const dragCounter = useRef(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    try { localStorage.setItem(QUALITY_STORAGE_KEY, quality); } catch { /* ignore */ }
+  }, [quality]);
 
   const filtered = members.filter((m) =>
     !search.trim() ||
