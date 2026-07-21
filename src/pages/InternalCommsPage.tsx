@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import JSZip from 'jszip';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useInternalComms, type OutgoingAttachment } from '@/hooks/useInternalComms';
 import { useInternalCommsUnread } from '@/hooks/useInternalCommsUnread';
@@ -7,8 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenuRadioGroup, DropdownMenuRadioItem,
+} from '@/components/ui/dropdown-menu';
+import {
   MessagesSquare, Send, Search, Users, Paperclip, X, Loader2,
   UploadCloud, RotateCcw, CheckCircle2, AlertCircle,
+  GripVertical, Download, Settings2, ChevronDown, Archive,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -18,6 +25,15 @@ import {
 import { compressImageFile } from '@/lib/imageCompression';
 import { AudioRecorder } from '@/components/internal-comms/AudioRecorder';
 import { AttachmentBubble } from '@/components/internal-comms/AttachmentBubble';
+import { supabase } from '@/integrations/supabase/client';
+
+type CompressionQuality = 'high' | 'balanced' | 'light';
+const QUALITY_PRESETS: Record<CompressionQuality, { maxDim: number; quality: number; label: string; hint: string }> = {
+  high:     { maxDim: 2560, quality: 0.92, label: 'Mais qualidade', hint: 'Até 2560px · 92%' },
+  balanced: { maxDim: 1920, quality: 0.82, label: 'Equilibrado',    hint: 'Até 1920px · 82% (padrão)' },
+  light:    { maxDim: 1280, quality: 0.70, label: 'Mais leve',      hint: 'Até 1280px · 70%' },
+};
+const QUALITY_STORAGE_KEY = 'internalComms:compressionQuality';
 
 const MAX_ATTACHMENTS_PER_MESSAGE = 10;
 
@@ -64,9 +80,22 @@ export default function InternalCommsPage() {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [quality, setQuality] = useState<CompressionQuality>(() => {
+    try {
+      const v = localStorage.getItem(QUALITY_STORAGE_KEY);
+      if (v === 'high' || v === 'balanced' || v === 'light') return v;
+    } catch { /* ignore */ }
+    return 'balanced';
+  });
+  const [reorderDragId, setReorderDragId] = useState<string | null>(null);
+  const [downloadingAll, setDownloadingAll] = useState<'compressed' | 'original' | null>(null);
   const dragCounter = useRef(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    try { localStorage.setItem(QUALITY_STORAGE_KEY, quality); } catch { /* ignore */ }
+  }, [quality]);
 
   const filtered = members.filter((m) =>
     !search.trim() ||
@@ -114,7 +143,8 @@ export default function InternalCommsPage() {
       let originalSize: number | undefined;
       if (rawFile.type.startsWith('image/') && rawFile.type !== 'image/gif') {
         try {
-          const res = await compressImageFile(rawFile);
+          const preset = QUALITY_PRESETS[quality];
+          const res = await compressImageFile(rawFile, { maxDim: preset.maxDim, quality: preset.quality });
           if (res.compressed) {
             file = res.file;
             originalFile = rawFile;
@@ -236,6 +266,73 @@ export default function InternalCommsPage() {
       if (!anyFailed) toast.success('Todos os anexos foram reenviados.');
     } finally {
       setSending(false);
+    }
+  };
+
+  // Reordenação das miniaturas via drag & drop no composer.
+  const moveQueueItem = (fromId: string, toId: string) => {
+    if (fromId === toId) return;
+    setQueue((prev) => {
+      const from = prev.findIndex((q) => q.id === fromId);
+      const to = prev.findIndex((q) => q.id === toId);
+      if (from < 0 || to < 0) return prev;
+      const next = prev.slice();
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  };
+
+  // Baixar todos anexos da conversa (comprimidos ou originais) como .zip.
+  const downloadAllAttachments = async (variant: 'compressed' | 'original') => {
+    if (!activePeer || downloadingAll) return;
+    const items = messages
+      .filter((m) => !!m.attachment_url)
+      .map((m) => {
+        const useOriginal = variant === 'original' && (m as any).attachment_original_url;
+        const key = useOriginal ? (m as any).attachment_original_url as string : m.attachment_url!;
+        return { key, name: m.attachment_name || key.split('/').pop() || 'arquivo' };
+      });
+    if (items.length === 0) { toast.message('Nenhum anexo nesta conversa.'); return; }
+    setDownloadingAll(variant);
+    const toastId = toast.loading(`Preparando ${items.length} anexo(s)…`);
+    try {
+      const zip = new JSZip();
+      const usedNames = new Map<string, number>();
+      let ok = 0, fail = 0;
+      for (const it of items) {
+        try {
+          const { data, error } = await supabase.storage
+            .from('internal-comms').createSignedUrl(it.key, 300);
+          if (error || !data?.signedUrl) throw error || new Error('signed_url_failed');
+          const resp = await fetch(data.signedUrl);
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const blob = await resp.blob();
+          let name = it.name;
+          const n = (usedNames.get(name) || 0) + 1;
+          usedNames.set(name, n);
+          if (n > 1) {
+            const dot = name.lastIndexOf('.');
+            name = dot > 0 ? `${name.slice(0, dot)} (${n})${name.slice(dot)}` : `${name} (${n})`;
+          }
+          zip.file(name, blob);
+          ok++;
+        } catch { fail++; }
+      }
+      if (ok === 0) throw new Error('Nenhum anexo pôde ser baixado.');
+      const out = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(out);
+      const a = document.createElement('a');
+      const safePeer = (activePeer.display_name || 'conversa').replace(/[^\w-]+/g, '_');
+      a.href = url;
+      a.download = `anexos-${safePeer}-${variant === 'original' ? 'originais' : 'otimizados'}.zip`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast.success(`${ok} anexo(s) baixado(s)${fail ? ` · ${fail} falharam` : ''}.`, { id: toastId });
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao gerar o ZIP.', { id: toastId });
+    } finally {
+      setDownloadingAll(null);
     }
   };
 
@@ -385,11 +482,42 @@ export default function InternalCommsPage() {
                   {activePeer.avatar_url && <AvatarImage src={activePeer.avatar_url} alt={activePeer.display_name} />}
                   <AvatarFallback className="text-xs">{initials(activePeer.display_name)}</AvatarFallback>
                 </Avatar>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold truncate">{activePeer.display_name}</p>
                   {activePeer.email && <p className="text-xs text-muted-foreground truncate">{activePeer.email}</p>}
                 </div>
+                {messages.some((m) => !!m.attachment_url) && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1.5"
+                        disabled={!!downloadingAll}
+                        aria-label="Baixar anexos da conversa"
+                      >
+                        {downloadingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Archive className="w-3.5 h-3.5" />}
+                        <span className="hidden sm:inline">Baixar anexos</span>
+                        <ChevronDown className="w-3 h-3 opacity-70" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel className="text-xs">Empacotar em .zip</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => downloadAllAttachments('compressed')}>
+                        <Download className="w-4 h-4 mr-2" /> Otimizados
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => downloadAllAttachments('original')}
+                        disabled={!messages.some((m) => !!(m as any).attachment_original_url)}
+                      >
+                        <Download className="w-4 h-4 mr-2" /> Originais
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
+
 
               <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-2 bg-muted/20">
                 {loadingMessages ? (
@@ -529,8 +657,50 @@ export default function InternalCommsPage() {
                         Remover todos
                       </button>
                     </div>
-                    {queue.map((q) => (
-                      <div key={q.id} className="flex items-center gap-2 text-xs bg-background/80 rounded-md px-2 py-1.5 border border-border">
+                    {queue.map((q) => {
+                      const canReorder = queue.length > 1 && q.status !== 'uploading' && !composerBusy;
+                      const isDropTarget = reorderDragId && reorderDragId !== q.id;
+                      const progressPct = q.status === 'sent' ? 100 : q.status === 'uploading' ? 60 : q.status === 'failed' ? 100 : 0;
+                      const progressColor = q.status === 'sent'
+                        ? 'bg-emerald-500'
+                        : q.status === 'failed'
+                          ? 'bg-destructive'
+                          : 'bg-primary';
+                      return (
+                      <div
+                        key={q.id}
+                        className={`flex items-center gap-2 text-xs bg-background/80 rounded-md px-2 py-1.5 border transition-colors ${
+                          reorderDragId === q.id ? 'opacity-50 border-primary' : isDropTarget ? 'border-primary/60' : 'border-border'
+                        }`}
+                        draggable={canReorder}
+                        onDragStart={(e) => {
+                          if (!canReorder) return;
+                          setReorderDragId(q.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                          try { e.dataTransfer.setData('text/plain', q.id); } catch { /* ignore */ }
+                        }}
+                        onDragOver={(e) => {
+                          if (!reorderDragId || reorderDragId === q.id) return;
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                        }}
+                        onDrop={(e) => {
+                          if (!reorderDragId || reorderDragId === q.id) return;
+                          e.preventDefault(); e.stopPropagation();
+                          moveQueueItem(reorderDragId, q.id);
+                          setReorderDragId(null);
+                        }}
+                        onDragEnd={() => setReorderDragId(null)}
+                      >
+                        {canReorder && (
+                          <span
+                            className="p-1 -ml-1 cursor-grab active:cursor-grabbing text-muted-foreground"
+                            aria-label="Arraste para reordenar"
+                            title="Arraste para reordenar"
+                          >
+                            <GripVertical className="w-3.5 h-3.5" />
+                          </span>
+                        )}
                         {q.previewUrl ? (
                           <img
                             src={q.previewUrl}
@@ -546,16 +716,41 @@ export default function InternalCommsPage() {
                             {q.status === 'uploading' && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
                             <span className="truncate font-medium text-foreground">{q.file.name}</span>
                             <span className="text-muted-foreground shrink-0">· {fmtSize(q.file.size)}</span>
+                            <span
+                              className={`ml-auto shrink-0 text-[10px] uppercase tracking-wide ${
+                                q.status === 'sent' ? 'text-emerald-600' :
+                                q.status === 'failed' ? 'text-destructive' :
+                                q.status === 'uploading' ? 'text-primary' : 'text-muted-foreground'
+                              }`}
+                              data-testid={`attachment-status-${q.status}`}
+                            >
+                              {q.status === 'sent' ? 'Concluído'
+                                : q.status === 'uploading' ? 'Enviando…'
+                                : q.status === 'failed' ? 'Falhou'
+                                : 'Pronto'}
+                            </span>
                           </div>
-                          {q.status === 'uploading' && (
-                            <div className="h-1 mt-1 rounded-full bg-muted overflow-hidden" aria-label="Enviando anexo">
-                              <div className="h-full w-1/3 bg-primary animate-[shimmer_1.2s_infinite]" style={{
-                                animation: 'shimmer 1.2s linear infinite',
-                                background: 'linear-gradient(90deg, hsl(var(--primary)/0.3), hsl(var(--primary)), hsl(var(--primary)/0.3))',
-                                backgroundSize: '200% 100%',
-                              }} />
-                            </div>
-                          )}
+                          <div
+                            className="h-1 mt-1 rounded-full bg-muted overflow-hidden"
+                            role="progressbar"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={progressPct}
+                            aria-label={`Progresso de ${q.file.name}`}
+                          >
+                            {q.status === 'uploading' ? (
+                              <div
+                                className="h-full w-1/3"
+                                style={{
+                                  animation: 'shimmer 1.2s linear infinite',
+                                  background: 'linear-gradient(90deg, hsl(var(--primary)/0.3), hsl(var(--primary)), hsl(var(--primary)/0.3))',
+                                  backgroundSize: '200% 100%',
+                                }}
+                              />
+                            ) : (
+                              <div className={`h-full ${progressColor}`} style={{ width: `${progressPct}%` }} />
+                            )}
+                          </div>
                           {q.status === 'failed' && q.error && (
                             <p className="text-[10px] text-destructive truncate mt-0.5">{q.error}</p>
                           )}
@@ -583,7 +778,7 @@ export default function InternalCommsPage() {
                           </button>
                         )}
                       </div>
-                    ))}
+                    );})}
                   </div>
                 )}
                 <div className="p-3 flex items-center gap-2">
@@ -607,6 +802,32 @@ export default function InternalCommsPage() {
                   >
                     <Paperclip className="w-4 h-4" />
                   </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Qualidade de compressão: ${QUALITY_PRESETS[quality].label}`}
+                        title={`Compressão: ${QUALITY_PRESETS[quality].label} (${QUALITY_PRESETS[quality].hint})`}
+                        disabled={composerBusy}
+                      >
+                        <Settings2 className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-64">
+                      <DropdownMenuLabel className="text-xs">Qualidade das imagens</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuRadioGroup value={quality} onValueChange={(v) => setQuality(v as CompressionQuality)}>
+                        {(Object.keys(QUALITY_PRESETS) as CompressionQuality[]).map((k) => (
+                          <DropdownMenuRadioItem key={k} value={k} className="flex-col items-start gap-0.5">
+                            <span className="text-sm">{QUALITY_PRESETS[k].label}</span>
+                            <span className="text-[11px] text-muted-foreground">{QUALITY_PRESETS[k].hint}</span>
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <AudioRecorder disabled={composerBusy} onRecorded={handleAudioRecorded} />
                   <Input
                     placeholder={hasPendingUploads ? 'Escreva sua mensagem (legenda opcional)…' : 'Escreva sua mensagem...'}
