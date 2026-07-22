@@ -727,6 +727,98 @@ export default function FocusedChatPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [selected]);
 
+  // ---- Mensagens com mídia visível (para navegação/pré-carregamento) -------
+  const mediaMsgIndexes = useMemo(() => {
+    const out: Array<{ idx: number; url: string; type: string }> = [];
+    visibleMsgs.forEach((m, idx) => {
+      const meta: any = (m as any).metadata;
+      if (meta && typeof meta === 'object' && !Array.isArray(meta)) {
+        const url = meta.media_url;
+        const type = meta.media_type;
+        if (url && (type === 'image' || type === 'video' || type === 'audio')) {
+          out.push({ idx, url: String(url), type: String(type) });
+        }
+      }
+    });
+    return out;
+  }, [visibleMsgs]);
+
+  // Atalhos: navegar entre mídias e abrir o viewer.
+  //  Alt+←  / Alt+→  → mídia anterior/próxima (rola até ela; abre lightbox se imagem)
+  //  Alt+Enter / Alt+O → abre a mídia atual (imagem) no MediaViewerDialog
+  const currentMediaIdxRef = useRef<number>(-1);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!selected || !e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      if (!mediaMsgIndexes.length) return;
+
+      const key = e.key;
+      const openKey = key === 'Enter' || key.toLowerCase() === 'o';
+      const prevKey = key === 'ArrowLeft' || key === '[';
+      const nextKey = key === 'ArrowRight' || key === ']';
+      if (!openKey && !prevKey && !nextKey) return;
+      e.preventDefault();
+
+      let cursor = currentMediaIdxRef.current;
+      if (prevKey || nextKey) {
+        if (cursor < 0) cursor = nextKey ? 0 : mediaMsgIndexes.length - 1;
+        else cursor = (cursor + (nextKey ? 1 : -1) + mediaMsgIndexes.length) % mediaMsgIndexes.length;
+        currentMediaIdxRef.current = cursor;
+        const target = mediaMsgIndexes[cursor];
+        try { virtualizer.scrollToIndex(target.idx, { align: 'center' }); } catch {}
+        if (target.type === 'image') setLightboxUrl(target.url);
+      } else if (openKey) {
+        if (cursor < 0) cursor = 0;
+        const target = mediaMsgIndexes[cursor];
+        if (target?.type === 'image') setLightboxUrl(target.url);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected, mediaMsgIndexes, virtualizer]);
+
+  // Sincroniza o cursor de mídia com a imagem aberta no lightbox.
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    const i = mediaMsgIndexes.findIndex((x) => x.url === lightboxUrl);
+    if (i >= 0) currentMediaIdxRef.current = i;
+  }, [lightboxUrl, mediaMsgIndexes]);
+
+  // Pré-carregamento de miniaturas (imagens) e metadados de áudio para reduzir
+  // atrasos quando a conversa contém muitas mensagens de mídia.
+  useEffect(() => {
+    if (!mediaMsgIndexes.length) return;
+    const cancelled = { v: false };
+    const idle: (cb: () => void) => number =
+      (window as any).requestIdleCallback || ((cb) => window.setTimeout(cb, 200));
+    const handle = idle(() => {
+      if (cancelled.v) return;
+      // Limita a 40 itens para não estourar memória/rede em conversas gigantes.
+      const slice = mediaMsgIndexes.slice(-40);
+      for (const m of slice) {
+        try {
+          if (m.type === 'image') {
+            const img = new Image();
+            img.decoding = 'async';
+            img.loading = 'eager';
+            img.src = m.url;
+          } else if (m.type === 'audio') {
+            const a = new Audio();
+            a.preload = 'metadata';
+            a.src = m.url;
+          }
+        } catch {}
+      }
+    });
+    return () => {
+      cancelled.v = true;
+      try { (window as any).cancelIdleCallback?.(handle); } catch {}
+    };
+  }, [mediaMsgIndexes]);
+
+
   /**
    * Salta para uma mensagem específica retornada pela busca completa.
    * Carrega uma "janela" de contexto (antes + depois) sem quebrar a paginação:
