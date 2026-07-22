@@ -170,7 +170,36 @@ export function useDashboardMetrics(scope: DashboardScope): DashboardMetrics {
     setState((s) => ({ ...s, loading: true }));
     load().catch(() => !cancelled && setState((s) => ({ ...s, loading: false })));
     return () => { cancelled = true; };
+  }, [user?.id, access?.owner_id, scope, reloadTick]);
+
+  // Realtime: recount "Em Atendimento" quando conversas/atribuições mudam.
+  useEffect(() => {
+    if (!user) return;
+    const ownerId = access?.owner_id || user.id;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setReloadTick((t) => t + 1), 600);
+    };
+    const channel = supabase
+      .channel(`dashboard-metrics-${ownerId}-${scope}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'customers', filter: `owner_id=eq.${ownerId}` },
+        schedule,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'lead_assignments', filter: `owner_id=eq.${ownerId}` },
+        schedule,
+      )
+      .subscribe();
+    return () => {
+      if (timer) clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
   }, [user?.id, access?.owner_id, scope]);
 
   return state;
 }
+
