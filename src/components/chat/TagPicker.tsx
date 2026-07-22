@@ -3,8 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Tag, Plus, Check } from 'lucide-react';
+import { Tag, Plus, Check, Trash2, Pencil, Lock } from 'lucide-react';
 import { toast } from 'sonner';
+import { useCanManageChatTags } from '@/hooks/useCanManageChatTags';
+
 
 export interface ChatTag {
   id: string;
