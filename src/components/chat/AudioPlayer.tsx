@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, Download, Loader2, AlertCircle, RotateCcw, Scissors, Volume2 } from 'lucide-react';
+import { Play, Pause, Download, Loader2, AlertCircle, RotateCcw, Scissors } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -356,18 +356,8 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     }
   };
 
-  const cycleGain = () => {
-    ensureAudioGraph();
-    const next = (gainIdx + 1) % GAINS.length;
-    setGainIdx(next);
-    try { localStorage.setItem(GAIN_STORAGE_KEY, String(next)); } catch {}
-  };
-  const onGainKey = (e: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      e.preventDefault();
-      cycleGain();
-    }
-  };
+
+
 
   const progress = total > 0 ? current / total : 0;
   const activeBar = Math.floor(progress * BARS);
@@ -487,22 +477,6 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
           )}
         >
           {SPEEDS[speedIdx]}x
-        </button>
-        <button
-          type="button"
-          onClick={cycleGain}
-          onKeyDown={onGainKey}
-          aria-label={`Ganho de volume ${GAINS[gainIdx]}x com normalização. Pressione para alternar.`}
-          title={`Volume ${GAINS[gainIdx]}x`}
-          className={cn(
-            'flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-md transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-            mine
-              ? 'bg-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/30'
-              : 'bg-primary/10 text-primary hover:bg-primary/20',
-          )}
-        >
-          <Volume2 className="w-3 h-3" />
-          {GAINS[gainIdx]}x
         </button>
         <a
           href={url}
