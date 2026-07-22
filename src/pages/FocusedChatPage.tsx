@@ -127,6 +127,8 @@ export default function FocusedChatPage() {
     ? (initialToolParam as Tool) : null;
 
   const [convs, setConvs] = useState<Conversation[]>([]);
+  const convsRef = useRef<Conversation[]>([]);
+  useEffect(() => { convsRef.current = convs; }, [convs]);
   const CONV_PAGE_SIZE = 200;
   const [convLimit, setConvLimit] = useState(CONV_PAGE_SIZE);
   const [convHasMore, setConvHasMore] = useState(false);
