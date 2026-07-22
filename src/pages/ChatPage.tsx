@@ -1241,7 +1241,7 @@ export default function ChatPage() {
         const row: any = payload.new || payload.old;
         if (!row?.owner_id || (activeOwnerIdRef.current && row.owner_id !== activeOwnerIdRef.current)) return;
         const currentChannel = activeChannelRef.current;
-        if (currentChannel) loadConversations(currentChannel);
+        if (currentChannel) { const _ch = currentChannel; const _t = startRealtimeTimer('chat_conversations', 'lead_assignments.change'); const _before = (convsRef.current[_ch] || []).length; loadConversations(_ch).then(() => _t.done(_before, (convsRef.current[_ch] || []).length, { channel: _ch, stage: row?.stage, assigned_to: row?.assigned_to })); }
       })
       .subscribe();
 
