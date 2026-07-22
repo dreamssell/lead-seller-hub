@@ -16,6 +16,19 @@ import type { WhatsAppConnection } from './types';
 import type { WhatsAppProviderAdapter } from './adapters';
 import { DEFAULT_WAHA_TEXT_TEMPLATE, renderWahaTemplate } from './wahaConfig';
 
+// Mirrors canonicalMsgId in supabase/functions/waha-inbound & handle-inbound-webhook.
+// WAHA returns the outbound message id as `true_<jid>_<HEX>` (via `id._serialized`);
+// the webhook echo canonicalises it to bare `<HEX>`. We MUST store the same
+// canonical form here so the DB unique index (chat_messages_uaz_msg_id_unique_notnull)
+// blocks the second insert and the sender does NOT see two bubbles.
+function canonicalWahaMsgId(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'string') return raw == null ? null : String(raw);
+  const parts = raw.split('_');
+  const tail = parts[parts.length - 1];
+  if (parts.length >= 3 && /^[A-F0-9]{16,}$/i.test(tail)) return tail.toUpperCase();
+  return /^[A-F0-9]{16,}$/i.test(raw) ? raw.toUpperCase() : raw;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Zod schemas — the "contract" of what we send to WAHA. Exported so the
 // contract tests can assert future provider edits stay compatible.
@@ -423,7 +436,7 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
           retries: opts.retries ?? 0,
           signal: opts.signal,
         });
-        const messageId = data?.id?._serialized || data?.id || null;
+        const messageId = canonicalWahaMsgId(data?.id?._serialized || data?.id || null);
         await writeWahaAudit(conn, {
           action: 'send_text', status: 'success', customerId,
           wahaSessionId: parsed.data.session, messageId, requestId, clientMsgId,
@@ -510,7 +523,7 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
         // Non-idempotent: never auto-retry to avoid duplicate deliveries.
         retries: 0,
       });
-      const messageId = data?.id?._serialized || data?.id || data?.key?.id || null;
+      const messageId = canonicalWahaMsgId(data?.id?._serialized || data?.id || data?.key?.id || null);
       if (!messageId) {
         const dbg = (() => { try { return JSON.stringify(data).slice(0, 500); } catch { return String(data); } })();
         throw new Error(`WAHA respondeu sem message_id (rota ${path}). Resposta: ${dbg}`);
@@ -599,7 +612,7 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
         // Non-idempotent: never auto-retry to avoid duplicate voice notes.
         retries: 0,
       });
-      const messageId = data?.id?._serialized || data?.id || null;
+      const messageId = canonicalWahaMsgId(data?.id?._serialized || data?.id || null);
       if (!messageId) {
         throw new Error('WAHA aceitou o áudio mas não retornou message_id — provável falha na sessão. Reconecte e tente novamente.');
       }
@@ -733,7 +746,7 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
         // Non-idempotent forward: never auto-retry.
         method: 'POST', body: parsed.data, timeoutMs: 10_000, retries: 0,
       });
-      const messageId = data?.id?._serialized || data?.id || null;
+      const messageId = canonicalWahaMsgId(data?.id?._serialized || data?.id || null);
       await writeWahaAudit(conn, {
         action: 'forward_message', status: 'success',
         customerId: toCustomerId, wahaSessionId: parsed.data.session,
