@@ -5,7 +5,7 @@ import { TicketStatusSelect } from './TicketStatusSelect';
 import { TagPicker } from './TagPicker';
 import { SlaTimer } from './SlaTimer';
 import { Button } from '@/components/ui/button';
-import { Bot, UserCog, Sparkles, Eye } from 'lucide-react';
+import { Bot, UserCog, Sparkles, Eye, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
