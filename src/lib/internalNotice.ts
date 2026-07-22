@@ -39,4 +39,21 @@ export async function postTransferInternalNotice(input: TransferNoticeInput) {
   } catch {
     /* best-effort — não bloqueia a transferência */
   }
+  // Registra no CRM 360 (histórico do lead) — best-effort
+  try {
+    await supabase.rpc('log_conversation_transfer', {
+      p_customer_id: input.customerId,
+      p_notice_type: input.noticeType,
+      p_target_label:
+        input.noticeType === 'transfer_flow'
+          ? input.targetStageLabel || ''
+          : input.targetName || '',
+      p_reason: input.reason ?? null,
+      p_target_user_id: (input as any).targetUserId ?? null,
+      p_target_stage: (input as any).targetStage ?? null,
+    } as any);
+  } catch {
+    /* best-effort */
+  }
 }
+
