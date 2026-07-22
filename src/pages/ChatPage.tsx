@@ -2621,7 +2621,27 @@ export default function ChatPage() {
               </div>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto chat-scroll">
+          <div
+            className="flex-1 overflow-y-auto chat-scroll"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              if (!activeChannel) return;
+              if (!convHasMore[activeChannel]) return;
+              // Prefetch next page when user is within 240px of the bottom.
+              if (el.scrollHeight - el.scrollTop - el.clientHeight < 240) {
+                const ch = activeChannel;
+                const current = convLimitsRef.current[ch] || CONV_PAGE_SIZE;
+                // Debounce: only bump once per limit value.
+                if ((el as any).__lastPrefetchLimit === current) return;
+                (el as any).__lastPrefetchLimit = current;
+                const next = current + CONV_PAGE_SIZE;
+                setConvLimits(prev => ({ ...prev, [ch]: next }));
+                convLimitsRef.current = { ...convLimitsRef.current, [ch]: next };
+                // @ts-ignore
+                if (typeof window.manualRefreshChannel === 'function') window.manualRefreshChannel(ch);
+              }
+            }}
+          >
             {list.filter(c => {
               const q = searchTerm.toLowerCase();
               if (q && !(c.name.toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q) || (c.msg || '').toLowerCase().includes(q))) return false;
