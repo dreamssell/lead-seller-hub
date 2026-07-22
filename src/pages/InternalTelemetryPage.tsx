@@ -37,6 +37,9 @@ type TelemetryRow = {
 const TYPE_OPTIONS = [
   { value: 'all', label: 'Todos os tipos' },
   { value: 'auth_only', label: '★ Somente eventos do AuthContext' },
+  { value: 'perf_only', label: '⚡ Somente performance (page load + realtime)' },
+  { value: 'perf.page_load', label: '⚡ Perf · tempo de carregamento por página' },
+  { value: 'perf.realtime_impact', label: '⚡ Perf · impacto de realtime na lista' },
   { value: 'route_404', label: '404 (rota não encontrada)' },
   { value: 'protected_route_blocked', label: 'ProtectedRoute · bloqueado' },
   { value: 'protected_route_unauthenticated', label: 'ProtectedRoute · sem sessão' },
@@ -65,6 +68,8 @@ const TYPE_BADGE: Record<string, string> = {
   auth_spinner_shown: 'bg-cyan-500/15 text-cyan-600 border-cyan-500/30',
   auth_visibility_refresh: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',
   auth_revalidation_failed: 'bg-red-500/15 text-red-600 border-red-500/30',
+  'perf.page_load': 'bg-indigo-500/15 text-indigo-600 border-indigo-500/30',
+  'perf.realtime_impact': 'bg-violet-500/15 text-violet-600 border-violet-500/30',
 };
 
 export default function InternalTelemetryPage() {
@@ -125,6 +130,8 @@ export default function InternalTelemetryPage() {
 
         if (type === 'auth_only') {
           q = q.in('type', AUTH_TYPES as unknown as string[]);
+        } else if (type === 'perf_only') {
+          q = q.in('type', ['perf.page_load', 'perf.realtime_impact']);
         } else if (type !== 'all') {
           q = q.eq('type', type);
         }

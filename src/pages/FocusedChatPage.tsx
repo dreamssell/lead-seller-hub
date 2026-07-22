@@ -40,6 +40,7 @@ import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { toast as sonnerToast } from 'sonner';
 import { logCallUi, callTelemetryUrl } from '@/lib/callTelemetry';
+import { startRealtimeTimer } from '@/lib/perfTelemetry';
 import { CallEventFailedIndicator } from '@/components/chat/CallEventFailedIndicator';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { renderWhatsAppText } from '@/lib/whatsappFormat';
@@ -126,6 +127,8 @@ export default function FocusedChatPage() {
     ? (initialToolParam as Tool) : null;
 
   const [convs, setConvs] = useState<Conversation[]>([]);
+  const convsRef = useRef<Conversation[]>([]);
+  useEffect(() => { convsRef.current = convs; }, [convs]);
   const CONV_PAGE_SIZE = 200;
   const [convLimit, setConvLimit] = useState(CONV_PAGE_SIZE);
   const [convHasMore, setConvHasMore] = useState(false);
@@ -524,7 +527,7 @@ export default function FocusedChatPage() {
         })
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'lead_assignments' },
-        () => { loadConvs(); })
+        () => { const _t = startRealtimeTimer('focus_conversations', 'lead_assignments.change'); const _before = convsRef.current.length; loadConvs().then(() => _t.done(_before, convsRef.current.length)); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user, selected, readerInfo]);

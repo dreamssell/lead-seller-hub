@@ -30,6 +30,7 @@ import { toast } from '@/hooks/use-toast';
 import { toast as sonnerToast } from 'sonner';
 
 import { supabase } from '@/integrations/supabase/client';
+import { startRealtimeTimer } from '@/lib/perfTelemetry';
 import {
   getCachedConvs, setCachedConvs,
   getCachedMessages, setCachedMessages,
@@ -1164,7 +1165,7 @@ export default function ChatPage() {
           if (!customer || (customer as any).owner_id !== currentOwner) return;
           const currentChannel = activeChannelRef.current;
           if (currentChannel && ((customer as any).channel === currentChannel || currentChannel === 'whatsapp')) {
-            await loadConversations(currentChannel);
+            { const _t = startRealtimeTimer('chat_conversations', 'chat_messages.insert.new_customer'); const _before = (convsRef.current[currentChannel] || []).length; await loadConversations(currentChannel); _t.done(_before, (convsRef.current[currentChannel] || []).length, { channel: currentChannel }); }
           }
         }
         setInboundDebug((prev) => ({
@@ -1196,7 +1197,7 @@ export default function ChatPage() {
             return next;
           });
         }
-        if (activeChannelRef.current) loadConversations(activeChannelRef.current);
+        if (activeChannelRef.current) { const _ch = activeChannelRef.current; const _t = startRealtimeTimer('chat_conversations', 'chat_messages.insert'); const _before = (convsRef.current[_ch] || []).length; loadConversations(_ch).then(() => _t.done(_before, (convsRef.current[_ch] || []).length, { channel: _ch })); }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages' }, (payload) => {
         const row: any = payload.new;
@@ -1217,7 +1218,7 @@ export default function ChatPage() {
         const currentChannel = activeChannelRef.current;
         if (!currentChannel) return;
         if (currentChannel === 'whatsapp' && (c.channel === 'whatsapp' || (!c.channel && c.phone && !String(c.phone).includes('@telegram')))) {
-          loadConversations(currentChannel);
+          { const _t = startRealtimeTimer('chat_conversations', 'customers.insert'); const _before = (convsRef.current[currentChannel] || []).length; loadConversations(currentChannel).then(() => _t.done(_before, (convsRef.current[currentChannel] || []).length, { channel: currentChannel, customer_id: c.id })); }
         }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'customers' }, (payload) => {
@@ -1240,7 +1241,7 @@ export default function ChatPage() {
         const row: any = payload.new || payload.old;
         if (!row?.owner_id || (activeOwnerIdRef.current && row.owner_id !== activeOwnerIdRef.current)) return;
         const currentChannel = activeChannelRef.current;
-        if (currentChannel) loadConversations(currentChannel);
+        if (currentChannel) { const _ch = currentChannel; const _t = startRealtimeTimer('chat_conversations', 'lead_assignments.change'); const _before = (convsRef.current[_ch] || []).length; loadConversations(_ch).then(() => _t.done(_before, (convsRef.current[_ch] || []).length, { channel: _ch, stage: row?.stage, assigned_to: row?.assigned_to })); }
       })
       .subscribe();
 
