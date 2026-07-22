@@ -188,8 +188,8 @@ export default function OutrosPage() {
     load();
   };
 
-  const copyLink = (slug: string) => {
-    navigator.clipboard.writeText(publicUrl(slug));
+  const copyLink = (p: Pick<Page, 'slug' | 'page_type'>) => {
+    navigator.clipboard.writeText(publicUrl(p));
     toast({ title: 'Link copiado!' });
   };
 
