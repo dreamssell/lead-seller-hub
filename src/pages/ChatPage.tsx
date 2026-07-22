@@ -2722,6 +2722,22 @@ export default function ChatPage() {
                 </div>
               </button>
             ))}
+            {activeChannel && convHasMore[activeChannel] && (
+              <button
+                type="button"
+                onClick={() => {
+                  const ch = activeChannel;
+                  const next = (convLimitsRef.current[ch] || CONV_PAGE_SIZE) + CONV_PAGE_SIZE;
+                  setConvLimits(prev => ({ ...prev, [ch]: next }));
+                  convLimitsRef.current = { ...convLimitsRef.current, [ch]: next };
+                  // @ts-ignore
+                  if (typeof window.manualRefreshChannel === 'function') window.manualRefreshChannel(ch);
+                }}
+                className="w-full py-3 text-xs text-primary hover:bg-secondary/50 border-t border-border"
+              >
+                Carregar mais conversas
+              </button>
+            )}
           </div>
         </div>
 
