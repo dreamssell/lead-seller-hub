@@ -58,6 +58,25 @@ export function CollaborationBar({ customerId, onOpenTransfer, onClose, isSuperv
 
   useEffect(() => {
     load();
+    // Realtime: reload when this customer or its attendance assignment changes,
+    // so close/transfer actions reflect immediately without a page reload.
+    const channel = supabase
+      .channel(`collab-bar-${customerId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'customers', filter: `id=eq.${customerId}` },
+        () => load(),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'lead_assignments', filter: `customer_id=eq.${customerId}` },
+        () => load(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId]);
 
   const update = async (patch: Partial<CustomerRow>) => {
