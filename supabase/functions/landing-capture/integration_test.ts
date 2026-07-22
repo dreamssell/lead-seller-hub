@@ -64,7 +64,7 @@ async function callLink(slug: string, ip: string) {
 
 Deno.test("landing-capture: metrics, IP dedupe, CRM 360 & Kanban", async (t) => {
   const stage = await pickPipelineWithStage();
-  const owner = await pickOwner();
+  const owner = await pickOwner(stage.pipeline_id);
   const slug = `it-${crypto.randomUUID().slice(0, 8)}`;
   const label = "Integração Automática";
 
