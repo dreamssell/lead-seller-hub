@@ -296,6 +296,11 @@ const extractOutboundMediaMeta = (data: any) => {
 export default function ChatPage() {
   const [activeChannel, setActiveChannel] = useState<ChannelKey | null>(null);
   const [convs, setConvs] = useState(conversationsByChannel);
+  const CONV_PAGE_SIZE = 200;
+  const [convLimits, setConvLimits] = useState<Record<string, number>>({});
+  const [convHasMore, setConvHasMore] = useState<Record<string, boolean>>({});
+  const convLimitsRef = useRef(convLimits);
+  useEffect(() => { convLimitsRef.current = convLimits; }, [convLimits]);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [transferOpen, setTransferOpen] = useState(false);
