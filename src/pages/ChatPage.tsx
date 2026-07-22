@@ -68,6 +68,7 @@ import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
 import { ContactsDialog } from '@/components/chat/ContactsDialog';
 import { Plus, Archive, BellOff, Bell, Tag, Users, Inbox, Maximize2, Minimize2 } from 'lucide-react';
 import { AttendanceFlowDialog } from '@/components/chat/AttendanceFlowDialog';
+import { closeConversation } from '@/lib/attendanceFlow';
 import { MoveToFlowMenu } from '@/components/chat/MoveToFlowMenu';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
