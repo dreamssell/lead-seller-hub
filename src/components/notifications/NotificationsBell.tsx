@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { Bell, Check, ArrowRight, Sparkles, MessageCircle, BellOff, Filter } from 'lucide-react';
+import { Bell, Check, ArrowRight, Sparkles, MessageCircle, BellOff, Filter, LifeBuoy } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -27,6 +27,7 @@ type Notification = {
   read_at: string | null;
   created_at: string;
   peer_id?: string | null;
+  metadata?: Record<string, any> | null;
   /** Chave real (uuid) da linha em internal_messages, quando `type === 'internal_message'`. */
   raw_id?: string;
 };
@@ -65,7 +66,7 @@ export function NotificationsBell() {
     if (!user) return;
     const { data } = await supabase
       .from('notifications')
-      .select('id,type,title,body,lead_id,channel,source,read_at,created_at')
+      .select('id,type,title,body,lead_id,channel,source,read_at,created_at,metadata')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(100);
@@ -120,10 +121,15 @@ export function NotificationsBell() {
         if (mute.platform) return;
         if (toastedRef.current.has(`p:${n.id}`)) return;
         toastedRef.current.add(`p:${n.id}`);
+        const ticketId = (n as any).metadata?.ticket_id as string | undefined;
         toast(n.title, {
           id: `platform-${n.id}`,
           description: n.body || undefined,
-          action: n.lead_id ? { label: 'Ver', onClick: () => navigate(`/pipeline`) } : undefined,
+          action: ticketId
+            ? { label: 'Abrir', onClick: () => navigate(`/suporte/${ticketId}`) }
+            : n.lead_id
+              ? { label: 'Ver', onClick: () => navigate(`/pipeline`) }
+              : undefined,
         });
       })
       .on('postgres_changes', {
@@ -244,7 +250,9 @@ export function NotificationsBell() {
 
   const handleClick = (n: Notification) => {
     void markOne(n);
+    const ticketId = (n.metadata as any)?.ticket_id as string | undefined;
     if (n.type === 'internal_message' && n.raw_id) navigate(`/internal-comms/message/${n.raw_id}`);
+    else if (ticketId) navigate(`/suporte/${ticketId}`);
     else if (n.lead_id) navigate('/pipeline');
   };
 
@@ -320,9 +328,11 @@ export function NotificationsBell() {
                 <div className="mt-0.5">
                   {n.type === 'internal_message'
                     ? <MessageCircle className="w-4 h-4 text-primary" />
-                    : n.type === 'lead_created'
-                      ? <Sparkles className="w-4 h-4 text-primary" />
-                      : <ArrowRight className="w-4 h-4 text-primary" />}
+                    : (n.type === 'ticket_status' || n.type === 'ticket_reply')
+                      ? <LifeBuoy className="w-4 h-4 text-primary" />
+                      : n.type === 'lead_created'
+                        ? <Sparkles className="w-4 h-4 text-primary" />
+                        : <ArrowRight className="w-4 h-4 text-primary" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{n.title}</p>
