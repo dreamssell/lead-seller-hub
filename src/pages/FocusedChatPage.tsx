@@ -527,7 +527,7 @@ export default function FocusedChatPage() {
         })
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'lead_assignments' },
-        () => { loadConvs(); })
+        () => { const _t = startRealtimeTimer('focus_conversations', 'lead_assignments.change'); const _before = convsRef.current.length; loadConvs().then(() => _t.done(_before, convsRef.current.length)); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user, selected, readerInfo]);
