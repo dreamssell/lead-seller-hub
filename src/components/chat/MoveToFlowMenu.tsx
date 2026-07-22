@@ -2,7 +2,7 @@
  * MoveToFlowMenu — botão discreto (desktop) que abre um menu com os fluxos
  * de atendimento e move a conversa (customer) para o estágio escolhido.
  */
-import { MoreVertical, UserPlus, Bot, Inbox, MessageCircle, Archive } from 'lucide-react';
+import { MoreVertical, UserPlus, Bot, Inbox, MessageCircle } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
@@ -18,12 +18,13 @@ interface Props {
   onMoved?: (stage: FlowStage) => void;
 }
 
+// "Finalizados" foi removido deste menu: uma conversa só entra em Finalizados
+// através do botão "Encerrar" no cabeçalho da conversa.
 const OPTIONS: { stage: FlowStage; label: string; icon: any }[] = [
   { stage: 'manual', label: 'Entrada Manual', icon: UserPlus },
   { stage: 'auto', label: 'Distribuição', icon: Bot },
   { stage: 'waiting', label: 'Aguardando', icon: Inbox },
   { stage: 'active', label: 'Em Atendimento', icon: MessageCircle },
-  { stage: 'closed', label: 'Finalizados', icon: Archive },
 ];
 
 export function MoveToFlowMenu({ customerId, ownerId: ownerIdProp, className, onMoved }: Props) {

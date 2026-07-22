@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   MessageCircle, Search, Info, Images, Pin, Star, StickyNote,
-  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2, Eye, Contact2, Plus, Inbox, ArrowLeftRight, Phone,
+  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2, Eye, Contact2, Plus, Inbox, ArrowLeftRight, Phone, CheckCircle2,
 } from 'lucide-react';
 import { useVoip } from '@/contexts/VoipContext';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
@@ -61,6 +61,7 @@ import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
 import { AttendanceFlowDialog } from '@/components/chat/AttendanceFlowDialog';
 import { MoveToFlowMenu } from '@/components/chat/MoveToFlowMenu';
 import { TransferConversationDialog } from '@/components/chat/TransferConversationDialog';
+import { closeConversation } from '@/lib/attendanceFlow';
 
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import type { WhatsAppConnection } from '@/components/whatsapp/types';
@@ -1170,6 +1171,38 @@ export default function FocusedChatPage() {
                         </button>
                       </TooltipTrigger>
                       <TooltipContent>Transferir para colega ou fluxo</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={async () => {
+                            if (!selectedConv) return;
+                            if (!window.confirm('Encerrar este atendimento? A conversa será enviada para Finalizados.')) return;
+                            try {
+                              const { data: u } = await supabase.auth.getUser();
+                              const meta = (u.user?.user_metadata || {}) as any;
+                              const actorName = meta.full_name || meta.name || u.user?.email || null;
+                              const ownerId = (selectedConv as any)?.ownerId || u.user?.id || null;
+                              if (!ownerId) { sonnerToast.error('Sem contexto de empresa'); return; }
+                              await closeConversation({
+                                customerId: selectedConv.id,
+                                ownerId,
+                                actorId: u.user?.id ?? null,
+                                actorName,
+                              });
+                              sonnerToast.success('Atendimento encerrado e enviado para Finalizados');
+                            } catch (e: any) {
+                              sonnerToast.error(e?.message || 'Falha ao encerrar');
+                            }
+                          }}
+                          className="px-2.5 h-8 rounded-lg border border-emerald-200 dark:border-emerald-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition text-xs font-medium inline-flex items-center gap-1.5 text-emerald-600 hover:text-emerald-700"
+                          aria-label="Encerrar atendimento"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Encerrar
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Encerrar o atendimento e enviar para Finalizados</TooltipContent>
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>

@@ -68,6 +68,7 @@ import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
 import { ContactsDialog } from '@/components/chat/ContactsDialog';
 import { Plus, Archive, BellOff, Bell, Tag, Users, Inbox, Maximize2, Minimize2 } from 'lucide-react';
 import { AttendanceFlowDialog } from '@/components/chat/AttendanceFlowDialog';
+import { closeConversation } from '@/lib/attendanceFlow';
 import { MoveToFlowMenu } from '@/components/chat/MoveToFlowMenu';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
@@ -2973,6 +2974,25 @@ export default function ChatPage() {
               <CollaborationBar
                 customerId={selectedConv.id}
                 onOpenTransfer={() => setCollabTransferOpen(true)}
+                onClose={async () => {
+                  const ownerId = (selectedConv as any)?.ownerId || access?.owner_id || currentUserId || null;
+                  if (!ownerId) { sonnerToast.error('Sem contexto de empresa'); return; }
+                  if (!window.confirm('Encerrar este atendimento? A conversa será enviada para Finalizados.')) return;
+                  try {
+                    const { data: u } = await supabase.auth.getUser();
+                    const meta = (u.user?.user_metadata || {}) as any;
+                    const actorName = meta.full_name || meta.name || u.user?.email || null;
+                    await closeConversation({
+                      customerId: selectedConv.id,
+                      ownerId,
+                      actorId: currentUserId,
+                      actorName,
+                    });
+                    sonnerToast.success('Atendimento encerrado e enviado para Finalizados');
+                  } catch (e: any) {
+                    sonnerToast.error(e?.message || 'Falha ao encerrar');
+                  }
+                }}
                 isSupervisor={isSupervisor}
                 currentUserId={currentUserId}
               />

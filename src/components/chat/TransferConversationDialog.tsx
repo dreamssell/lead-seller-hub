@@ -203,7 +203,7 @@ export function TransferConversationDialog({ open, onOpenChange, customerId, own
                 <SelectValue placeholder="Selecionar fluxo" />
               </SelectTrigger>
               <SelectContent>
-                {FLOW_STAGES.map((s) => (
+                {FLOW_STAGES.filter((s) => s.value !== 'closed').map((s) => (
                   <SelectItem key={s.value} value={s.value}>
                     {s.label}
                   </SelectItem>
@@ -211,7 +211,8 @@ export function TransferConversationDialog({ open, onOpenChange, customerId, own
               </SelectContent>
             </Select>
             <p className="text-[11px] text-muted-foreground">
-              Move a conversa entre os fluxos: Entrada Manual, Distribuição, Aguardando, Em Atendimento e Finalizados.
+              Move a conversa entre os fluxos: Entrada Manual, Distribuição, Aguardando e Em Atendimento.
+              Para encerrar o atendimento, use o botão <b>Encerrar</b> no cabeçalho da conversa.
             </p>
           </TabsContent>
         </Tabs>

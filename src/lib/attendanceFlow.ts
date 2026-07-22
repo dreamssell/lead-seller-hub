@@ -46,3 +46,40 @@ export async function moveConversationToStage(params: {
   } as any);
   if (error) throw error;
 }
+
+/**
+ * Encerra uma conversa: move o assignment para "closed", libera o atendente
+ * e posta uma nota interna informando o encerramento. Essa é a ÚNICA forma
+ * suportada de mandar uma conversa para o fluxo "Finalizados" — o menu
+ * "Transferir → Para Fluxo" não expõe mais essa opção.
+ */
+export async function closeConversation(params: {
+  customerId: string;
+  ownerId: string;
+  actorId?: string | null;
+  actorName?: string | null;
+  reason?: string | null;
+}) {
+  const { customerId, ownerId, actorId, actorName, reason } = params;
+  await moveConversationToStage({
+    customerId,
+    ownerId,
+    stage: 'closed',
+    assignedTo: null,
+    actorId,
+    origin: 'close_conversation',
+  });
+  try {
+    const { postTransferInternalNotice } = await import('@/lib/internalNotice');
+    await postTransferInternalNotice({
+      customerId,
+      noticeType: 'transfer_flow',
+      actorName: actorName ?? null,
+      targetStageLabel: FLOW_STAGE_LABEL.closed,
+      targetStage: 'closed',
+      reason: reason ?? null,
+    });
+  } catch {
+    // nota interna é best-effort; não bloqueia o encerramento
+  }
+}

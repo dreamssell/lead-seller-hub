@@ -5,7 +5,7 @@ import { TicketStatusSelect } from './TicketStatusSelect';
 import { TagPicker } from './TagPicker';
 import { SlaTimer } from './SlaTimer';
 import { Button } from '@/components/ui/button';
-import { Bot, UserCog, Sparkles, Eye } from 'lucide-react';
+import { Bot, UserCog, Sparkles, Eye, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -26,11 +26,12 @@ interface CustomerRow {
 interface Props {
   customerId: string;
   onOpenTransfer: () => void;
+  onClose?: () => void;
   isSupervisor: boolean;
   currentUserId: string | null;
 }
 
-export function CollaborationBar({ customerId, onOpenTransfer, isSupervisor, currentUserId }: Props) {
+export function CollaborationBar({ customerId, onOpenTransfer, onClose, isSupervisor, currentUserId }: Props) {
   const [row, setRow] = useState<CustomerRow | null>(null);
   const [assigneeName, setAssigneeName] = useState<string>('');
 
@@ -152,6 +153,21 @@ export function CollaborationBar({ customerId, onOpenTransfer, isSupervisor, cur
           <Button size="sm" variant="outline" className="h-7 gap-1.5" onClick={onOpenTransfer}>
             <UserCog className="w-3.5 h-3.5" /> Transferir
           </Button>
+          {onClose && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900"
+                  onClick={onClose}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Encerrar
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Encerrar o atendimento e enviar para Finalizados</TooltipContent>
+            </Tooltip>
+          )}
         </div>
       </div>
     </TooltipProvider>
