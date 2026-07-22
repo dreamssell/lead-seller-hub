@@ -2976,23 +2976,21 @@ export default function ChatPage() {
                 onOpenTransfer={() => setCollabTransferOpen(true)}
                 onClose={async () => {
                   const ownerId = (selectedConv as any)?.ownerId || access?.owner_id || currentUserId || null;
-                  if (!ownerId) { toast.error('Sem contexto de empresa'); return; }
+                  if (!ownerId) { sonnerToast.error('Sem contexto de empresa'); return; }
                   if (!window.confirm('Encerrar este atendimento? A conversa será enviada para Finalizados.')) return;
                   try {
-                    const actorName =
-                      (user?.user_metadata as any)?.full_name ||
-                      (user?.user_metadata as any)?.name ||
-                      user?.email ||
-                      null;
+                    const { data: u } = await supabase.auth.getUser();
+                    const meta = (u.user?.user_metadata || {}) as any;
+                    const actorName = meta.full_name || meta.name || u.user?.email || null;
                     await closeConversation({
                       customerId: selectedConv.id,
                       ownerId,
                       actorId: currentUserId,
                       actorName,
                     });
-                    toast.success('Atendimento encerrado e enviado para Finalizados');
+                    sonnerToast.success('Atendimento encerrado e enviado para Finalizados');
                   } catch (e: any) {
-                    toast.error(e?.message || 'Falha ao encerrar');
+                    sonnerToast.error(e?.message || 'Falha ao encerrar');
                   }
                 }}
                 isSupervisor={isSupervisor}
