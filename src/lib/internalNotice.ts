@@ -3,6 +3,7 @@
  * para os usuários da plataforma — nunca é enviada ao lead/cliente.
  */
 import { supabase } from '@/integrations/supabase/client';
+import { insertChatMessageDedup } from '@/lib/dedupChatInsert';
 
 export type TransferNoticeInput = {
   customerId: string;
