@@ -52,6 +52,8 @@ import { AIInsightsPanel } from '@/components/chat/AIInsightsPanel';
 import { Customer360Timeline } from '@/components/chat/Customer360Timeline';
 import { MessageSearchDialog, type MessageSearchHit } from '@/components/chat/MessageSearchDialog';
 import { MediaDropzone } from '@/components/chat/MediaDropzone';
+import { MediaMessageContent } from '@/components/chat/MediaMessageContent';
+import { MediaViewerDialog, type MediaItem } from '@/components/chat/MediaViewerDialog';
 import { CallEventBubble, isCallEventMessage } from '@/components/chat/CallEventBubble';
 import { InternalNoticeBubble, isInternalNoticeMessage } from '@/components/chat/InternalNoticeBubble';
 import { ContactsDialog } from '@/components/chat/ContactsDialog';
