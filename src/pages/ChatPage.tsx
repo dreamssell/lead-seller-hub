@@ -1058,7 +1058,7 @@ export default function ChatPage() {
           : { data: [] as any[] };
 
         const byIdentity = new Map<string, any>();
-        channelCustomers.forEach(c => {
+        scopedCustomers.forEach(c => {
           const lastMsg = lastMessages?.find(m => m.customer_id === c.id);
           const pres = computePresence((c as any).presence, (c as any).presence_updated_at, (c as any).last_seen_at);
           const phoneDigits = String(c.phone || '').replace(/\D/g, '');
