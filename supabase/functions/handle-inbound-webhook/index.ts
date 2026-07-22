@@ -286,6 +286,29 @@ Deno.serve(async (req) => {
         }
 
         if (customer) {
+          // fromMe echo: if the app already inserted an optimistic outbound row
+          // (client_msg_id present, uaz_msg_id still null), backfill it in
+          // place instead of creating a second bubble for the sender.
+          if (fromMe) {
+            const { data: pending } = await supabaseAdmin
+              .from("chat_messages")
+              .select("id")
+              .eq("customer_id", customer.id)
+              .eq("sender_type", "agent")
+              .eq("content", messageText)
+              .is("uaz_msg_id", null)
+              .order("created_at", { ascending: false })
+              .limit(1);
+            const pendingRow = (pending || [])[0];
+            if (pendingRow) {
+              await supabaseAdmin
+                .from("chat_messages")
+                .update({ uaz_msg_id: msgId, metadata: { raw: payload.data, from_me: true, direction: "outbound_native", status: "sent" } })
+                .eq("id", pendingRow.id);
+              responseBody = JSON.stringify({ success: true, backfilled: true });
+              return new Response(responseBody, { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
+          }
           await supabaseAdmin.from("chat_messages").insert({
             customer_id: customer.id,
             sender_type: senderType,
