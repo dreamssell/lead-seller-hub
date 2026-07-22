@@ -121,6 +121,7 @@ const App = () => (
               <Route path="/video/join/:roomId" element={<VideoJoinPage />} />
               <Route path="/sign/:token" element={<SignaturePortalPage />} />
               <Route path="/p/:slug" element={<PublicLandingPage />} />
+              <Route path="/l/:slug" element={<PublicLinkRedirectPage />} />
 
               {/* Rotas protegidas */}
               <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
