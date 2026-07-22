@@ -417,6 +417,9 @@ export default function ChatPage() {
 
   const [messageText, setMessageText] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [msgFilter, setMsgFilter] = useState<'all' | 'client' | 'notes'>('all');
+  const [recentTransfers, setRecentTransfers] = useState<Record<string, { at: number; label: string }>>({});
+
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [debugLogs, setDebugLogs] = useState<Array<{ id: string; time: string; type: 'info' | 'error' | 'request'; message: string; data?: any }>>([]);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
