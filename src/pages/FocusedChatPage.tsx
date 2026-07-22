@@ -1094,7 +1094,8 @@ export default function FocusedChatPage() {
                       style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}
                     >
                       {virtualizer.getVirtualItems().map((vi) => {
-                        const m = msgs[vi.index];
+                        const m = visibleMsgs[vi.index];
+
                         if (!m) return null;
                         const _meta = (m as any).metadata;
                         const isCallEvt = isCallEventMessage(_meta);
