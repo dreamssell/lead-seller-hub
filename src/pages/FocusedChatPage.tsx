@@ -21,6 +21,7 @@ import { useVoip } from '@/contexts/VoipContext';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { supabase } from '@/integrations/supabase/client';
+import { insertChatMessageDedup } from '@/lib/dedupChatInsert';
 import {
   getCachedConvs, setCachedConvs,
   getCachedMessages, setCachedMessages,
