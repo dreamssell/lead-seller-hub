@@ -327,13 +327,17 @@ export default function FocusedChatPage() {
         setLoading(false);
       } else setLoading(true);
     } catch { setLoading(true); }
-    const { data: customers } = await supabase
+    const currentLimit = convLimitRef.current || CONV_PAGE_SIZE;
+    const { data: customersRaw } = await supabase
       .from('customers')
       .select('id,name,phone,avatar_url,presence,is_archived')
       .eq('channel', 'whatsapp')
       .order('updated_at', { ascending: false })
-      .limit(200);
-    if (!customers) { setLoading(false); return; }
+      .limit(currentLimit + 1);
+    if (!customersRaw) { setLoading(false); return; }
+    const hasMore = customersRaw.length > currentLimit;
+    setConvHasMore(hasMore);
+    const customers = hasMore ? customersRaw.slice(0, currentLimit) : customersRaw;
     const ids = customers.map(c => c.id);
     const { data: lastMsgs } = await supabase
       .from('chat_messages')
