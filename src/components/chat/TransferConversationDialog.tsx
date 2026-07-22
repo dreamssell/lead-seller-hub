@@ -216,11 +216,12 @@ export function TransferConversationDialog({ open, onOpenChange, customerId, own
           </TabsContent>
         </Tabs>
         <Textarea
-          placeholder="Motivo da transferência (obrigatório)..."
+          placeholder="Motivo da transferência (opcional)..."
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           rows={3}
         />
+
         <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="outline" onClick={handleAssignToMe} disabled={saving}>
             Atribuir a mim
