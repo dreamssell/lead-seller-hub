@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
 import { STATUS_META, PRIORITY_META, DEPARTMENT_META, formatTicketNumber, slaState, SLA_META, slaRemainingLabel, type SupportStatus } from '@/lib/supportHelpers';
+import { describeSupabaseError } from '@/lib/supabaseErrorMessage';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { ArrowLeft, Send, StickyNote, Paperclip, Star, Download, UserCircle2, History, Save, Bell, CheckCircle2, XCircle, Clock, BellOff, RefreshCw } from 'lucide-react';
 
@@ -16,6 +17,7 @@ type Ticket = any;
 type Message = { id: string; ticket_id: string; sender_id: string; is_internal_note: boolean; message: string; created_at: string };
 type Attachment = { id: string; storage_path: string; file_name: string; file_type: string; file_size: number; message_id: string | null };
 type AssignmentLog = { id: string; from_user: string | null; to_user: string | null; changed_by: string; created_at: string };
+type StatusLog = { id: string; from_status: SupportStatus | null; to_status: SupportStatus; changed_by: string | null; created_at: string };
 type Agent = { user_id: string; display_name: string | null; email: string | null };
 type NotifLog = { id: string; event_type: string; audience: string; channel: string; recipient: string; body: string; status: string; error: string | null; created_at: string; attempt?: number; max_attempts?: number; next_retry_at?: string | null };
 
@@ -29,6 +31,7 @@ export default function SupportTicketDetailPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [assignments, setAssignments] = useState<AssignmentLog[]>([]);
+  const [statusLogs, setStatusLogs] = useState<StatusLog[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [notifLogs, setNotifLogs] = useState<NotifLog[]>([]);
   const [reply, setReply] = useState('');
@@ -51,11 +54,13 @@ export default function SupportTicketDetailPage() {
     setNotifLogs((nl as any) || []);
     setInternalNotes(((t as any)?.internal_notes) || '');
     if (isOwner) {
-      const [{ data: al }, { data: ag }] = await Promise.all([
+      const [{ data: al }, { data: sl }, { data: ag }] = await Promise.all([
         supabase.from('support_ticket_assignments' as any).select('*').eq('ticket_id', id).order('created_at', { ascending: false }),
+        supabase.from('support_ticket_status_history' as any).select('*').eq('ticket_id', id).order('created_at', { ascending: false }),
         supabase.from('user_roles').select('user_id, profiles!inner(display_name, email)').eq('role', 'admin' as any),
       ]);
       setAssignments((al as any) || []);
+      setStatusLogs((sl as any) || []);
       setAgents((ag as any || []).map((r: any) => ({
         user_id: r.user_id, display_name: r.profiles?.display_name, email: r.profiles?.email,
       })));
@@ -78,6 +83,8 @@ export default function SupportTicketDetailPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_ticket_messages', filter: `ticket_id=eq.${id}` }, load)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'support_tickets', filter: `id=eq.${id}` }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_notification_logs', filter: `ticket_id=eq.${id}` }, load)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_ticket_assignments', filter: `ticket_id=eq.${id}` }, load)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_ticket_status_history', filter: `ticket_id=eq.${id}` }, load)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -117,7 +124,11 @@ export default function SupportTicketDetailPage() {
     const { error } = await supabase.from('support_tickets' as any).update(patch).eq('id', ticket.id);
     if (error) {
       setTicket({ ...ticket, status: prev });
-      return toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+      return toast({
+        title: 'Não foi possível mudar o status',
+        description: describeSupabaseError(error, 'Tente novamente ou verifique suas permissões.'),
+        variant: 'destructive',
+      });
     }
     const event = s === 'resolvido' ? 'resolved' : 'status_changed';
     void supabase.functions.invoke('support-notify', { body: { ticket_id: ticket.id, event } }).catch(() => {});
@@ -137,7 +148,11 @@ export default function SupportTicketDetailPage() {
       .update({ assigned_to: userId }).eq('id', ticket.id);
     if (error) {
       setTicket({ ...ticket, assigned_to: prev });
-      toast({ title: 'Erro ao atribuir', description: error.message, variant: 'destructive' });
+      toast({
+        title: 'Não foi possível atualizar o responsável',
+        description: describeSupabaseError(error, 'Tente novamente ou verifique suas permissões.'),
+        variant: 'destructive',
+      });
     } else {
       toast({ title: userId ? 'Responsável atualizado' : 'Atribuição removida' });
       if (userId) void supabase.functions.invoke('support-notify', { body: { ticket_id: ticket.id, event: 'assigned' } }).catch(() => {});
@@ -461,7 +476,7 @@ export default function SupportTicketDetailPage() {
           {isOwner && assignments.length > 0 && (
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                <History className="w-3 h-3"/> Histórico de atribuições
+                <History className="w-3 h-3"/> Histórico de responsáveis
               </p>
               <ul className="space-y-1 mt-1 max-h-32 overflow-y-auto text-[11px]">
                 {assignments.map(al => (
@@ -469,7 +484,28 @@ export default function SupportTicketDetailPage() {
                     <span className="text-muted-foreground">{agentName(al.from_user)}</span>
                     <span className="mx-1">→</span>
                     <span className="font-medium">{agentName(al.to_user)}</span>
-                    <div className="text-[9px] text-muted-foreground">{new Date(al.created_at).toLocaleString('pt-BR')}</div>
+                    <div className="text-[9px] text-muted-foreground">
+                      por {agentName(al.changed_by)} · {new Date(al.created_at).toLocaleString('pt-BR')}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {isOwner && statusLogs.length > 0 && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                <History className="w-3 h-3"/> Histórico de status
+              </p>
+              <ul className="space-y-1 mt-1 max-h-32 overflow-y-auto text-[11px]" data-testid="status-history-list">
+                {statusLogs.map(sl => (
+                  <li key={sl.id} className="p-1.5 rounded bg-secondary/60">
+                    <span className="text-muted-foreground">{sl.from_status ? STATUS_META[sl.from_status].label : '—'}</span>
+                    <span className="mx-1">→</span>
+                    <span className="font-medium">{STATUS_META[sl.to_status].label}</span>
+                    <div className="text-[9px] text-muted-foreground">
+                      por {agentName(sl.changed_by)} · {new Date(sl.created_at).toLocaleString('pt-BR')}
+                    </div>
                   </li>
                 ))}
               </ul>

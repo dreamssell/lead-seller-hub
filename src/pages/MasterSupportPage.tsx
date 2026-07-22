@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { LifeBuoy, AlertCircle, UserCircle2, Clock3, Bell } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { describeSupabaseError } from '@/lib/supabaseErrorMessage';
 import { NotificationTemplatesDialog } from '@/components/support/NotificationTemplatesDialog';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -52,6 +53,8 @@ export default function MasterSupportPage() {
     void load();
     const ch = supabase.channel('support-master')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, load)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_ticket_status_history' }, load)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_ticket_assignments' }, load)
       .subscribe();
     // Recomputa a cada minuto para atualizar contadores de SLA
     const iv = setInterval(() => setTickets((prev) => [...prev]), 60000);
@@ -88,7 +91,11 @@ export default function MasterSupportPage() {
     const { error } = await supabase.from('support_tickets' as any)
       .update({ assigned_to: userId }).eq('id', ticket.id);
     if (error) {
-      toast({ title: 'Erro ao atribuir', description: error.message, variant: 'destructive' });
+      toast({
+        title: 'Não foi possível atualizar o responsável',
+        description: describeSupabaseError(error, 'Tente novamente ou verifique suas permissões.'),
+        variant: 'destructive',
+      });
       // rollback
       setTickets((prev) => prev.map((t) => (t.id === ticket.id ? { ...t, assigned_to: ticket.assigned_to } : t)));
       return;
@@ -104,7 +111,11 @@ export default function MasterSupportPage() {
     if (status === 'fechado' || status === 'resolvido') patch.closed_at = new Date().toISOString();
     const { error } = await supabase.from('support_tickets' as any).update(patch).eq('id', ticket.id);
     if (error) {
-      toast({ title: 'Erro ao mudar status', description: error.message, variant: 'destructive' });
+      toast({
+        title: 'Não foi possível mudar o status',
+        description: describeSupabaseError(error, 'Tente novamente ou verifique suas permissões.'),
+        variant: 'destructive',
+      });
       setTickets((prev) => prev.map((t) => (t.id === ticket.id ? { ...t, status: prevStatus } : t)));
       return;
     }
@@ -194,7 +205,7 @@ export default function MasterSupportPage() {
                     const slaMeta = SLA_META[sla];
                     const isSub = !!t.sub_company_id;
                     return (
-                      <motion.div layout key={t.id}
+                      <motion.div layout key={t.id} data-testid={`support-card-${t.id}`}
                         className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-md ${slaMeta.border} ${sla === 'breach' ? 'bg-red-500/5' : sla === 'warn' ? 'bg-amber-500/5' : 'bg-card'}`}
                         whileHover={{ y: -1 }}
                       >
@@ -217,7 +228,7 @@ export default function MasterSupportPage() {
                         <div className="mt-2 pt-2 border-t border-border/60 flex items-center gap-1.5">
                           <UserCircle2 className="w-3.5 h-3.5 text-muted-foreground shrink-0"/>
                           <Select value={t.assigned_to || 'none'} onValueChange={(v) => assignTo(t, v === 'none' ? null : v)}>
-                            <SelectTrigger className="h-7 text-[11px] px-2"><SelectValue placeholder="Atribuir…"/></SelectTrigger>
+                            <SelectTrigger data-testid={`assignee-select-${t.id}`} className="h-7 text-[11px] px-2"><SelectValue placeholder="Atribuir…"/></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none">Sem responsável</SelectItem>
                               {agents.map(a => (
@@ -228,7 +239,7 @@ export default function MasterSupportPage() {
                         </div>
                         <div className="mt-1.5 flex items-center gap-1.5">
                           <Select value={t.status} onValueChange={(v) => changeStatus(t, v as SupportStatus)}>
-                            <SelectTrigger className="h-7 text-[11px] px-2"><SelectValue/></SelectTrigger>
+                            <SelectTrigger data-testid={`status-select-${t.id}`} className="h-7 text-[11px] px-2"><SelectValue/></SelectTrigger>
                             <SelectContent>
                               {KANBAN_COLUMNS.map((s) => (
                                 <SelectItem key={s} value={s}>{STATUS_META[s].kanbanTitle}</SelectItem>
