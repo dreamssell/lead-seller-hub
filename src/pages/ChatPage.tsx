@@ -2654,6 +2654,16 @@ export default function ChatPage() {
                       {c.name}
                       {(c as any).is_muted && <BellOff className="w-3 h-3 text-amber-500 shrink-0" />}
                       {(c as any).is_archived && <Archive className="w-3 h-3 text-muted-foreground shrink-0" />}
+                      {(() => {
+                        const msg = String(c.msg || '');
+                        const transferred = msg.startsWith('Conversa transferida') || msg.startsWith('Conversa movida');
+                        if (!transferred) return null;
+                        return (
+                          <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 border-primary/40 text-primary shrink-0" title={msg}>
+                            Transferida
+                          </Badge>
+                        );
+                      })()}
                     </p>
                     <span className="text-[10px] text-muted-foreground shrink-0 inline-flex items-center gap-0.5">
                       {c.time}
@@ -2661,6 +2671,7 @@ export default function ChatPage() {
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{c.msg}</p>
+
                   <div className="flex items-center gap-1 mt-1 flex-wrap">
                     {(c as any).presenceLabel && (() => {
                       const p = String((c as any).presence || '').toLowerCase();
