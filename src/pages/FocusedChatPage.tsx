@@ -511,6 +511,9 @@ export default function FocusedChatPage() {
           if (m.customer_id !== selected) return;
           setMsgs(prev => prev.map(x => x.id === m.id ? m : x));
         })
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'lead_assignments' },
+        () => { loadConvs(); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user, selected, readerInfo]);
