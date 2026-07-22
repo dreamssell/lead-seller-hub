@@ -44,7 +44,23 @@ export async function moveConversationToStage(params: {
     p_actor_id: actorId ?? null,
     p_origin: origin || 'manual',
   } as any);
-  if (error) throw error;
+  if (error) {
+    const hint = (error as any)?.hint || '';
+    const msg = (error as any)?.message || '';
+    if (hint === 'already_closed' || /already_closed/i.test(msg)) {
+      throw new Error('Este atendimento já está finalizado.');
+    }
+    if (hint === 'no_open_attendance' || /no_open_attendance/i.test(msg)) {
+      throw new Error('Não há atendimento aberto para encerrar.');
+    }
+    if (/not_allowed|insufficient_privilege/i.test(msg)) {
+      throw new Error('Você não tem permissão para mover este atendimento.');
+    }
+    if (/not_authenticated/i.test(msg)) {
+      throw new Error('Sessão expirada. Entre novamente para continuar.');
+    }
+    throw error;
+  }
 }
 
 /**
