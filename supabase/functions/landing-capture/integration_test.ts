@@ -36,10 +36,17 @@ async function pickPipelineWithStage() {
   return stage!;
 }
 
-async function pickOwner() {
-  const { data } = await admin.from("profiles").select("id,sub_company_id").limit(1).maybeSingle();
-  assert(data, "No profile available to own the fixture landing page");
-  return data!;
+async function pickOwner(pipelineId: string) {
+  // Prefer an owner that already owns the target pipeline so tenant scoping matches.
+  const { data: pipe } = await admin
+    .from("pipelines")
+    .select("owner_id,sub_company_id")
+    .eq("id", pipelineId)
+    .maybeSingle();
+  if (pipe?.owner_id) return { id: pipe.owner_id, sub_company_id: pipe.sub_company_id ?? null };
+  const { data } = await admin.from("profiles").select("user_id").limit(1).maybeSingle();
+  assert(data?.user_id, "No profile available to own the fixture landing page");
+  return { id: data!.user_id, sub_company_id: null };
 }
 
 async function callLink(slug: string, ip: string) {
