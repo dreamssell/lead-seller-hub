@@ -17,6 +17,7 @@ type Ticket = any;
 type Message = { id: string; ticket_id: string; sender_id: string; is_internal_note: boolean; message: string; created_at: string };
 type Attachment = { id: string; storage_path: string; file_name: string; file_type: string; file_size: number; message_id: string | null };
 type AssignmentLog = { id: string; from_user: string | null; to_user: string | null; changed_by: string; created_at: string };
+type StatusLog = { id: string; from_status: SupportStatus | null; to_status: SupportStatus; changed_by: string | null; created_at: string };
 type Agent = { user_id: string; display_name: string | null; email: string | null };
 type NotifLog = { id: string; event_type: string; audience: string; channel: string; recipient: string; body: string; status: string; error: string | null; created_at: string; attempt?: number; max_attempts?: number; next_retry_at?: string | null };
 
