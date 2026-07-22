@@ -392,7 +392,7 @@ export default function FocusedChatPage() {
     void setCachedConvs(user?.id, 'whatsapp', list);
   }, [user?.id, isSupervisor, supervisorUserId]);
 
-  useEffect(() => { loadConvs(); }, [loadConvs]);
+  useEffect(() => { loadConvs(); }, [loadConvs, convLimit]);
 
   // Load messages (last PAGE_SIZE) for selected conversation.
   const loadMessages = useCallback(async (cid: string) => {
