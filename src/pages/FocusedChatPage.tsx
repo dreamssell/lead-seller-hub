@@ -1085,11 +1085,31 @@ export default function FocusedChatPage() {
                     ) : null}
                   </div>
 
-                  {msgs.length === 0 ? (
+                  <div className="sticky top-0 z-10 bg-background/80 backdrop-blur border-b border-border/40 px-3 py-1.5 flex items-center gap-1 text-[10px] mb-1">
+                    <span className="text-muted-foreground uppercase tracking-wide">Ver:</span>
+                    {(['all','client','notes'] as const).map(k => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setMsgFilter(k)}
+                        className={cn(
+                          'px-2 py-0.5 rounded-full border transition-colors',
+                          msgFilter === k
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'border-border hover:bg-secondary text-muted-foreground',
+                        )}
+                      >
+                        {k === 'all' ? 'Tudo' : k === 'client' ? 'Só cliente' : 'Só notas internas'}
+                      </button>
+                    ))}
+                  </div>
+
+                  {visibleMsgs.length === 0 ? (
                     <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-                      Nenhuma mensagem ainda — envie a primeira.
+                      {msgs.length === 0 ? 'Nenhuma mensagem ainda — envie a primeira.' : 'Nenhuma mensagem para este filtro.'}
                     </div>
                   ) : (
+
                     <div
                       style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}
                     >
