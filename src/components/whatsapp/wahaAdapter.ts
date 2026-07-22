@@ -139,6 +139,8 @@ async function writeWahaAudit(
     messageId?: string | null;
     errorMessage?: string | null;
     payload?: Record<string, any>;
+    requestId?: string | null;
+    clientMsgId?: string | null;
   },
 ) {
   if (!conn.owner_id) return;
@@ -158,11 +160,27 @@ async function writeWahaAudit(
       waha_session_id: input.wahaSessionId ?? null,
       message_id: input.messageId ?? null,
       error_message: input.errorMessage ?? null,
-      payload: input.payload ?? {},
+      payload: {
+        ...(input.payload ?? {}),
+        request_id: input.requestId ?? null,
+        client_msg_id: input.clientMsgId ?? null,
+      },
     });
   } catch (e) {
     console.warn('[WAHA] audit log falhou', e);
   }
+}
+
+// Módulo-level dedup: uma mesma client_msg_id nunca gera dois POST /api/sendText
+// no mesmo tab (StrictMode, double-click, retry rápido do usuário). Mapeia
+// client_msg_id → Promise da chamada em andamento OU resultado final por 5min.
+const inflightSends = new Map<string, Promise<any>>();
+const recentSends = new Map<string, { at: number; result: any }>();
+function recallRecent(clientMsgId: string) {
+  const hit = recentSends.get(clientMsgId);
+  if (!hit) return null;
+  if (Date.now() - hit.at > 5 * 60_000) { recentSends.delete(clientMsgId); return null; }
+  return hit.result;
 }
 
 // Upload an outbound media/audio blob to the private `chat-media` bucket so
