@@ -77,7 +77,6 @@ export function TransferConversationDialog({ open, onOpenChange, customerId, own
     if (!ownerId) return toast.error('Sem contexto de empresa');
     if (mode === 'user' && !target) return toast.error('Selecione um colega');
     if (mode === 'flow' && !stage) return toast.error('Selecione um fluxo');
-    if (!reason.trim()) return toast.error('Informe o motivo');
     setSaving(true);
     try {
       const { data: u } = await supabase.auth.getUser();
@@ -86,8 +85,8 @@ export function TransferConversationDialog({ open, onOpenChange, customerId, own
         (user?.user_metadata as any)?.name ||
         user?.email ||
         null;
+      const reasonText = reason.trim() || null;
       if (mode === 'user') {
-        // Transfere para colega — cai em "Em Atendimento" do colega escolhido
         await moveConversationToStage({
           customerId,
           ownerId,
@@ -103,16 +102,11 @@ export function TransferConversationDialog({ open, onOpenChange, customerId, own
           noticeType: 'transfer_user',
           actorName,
           targetName: targetUser?.display_name || targetUser?.email || 'colega',
-          reason: reason.trim() || null,
+          targetUserId: target,
+          reason: reasonText,
         });
         toast.success('Conversa transferida ao colega (Em Atendimento)');
       } else {
-        // Regras de assignment ao mover para um fluxo:
-        //  - closed   → limpa assigned_to
-        //  - active   → atribui ao próprio ator (para contabilizar em
-        //               "Em Atendimento" e sair da lista lateral de outros)
-        //  - waiting  → devolve para a fila (assigned_to = null)
-        //  - manual/auto → mantém o assigned_to atual
         let assignedTo: string | null | undefined;
         if (stage === 'closed' || stage === 'waiting') assignedTo = null;
         else if (stage === 'active') assignedTo = u.user?.id ?? null;
@@ -131,7 +125,8 @@ export function TransferConversationDialog({ open, onOpenChange, customerId, own
           noticeType: 'transfer_flow',
           actorName,
           targetStageLabel: FLOW_STAGE_LABEL[stage],
-          reason: reason.trim() || null,
+          targetStage: stage,
+          reason: reasonText,
         });
         toast.success('Conversa movida para o fluxo');
       }
@@ -145,6 +140,7 @@ export function TransferConversationDialog({ open, onOpenChange, customerId, own
       setSaving(false);
     }
   };
+
 
   const handleAssignToMe = async () => {
     const { data: u } = await supabase.auth.getUser();
