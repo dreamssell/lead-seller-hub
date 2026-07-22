@@ -72,7 +72,7 @@ Deno.test("landing-capture: metrics, IP dedupe, CRM 360 & Kanban", async (t) => 
     .from("landing_pages")
     .insert({
       slug,
-      name: "Integration Test Link",
+      title: "Integration Test Link",
       page_type: "link",
       status: "published",
       redirect_url: "https://wa.me/5500000000000",
