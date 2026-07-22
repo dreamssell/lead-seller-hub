@@ -356,18 +356,8 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     }
   };
 
-  const cycleGain = () => {
-    ensureAudioGraph();
-    const next = (gainIdx + 1) % GAINS.length;
-    setGainIdx(next);
-    try { localStorage.setItem(GAIN_STORAGE_KEY, String(next)); } catch {}
-  };
-  const onGainKey = (e: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      e.preventDefault();
-      cycleGain();
-    }
-  };
+
+
 
   const progress = total > 0 ? current / total : 0;
   const activeBar = Math.floor(progress * BARS);
