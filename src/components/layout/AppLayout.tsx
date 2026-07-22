@@ -13,6 +13,7 @@ interface AppLayoutProps {
 export function AppLayout({ children, title, subtitle }: AppLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [hoverExpanded, setHoverExpanded] = useState(false);
+  usePagePerfTelemetry();
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
