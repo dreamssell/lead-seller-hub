@@ -205,7 +205,7 @@ export default function MasterSupportPage() {
                     const slaMeta = SLA_META[sla];
                     const isSub = !!t.sub_company_id;
                     return (
-                      <motion.div layout key={t.id}
+                      <motion.div layout key={t.id} data-testid={`support-card-${t.id}`}
                         className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-md ${slaMeta.border} ${sla === 'breach' ? 'bg-red-500/5' : sla === 'warn' ? 'bg-amber-500/5' : 'bg-card'}`}
                         whileHover={{ y: -1 }}
                       >
@@ -228,7 +228,7 @@ export default function MasterSupportPage() {
                         <div className="mt-2 pt-2 border-t border-border/60 flex items-center gap-1.5">
                           <UserCircle2 className="w-3.5 h-3.5 text-muted-foreground shrink-0"/>
                           <Select value={t.assigned_to || 'none'} onValueChange={(v) => assignTo(t, v === 'none' ? null : v)}>
-                            <SelectTrigger className="h-7 text-[11px] px-2"><SelectValue placeholder="Atribuir…"/></SelectTrigger>
+                            <SelectTrigger data-testid={`assignee-select-${t.id}`} className="h-7 text-[11px] px-2"><SelectValue placeholder="Atribuir…"/></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none">Sem responsável</SelectItem>
                               {agents.map(a => (
@@ -239,7 +239,7 @@ export default function MasterSupportPage() {
                         </div>
                         <div className="mt-1.5 flex items-center gap-1.5">
                           <Select value={t.status} onValueChange={(v) => changeStatus(t, v as SupportStatus)}>
-                            <SelectTrigger className="h-7 text-[11px] px-2"><SelectValue/></SelectTrigger>
+                            <SelectTrigger data-testid={`status-select-${t.id}`} className="h-7 text-[11px] px-2"><SelectValue/></SelectTrigger>
                             <SelectContent>
                               {KANBAN_COLUMNS.map((s) => (
                                 <SelectItem key={s} value={s}>{STATUS_META[s].kanbanTitle}</SelectItem>
