@@ -279,8 +279,8 @@ export default function OutrosPage() {
         <Card className="glass-card">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-base">Suas páginas</CardTitle>
-              <CardDescription>Cada página gera um link público e um QR Code para compartilhar.</CardDescription>
+              <CardTitle className="text-base">Suas páginas e links</CardTitle>
+              <CardDescription>Cada item gera um link público e um QR Code para compartilhar.</CardDescription>
             </div>
             <div className="flex gap-2 flex-wrap">
               <Input placeholder="Buscar..." value={query} onChange={e => setQuery(e.target.value)} className="w-48" />
@@ -288,6 +288,7 @@ export default function OutrosPage() {
               <Button variant="outline" onClick={exportPdf}><FileText className="w-4 h-4 mr-1" />PDF</Button>
               <Button variant="outline" onClick={exportCtaCsv}><FileSpreadsheet className="w-4 h-4 mr-1" />CTAs CSV</Button>
               <Button variant="outline" onClick={() => setTplOpen(true)}><Sparkles className="w-4 h-4 mr-1" />Templates</Button>
+              <Button variant="outline" onClick={() => { setEditingLink(null); setNewLinkOpen(true); }}><LinkIcon className="w-4 h-4 mr-1" />Novo link</Button>
               <Button onClick={createNew}><Plus className="w-4 h-4 mr-1" />Nova página</Button>
             </div>
           </CardHeader>
