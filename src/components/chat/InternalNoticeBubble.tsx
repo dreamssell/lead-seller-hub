@@ -22,8 +22,15 @@ export function InternalNoticeBubble({
 }) {
   const isFlow = metadata.notice_type === 'transfer_flow';
   const Icon = isFlow ? Workflow : UserIcon;
-  const timeLabel = createdAt
-    ? new Date(createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  const dateObj = createdAt ? new Date(createdAt) : null;
+  const timeLabel = dateObj
+    ? dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    : null;
+  const fullLabel = dateObj
+    ? dateObj.toLocaleString('pt-BR', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+      })
     : null;
 
   const title = isFlow
@@ -34,18 +41,19 @@ export function InternalNoticeBubble({
     <div className="flex justify-center my-1">
       <div
         className="inline-flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl border border-dashed border-primary/40 bg-primary/5 text-xs max-w-[85%]"
-        title="Nota interna — o cliente não vê esta mensagem"
+        title={fullLabel ? `Nota interna — ${fullLabel}` : 'Nota interna — o cliente não vê esta mensagem'}
       >
         <div className="flex items-center gap-1.5 text-foreground/90">
           <ArrowLeftRight className="w-3 h-3 text-primary" />
           <Icon className="w-3 h-3 text-primary" />
           <span className="font-medium">{title}</span>
         </div>
-        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground flex-wrap justify-center">
           <Lock className="w-2.5 h-2.5" />
           <span>Nota interna</span>
           {metadata.actor_name && <span>· por {metadata.actor_name}</span>}
-          {timeLabel && <span>· {timeLabel}</span>}
+          {fullLabel && <span title={fullLabel}>· {fullLabel}</span>}
+          {!fullLabel && timeLabel && <span>· {timeLabel}</span>}
         </div>
         {metadata.reason && (
           <div className="text-[11px] text-muted-foreground italic mt-0.5 text-center">
@@ -56,3 +64,4 @@ export function InternalNoticeBubble({
     </div>
   );
 }
+
