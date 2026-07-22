@@ -4852,6 +4852,47 @@ export type Database = {
           },
         ]
       }
+      support_ticket_status_history: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          from_status:
+            | Database["public"]["Enums"]["support_ticket_status"]
+            | null
+          id: string
+          ticket_id: string
+          to_status: Database["public"]["Enums"]["support_ticket_status"]
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          from_status?:
+            | Database["public"]["Enums"]["support_ticket_status"]
+            | null
+          id?: string
+          ticket_id: string
+          to_status: Database["public"]["Enums"]["support_ticket_status"]
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          from_status?:
+            | Database["public"]["Enums"]["support_ticket_status"]
+            | null
+          id?: string
+          ticket_id?: string
+          to_status?: Database["public"]["Enums"]["support_ticket_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_ticket_status_history_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_tickets: {
         Row: {
           assigned_to: string | null
