@@ -126,6 +126,11 @@ export default function FocusedChatPage() {
     ? (initialToolParam as Tool) : null;
 
   const [convs, setConvs] = useState<Conversation[]>([]);
+  const CONV_PAGE_SIZE = 200;
+  const [convLimit, setConvLimit] = useState(CONV_PAGE_SIZE);
+  const [convHasMore, setConvHasMore] = useState(false);
+  const convLimitRef = useRef(CONV_PAGE_SIZE);
+  useEffect(() => { convLimitRef.current = convLimit; }, [convLimit]);
   const [filter, setFilter] = useState('');
   const [selected, setSelected] = useState<string | null>(initialConv);
   const [msgs, setMsgs] = useState<Msg[]>([]);
