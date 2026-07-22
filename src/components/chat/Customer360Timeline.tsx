@@ -74,9 +74,12 @@ function translateLeadEvent(type: string): string {
     contacted: 'Contato realizado',
     qualified: 'Lead qualificado',
     note_added: 'Nota adicionada',
+    transferred_to_user: 'Conversa transferida para colega',
+    transferred_to_stage: 'Conversa movida para fluxo',
   };
   return map[type] || type;
 }
+
 
 export function Customer360Timeline({ customerId }: Props) {
   const [items, setItems] = useState<TimelineItem[]>([]);
