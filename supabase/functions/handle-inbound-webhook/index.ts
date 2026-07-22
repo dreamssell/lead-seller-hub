@@ -97,7 +97,8 @@ Deno.serve(async (req) => {
     const eventType = payload.event || "unknown";
     const remoteJid = payload.data?.key?.remoteJid || payload.data?.remoteJid || payload.data?.from;
     const messageText = extractMessageText(payload.data);
-    const msgId = payload.data?.key?.id || payload.data?.id;
+    const rawMsgId = payload.data?.key?.id || payload.data?.id;
+    const msgId = canonicalMsgId(rawMsgId);
     const senderName = payload.data?.pushName || payload.data?.notifyName;
     const fromMe = Boolean(payload.data?.key?.fromMe ?? payload.data?.fromMe ?? false);
 
