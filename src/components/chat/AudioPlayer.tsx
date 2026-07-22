@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, Download, Loader2, AlertCircle, RotateCcw, Scissors, Volume2 } from 'lucide-react';
+import { Play, Pause, Download, Loader2, AlertCircle, RotateCcw, Scissors } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Props {
