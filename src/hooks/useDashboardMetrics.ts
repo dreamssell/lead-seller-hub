@@ -50,6 +50,8 @@ function isoDay(d: Date) {
 export function useDashboardMetrics(scope: DashboardScope): DashboardMetrics {
   const { user, access } = useAuth();
   const [state, setState] = useState<DashboardMetrics>(empty);
+  const [reloadTick, setReloadTick] = useState(0);
+
 
   useEffect(() => {
     if (!user) return;
