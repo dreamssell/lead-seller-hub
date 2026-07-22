@@ -1724,7 +1724,7 @@ export default function ChatPage() {
       _sentAt: Date.now(),
     }]);
     try {
-      await supabase.from('chat_messages').insert({
+      await insertChatMessageDedup({
         client_msg_id: id,
         customer_id: selectedConvId,
         sender_type: 'agent',
@@ -1733,7 +1733,7 @@ export default function ChatPage() {
         connection_id: activeWhatsAppConn?.id ?? null,
         correlation_id: id,
         metadata: { status: 'sending', correlation_id: id },
-      });
+      }, { source: 'ChatPage.sendOptimistic', subCompanyId: activeWhatsAppConn?.sub_company_id ?? null });
     } catch {}
     return id;
   };
