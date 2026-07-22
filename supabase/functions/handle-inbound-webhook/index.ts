@@ -7,6 +7,19 @@ const corsHeaders = {
 
 const normalizePhone = (value: unknown) => String(value || "").replace(/@s\.whatsapp\.net|@c\.us|@g\.us/gi, "").replace(/\D/g, "");
 
+// Mirrors canonicalMsgId in uaz-send-message / waha-inbound. WhatsApp echoes
+// the same message id in two shapes: `true_<jid>_<HEX>` (fromMe echo) and bare
+// `<HEX>`. Persisting one form while uaz-send-message stored the other breaks
+// dedup and shows the sender a duplicated bubble even though the recipient
+// only received one message. Always canonicalise to the bare uppercase hex.
+const canonicalMsgId = (raw: unknown): string | null => {
+  if (!raw || typeof raw !== "string") return null;
+  const parts = raw.split("_");
+  const tail = parts[parts.length - 1];
+  if (parts.length >= 3 && /^[A-F0-9]{16,}$/i.test(tail)) return tail.toUpperCase();
+  return /^[A-F0-9]{16,}$/i.test(raw) ? raw.toUpperCase() : raw;
+};
+
 const extractMessageText = (data: any) => {
   const msg = data?.message || {};
   return (
