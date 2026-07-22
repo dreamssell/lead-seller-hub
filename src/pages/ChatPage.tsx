@@ -1197,7 +1197,7 @@ export default function ChatPage() {
             return next;
           });
         }
-        if (activeChannelRef.current) loadConversations(activeChannelRef.current);
+        if (activeChannelRef.current) { const _ch = activeChannelRef.current; const _t = startRealtimeTimer('chat_conversations', 'chat_messages.insert'); const _before = (convsRef.current[_ch] || []).length; loadConversations(_ch).then(() => _t.done(_before, (convsRef.current[_ch] || []).length, { channel: _ch })); }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages' }, (payload) => {
         const row: any = payload.new;
