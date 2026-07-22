@@ -144,10 +144,18 @@ export function AttendanceFlowDialog({ open, onOpenChange, onSelectCustomer }: P
 
   const filtered = useMemo(() => ({
     auto: assignments.filter(a => ['auto', 'waiting'].includes(a.stage)),
-    waiting: assignments.filter(a => a.stage === 'waiting' && (!userId || a.assigned_to === userId)),
-    active: assignments.filter(a => ['active', 'snoozed'].includes(a.stage) && (!userId || a.assigned_to === userId)),
+    // Aguardando: fila para qualquer atendente assumir (sem atribuição direta).
+    // Também inclui itens já atribuídos ao usuário atual, para que ele veja
+    // o que ainda precisa iniciar. Supervisores enxergam tudo.
+    waiting: assignments.filter(a =>
+      a.stage === 'waiting' && (isSupervisor || !a.assigned_to || a.assigned_to === userId),
+    ),
+    // Em Atendimento: supervisores veem todos os ativos; agentes veem apenas os seus.
+    active: assignments.filter(a =>
+      ['active', 'snoozed'].includes(a.stage) && (isSupervisor || !userId || a.assigned_to === userId),
+    ),
     closed: assignments.filter(a => a.stage === 'closed'),
-  }), [assignments, userId]);
+  }), [assignments, userId, isSupervisor]);
 
   const openCustomer = (id: string) => {
     onSelectCustomer?.(id);
