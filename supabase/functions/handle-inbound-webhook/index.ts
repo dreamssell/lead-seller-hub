@@ -7,6 +7,19 @@ const corsHeaders = {
 
 const normalizePhone = (value: unknown) => String(value || "").replace(/@s\.whatsapp\.net|@c\.us|@g\.us/gi, "").replace(/\D/g, "");
 
+// Mirrors canonicalMsgId in uaz-send-message / waha-inbound. WhatsApp echoes
+// the same message id in two shapes: `true_<jid>_<HEX>` (fromMe echo) and bare
+// `<HEX>`. Persisting one form while uaz-send-message stored the other breaks
+// dedup and shows the sender a duplicated bubble even though the recipient
+// only received one message. Always canonicalise to the bare uppercase hex.
+const canonicalMsgId = (raw: unknown): string | null => {
+  if (!raw || typeof raw !== "string") return null;
+  const parts = raw.split("_");
+  const tail = parts[parts.length - 1];
+  if (parts.length >= 3 && /^[A-F0-9]{16,}$/i.test(tail)) return tail.toUpperCase();
+  return /^[A-F0-9]{16,}$/i.test(raw) ? raw.toUpperCase() : raw;
+};
+
 const extractMessageText = (data: any) => {
   const msg = data?.message || {};
   return (
@@ -84,7 +97,8 @@ Deno.serve(async (req) => {
     const eventType = payload.event || "unknown";
     const remoteJid = payload.data?.key?.remoteJid || payload.data?.remoteJid || payload.data?.from;
     const messageText = extractMessageText(payload.data);
-    const msgId = payload.data?.key?.id || payload.data?.id;
+    const rawMsgId = payload.data?.key?.id || payload.data?.id;
+    const msgId = canonicalMsgId(rawMsgId);
     const senderName = payload.data?.pushName || payload.data?.notifyName;
     const fromMe = Boolean(payload.data?.key?.fromMe ?? payload.data?.fromMe ?? false);
 
@@ -272,6 +286,29 @@ Deno.serve(async (req) => {
         }
 
         if (customer) {
+          // fromMe echo: if the app already inserted an optimistic outbound row
+          // (client_msg_id present, uaz_msg_id still null), backfill it in
+          // place instead of creating a second bubble for the sender.
+          if (fromMe) {
+            const { data: pending } = await supabaseAdmin
+              .from("chat_messages")
+              .select("id")
+              .eq("customer_id", customer.id)
+              .eq("sender_type", "agent")
+              .eq("content", messageText)
+              .is("uaz_msg_id", null)
+              .order("created_at", { ascending: false })
+              .limit(1);
+            const pendingRow = (pending || [])[0];
+            if (pendingRow) {
+              await supabaseAdmin
+                .from("chat_messages")
+                .update({ uaz_msg_id: msgId, metadata: { raw: payload.data, from_me: true, direction: "outbound_native", status: "sent" } })
+                .eq("id", pendingRow.id);
+              responseBody = JSON.stringify({ success: true, backfilled: true });
+              return new Response(responseBody, { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
+          }
           await supabaseAdmin.from("chat_messages").insert({
             customer_id: customer.id,
             sender_type: senderType,
@@ -287,7 +324,7 @@ Deno.serve(async (req) => {
     }
 
     if (/messages\.(update|ack)|message\.(update|ack)|send\.message|status/i.test(eventType)) {
-      const statusMsgId = extractStatusMessageId(payload.data);
+      const statusMsgId = canonicalMsgId(extractStatusMessageId(payload.data));
       const deliveryStatus = normalizeDeliveryStatus(
         payload.data?.status ||
         payload.data?.ack ||
