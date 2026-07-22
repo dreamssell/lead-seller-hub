@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { LifeBuoy, AlertCircle, UserCircle2, Clock3, Bell } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { describeSupabaseError } from '@/lib/supabaseErrorMessage';
 import { NotificationTemplatesDialog } from '@/components/support/NotificationTemplatesDialog';
 import { useAuth } from '@/contexts/AuthContext';
 
