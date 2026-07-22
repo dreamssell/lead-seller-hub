@@ -42,6 +42,7 @@ import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
 import { ChatRightPanel } from '@/components/chat/ChatRightPanel';
 import { MediaMessageContent } from '@/components/chat/MediaMessageContent';
 import { CallEventBubble, isCallEventMessage } from '@/components/chat/CallEventBubble';
+import { InternalNoticeBubble, isInternalNoticeMessage } from '@/components/chat/InternalNoticeBubble';
 import { MediaViewerDialog, type MediaItem } from '@/components/chat/MediaViewerDialog';
 import { SignatureDocumentModal } from '@/components/signature/SignatureDocumentModal';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -2944,6 +2945,9 @@ export default function ChatPage() {
                 
                 {messages.map((m) => {
                   const _meta = getMessageMetadata(m);
+                  if (isInternalNoticeMessage(_meta)) {
+                    return <InternalNoticeBubble key={m.id} metadata={_meta as any} createdAt={m.created_at} />;
+                  }
                   if (isCallEventMessage(_meta)) {
                     return (
                       <CallEventBubble
