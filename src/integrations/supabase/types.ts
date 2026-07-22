@@ -2173,34 +2173,55 @@ export type Database = {
       landing_events: {
         Row: {
           button_id: string | null
+          city: string | null
+          country: string | null
           created_at: string
           id: string
+          ip_address: string | null
+          latitude: number | null
           lead_id: string | null
+          longitude: number | null
           metadata: Json
+          neighborhood: string | null
           page_id: string
           referrer: string | null
+          region: string | null
           type: string
           user_agent: string | null
         }
         Insert: {
           button_id?: string | null
+          city?: string | null
+          country?: string | null
           created_at?: string
           id?: string
+          ip_address?: string | null
+          latitude?: number | null
           lead_id?: string | null
+          longitude?: number | null
           metadata?: Json
+          neighborhood?: string | null
           page_id: string
           referrer?: string | null
+          region?: string | null
           type: string
           user_agent?: string | null
         }
         Update: {
           button_id?: string | null
+          city?: string | null
+          country?: string | null
           created_at?: string
           id?: string
+          ip_address?: string | null
+          latitude?: number | null
           lead_id?: string | null
+          longitude?: number | null
           metadata?: Json
+          neighborhood?: string | null
           page_id?: string
           referrer?: string | null
+          region?: string | null
           type?: string
           user_agent?: string | null
         }
@@ -2236,8 +2257,10 @@ export type Database = {
           lead_count: number
           owner_id: string
           page_bg_color: string
+          page_type: string
           pipeline_id: string | null
           published_version: number
+          redirect_url: string | null
           settings: Json
           slug: string
           status: string
@@ -2263,8 +2286,10 @@ export type Database = {
           lead_count?: number
           owner_id: string
           page_bg_color?: string
+          page_type?: string
           pipeline_id?: string | null
           published_version?: number
+          redirect_url?: string | null
           settings?: Json
           slug: string
           status?: string
@@ -2290,8 +2315,10 @@ export type Database = {
           lead_count?: number
           owner_id?: string
           page_bg_color?: string
+          page_type?: string
           pipeline_id?: string | null
           published_version?: number
+          redirect_url?: string | null
           settings?: Json
           slug?: string
           status?: string
