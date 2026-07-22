@@ -53,6 +53,8 @@ const OutrosPage = lazy(() => import("./pages/OutrosPage"));
 const LandingBuilderPage = lazy(() => import("./pages/LandingBuilderPage"));
 const LandingPreviewPage = lazy(() => import("./pages/LandingPreviewPage"));
 const PublicLandingPage = lazy(() => import("./pages/PublicLandingPage"));
+const OutrosDataPage = lazy(() => import("./pages/OutrosDataPage"));
+const PublicLinkRedirectPage = lazy(() => import("./pages/PublicLinkRedirectPage"));
 const InternalTelemetryPage = lazy(() => import("./pages/InternalTelemetryPage"));
 const CallTelemetryPage = lazy(() => import("./pages/CallTelemetryPage"));
 const RoleLabelAuditPage = lazy(() => import("./pages/RoleLabelAuditPage"));
