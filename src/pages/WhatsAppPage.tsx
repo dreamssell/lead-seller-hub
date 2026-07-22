@@ -235,8 +235,9 @@ export default function WhatsAppPage() {
           )}
 
 
-          <TabsContent value="waha" className="mt-0">
+          <TabsContent value="waha" className="mt-0 space-y-4">
             <WahaMonitorPanel />
+            <WahaOwnerStatusPanel />
           </TabsContent>
 
           <TabsContent value="aggregate" className="mt-0">
