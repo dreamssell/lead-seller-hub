@@ -83,6 +83,8 @@ export default function SupportTicketDetailPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_ticket_messages', filter: `ticket_id=eq.${id}` }, load)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'support_tickets', filter: `id=eq.${id}` }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_notification_logs', filter: `ticket_id=eq.${id}` }, load)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_ticket_assignments', filter: `ticket_id=eq.${id}` }, load)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_ticket_status_history', filter: `ticket_id=eq.${id}` }, load)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
