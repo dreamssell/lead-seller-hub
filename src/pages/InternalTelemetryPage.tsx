@@ -68,6 +68,8 @@ const TYPE_BADGE: Record<string, string> = {
   auth_spinner_shown: 'bg-cyan-500/15 text-cyan-600 border-cyan-500/30',
   auth_visibility_refresh: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',
   auth_revalidation_failed: 'bg-red-500/15 text-red-600 border-red-500/30',
+  'perf.page_load': 'bg-indigo-500/15 text-indigo-600 border-indigo-500/30',
+  'perf.realtime_impact': 'bg-violet-500/15 text-violet-600 border-violet-500/30',
 };
 
 export default function InternalTelemetryPage() {
