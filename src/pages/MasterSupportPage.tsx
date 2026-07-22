@@ -53,6 +53,8 @@ export default function MasterSupportPage() {
     void load();
     const ch = supabase.channel('support-master')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, load)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_ticket_status_history' }, load)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_ticket_assignments' }, load)
       .subscribe();
     // Recomputa a cada minuto para atualizar contadores de SLA
     const iv = setInterval(() => setTickets((prev) => [...prev]), 60000);
