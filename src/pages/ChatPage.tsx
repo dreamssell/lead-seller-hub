@@ -30,6 +30,7 @@ import { toast } from '@/hooks/use-toast';
 import { toast as sonnerToast } from 'sonner';
 
 import { supabase } from '@/integrations/supabase/client';
+import { insertChatMessageDedup } from '@/lib/dedupChatInsert';
 import { startRealtimeTimer } from '@/lib/perfTelemetry';
 import {
   getCachedConvs, setCachedConvs,
