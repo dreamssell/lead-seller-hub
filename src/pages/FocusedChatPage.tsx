@@ -129,6 +129,8 @@ export default function FocusedChatPage() {
   const [filter, setFilter] = useState('');
   const [selected, setSelected] = useState<string | null>(initialConv);
   const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [msgFilter, setMsgFilter] = useState<'all' | 'client' | 'notes'>('all');
+
   const [loading, setLoading] = useState(true);
   const [conn, setConn] = useState<WhatsAppConnection | null>(null);
   const [connOnline, setConnOnline] = useState(false);
