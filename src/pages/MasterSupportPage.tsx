@@ -226,6 +226,16 @@ export default function MasterSupportPage() {
                             </SelectContent>
                           </Select>
                         </div>
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                          <Select value={t.status} onValueChange={(v) => changeStatus(t, v as SupportStatus)}>
+                            <SelectTrigger className="h-7 text-[11px] px-2"><SelectValue/></SelectTrigger>
+                            <SelectContent>
+                              {KANBAN_COLUMNS.map((s) => (
+                                <SelectItem key={s} value={s}>{STATUS_META[s].kanbanTitle}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </motion.div>
                     );
                   })}
