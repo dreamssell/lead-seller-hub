@@ -476,7 +476,7 @@ export default function SupportTicketDetailPage() {
           {isOwner && assignments.length > 0 && (
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                <History className="w-3 h-3"/> Histórico de atribuições
+                <History className="w-3 h-3"/> Histórico de responsáveis
               </p>
               <ul className="space-y-1 mt-1 max-h-32 overflow-y-auto text-[11px]">
                 {assignments.map(al => (
@@ -484,7 +484,28 @@ export default function SupportTicketDetailPage() {
                     <span className="text-muted-foreground">{agentName(al.from_user)}</span>
                     <span className="mx-1">→</span>
                     <span className="font-medium">{agentName(al.to_user)}</span>
-                    <div className="text-[9px] text-muted-foreground">{new Date(al.created_at).toLocaleString('pt-BR')}</div>
+                    <div className="text-[9px] text-muted-foreground">
+                      por {agentName(al.changed_by)} · {new Date(al.created_at).toLocaleString('pt-BR')}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {isOwner && statusLogs.length > 0 && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                <History className="w-3 h-3"/> Histórico de status
+              </p>
+              <ul className="space-y-1 mt-1 max-h-32 overflow-y-auto text-[11px]" data-testid="status-history-list">
+                {statusLogs.map(sl => (
+                  <li key={sl.id} className="p-1.5 rounded bg-secondary/60">
+                    <span className="text-muted-foreground">{sl.from_status ? STATUS_META[sl.from_status].label : '—'}</span>
+                    <span className="mx-1">→</span>
+                    <span className="font-medium">{STATUS_META[sl.to_status].label}</span>
+                    <div className="text-[9px] text-muted-foreground">
+                      por {agentName(sl.changed_by)} · {new Date(sl.created_at).toLocaleString('pt-BR')}
+                    </div>
                   </li>
                 ))}
               </ul>
