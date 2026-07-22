@@ -436,7 +436,7 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
           retries: opts.retries ?? 0,
           signal: opts.signal,
         });
-        const messageId = data?.id?._serialized || data?.id || null;
+        const messageId = canonicalWahaMsgId(data?.id?._serialized || data?.id || null);
         await writeWahaAudit(conn, {
           action: 'send_text', status: 'success', customerId,
           wahaSessionId: parsed.data.session, messageId, requestId, clientMsgId,
@@ -523,7 +523,7 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
         // Non-idempotent: never auto-retry to avoid duplicate deliveries.
         retries: 0,
       });
-      const messageId = data?.id?._serialized || data?.id || data?.key?.id || null;
+      const messageId = canonicalWahaMsgId(data?.id?._serialized || data?.id || data?.key?.id || null);
       if (!messageId) {
         const dbg = (() => { try { return JSON.stringify(data).slice(0, 500); } catch { return String(data); } })();
         throw new Error(`WAHA respondeu sem message_id (rota ${path}). Resposta: ${dbg}`);
@@ -612,7 +612,7 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
         // Non-idempotent: never auto-retry to avoid duplicate voice notes.
         retries: 0,
       });
-      const messageId = data?.id?._serialized || data?.id || null;
+      const messageId = canonicalWahaMsgId(data?.id?._serialized || data?.id || null);
       if (!messageId) {
         throw new Error('WAHA aceitou o áudio mas não retornou message_id — provável falha na sessão. Reconecte e tente novamente.');
       }
@@ -746,7 +746,7 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
         // Non-idempotent forward: never auto-retry.
         method: 'POST', body: parsed.data, timeoutMs: 10_000, retries: 0,
       });
-      const messageId = data?.id?._serialized || data?.id || null;
+      const messageId = canonicalWahaMsgId(data?.id?._serialized || data?.id || null);
       await writeWahaAudit(conn, {
         action: 'forward_message', status: 'success',
         customerId: toCustomerId, wahaSessionId: parsed.data.session,
