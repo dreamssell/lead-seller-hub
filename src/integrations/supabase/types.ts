@@ -6824,6 +6824,18 @@ export type Database = {
         }
         Returns: undefined
       }
+      move_conversation_to_stage: {
+        Args: {
+          p_actor_id?: string
+          p_assigned_to?: string
+          p_assigned_to_provided?: boolean
+          p_customer_id: string
+          p_origin?: string
+          p_owner_id: string
+          p_stage: Database["public"]["Enums"]["assignment_stage"]
+        }
+        Returns: string
+      }
       pick_next_queue_member: { Args: { _queue_id: string }; Returns: string }
       reconcile_wavoip_call_history: {
         Args: { p_call_id?: string; p_wavoip_call_id?: string }
