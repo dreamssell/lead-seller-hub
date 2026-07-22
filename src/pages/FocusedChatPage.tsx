@@ -40,6 +40,7 @@ import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { toast as sonnerToast } from 'sonner';
 import { logCallUi, callTelemetryUrl } from '@/lib/callTelemetry';
+import { startRealtimeTimer } from '@/lib/perfTelemetry';
 import { CallEventFailedIndicator } from '@/components/chat/CallEventFailedIndicator';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { renderWhatsAppText } from '@/lib/whatsappFormat';
