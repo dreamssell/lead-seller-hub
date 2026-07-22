@@ -375,7 +375,13 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
       role="group"
       aria-label={`Mensagem de áudio${filename ? `: ${filename}` : ''}`}
     >
-      <audio ref={audioRef} src={url} preload="metadata" className="hidden" />
+      {/* crossOrigin MUST be set here (declaratively, before src is fetched).
+          Setting it later inside ensureAudioGraph is too late: the browser
+          already made a no-cors request, so createMediaElementSource taints
+          the stream and Chromium outputs zeroes ("MediaElementAudioSource
+          outputs zeroes due to CORS access restrictions"). That is the root
+          cause of "áudio não toca" reports even though the UI progresses. */}
+      <audio ref={audioRef} src={url} preload="metadata" crossOrigin="anonymous" className="hidden" />
 
       <button
         type="button"
