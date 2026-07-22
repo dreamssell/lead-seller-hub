@@ -200,14 +200,17 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
   const ensureAudioGraph = useCallback(() => {
     const a = audioRef.current;
     if (!a || sourceNodeRef.current) return;
+    // Only attempt WebAudio when we actually need to boost volume — otherwise
+    // native playback is safer (no CORS tainting risk, less chance of silent
+    // failure on iOS Safari). Once the source is created it can NEVER be
+    // reverted, so we defer graph creation until the user picks >1x gain.
+    if (GAINS[gainIdx] <= 1) return;
     try {
       const Ctx: typeof AudioContext =
         (window as any).AudioContext || (window as any).webkitAudioContext;
       if (!Ctx) return;
-      a.crossOrigin = a.crossOrigin || 'anonymous';
       const ctx = new Ctx();
       const src = ctx.createMediaElementSource(a);
-      // Soft compressor to normalize loudness across recordings
       const comp = ctx.createDynamicsCompressor();
       comp.threshold.value = -28;
       comp.knee.value = 24;
@@ -221,7 +224,7 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
       sourceNodeRef.current = src;
       gainNodeRef.current = gain;
     } catch {
-      // Silent — playback still works via native path
+      // Best-effort: fall back to native <audio> playback if the graph fails.
     }
   }, [gainIdx]);
 
