@@ -35,48 +35,14 @@ export async function moveConversationToStage(params: {
 }) {
   const { customerId, ownerId, stage, assignedTo, actorId, origin } = params;
 
-  // Busca o assignment mais recente aberto do cliente
-  const { data: existing } = await supabase
-    .from('lead_assignments')
-    .select('id, stage, assigned_to')
-    .eq('customer_id', customerId)
-    .eq('owner_id', ownerId)
-    .neq('stage', 'closed')
-    .order('assigned_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const patch: Record<string, any> = { stage };
-  if (assignedTo !== undefined) patch.assigned_to = assignedTo;
-  if (stage === 'active' && !existing?.stage) patch.first_response_at = new Date().toISOString();
-  if (stage === 'closed') patch.closed_at = new Date().toISOString();
-
-  if (existing) {
-    const { error } = await supabase
-      .from('lead_assignments')
-      .update(patch as any)
-      .eq('id', existing.id);
-    if (error) throw error;
-  } else {
-    const insertPayload: any = {
-      owner_id: ownerId,
-      customer_id: customerId,
-      stage,
-      priority: 'medium',
-      origin: origin || 'manual',
-      assigned_to: assignedTo ?? actorId ?? null,
-    };
-    if (stage === 'active') insertPayload.first_response_at = new Date().toISOString();
-    if (stage === 'closed') insertPayload.closed_at = new Date().toISOString();
-    const { error } = await supabase.from('lead_assignments').insert(insertPayload);
-    if (error) throw error;
-  }
-
-  // Sincroniza a coluna do cliente (usada pelo header do chat)
-  if (assignedTo !== undefined) {
-    await supabase
-      .from('customers')
-      .update({ assigned_to: assignedTo } as any)
-      .eq('id', customerId);
-  }
+  const { error } = await supabase.rpc('move_conversation_to_stage', {
+    p_customer_id: customerId,
+    p_owner_id: ownerId,
+    p_stage: stage,
+    p_assigned_to: assignedTo ?? null,
+    p_assigned_to_provided: assignedTo !== undefined,
+    p_actor_id: actorId ?? null,
+    p_origin: origin || 'manual',
+  } as any);
+  if (error) throw error;
 }
