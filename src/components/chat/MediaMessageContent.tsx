@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Play, Pause, FileText, Download, Image as ImageIcon, Film, Music, ExternalLink } from 'lucide-react';
+import { Play, Pause, FileText, Download, Image as ImageIcon, Film, Music, ExternalLink, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AudioPlayer } from './AudioPlayer';
 
@@ -41,23 +41,51 @@ function docKindColor(ext: string): string {
 
 export function MediaMessageContent({ url, type, mime, filename, duration, mine, onOpen }: Props) {
   const [imgError, setImgError] = useState(false);
+  const [imgRetryTick, setImgRetryTick] = useState(0);
 
   if (type === 'image') {
-    const commonImg = (
-      !imgError ? (
-        <img
-          src={url}
-          alt={filename || 'imagem'}
-          className="w-full max-h-72 object-cover"
-          loading="lazy"
-          onError={() => setImgError(true)}
-        />
-      ) : (
-        <div className="w-[240px] h-40 flex flex-col items-center justify-center text-muted-foreground gap-1">
+    if (imgError) {
+      // Estado de erro amigável com re-tentar e download
+      return (
+        <div
+          className="my-1 rounded-xl overflow-hidden bg-black/5 dark:bg-white/5 w-[240px] p-3 flex flex-col items-center justify-center gap-2 text-muted-foreground"
+          role="alert"
+          aria-label="Miniatura indisponível"
+        >
           <ImageIcon className="w-6 h-6" />
-          <span className="text-[10px]">Imagem indisponível</span>
+          <span className="text-[11px]">Não foi possível carregar a miniatura</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setImgError(false); setImgRetryTick((n) => n + 1); }}
+              className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20"
+            >
+              <RotateCcw className="w-3 h-3" /> Tentar novamente
+            </button>
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              download={filename || undefined}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-background/60 border border-border/60 hover:bg-background/80"
+            >
+              <Download className="w-3 h-3" /> Baixar
+            </a>
+          </div>
         </div>
-      )
+      );
+    }
+    const commonImg = (
+      <img
+        key={imgRetryTick}
+        src={url}
+        alt={filename || 'imagem'}
+        className="w-full max-h-72 object-cover"
+        loading="lazy"
+        decoding="async"
+        onError={() => setImgError(true)}
+      />
     );
     const cls = 'block relative group my-1 rounded-xl overflow-hidden bg-black/5 dark:bg-white/5 max-w-[280px] cursor-zoom-in';
     if (onOpen) {
