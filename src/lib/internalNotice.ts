@@ -10,9 +10,12 @@ export type TransferNoticeInput = {
   actorName?: string | null;
   targetName?: string | null;
   targetStageLabel?: string | null;
+  targetUserId?: string | null;
+  targetStage?: string | null;
   reason?: string | null;
   channel?: string;
 };
+
 
 export async function postTransferInternalNotice(input: TransferNoticeInput) {
   const clientMsgId = `internal-${crypto.randomUUID()}`;
