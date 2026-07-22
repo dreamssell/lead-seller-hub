@@ -114,7 +114,11 @@ export function AttendanceFlowDialog({ open, onOpenChange, onSelectCustomer }: P
         .eq('owner_id', ownerId)
         .order('assigned_at', { ascending: false })
         .limit(200);
-      if (!isSupervisor && userId) q = q.eq('assigned_to', userId);
+      // Agentes veem os próprios atendimentos + itens em fila (assigned_to nulo)
+      // para poderem assumir novas conversas.
+      if (!isSupervisor && userId) {
+        q = q.or(`assigned_to.eq.${userId},assigned_to.is.null`);
+      }
       const [{ data: a }, { data: qs }] = await Promise.all([
         q,
         supabase.from('attendance_queues').select('id, name, routing_strategy, pipeline_id').eq('owner_id', ownerId).eq('is_active', true).order('name'),
@@ -140,10 +144,18 @@ export function AttendanceFlowDialog({ open, onOpenChange, onSelectCustomer }: P
 
   const filtered = useMemo(() => ({
     auto: assignments.filter(a => ['auto', 'waiting'].includes(a.stage)),
-    waiting: assignments.filter(a => a.stage === 'waiting' && (!userId || a.assigned_to === userId)),
-    active: assignments.filter(a => ['active', 'snoozed'].includes(a.stage) && (!userId || a.assigned_to === userId)),
+    // Aguardando: fila para qualquer atendente assumir (sem atribuição direta).
+    // Também inclui itens já atribuídos ao usuário atual, para que ele veja
+    // o que ainda precisa iniciar. Supervisores enxergam tudo.
+    waiting: assignments.filter(a =>
+      a.stage === 'waiting' && (isSupervisor || !a.assigned_to || a.assigned_to === userId),
+    ),
+    // Em Atendimento: supervisores veem todos os ativos; agentes veem apenas os seus.
+    active: assignments.filter(a =>
+      ['active', 'snoozed'].includes(a.stage) && (isSupervisor || !userId || a.assigned_to === userId),
+    ),
     closed: assignments.filter(a => a.stage === 'closed'),
-  }), [assignments, userId]);
+  }), [assignments, userId, isSupervisor]);
 
   const openCustomer = (id: string) => {
     onSelectCustomer?.(id);
