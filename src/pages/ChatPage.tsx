@@ -2974,6 +2974,27 @@ export default function ChatPage() {
               <CollaborationBar
                 customerId={selectedConv.id}
                 onOpenTransfer={() => setCollabTransferOpen(true)}
+                onClose={async () => {
+                  const ownerId = (selectedConv as any)?.ownerId || access?.owner_id || currentUserId || null;
+                  if (!ownerId) { toast.error('Sem contexto de empresa'); return; }
+                  if (!window.confirm('Encerrar este atendimento? A conversa será enviada para Finalizados.')) return;
+                  try {
+                    const actorName =
+                      (user?.user_metadata as any)?.full_name ||
+                      (user?.user_metadata as any)?.name ||
+                      user?.email ||
+                      null;
+                    await closeConversation({
+                      customerId: selectedConv.id,
+                      ownerId,
+                      actorId: currentUserId,
+                      actorName,
+                    });
+                    toast.success('Atendimento encerrado e enviado para Finalizados');
+                  } catch (e: any) {
+                    toast.error(e?.message || 'Falha ao encerrar');
+                  }
+                }}
                 isSupervisor={isSupervisor}
                 currentUserId={currentUserId}
               />
