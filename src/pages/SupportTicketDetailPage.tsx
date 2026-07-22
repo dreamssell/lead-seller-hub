@@ -54,11 +54,13 @@ export default function SupportTicketDetailPage() {
     setNotifLogs((nl as any) || []);
     setInternalNotes(((t as any)?.internal_notes) || '');
     if (isOwner) {
-      const [{ data: al }, { data: ag }] = await Promise.all([
+      const [{ data: al }, { data: sl }, { data: ag }] = await Promise.all([
         supabase.from('support_ticket_assignments' as any).select('*').eq('ticket_id', id).order('created_at', { ascending: false }),
+        supabase.from('support_ticket_status_history' as any).select('*').eq('ticket_id', id).order('created_at', { ascending: false }),
         supabase.from('user_roles').select('user_id, profiles!inner(display_name, email)').eq('role', 'admin' as any),
       ]);
       setAssignments((al as any) || []);
+      setStatusLogs((sl as any) || []);
       setAgents((ag as any || []).map((r: any) => ({
         user_id: r.user_id, display_name: r.profiles?.display_name, email: r.profiles?.email,
       })));
