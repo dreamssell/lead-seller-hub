@@ -380,17 +380,33 @@ export default function SupportCenterPage() {
         >
           <div className="flex items-center gap-2">
             <Paperclip className="w-4 h-4 text-primary" />
-            <h3 className="text-sm font-semibold">Meus tickets recentes</h3>
+            <h3 className="text-sm font-semibold">Tickets recentes</h3>
+          </div>
+          <div className="flex items-center gap-1 p-0.5 rounded-lg bg-secondary/60">
+            {(['mine','team'] as ListScope[]).map(s => (
+              <button
+                key={s}
+                onClick={() => setScope(s)}
+                className={`flex-1 text-[11px] font-medium px-2 py-1 rounded-md transition-colors ${
+                  scope === s ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {s === 'mine' ? 'Meus' : 'Da equipe'}
+              </button>
+            ))}
           </div>
           {loadingList ? (
             <div className="space-y-2">{Array.from({length:3}).map((_,i)=>(<div key={i} className="h-14 rounded-lg bg-muted/40 animate-pulse"/>))}</div>
           ) : tickets.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-6 text-center">Nenhum ticket ainda.</p>
+            <p className="text-xs text-muted-foreground py-6 text-center">
+              {scope === 'mine' ? 'Nenhum ticket ainda.' : 'Nenhum ticket aberto pela equipe.'}
+            </p>
           ) : (
             <ul className="space-y-1.5 max-h-[520px] overflow-y-auto pr-1">
               {tickets.map((t) => {
                 const st = STATUS_META[t.status];
                 const pr = PRIORITY_META[t.priority];
+                const isMine = t.user_id === user?.id;
                 return (
                   <li key={t.id}>
                     <button
@@ -405,6 +421,11 @@ export default function SupportCenterPage() {
                       <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-muted-foreground">
                         <st.icon className={`w-3 h-3 ${st.color}`} />
                         <span>{st.label}</span>
+                        {scope === 'team' && t.author_name && (
+                          <span className="ml-auto truncate max-w-[120px]">
+                            {isMine ? 'Você' : t.author_name}
+                          </span>
+                        )}
                       </div>
                     </button>
                   </li>
