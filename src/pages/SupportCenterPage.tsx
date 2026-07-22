@@ -26,7 +26,11 @@ type Ticket = {
   department: SupportDepartment;
   created_at: string;
   last_activity_at: string;
+  user_id: string;
+  author_name?: string | null;
 };
+
+type ListScope = 'mine' | 'team';
 
 type QueuedFile = { file: File; kind: 'image' | 'video'; id: string };
 
@@ -37,6 +41,7 @@ export default function SupportCenterPage() {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loadingList, setLoadingList] = useState(true);
+  const [scope, setScope] = useState<ListScope>('mine');
   const [brand, setBrand] = useState<WhiteLabel | null>(null);
 
   // form state
@@ -69,34 +74,40 @@ export default function SupportCenterPage() {
     let mounted = true;
     (async () => {
       setLoadingList(true);
-      const { data } = await supabase
-        .from('support_tickets' as any)
-        .select('id, number, title, status, priority, department, created_at, last_activity_at')
-        .order('last_activity_at', { ascending: false })
-        .limit(25);
-      if (mounted) {
-        setTickets((data as any) || []);
-        setLoadingList(false);
-      }
+      await refresh();
+      if (mounted) setLoadingList(false);
     })();
 
     const ch = supabase
-      .channel(`support-mine-${user.id}`)
+      .channel(`support-center-${user.id}`)
       .on('postgres_changes',
-          { event: '*', schema: 'public', table: 'support_tickets', filter: `user_id=eq.${user.id}` },
+          { event: '*', schema: 'public', table: 'support_tickets' },
           () => { void refresh(); })
       .subscribe();
     return () => { mounted = false; supabase.removeChannel(ch); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, scope]);
 
   async function refresh() {
-    const { data } = await supabase
+    let q = supabase
       .from('support_tickets' as any)
-      .select('id, number, title, status, priority, department, created_at, last_activity_at')
+      .select('id, number, title, status, priority, department, created_at, last_activity_at, user_id')
       .order('last_activity_at', { ascending: false })
-      .limit(25);
-    setTickets((data as any) || []);
+      .limit(50);
+    if (scope === 'mine' && user) q = q.eq('user_id', user.id);
+    const { data } = await q;
+    const rows = (data as any[]) || [];
+    // Resolve nomes dos autores (para a aba "Da equipe")
+    const authorIds = Array.from(new Set(rows.map(r => r.user_id).filter(Boolean)));
+    let nameById = new Map<string, string>();
+    if (authorIds.length) {
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('user_id, display_name, email')
+        .in('user_id', authorIds);
+      (profs as any[] | null)?.forEach(p => nameById.set(p.user_id, p.display_name || p.email || 'Colega'));
+    }
+    setTickets(rows.map(r => ({ ...r, author_name: nameById.get(r.user_id) || null })));
   }
 
   function addFiles(list: FileList | File[]) {
