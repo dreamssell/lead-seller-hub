@@ -1004,16 +1004,22 @@ export default function ChatPage() {
         }
       } catch {}
 
-      const { data: customers, error } = await supabase
+      const currentLimit = convLimitsRef.current[channel] || CONV_PAGE_SIZE;
+      const { data: customersRaw, error } = await supabase
         .from('customers')
         .select('*')
         .eq('owner_id', activeOwnerId)
-        .order('updated_at', { ascending: false });
+        .order('updated_at', { ascending: false })
+        .limit(currentLimit + 1);
 
       if (error) {
         addDebugLog('error', `Erro ao carregar clientes (${channel})`, error);
         return;
       }
+
+      const hasMore = (customersRaw?.length || 0) > currentLimit;
+      const customers = hasMore ? customersRaw!.slice(0, currentLimit) : customersRaw;
+      setConvHasMore(prev => ({ ...prev, [channel]: hasMore }));
 
       if (customers) {
         // Filter customers by channel if needed (for now showing all as per current logic, 
