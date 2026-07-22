@@ -10,21 +10,27 @@ import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/components/ui/use-toast';
-import { Link2, Plus, Eye, MousePointerClick, Sparkles, Copy, ExternalLink, Trash2, Pencil, Download, FileSpreadsheet, FileText, Search, Loader2 } from 'lucide-react';
+import { Link2, Plus, Eye, MousePointerClick, Sparkles, Copy, ExternalLink, Trash2, Pencil, Download, FileSpreadsheet, FileText, Search, Loader2, LinkIcon, BarChart3 } from 'lucide-react';
 import { TemplatePickerDialog } from '@/components/outros/TemplatePickerDialog';
 import { QrCodeStudio } from '@/components/outros/QrCodeStudio';
+import { NewLinkDialog } from '@/components/outros/NewLinkDialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { downloadPdf } from '@/lib/ceoExport';
 import type { LandingTemplate } from '@/lib/landingTemplates';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
-import { getPublicLandingUrl } from '@/lib/publicLinks';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, PieChart, Pie, Cell, Legend } from 'recharts';
+import { getPublicLandingUrl, getPublicLinkUrl } from '@/lib/publicLinks';
 
 type Page = {
   id: string; slug: string; title: string; status: 'draft' | 'published';
   tracking_label: string | null; view_count: number; click_count: number; lead_count: number;
   created_at: string; updated_at: string;
+  page_type?: 'page' | 'link';
+  redirect_url?: string | null;
+  pipeline_id?: string | null;
 };
 
-const publicUrl = (slug: string) => getPublicLandingUrl(slug);
+const publicUrl = (p: Pick<Page, 'slug' | 'page_type'>) =>
+  p.page_type === 'link' ? getPublicLinkUrl(p.slug) : getPublicLandingUrl(p.slug);
 
 export default function OutrosPage() {
   const nav = useNavigate();
@@ -35,6 +41,8 @@ export default function OutrosPage() {
   const [query, setQuery] = useState('');
   const [analyticsId, setAnalyticsId] = useState<string | null>(null);
   const [tplOpen, setTplOpen] = useState(false);
+  const [newLinkOpen, setNewLinkOpen] = useState(false);
+  const [editingLink, setEditingLink] = useState<Page | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -182,8 +190,8 @@ export default function OutrosPage() {
     load();
   };
 
-  const copyLink = (slug: string) => {
-    navigator.clipboard.writeText(publicUrl(slug));
+  const copyLink = (p: Pick<Page, 'slug' | 'page_type'>) => {
+    navigator.clipboard.writeText(publicUrl(p));
     toast({ title: 'Link copiado!' });
   };
 
@@ -244,7 +252,7 @@ export default function OutrosPage() {
                             return <Cell key={i} fill={colors[i % colors.length]} />;
                           })}
                         </Pie>
-                        <Tooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                        <RTooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
                         <Legend />
                       </PieChart>
                     </ResponsiveContainer>
@@ -256,7 +264,7 @@ export default function OutrosPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis dataKey="canal" stroke="hsl(var(--muted-foreground))" fontSize={11} />
                       <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                      <Tooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                      <RTooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
                       <Legend />
                       <Bar dataKey="cliques" name="Cliques" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="ctas" name="CTAs" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
@@ -271,8 +279,8 @@ export default function OutrosPage() {
         <Card className="glass-card">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-base">Suas páginas</CardTitle>
-              <CardDescription>Cada página gera um link público e um QR Code para compartilhar.</CardDescription>
+              <CardTitle className="text-base">Suas páginas e links</CardTitle>
+              <CardDescription>Cada item gera um link público e um QR Code para compartilhar.</CardDescription>
             </div>
             <div className="flex gap-2 flex-wrap">
               <Input placeholder="Buscar..." value={query} onChange={e => setQuery(e.target.value)} className="w-48" />
@@ -280,6 +288,7 @@ export default function OutrosPage() {
               <Button variant="outline" onClick={exportPdf}><FileText className="w-4 h-4 mr-1" />PDF</Button>
               <Button variant="outline" onClick={exportCtaCsv}><FileSpreadsheet className="w-4 h-4 mr-1" />CTAs CSV</Button>
               <Button variant="outline" onClick={() => setTplOpen(true)}><Sparkles className="w-4 h-4 mr-1" />Templates</Button>
+              <Button variant="outline" onClick={() => { setEditingLink(null); setNewLinkOpen(true); }}><LinkIcon className="w-4 h-4 mr-1" />Novo link</Button>
               <Button onClick={createNew}><Plus className="w-4 h-4 mr-1" />Nova página</Button>
             </div>
           </CardHeader>
@@ -311,10 +320,15 @@ export default function OutrosPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filtered.map(p => (
-                      <TableRow key={p.id} className="cursor-pointer" onClick={() => setAnalyticsId(p.id)}>
+                    {filtered.map(p => {
+                      const isLink = p.page_type === 'link';
+                      return (
+                      <TableRow key={p.id} className="cursor-pointer" onClick={() => nav(`/outros/${p.id}/dados`)}>
                         <TableCell>
-                          <div className="font-medium">{p.title}</div>
+                          <div className="font-medium flex items-center gap-2">
+                            {isLink && <Badge variant="outline" className="text-[10px] px-1.5 py-0"><LinkIcon className="w-3 h-3 mr-1" />Link</Badge>}
+                            {p.title}
+                          </div>
                           <div className="text-xs text-muted-foreground">/{p.slug}{p.tracking_label ? ` · ${p.tracking_label}` : ''}</div>
                         </TableCell>
                         <TableCell><Badge variant={p.status === 'published' ? 'default' : 'secondary'}>{p.status === 'published' ? 'Publicada' : 'Rascunho'}</Badge></TableCell>
@@ -323,14 +337,27 @@ export default function OutrosPage() {
                         <TableCell className="text-right">{p.lead_count}</TableCell>
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                           <div className="flex justify-end gap-1">
-                            <Button size="icon" variant="ghost" title="Copiar link" onClick={() => copyLink(p.slug)}><Copy className="w-4 h-4" /></Button>
-                            <Button size="icon" variant="ghost" title="Abrir" onClick={() => window.open(publicUrl(p.slug), '_blank')}><ExternalLink className="w-4 h-4" /></Button>
-                            <Button size="icon" variant="ghost" title="Editar" onClick={() => nav(`/outros/${p.id}/editar`)}><Pencil className="w-4 h-4" /></Button>
+                            <TooltipProvider delayDuration={200}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button size="icon" variant="ghost" onClick={() => nav(`/outros/${p.id}/dados`)} aria-label="Ver dados">
+                                    <Eye className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Ver dados</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <Button size="icon" variant="ghost" title="Copiar link" onClick={() => copyLink(p)}><Copy className="w-4 h-4" /></Button>
+                            <Button size="icon" variant="ghost" title="Abrir" onClick={() => window.open(publicUrl(p), '_blank')}><ExternalLink className="w-4 h-4" /></Button>
+                            <Button
+                              size="icon" variant="ghost" title="Editar"
+                              onClick={() => isLink ? (setEditingLink(p), setNewLinkOpen(true)) : nav(`/outros/${p.id}/editar`)}
+                            ><Pencil className="w-4 h-4" /></Button>
                             <Button size="icon" variant="ghost" title="Excluir" onClick={() => remove(p.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
+                    );})}
                   </TableBody>
                 </Table>
               )}
@@ -340,6 +367,19 @@ export default function OutrosPage() {
 
       <AnalyticsModal pageId={analyticsId} onClose={() => setAnalyticsId(null)} />
       <TemplatePickerDialog open={tplOpen} onOpenChange={setTplOpen} onApply={createFromTemplate} />
+      <NewLinkDialog
+        open={newLinkOpen}
+        onOpenChange={(v) => { setNewLinkOpen(v); if (!v) setEditingLink(null); }}
+        onCreated={load}
+        editing={editingLink ? {
+          id: editingLink.id,
+          title: editingLink.title,
+          redirect_url: editingLink.redirect_url ?? null,
+          tracking_label: editingLink.tracking_label,
+          pipeline_id: editingLink.pipeline_id ?? null,
+          status: editingLink.status,
+        } : null}
+      />
     </AppLayout>
   );
 }
@@ -362,7 +402,7 @@ function AnalyticsModal({ pageId, onClose }: { pageId: string | null; onClose: (
   }, [pageId]);
 
   if (!pageId || !page) return null;
-  const link = publicUrl(page.slug);
+  const link = publicUrl(page);
 
   return (
     <Dialog open={!!pageId} onOpenChange={(o) => !o && onClose()}>

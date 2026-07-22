@@ -53,6 +53,8 @@ const OutrosPage = lazy(() => import("./pages/OutrosPage"));
 const LandingBuilderPage = lazy(() => import("./pages/LandingBuilderPage"));
 const LandingPreviewPage = lazy(() => import("./pages/LandingPreviewPage"));
 const PublicLandingPage = lazy(() => import("./pages/PublicLandingPage"));
+const OutrosDataPage = lazy(() => import("./pages/OutrosDataPage"));
+const PublicLinkRedirectPage = lazy(() => import("./pages/PublicLinkRedirectPage"));
 const InternalTelemetryPage = lazy(() => import("./pages/InternalTelemetryPage"));
 const CallTelemetryPage = lazy(() => import("./pages/CallTelemetryPage"));
 const RoleLabelAuditPage = lazy(() => import("./pages/RoleLabelAuditPage"));
@@ -119,6 +121,7 @@ const App = () => (
               <Route path="/video/join/:roomId" element={<VideoJoinPage />} />
               <Route path="/sign/:token" element={<SignaturePortalPage />} />
               <Route path="/p/:slug" element={<PublicLandingPage />} />
+              <Route path="/l/:slug" element={<PublicLinkRedirectPage />} />
 
               {/* Rotas protegidas */}
               <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -151,6 +154,7 @@ const App = () => (
 
               <Route path="/outros" element={<ProtectedRoute pageKey="outros"><OutrosPage /></ProtectedRoute>} />
               <Route path="/outros/:id/editar" element={<ProtectedRoute pageKey="outros"><LandingBuilderPage /></ProtectedRoute>} />
+              <Route path="/outros/:id/dados" element={<ProtectedRoute pageKey="outros"><OutrosDataPage /></ProtectedRoute>} />
               <Route path="/outros/:id/preview" element={<ProtectedRoute pageKey="outros"><LandingPreviewPage /></ProtectedRoute>} />
               <Route path="/status" element={<ProtectedRoute ownerOnly><BackendStatusPage /></ProtectedRoute>} />
               <Route path="/documentation" element={<ProtectedRoute pageKey="documentation"><DocumentationPage /></ProtectedRoute>} />
