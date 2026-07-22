@@ -1189,7 +1189,11 @@ export default function FocusedChatPage() {
                               <InternalNoticeBubble metadata={_meta as any} createdAt={m.created_at} />
                             ) : isCallEvt ? (
                               <CallEventBubble metadata={_meta as any} createdAt={m.created_at} />
-                            ) : (
+                            ) : (() => {
+                              const meta = (_meta && typeof _meta === 'object' && !Array.isArray(_meta)) ? _meta as any : {};
+                              const mediaUrl = meta.media_url || null;
+                              const mediaType = meta.media_type || null;
+                              return (
                             <div className={cn('flex', isMe ? 'justify-end' : 'justify-start')}>
                               <div
                                 className={cn(
@@ -1199,7 +1203,20 @@ export default function FocusedChatPage() {
                                     : 'bg-card border border-border rounded-bl-sm',
                                 )}
                               >
-                                <div>{renderWhatsAppText(m.content || '')}</div>
+                                {mediaUrl && mediaType && (
+                                  <MediaMessageContent
+                                    url={mediaUrl}
+                                    type={mediaType}
+                                    mime={meta.media_mime}
+                                    filename={meta.media_filename}
+                                    duration={meta.media_duration}
+                                    mine={isMe}
+                                    onOpen={mediaType === 'image' ? (u) => setLightboxUrl(u) : undefined}
+                                  />
+                                )}
+                                {m.content && m.content !== '[mídia]' && (
+                                  <div>{renderWhatsAppText(m.content || '')}</div>
+                                )}
                                 <div className={cn(
                                   'flex items-center gap-1 mt-1 text-[10px] opacity-70',
                                   isMe ? 'justify-end' : 'justify-start',
@@ -1211,7 +1228,8 @@ export default function FocusedChatPage() {
                                 </div>
                               </div>
                             </div>
-                            )}
+                              );
+                            })()}
                           </div>
                         );
                       })}
