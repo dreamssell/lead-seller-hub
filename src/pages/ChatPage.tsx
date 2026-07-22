@@ -1165,7 +1165,7 @@ export default function ChatPage() {
           if (!customer || (customer as any).owner_id !== currentOwner) return;
           const currentChannel = activeChannelRef.current;
           if (currentChannel && ((customer as any).channel === currentChannel || currentChannel === 'whatsapp')) {
-            await loadConversations(currentChannel);
+            { const _t = startRealtimeTimer('chat_conversations', 'chat_messages.insert.new_customer'); const _before = (convsRef.current[currentChannel] || []).length; await loadConversations(currentChannel); _t.done(_before, (convsRef.current[currentChannel] || []).length, { channel: currentChannel }); }
           }
         }
         setInboundDebug((prev) => ({
