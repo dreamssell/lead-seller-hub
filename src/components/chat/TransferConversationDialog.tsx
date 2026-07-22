@@ -38,25 +38,24 @@ export function TransferConversationDialog({ open, onOpenChange, customerId, own
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!open || !ownerId) return;
+    if (!open) return;
     (async () => {
-      // Coleta todos os usuários ativos do tenant (owner + user_account_access)
-      const { data: acc } = await supabase
-        .from('user_account_access')
-        .select('user_id')
-        .eq('owner_id', ownerId);
-      const activeIds = new Set<string>([ownerId]);
-      (acc || []).forEach((a: any) => activeIds.add(a.user_id));
-      const ids = Array.from(activeIds);
-      if (ids.length === 0) return setUsers([]);
-      const { data: profs } = await supabase
-        .from('profiles')
-        .select('user_id, email, display_name')
-        .in('user_id', ids);
-      const sorted = (profs || []).sort((a: any, b: any) =>
+      // Usa RPC SECURITY DEFINER que retorna colegas visíveis no escopo do usuário
+      // (funciona tanto para donos de empresa quanto membros de sub-empresa).
+      const { data, error } = await supabase.rpc('list_internal_comms_members');
+      if (error) {
+        setUsers([]);
+        return;
+      }
+      const mapped = (data || []).map((m: any) => ({
+        user_id: m.user_id,
+        email: m.email,
+        display_name: m.display_name,
+      }));
+      mapped.sort((a: any, b: any) =>
         (a.display_name || a.email || '').localeCompare(b.display_name || b.email || ''),
       );
-      setUsers(sorted as any);
+      setUsers(mapped);
     })();
   }, [open, ownerId]);
 
