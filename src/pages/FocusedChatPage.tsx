@@ -841,59 +841,82 @@ export default function FocusedChatPage() {
                 </button>
               </div>
             </div>
-            <ScrollArea className="flex-1">
+            <div
+              className="flex-1 overflow-y-auto chat-scroll"
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                if (!convHasMore) return;
+                if (el.scrollHeight - el.scrollTop - el.clientHeight < 240) {
+                  const current = convLimitRef.current || CONV_PAGE_SIZE;
+                  if ((el as any).__lastPrefetchLimit === current) return;
+                  (el as any).__lastPrefetchLimit = current;
+                  setConvLimit(current + CONV_PAGE_SIZE);
+                }
+              }}
+            >
               {loading && !convs.length ? (
                 <div className="p-6 text-xs text-muted-foreground text-center">Carregando...</div>
               ) : filteredConvs.length === 0 ? (
                 <div className="p-6 text-xs text-muted-foreground text-center">Nenhuma conversa</div>
               ) : (
-                filteredConvs.map(c => (
-                  <div
-                    key={c.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelected(c.id)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelected(c.id); }}
-                    className={cn(
-                      'group w-full flex items-center gap-3 px-3 py-2.5 hover:bg-secondary/60 transition text-left border-b border-border/40 cursor-pointer',
-                      selected === c.id && 'bg-primary/10 hover:bg-primary/10',
-                    )}
-                  >
-                    <Avatar className="w-10 h-10 shrink-0">
-                      <AvatarImage src={c.avatar_url || undefined} />
-                      <AvatarFallback className="text-xs bg-secondary">{initials(c.name)}</AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium truncate flex items-center gap-1">
-                          {c.name}
-                          {(() => {
-                            const msg = String((c as any).last_message || '');
-                            const transferred = msg.startsWith('Conversa transferida') || msg.startsWith('Conversa movida');
-                            return transferred ? (
-                              <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 border-primary/40 text-primary shrink-0" title={msg}>
-                                Transferida
-                              </Badge>
-                            ) : null;
-                          })()}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground shrink-0 inline-flex items-center gap-0.5">
-                          {formatTime(c.last_at)}
-                          <MoveToFlowMenu customerId={c.id} />
-                        </span>
-                      </div>
+                <>
+                  {filteredConvs.map(c => (
+                    <div
+                      key={c.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelected(c.id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelected(c.id); }}
+                      className={cn(
+                        'group w-full flex items-center gap-3 px-3 py-2.5 hover:bg-secondary/60 transition text-left border-b border-border/40 cursor-pointer',
+                        selected === c.id && 'bg-primary/10 hover:bg-primary/10',
+                      )}
+                    >
+                      <Avatar className="w-10 h-10 shrink-0">
+                        <AvatarImage src={c.avatar_url || undefined} />
+                        <AvatarFallback className="text-xs bg-secondary">{initials(c.name)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium truncate flex items-center gap-1">
+                            {c.name}
+                            {(() => {
+                              const msg = String((c as any).last_message || '');
+                              const transferred = msg.startsWith('Conversa transferida') || msg.startsWith('Conversa movida');
+                              return transferred ? (
+                                <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 border-primary/40 text-primary shrink-0" title={msg}>
+                                  Transferida
+                                </Badge>
+                              ) : null;
+                            })()}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground shrink-0 inline-flex items-center gap-0.5">
+                            {formatTime(c.last_at)}
+                            <MoveToFlowMenu customerId={c.id} />
+                          </span>
+                        </div>
 
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-muted-foreground truncate">{c.last_message}</span>
-                        {c.unread > 0 && (
-                          <Badge className="h-4 min-w-4 px-1 text-[10px] bg-emerald-500 text-white">{c.unread}</Badge>
-                        )}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground truncate">{c.last_message}</span>
+                          {c.unread > 0 && (
+                            <Badge className="h-4 min-w-4 px-1 text-[10px] bg-emerald-500 text-white">{c.unread}</Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  ))}
+                  {convHasMore && (
+                    <button
+                      type="button"
+                      onClick={() => setConvLimit((convLimitRef.current || CONV_PAGE_SIZE) + CONV_PAGE_SIZE)}
+                      className="w-full py-3 text-xs text-primary hover:bg-secondary/50 border-t border-border"
+                    >
+                      Carregar mais conversas
+                    </button>
+                  )}
+                </>
               )}
-            </ScrollArea>
+            </div>
           </aside>
 
           {/* Conversation area (main / largest) */}
