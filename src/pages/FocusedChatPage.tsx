@@ -51,6 +51,7 @@ import { Customer360Timeline } from '@/components/chat/Customer360Timeline';
 import { MessageSearchDialog, type MessageSearchHit } from '@/components/chat/MessageSearchDialog';
 import { MediaDropzone } from '@/components/chat/MediaDropzone';
 import { CallEventBubble, isCallEventMessage } from '@/components/chat/CallEventBubble';
+import { InternalNoticeBubble, isInternalNoticeMessage } from '@/components/chat/InternalNoticeBubble';
 import { ContactsDialog } from '@/components/chat/ContactsDialog';
 import { NewConversationDialog } from '@/components/chat/NewConversationDialog';
 import { AttendanceFlowDialog } from '@/components/chat/AttendanceFlowDialog';
@@ -1071,7 +1072,9 @@ export default function FocusedChatPage() {
                               paddingBottom: 8,
                             }}
                           >
-                            {isCallEvt ? (
+                            {isInternalNoticeMessage(_meta) ? (
+                              <InternalNoticeBubble metadata={_meta as any} createdAt={m.created_at} />
+                            ) : isCallEvt ? (
                               <CallEventBubble metadata={_meta as any} createdAt={m.created_at} />
                             ) : (
                             <div className={cn('flex', isMe ? 'justify-end' : 'justify-start')}>
