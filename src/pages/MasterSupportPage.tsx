@@ -83,10 +83,33 @@ export default function MasterSupportPage() {
   }, [filtered]);
 
   async function assignTo(ticket: Ticket, userId: string | null) {
+    // Optimistic update — reflete imediatamente na caixa seletora
+    setTickets((prev) => prev.map((t) => (t.id === ticket.id ? { ...t, assigned_to: userId } : t)));
     const { error } = await supabase.from('support_tickets' as any)
       .update({ assigned_to: userId }).eq('id', ticket.id);
-    if (error) toast({ title: 'Erro ao atribuir', description: error.message, variant: 'destructive' });
-    else toast({ title: userId ? 'Ticket atribuído' : 'Atribuição removida' });
+    if (error) {
+      toast({ title: 'Erro ao atribuir', description: error.message, variant: 'destructive' });
+      // rollback
+      setTickets((prev) => prev.map((t) => (t.id === ticket.id ? { ...t, assigned_to: ticket.assigned_to } : t)));
+      return;
+    }
+    toast({ title: userId ? 'Ticket atribuído' : 'Atribuição removida' });
+    if (userId) void supabase.functions.invoke('support-notify', { body: { ticket_id: ticket.id, event: 'assigned' } }).catch(() => {});
+  }
+
+  async function changeStatus(ticket: Ticket, status: SupportStatus) {
+    const prevStatus = ticket.status;
+    setTickets((prev) => prev.map((t) => (t.id === ticket.id ? { ...t, status } : t)));
+    const patch: any = { status };
+    if (status === 'fechado' || status === 'resolvido') patch.closed_at = new Date().toISOString();
+    const { error } = await supabase.from('support_tickets' as any).update(patch).eq('id', ticket.id);
+    if (error) {
+      toast({ title: 'Erro ao mudar status', description: error.message, variant: 'destructive' });
+      setTickets((prev) => prev.map((t) => (t.id === ticket.id ? { ...t, status: prevStatus } : t)));
+      return;
+    }
+    const event = status === 'resolvido' ? 'resolved' : 'status_changed';
+    void supabase.functions.invoke('support-notify', { body: { ticket_id: ticket.id, event } }).catch(() => {});
   }
 
   return (
