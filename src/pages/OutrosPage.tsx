@@ -250,7 +250,7 @@ export default function OutrosPage() {
                             return <Cell key={i} fill={colors[i % colors.length]} />;
                           })}
                         </Pie>
-                        <Tooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                        <RTooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
                         <Legend />
                       </PieChart>
                     </ResponsiveContainer>
@@ -262,7 +262,7 @@ export default function OutrosPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis dataKey="canal" stroke="hsl(var(--muted-foreground))" fontSize={11} />
                       <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                      <Tooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                      <RTooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
                       <Legend />
                       <Bar dataKey="cliques" name="Cliques" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="ctas" name="CTAs" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
@@ -329,8 +329,8 @@ export default function OutrosPage() {
                         <TableCell className="text-right">{p.lead_count}</TableCell>
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                           <div className="flex justify-end gap-1">
-                            <Button size="icon" variant="ghost" title="Copiar link" onClick={() => copyLink(p.slug)}><Copy className="w-4 h-4" /></Button>
-                            <Button size="icon" variant="ghost" title="Abrir" onClick={() => window.open(publicUrl(p.slug), '_blank')}><ExternalLink className="w-4 h-4" /></Button>
+                            <Button size="icon" variant="ghost" title="Copiar link" onClick={() => copyLink(p)}><Copy className="w-4 h-4" /></Button>
+                            <Button size="icon" variant="ghost" title="Abrir" onClick={() => window.open(publicUrl(p), '_blank')}><ExternalLink className="w-4 h-4" /></Button>
                             <Button size="icon" variant="ghost" title="Editar" onClick={() => nav(`/outros/${p.id}/editar`)}><Pencil className="w-4 h-4" /></Button>
                             <Button size="icon" variant="ghost" title="Excluir" onClick={() => remove(p.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
                           </div>
@@ -368,7 +368,7 @@ function AnalyticsModal({ pageId, onClose }: { pageId: string | null; onClose: (
   }, [pageId]);
 
   if (!pageId || !page) return null;
-  const link = publicUrl(page.slug);
+  const link = publicUrl(page);
 
   return (
     <Dialog open={!!pageId} onOpenChange={(o) => !o && onClose()}>
