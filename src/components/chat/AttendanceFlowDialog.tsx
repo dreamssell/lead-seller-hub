@@ -114,7 +114,11 @@ export function AttendanceFlowDialog({ open, onOpenChange, onSelectCustomer }: P
         .eq('owner_id', ownerId)
         .order('assigned_at', { ascending: false })
         .limit(200);
-      if (!isSupervisor && userId) q = q.eq('assigned_to', userId);
+      // Agentes veem os próprios atendimentos + itens em fila (assigned_to nulo)
+      // para poderem assumir novas conversas.
+      if (!isSupervisor && userId) {
+        q = q.or(`assigned_to.eq.${userId},assigned_to.is.null`);
+      }
       const [{ data: a }, { data: qs }] = await Promise.all([
         q,
         supabase.from('attendance_queues').select('id, name, routing_strategy, pipeline_id').eq('owner_id', ownerId).eq('is_active', true).order('name'),
