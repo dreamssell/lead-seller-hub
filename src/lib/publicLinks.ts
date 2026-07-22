@@ -18,3 +18,9 @@ export function getPublicAppOrigin() {
 export function getPublicLandingUrl(slug: string) {
   return `${getPublicAppOrigin()}/p/${slug}`;
 }
+
+export function getPublicLinkUrl(slug: string) {
+  const base = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/+$/, '');
+  if (!base) return `${getPublicAppOrigin()}/l/${slug}`;
+  return `${base}/functions/v1/landing-capture?slug=${encodeURIComponent(slug)}`;
+}
