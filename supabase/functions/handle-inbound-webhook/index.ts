@@ -324,7 +324,7 @@ Deno.serve(async (req) => {
     }
 
     if (/messages\.(update|ack)|message\.(update|ack)|send\.message|status/i.test(eventType)) {
-      const statusMsgId = extractStatusMessageId(payload.data);
+      const statusMsgId = canonicalMsgId(extractStatusMessageId(payload.data));
       const deliveryStatus = normalizeDeliveryStatus(
         payload.data?.status ||
         payload.data?.ack ||
