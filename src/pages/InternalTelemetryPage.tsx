@@ -130,6 +130,8 @@ export default function InternalTelemetryPage() {
 
         if (type === 'auth_only') {
           q = q.in('type', AUTH_TYPES as unknown as string[]);
+        } else if (type === 'perf_only') {
+          q = q.in('type', ['perf.page_load', 'perf.realtime_impact']);
         } else if (type !== 'all') {
           q = q.eq('type', type);
         }
