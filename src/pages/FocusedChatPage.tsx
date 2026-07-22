@@ -52,6 +52,8 @@ import { AIInsightsPanel } from '@/components/chat/AIInsightsPanel';
 import { Customer360Timeline } from '@/components/chat/Customer360Timeline';
 import { MessageSearchDialog, type MessageSearchHit } from '@/components/chat/MessageSearchDialog';
 import { MediaDropzone } from '@/components/chat/MediaDropzone';
+import { MediaMessageContent } from '@/components/chat/MediaMessageContent';
+import { MediaViewerDialog, type MediaItem } from '@/components/chat/MediaViewerDialog';
 import { CallEventBubble, isCallEventMessage } from '@/components/chat/CallEventBubble';
 import { InternalNoticeBubble, isInternalNoticeMessage } from '@/components/chat/InternalNoticeBubble';
 import { ContactsDialog } from '@/components/chat/ContactsDialog';
@@ -138,6 +140,7 @@ export default function FocusedChatPage() {
   const [selected, setSelected] = useState<string | null>(initialConv);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [msgFilter, setMsgFilter] = useState<'all' | 'client' | 'notes'>('all');
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [conn, setConn] = useState<WhatsAppConnection | null>(null);
@@ -1186,7 +1189,11 @@ export default function FocusedChatPage() {
                               <InternalNoticeBubble metadata={_meta as any} createdAt={m.created_at} />
                             ) : isCallEvt ? (
                               <CallEventBubble metadata={_meta as any} createdAt={m.created_at} />
-                            ) : (
+                            ) : (() => {
+                              const meta = (_meta && typeof _meta === 'object' && !Array.isArray(_meta)) ? _meta as any : {};
+                              const mediaUrl = meta.media_url || null;
+                              const mediaType = meta.media_type || null;
+                              return (
                             <div className={cn('flex', isMe ? 'justify-end' : 'justify-start')}>
                               <div
                                 className={cn(
@@ -1196,7 +1203,20 @@ export default function FocusedChatPage() {
                                     : 'bg-card border border-border rounded-bl-sm',
                                 )}
                               >
-                                <div>{renderWhatsAppText(m.content || '')}</div>
+                                {mediaUrl && mediaType && (
+                                  <MediaMessageContent
+                                    url={mediaUrl}
+                                    type={mediaType}
+                                    mime={meta.media_mime}
+                                    filename={meta.media_filename}
+                                    duration={meta.media_duration}
+                                    mine={isMe}
+                                    onOpen={mediaType === 'image' ? (u) => setLightboxUrl(u) : undefined}
+                                  />
+                                )}
+                                {m.content && m.content !== '[mídia]' && (
+                                  <div>{renderWhatsAppText(m.content || '')}</div>
+                                )}
                                 <div className={cn(
                                   'flex items-center gap-1 mt-1 text-[10px] opacity-70',
                                   isMe ? 'justify-end' : 'justify-start',
@@ -1208,7 +1228,8 @@ export default function FocusedChatPage() {
                                 </div>
                               </div>
                             </div>
-                            )}
+                              );
+                            })()}
                           </div>
                         );
                       })}
@@ -1312,6 +1333,26 @@ export default function FocusedChatPage() {
         ]}
         onSendFile={async (file, kind) => { await handleSendMedia(file, kind); }}
       />
+
+      {lightboxUrl && (() => {
+        const imgs: MediaItem[] = msgs
+          .map((mm: any) => {
+            const meta = (mm.metadata && typeof mm.metadata === 'object' && !Array.isArray(mm.metadata)) ? mm.metadata : {};
+            return meta.media_type === 'image' && meta.media_url
+              ? { url: meta.media_url as string, mime: meta.media_mime, name: meta.media_filename, caption: mm.content && mm.content !== '[mídia]' ? mm.content : undefined }
+              : null;
+          })
+          .filter(Boolean) as MediaItem[];
+        const idx = Math.max(0, imgs.findIndex(i => i.url === lightboxUrl));
+        return (
+          <MediaViewerDialog
+            items={imgs.length ? imgs : [{ url: lightboxUrl }]}
+            index={idx}
+            onClose={() => setLightboxUrl(null)}
+          />
+        );
+      })()}
+
 
       <MessageSearchDialog
         open={searchOpen}
