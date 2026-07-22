@@ -46,7 +46,7 @@ export function NewLinkDialog({ open, onOpenChange, onCreated, editing }: Props)
   useEffect(() => {
     if (!open) return;
     (async () => {
-      let q = supabase.from('pipelines').select('id,name,sub_company_id,owner_id').eq('is_active', true);
+      let q = supabase.from('pipelines').select('id,name,sub_company_id,owner_id');
       if (access?.owner_id) q = q.eq('owner_id', access.owner_id);
       if (access?.sub_company_id) q = q.eq('sub_company_id', access.sub_company_id);
       const { data } = await q.order('name');
