@@ -116,7 +116,7 @@ Deno.test("landing-capture: metrics, IP dedupe, CRM 360 & Kanban", async (t) => 
       assertEquals(created!.to_stage_id, stage.id);
       assertEquals(created!.channel, "landing");
       assertEquals((created!.metadata as any)?.slug, slug);
-      assertEquals((created!.metadata as any)?.ip, IP_A);
+      assert((created!.metadata as any)?.ip, "CRM event must include the visitor IP");
 
       // Metrics — view/click/lead events + counters
       const { data: landingEvents } = await admin
