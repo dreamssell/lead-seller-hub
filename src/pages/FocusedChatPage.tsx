@@ -856,12 +856,24 @@ export default function FocusedChatPage() {
                     </Avatar>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium truncate">{c.name}</span>
+                        <span className="text-sm font-medium truncate flex items-center gap-1">
+                          {c.name}
+                          {(() => {
+                            const msg = String((c as any).last_message || '');
+                            const transferred = msg.startsWith('Conversa transferida') || msg.startsWith('Conversa movida');
+                            return transferred ? (
+                              <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 border-primary/40 text-primary shrink-0" title={msg}>
+                                Transferida
+                              </Badge>
+                            ) : null;
+                          })()}
+                        </span>
                         <span className="text-[10px] text-muted-foreground shrink-0 inline-flex items-center gap-0.5">
                           {formatTime(c.last_at)}
                           <MoveToFlowMenu customerId={c.id} />
                         </span>
                       </div>
+
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground truncate">{c.last_message}</span>
                         {c.unread > 0 && (
