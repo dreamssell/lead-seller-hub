@@ -320,10 +320,15 @@ export default function OutrosPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filtered.map(p => (
-                      <TableRow key={p.id} className="cursor-pointer" onClick={() => setAnalyticsId(p.id)}>
+                    {filtered.map(p => {
+                      const isLink = p.page_type === 'link';
+                      return (
+                      <TableRow key={p.id} className="cursor-pointer" onClick={() => nav(`/outros/${p.id}/dados`)}>
                         <TableCell>
-                          <div className="font-medium">{p.title}</div>
+                          <div className="font-medium flex items-center gap-2">
+                            {isLink && <Badge variant="outline" className="text-[10px] px-1.5 py-0"><LinkIcon className="w-3 h-3 mr-1" />Link</Badge>}
+                            {p.title}
+                          </div>
                           <div className="text-xs text-muted-foreground">/{p.slug}{p.tracking_label ? ` · ${p.tracking_label}` : ''}</div>
                         </TableCell>
                         <TableCell><Badge variant={p.status === 'published' ? 'default' : 'secondary'}>{p.status === 'published' ? 'Publicada' : 'Rascunho'}</Badge></TableCell>
@@ -332,14 +337,27 @@ export default function OutrosPage() {
                         <TableCell className="text-right">{p.lead_count}</TableCell>
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                           <div className="flex justify-end gap-1">
+                            <TooltipProvider delayDuration={200}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button size="icon" variant="ghost" onClick={() => nav(`/outros/${p.id}/dados`)} aria-label="Ver dados">
+                                    <Eye className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Ver dados</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                             <Button size="icon" variant="ghost" title="Copiar link" onClick={() => copyLink(p)}><Copy className="w-4 h-4" /></Button>
                             <Button size="icon" variant="ghost" title="Abrir" onClick={() => window.open(publicUrl(p), '_blank')}><ExternalLink className="w-4 h-4" /></Button>
-                            <Button size="icon" variant="ghost" title="Editar" onClick={() => nav(`/outros/${p.id}/editar`)}><Pencil className="w-4 h-4" /></Button>
+                            <Button
+                              size="icon" variant="ghost" title="Editar"
+                              onClick={() => isLink ? (setEditingLink(p), setNewLinkOpen(true)) : nav(`/outros/${p.id}/editar`)}
+                            ><Pencil className="w-4 h-4" /></Button>
                             <Button size="icon" variant="ghost" title="Excluir" onClick={() => remove(p.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
+                    );})}
                   </TableBody>
                 </Table>
               )}
