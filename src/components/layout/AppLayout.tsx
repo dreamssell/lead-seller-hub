@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { usePagePerfTelemetry } from '@/hooks/usePagePerfTelemetry';
 
 interface AppLayoutProps {
   children: ReactNode;
