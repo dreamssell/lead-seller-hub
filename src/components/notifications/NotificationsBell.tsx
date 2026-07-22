@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { Bell, Check, ArrowRight, Sparkles, MessageCircle, BellOff, Filter } from 'lucide-react';
+import { Bell, Check, ArrowRight, Sparkles, MessageCircle, BellOff, Filter, LifeBuoy } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -328,9 +328,11 @@ export function NotificationsBell() {
                 <div className="mt-0.5">
                   {n.type === 'internal_message'
                     ? <MessageCircle className="w-4 h-4 text-primary" />
-                    : n.type === 'lead_created'
-                      ? <Sparkles className="w-4 h-4 text-primary" />
-                      : <ArrowRight className="w-4 h-4 text-primary" />}
+                    : (n.type === 'ticket_status' || n.type === 'ticket_reply')
+                      ? <LifeBuoy className="w-4 h-4 text-primary" />
+                      : n.type === 'lead_created'
+                        ? <Sparkles className="w-4 h-4 text-primary" />
+                        : <ArrowRight className="w-4 h-4 text-primary" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{n.title}</p>
