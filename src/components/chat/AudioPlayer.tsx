@@ -230,7 +230,8 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
 
   useEffect(() => {
     if (gainNodeRef.current) gainNodeRef.current.gain.value = GAINS[gainIdx];
-  }, [gainIdx]);
+    else if (playing && GAINS[gainIdx] > 1) ensureAudioGraph();
+  }, [gainIdx, playing, ensureAudioGraph]);
 
   useEffect(() => () => {
     try { audioCtxRef.current?.close(); } catch {}
