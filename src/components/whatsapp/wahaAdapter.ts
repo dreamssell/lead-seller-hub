@@ -16,6 +16,19 @@ import type { WhatsAppConnection } from './types';
 import type { WhatsAppProviderAdapter } from './adapters';
 import { DEFAULT_WAHA_TEXT_TEMPLATE, renderWahaTemplate } from './wahaConfig';
 
+// Mirrors canonicalMsgId in supabase/functions/waha-inbound & handle-inbound-webhook.
+// WAHA returns the outbound message id as `true_<jid>_<HEX>` (via `id._serialized`);
+// the webhook echo canonicalises it to bare `<HEX>`. We MUST store the same
+// canonical form here so the DB unique index (chat_messages_uaz_msg_id_unique_notnull)
+// blocks the second insert and the sender does NOT see two bubbles.
+function canonicalWahaMsgId(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'string') return raw == null ? null : String(raw);
+  const parts = raw.split('_');
+  const tail = parts[parts.length - 1];
+  if (parts.length >= 3 && /^[A-F0-9]{16,}$/i.test(tail)) return tail.toUpperCase();
+  return /^[A-F0-9]{16,}$/i.test(raw) ? raw.toUpperCase() : raw;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Zod schemas — the "contract" of what we send to WAHA. Exported so the
 // contract tests can assert future provider edits stay compatible.
