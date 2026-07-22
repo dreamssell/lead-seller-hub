@@ -7,8 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Loader2, User, Workflow } from 'lucide-react';
-import { FLOW_STAGES, moveConversationToStage, type FlowStage } from '@/lib/attendanceFlow';
+import { FLOW_STAGES, FLOW_STAGE_LABEL, moveConversationToStage, type FlowStage } from '@/lib/attendanceFlow';
 import { useAuth } from '@/contexts/AuthContext';
+import { postTransferInternalNotice } from '@/lib/internalNotice';
 
 interface Props {
   open: boolean;
@@ -80,6 +81,11 @@ export function TransferConversationDialog({ open, onOpenChange, customerId, own
     setSaving(true);
     try {
       const { data: u } = await supabase.auth.getUser();
+      const actorName =
+        (user?.user_metadata as any)?.full_name ||
+        (user?.user_metadata as any)?.name ||
+        user?.email ||
+        null;
       if (mode === 'user') {
         // Transfere para colega — cai em "Em Atendimento" do colega escolhido
         await moveConversationToStage({
@@ -91,6 +97,14 @@ export function TransferConversationDialog({ open, onOpenChange, customerId, own
           origin: 'transfer',
         });
         await logAssignment({ to_user_id: target });
+        const targetUser = users.find((usr) => usr.user_id === target);
+        await postTransferInternalNotice({
+          customerId,
+          noticeType: 'transfer_user',
+          actorName,
+          targetName: targetUser?.display_name || targetUser?.email || 'colega',
+          reason: reason.trim() || null,
+        });
         toast.success('Conversa transferida ao colega (Em Atendimento)');
       } else {
         await moveConversationToStage({
@@ -102,6 +116,13 @@ export function TransferConversationDialog({ open, onOpenChange, customerId, own
           origin: 'flow_move',
         });
         await logAssignment({ to_queue_id: null });
+        await postTransferInternalNotice({
+          customerId,
+          noticeType: 'transfer_flow',
+          actorName,
+          targetStageLabel: FLOW_STAGE_LABEL[stage],
+          reason: reason.trim() || null,
+        });
         toast.success('Conversa movida para o fluxo');
       }
       onOpenChange(false);
