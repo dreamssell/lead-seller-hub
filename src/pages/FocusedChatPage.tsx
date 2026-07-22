@@ -660,14 +660,26 @@ export default function FocusedChatPage() {
 
   const toggleTool = (t: Tool) => setTool(prev => (prev === t ? null : t));
 
+  // ---- Filtro (Tudo / Só cliente / Só notas internas) ---------------------
+  const visibleMsgs = useMemo(() => {
+    if (msgFilter === 'all') return msgs;
+    return msgs.filter((m) => {
+      const meta = (m as any).metadata;
+      const isNote = isInternalNoticeMessage(meta);
+      if (msgFilter === 'notes') return isNote;
+      return !isNote && !isCallEventMessage(meta);
+    });
+  }, [msgs, msgFilter]);
+
   // ---- Virtualização do histórico ------------------------------------------
   const virtualizer = useVirtualizer({
-    count: msgs.length,
+    count: visibleMsgs.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 72,
     overscan: 8,
-    getItemKey: (i) => msgs[i]?.id ?? i,
+    getItemKey: (i) => visibleMsgs[i]?.id ?? i,
   });
+
 
   // Ao carregar mensagens antigas (prepend), preserva a posição visual do usuário.
   useEffect(() => {
