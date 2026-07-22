@@ -367,6 +367,19 @@ export default function OutrosPage() {
 
       <AnalyticsModal pageId={analyticsId} onClose={() => setAnalyticsId(null)} />
       <TemplatePickerDialog open={tplOpen} onOpenChange={setTplOpen} onApply={createFromTemplate} />
+      <NewLinkDialog
+        open={newLinkOpen}
+        onOpenChange={(v) => { setNewLinkOpen(v); if (!v) setEditingLink(null); }}
+        onCreated={load}
+        editing={editingLink ? {
+          id: editingLink.id,
+          title: editingLink.title,
+          redirect_url: editingLink.redirect_url ?? null,
+          tracking_label: editingLink.tracking_label,
+          pipeline_id: editingLink.pipeline_id ?? null,
+          status: editingLink.status,
+        } : null}
+      />
     </AppLayout>
   );
 }
