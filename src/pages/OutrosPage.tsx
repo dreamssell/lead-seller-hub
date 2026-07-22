@@ -10,21 +10,27 @@ import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/components/ui/use-toast';
-import { Link2, Plus, Eye, MousePointerClick, Sparkles, Copy, ExternalLink, Trash2, Pencil, Download, FileSpreadsheet, FileText, Search, Loader2 } from 'lucide-react';
+import { Link2, Plus, Eye, MousePointerClick, Sparkles, Copy, ExternalLink, Trash2, Pencil, Download, FileSpreadsheet, FileText, Search, Loader2, LinkIcon, BarChart3 } from 'lucide-react';
 import { TemplatePickerDialog } from '@/components/outros/TemplatePickerDialog';
 import { QrCodeStudio } from '@/components/outros/QrCodeStudio';
+import { NewLinkDialog } from '@/components/outros/NewLinkDialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { downloadPdf } from '@/lib/ceoExport';
 import type { LandingTemplate } from '@/lib/landingTemplates';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
-import { getPublicLandingUrl } from '@/lib/publicLinks';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, PieChart, Pie, Cell, Legend } from 'recharts';
+import { getPublicLandingUrl, getPublicLinkUrl } from '@/lib/publicLinks';
 
 type Page = {
   id: string; slug: string; title: string; status: 'draft' | 'published';
   tracking_label: string | null; view_count: number; click_count: number; lead_count: number;
   created_at: string; updated_at: string;
+  page_type?: 'page' | 'link';
+  redirect_url?: string | null;
+  pipeline_id?: string | null;
 };
 
-const publicUrl = (slug: string) => getPublicLandingUrl(slug);
+const publicUrl = (p: Pick<Page, 'slug' | 'page_type'>) =>
+  p.page_type === 'link' ? getPublicLinkUrl(p.slug) : getPublicLandingUrl(p.slug);
 
 export default function OutrosPage() {
   const nav = useNavigate();
