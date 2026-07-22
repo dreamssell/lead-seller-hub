@@ -1334,6 +1334,26 @@ export default function FocusedChatPage() {
         onSendFile={async (file, kind) => { await handleSendMedia(file, kind); }}
       />
 
+      {lightboxUrl && (() => {
+        const imgs: MediaItem[] = msgs
+          .map((mm: any) => {
+            const meta = (mm.metadata && typeof mm.metadata === 'object' && !Array.isArray(mm.metadata)) ? mm.metadata : {};
+            return meta.media_type === 'image' && meta.media_url
+              ? { url: meta.media_url as string, mime: meta.media_mime, name: meta.media_filename, caption: mm.content && mm.content !== '[mídia]' ? mm.content : undefined }
+              : null;
+          })
+          .filter(Boolean) as MediaItem[];
+        const idx = Math.max(0, imgs.findIndex(i => i.url === lightboxUrl));
+        return (
+          <MediaViewerDialog
+            items={imgs.length ? imgs : [{ url: lightboxUrl }]}
+            index={idx}
+            onClose={() => setLightboxUrl(null)}
+          />
+        );
+      })()}
+
+
       <MessageSearchDialog
         open={searchOpen}
         onOpenChange={setSearchOpen}
