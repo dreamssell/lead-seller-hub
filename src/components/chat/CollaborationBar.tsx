@@ -31,7 +31,7 @@ interface Props {
   currentUserId: string | null;
 }
 
-export function CollaborationBar({ customerId, onOpenTransfer, isSupervisor, currentUserId }: Props) {
+export function CollaborationBar({ customerId, onOpenTransfer, onClose, isSupervisor, currentUserId }: Props) {
   const [row, setRow] = useState<CustomerRow | null>(null);
   const [assigneeName, setAssigneeName] = useState<string>('');
 
