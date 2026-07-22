@@ -164,7 +164,18 @@ Deno.test("landing-capture: metrics, IP dedupe, CRM 360 & Kanban", async (t) => 
       assertEquals(pageAfter!.lead_count, 1, "lead_count stays at 1 because of IP dedupe");
     });
 
-    await t.step("click from a distinct IP B → creates a 2nd lead and a 2nd CRM event", async () => {
+    await t.step("distinct visitor IP → creates a 2nd lead and a 2nd CRM event", async () => {
+      // The Supabase Functions proxy overrides x-forwarded-for with the edge
+      // network IP, so we can't spoof a different visitor via headers. Instead,
+      // rewrite the ip_address of the previous click rows to something else
+      // — the 24h dedupe window then finds no prior click for the current IP,
+      // simulating a fresh visitor.
+      await admin
+        .from("landing_events")
+        .update({ ip_address: "10.0.0.1" })
+        .eq("page_id", pageId)
+        .eq("type", "click");
+
       const res = await callLink(slug, IP_B);
       await res.body?.cancel();
       assertEquals(res.status, 302);
@@ -174,7 +185,7 @@ Deno.test("landing-capture: metrics, IP dedupe, CRM 360 & Kanban", async (t) => 
         .select("id,stage_id")
         .eq("pipeline_id", stage.pipeline_id)
         .eq("source", `landing-link:${label}`);
-      assertEquals(leads?.length, 2, "a distinct IP must produce a new lead");
+      assertEquals(leads?.length, 2, "a fresh (non-deduped) visitor must produce a new lead");
       for (const l of leads!) assertEquals(l.stage_id, stage.id, "all leads land on the first stage");
 
       const { data: crmEvents } = await admin
