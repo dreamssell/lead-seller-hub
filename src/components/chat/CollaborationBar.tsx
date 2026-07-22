@@ -26,6 +26,7 @@ interface CustomerRow {
 interface Props {
   customerId: string;
   onOpenTransfer: () => void;
+  onClose?: () => void;
   isSupervisor: boolean;
   currentUserId: string | null;
 }
