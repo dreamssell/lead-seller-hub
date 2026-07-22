@@ -91,7 +91,11 @@ export default function MasterSupportPage() {
     const { error } = await supabase.from('support_tickets' as any)
       .update({ assigned_to: userId }).eq('id', ticket.id);
     if (error) {
-      toast({ title: 'Erro ao atribuir', description: error.message, variant: 'destructive' });
+      toast({
+        title: 'Não foi possível atualizar o responsável',
+        description: describeSupabaseError(error, 'Tente novamente ou verifique suas permissões.'),
+        variant: 'destructive',
+      });
       // rollback
       setTickets((prev) => prev.map((t) => (t.id === ticket.id ? { ...t, assigned_to: ticket.assigned_to } : t)));
       return;
@@ -107,7 +111,11 @@ export default function MasterSupportPage() {
     if (status === 'fechado' || status === 'resolvido') patch.closed_at = new Date().toISOString();
     const { error } = await supabase.from('support_tickets' as any).update(patch).eq('id', ticket.id);
     if (error) {
-      toast({ title: 'Erro ao mudar status', description: error.message, variant: 'destructive' });
+      toast({
+        title: 'Não foi possível mudar o status',
+        description: describeSupabaseError(error, 'Tente novamente ou verifique suas permissões.'),
+        variant: 'destructive',
+      });
       setTickets((prev) => prev.map((t) => (t.id === ticket.id ? { ...t, status: prevStatus } : t)));
       return;
     }
