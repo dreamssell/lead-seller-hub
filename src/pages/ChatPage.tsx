@@ -1218,7 +1218,7 @@ export default function ChatPage() {
         const currentChannel = activeChannelRef.current;
         if (!currentChannel) return;
         if (currentChannel === 'whatsapp' && (c.channel === 'whatsapp' || (!c.channel && c.phone && !String(c.phone).includes('@telegram')))) {
-          loadConversations(currentChannel);
+          { const _t = startRealtimeTimer('chat_conversations', 'customers.insert'); const _before = (convsRef.current[currentChannel] || []).length; loadConversations(currentChannel).then(() => _t.done(_before, (convsRef.current[currentChannel] || []).length, { channel: currentChannel, customer_id: c.id })); }
         }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'customers' }, (payload) => {
