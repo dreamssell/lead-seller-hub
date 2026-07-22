@@ -2979,12 +2979,38 @@ export default function ChatPage() {
                     </Button>
                   </div>
                 )}
-                
-                {messages.map((m) => {
+
+                <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-1 px-3 py-1.5 bg-background/80 backdrop-blur border-b border-border/40 flex items-center gap-1 text-[10px]">
+                  <span className="text-muted-foreground uppercase tracking-wide">Ver:</span>
+                  {(['all','client','notes'] as const).map(k => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setMsgFilter(k)}
+                      className={`px-2 py-0.5 rounded-full border transition-colors ${
+                        msgFilter === k
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'border-border hover:bg-secondary text-muted-foreground'
+                      }`}
+                    >
+                      {k === 'all' ? 'Tudo' : k === 'client' ? 'Só cliente' : 'Só notas internas'}
+                    </button>
+                  ))}
+                </div>
+
+                {messages.filter((m) => {
+                  if (msgFilter === 'all') return true;
+                  const meta = getMessageMetadata(m);
+                  const isNote = isInternalNoticeMessage(meta);
+                  if (msgFilter === 'notes') return isNote;
+                  // client: hide internal notes AND system call events
+                  return !isNote && !isCallEventMessage(meta);
+                }).map((m) => {
                   const _meta = getMessageMetadata(m);
                   if (isInternalNoticeMessage(_meta)) {
                     return <InternalNoticeBubble key={m.id} metadata={_meta as any} createdAt={m.created_at} />;
                   }
+
                   if (isCallEventMessage(_meta)) {
                     return (
                       <CallEventBubble
