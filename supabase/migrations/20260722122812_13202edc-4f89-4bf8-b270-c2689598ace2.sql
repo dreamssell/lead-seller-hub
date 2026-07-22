@@ -1,0 +1,1 @@
+UPDATE public.whatsapp_connections SET status = 'disconnected', metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('disabled_by_owner', true, 'disabled_at', now()::text, 'disabled_reason', 'UAZ desativado pelo dono para evitar duplicidade — usar apenas WAHA') WHERE provider = 'uaz';
