@@ -340,8 +340,31 @@ export default function FocusedChatPage() {
         lastByCustomer.set(m.customer_id, { content: m.content, created_at: m.created_at });
       }
     });
+    // Oculta conversas com assignment aberto atribuído a outro usuário
+    // (visão do atendente). Supervisores continuam vendo tudo.
+    const assignmentByCustomer = new Map<string, { assigned_to: string | null }>();
+    if (ids.length) {
+      const { data: assigns } = await supabase
+        .from('lead_assignments')
+        .select('customer_id, assigned_to, stage, assigned_at')
+        .in('customer_id', ids)
+        .neq('stage', 'closed')
+        .order('assigned_at', { ascending: false });
+      (assigns || []).forEach((a: any) => {
+        if (!assignmentByCustomer.has(a.customer_id)) {
+          assignmentByCustomer.set(a.customer_id, { assigned_to: a.assigned_to });
+        }
+      });
+    }
+    const meId = supervisorUserId || user?.id || null;
     const list: Conversation[] = customers
       .filter((c: any) => !c.is_archived)
+      .filter((c: any) => {
+        if (isSupervisor) return true;
+        const asg = assignmentByCustomer.get(c.id);
+        if (!asg || !asg.assigned_to) return true;
+        return asg.assigned_to === meId;
+      })
       .map((c: any) => ({
         id: c.id,
         name: c.name || c.phone || 'Sem nome',
@@ -356,7 +379,7 @@ export default function FocusedChatPage() {
     setConvs(list);
     setLoading(false);
     void setCachedConvs(user?.id, 'whatsapp', list);
-  }, [user?.id]);
+  }, [user?.id, isSupervisor, supervisorUserId]);
 
   useEffect(() => { loadConvs(); }, [loadConvs]);
 
