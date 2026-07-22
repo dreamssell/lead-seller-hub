@@ -30,6 +30,7 @@ import { toast } from '@/hooks/use-toast';
 import { toast as sonnerToast } from 'sonner';
 
 import { supabase } from '@/integrations/supabase/client';
+import { insertChatMessageDedup } from '@/lib/dedupChatInsert';
 import { startRealtimeTimer } from '@/lib/perfTelemetry';
 import {
   getCachedConvs, setCachedConvs,
@@ -1659,7 +1660,7 @@ export default function ChatPage() {
 
     // Persist optimistic row so refresh keeps the message
     try {
-      await supabase.from('chat_messages').insert({
+      const dedup = await insertChatMessageDedup({
         client_msg_id: clientMsgId,
         customer_id: selectedConvId,
         sender_type: 'agent',
@@ -1668,7 +1669,11 @@ export default function ChatPage() {
         connection_id: activeWhatsAppConn?.id ?? null,
         correlation_id: clientMsgId,
         metadata: { status: 'sending', correlation_id: clientMsgId },
-      });
+      }, { source: 'ChatPage.sendMessage', subCompanyId: activeWhatsAppConn?.sub_company_id ?? null });
+      if (dedup.duplicate) {
+        // Persistência bloqueada pela unique constraint — envio já registrado por outra instância.
+        return;
+      }
     } catch (e) { /* persistence is best-effort */ }
 
     // 2. Chamar Adapter para envio
@@ -1719,7 +1724,7 @@ export default function ChatPage() {
       _sentAt: Date.now(),
     }]);
     try {
-      await supabase.from('chat_messages').insert({
+      await insertChatMessageDedup({
         client_msg_id: id,
         customer_id: selectedConvId,
         sender_type: 'agent',
@@ -1728,7 +1733,7 @@ export default function ChatPage() {
         connection_id: activeWhatsAppConn?.id ?? null,
         correlation_id: id,
         metadata: { status: 'sending', correlation_id: id },
-      });
+      }, { source: 'ChatPage.sendOptimistic', subCompanyId: activeWhatsAppConn?.sub_company_id ?? null });
     } catch {}
     return id;
   };

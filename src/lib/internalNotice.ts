@@ -3,6 +3,7 @@
  * para os usuários da plataforma — nunca é enviada ao lead/cliente.
  */
 import { supabase } from '@/integrations/supabase/client';
+import { insertChatMessageDedup } from '@/lib/dedupChatInsert';
 
 export type TransferNoticeInput = {
   customerId: string;
@@ -24,7 +25,7 @@ export async function postTransferInternalNotice(input: TransferNoticeInput) {
       ? `Conversa movida para o fluxo: ${input.targetStageLabel || '—'}`
       : `Conversa transferida para ${input.targetName || 'colega'}`;
   try {
-    await supabase.from('chat_messages').insert({
+    await insertChatMessageDedup({
       client_msg_id: clientMsgId,
       customer_id: input.customerId,
       sender_type: 'system',
@@ -38,7 +39,7 @@ export async function postTransferInternalNotice(input: TransferNoticeInput) {
         target_stage_label: input.targetStageLabel ?? null,
         reason: input.reason ?? null,
       },
-    } as any);
+    }, { source: 'internalNotice' });
   } catch {
     /* best-effort — não bloqueia a transferência */
   }

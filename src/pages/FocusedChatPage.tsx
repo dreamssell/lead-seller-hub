@@ -21,6 +21,7 @@ import { useVoip } from '@/contexts/VoipContext';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { supabase } from '@/integrations/supabase/client';
+import { insertChatMessageDedup } from '@/lib/dedupChatInsert';
 import {
   getCachedConvs, setCachedConvs,
   getCachedMessages, setCachedMessages,
@@ -574,7 +575,7 @@ export default function FocusedChatPage() {
     setMsgs(prev => [...prev, optimistic]);
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }));
     try {
-      await supabase.from('chat_messages').insert({
+      await insertChatMessageDedup({
         customer_id: selected,
         sender_type: 'agent',
         content: text,
@@ -583,7 +584,7 @@ export default function FocusedChatPage() {
         client_msg_id: clientId,
         correlation_id: clientId,
         metadata: { status: 'sending' },
-      });
+      }, { source: 'FocusedChatPage.sendText', subCompanyId: conn.sub_company_id ?? null });
       const adapter = getProviderAdapter(conn.provider);
       const res = await adapter.sendMessage(conn, selected, text);
       const providerId = res?.key?.id || res?.messages?.[0]?.id || res?.id || null;
@@ -626,7 +627,7 @@ export default function FocusedChatPage() {
     setMsgs(prev => [...prev, optimistic]);
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }));
     try {
-      await supabase.from('chat_messages').insert({
+      await insertChatMessageDedup({
         customer_id: selected,
         sender_type: 'agent',
         content: label,
@@ -635,7 +636,7 @@ export default function FocusedChatPage() {
         client_msg_id: clientId,
         correlation_id: clientId,
         metadata: { status: 'sending', media_kind: kind, media_filename: file.name },
-      });
+      }, { source: 'FocusedChatPage.sendMedia', subCompanyId: conn.sub_company_id ?? null });
       const res = kind === 'audio' && adapter.sendAudio
         ? await adapter.sendAudio(conn, selected, file)
         : await adapter.sendMedia(conn, selected, file, '');
