@@ -6594,6 +6594,10 @@ export type Database = {
       }
       calculate_next_retry: { Args: { retry_count: number }; Returns: string }
       can_current_user_access: { Args: { _page: string }; Returns: boolean }
+      can_manage_chat_tags: {
+        Args: { _owner_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_user_manage_pipelines: {
         Args: { p_owner_id: string; p_sub_company_id: string }
         Returns: boolean
