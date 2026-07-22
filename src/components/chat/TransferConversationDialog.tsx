@@ -107,11 +107,21 @@ export function TransferConversationDialog({ open, onOpenChange, customerId, own
         });
         toast.success('Conversa transferida ao colega (Em Atendimento)');
       } else {
+        // Regras de assignment ao mover para um fluxo:
+        //  - closed   → limpa assigned_to
+        //  - active   → atribui ao próprio ator (para contabilizar em
+        //               "Em Atendimento" e sair da lista lateral de outros)
+        //  - waiting  → devolve para a fila (assigned_to = null)
+        //  - manual/auto → mantém o assigned_to atual
+        let assignedTo: string | null | undefined;
+        if (stage === 'closed' || stage === 'waiting') assignedTo = null;
+        else if (stage === 'active') assignedTo = u.user?.id ?? null;
+        else assignedTo = undefined;
         await moveConversationToStage({
           customerId,
           ownerId,
           stage,
-          assignedTo: stage === 'closed' ? null : undefined,
+          assignedTo,
           actorId: u.user?.id,
           origin: 'flow_move',
         });

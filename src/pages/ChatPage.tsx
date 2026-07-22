@@ -1023,14 +1023,42 @@ export default function ChatPage() {
         });
 
         addDebugLog('info', `${channelCustomers.length} contatos encontrados. Buscando últimas mensagens.`);
-        
-        const customerIds = channelCustomers.map((c) => c.id).filter(Boolean);
+
+        // Filtro por atribuição: se a conversa tem um assignment aberto
+        // (stage != 'closed') atribuído a outro usuário, ocultamos da lista
+        // lateral de "todas conversas" para o atendente. Supervisores/gestores
+        // continuam vendo tudo. Assim, após transferir para colega ou para um
+        // fluxo com atribuição, o card sai daqui e só reaparece no destino.
+        const idsForFilter = channelCustomers.map((c) => c.id).filter(Boolean);
+        const assignmentByCustomer = new Map<string, { assigned_to: string | null; stage: string }>();
+        if (idsForFilter.length) {
+          const { data: assigns } = await supabase
+            .from('lead_assignments')
+            .select('customer_id, assigned_to, stage, assigned_at')
+            .eq('owner_id', activeOwnerId)
+            .in('customer_id', idsForFilter)
+            .neq('stage', 'closed')
+            .order('assigned_at', { ascending: false });
+          (assigns || []).forEach((a: any) => {
+            if (!assignmentByCustomer.has(a.customer_id)) {
+              assignmentByCustomer.set(a.customer_id, { assigned_to: a.assigned_to, stage: a.stage });
+            }
+          });
+        }
+        const scopedCustomers = channelCustomers.filter((c) => {
+          if (isSupervisor) return true;
+          const asg = assignmentByCustomer.get(c.id);
+          if (!asg || !asg.assigned_to) return true;
+          return asg.assigned_to === currentUserId;
+        });
+
+        const customerIds = scopedCustomers.map((c) => c.id).filter(Boolean);
         const { data: lastMessages } = customerIds.length
           ? await (supabase as any).rpc('get_latest_chat_messages_for_customers', { _customer_ids: customerIds })
           : { data: [] as any[] };
 
         const byIdentity = new Map<string, any>();
-        channelCustomers.forEach(c => {
+        scopedCustomers.forEach(c => {
           const lastMsg = lastMessages?.find(m => m.customer_id === c.id);
           const pres = computePresence((c as any).presence, (c as any).presence_updated_at, (c as any).last_seen_at);
           const phoneDigits = String(c.phone || '').replace(/\D/g, '');
@@ -1193,6 +1221,12 @@ export default function ChatPage() {
           });
           return next;
         });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lead_assignments' }, (payload) => {
+        const row: any = payload.new || payload.old;
+        if (!row?.owner_id || (activeOwnerIdRef.current && row.owner_id !== activeOwnerIdRef.current)) return;
+        const currentChannel = activeChannelRef.current;
+        if (currentChannel) loadConversations(currentChannel);
       })
       .subscribe();
 
