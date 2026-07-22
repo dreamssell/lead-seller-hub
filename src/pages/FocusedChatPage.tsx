@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   MessageCircle, Search, Info, Images, Pin, Star, StickyNote,
-  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2, Eye, Contact2, Plus, Inbox, ArrowLeftRight, Phone,
+  Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2, Eye, Contact2, Plus, Inbox, ArrowLeftRight, Phone, CheckCircle2,
 } from 'lucide-react';
 import { useVoip } from '@/contexts/VoipContext';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
