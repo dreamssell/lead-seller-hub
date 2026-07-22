@@ -296,6 +296,11 @@ const extractOutboundMediaMeta = (data: any) => {
 export default function ChatPage() {
   const [activeChannel, setActiveChannel] = useState<ChannelKey | null>(null);
   const [convs, setConvs] = useState(conversationsByChannel);
+  const CONV_PAGE_SIZE = 200;
+  const [convLimits, setConvLimits] = useState<Record<string, number>>({});
+  const [convHasMore, setConvHasMore] = useState<Record<string, boolean>>({});
+  const convLimitsRef = useRef(convLimits);
+  useEffect(() => { convLimitsRef.current = convLimits; }, [convLimits]);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [transferOpen, setTransferOpen] = useState(false);
@@ -999,16 +1004,22 @@ export default function ChatPage() {
         }
       } catch {}
 
-      const { data: customers, error } = await supabase
+      const currentLimit = convLimitsRef.current[channel] || CONV_PAGE_SIZE;
+      const { data: customersRaw, error } = await supabase
         .from('customers')
         .select('*')
         .eq('owner_id', activeOwnerId)
-        .order('updated_at', { ascending: false });
+        .order('updated_at', { ascending: false })
+        .limit(currentLimit + 1);
 
       if (error) {
         addDebugLog('error', `Erro ao carregar clientes (${channel})`, error);
         return;
       }
+
+      const hasMore = (customersRaw?.length || 0) > currentLimit;
+      const customers = hasMore ? customersRaw!.slice(0, currentLimit) : customersRaw;
+      setConvHasMore(prev => ({ ...prev, [channel]: hasMore }));
 
       if (customers) {
         // Filter customers by channel if needed (for now showing all as per current logic, 
@@ -2711,6 +2722,22 @@ export default function ChatPage() {
                 </div>
               </button>
             ))}
+            {activeChannel && convHasMore[activeChannel] && (
+              <button
+                type="button"
+                onClick={() => {
+                  const ch = activeChannel;
+                  const next = (convLimitsRef.current[ch] || CONV_PAGE_SIZE) + CONV_PAGE_SIZE;
+                  setConvLimits(prev => ({ ...prev, [ch]: next }));
+                  convLimitsRef.current = { ...convLimitsRef.current, [ch]: next };
+                  // @ts-ignore
+                  if (typeof window.manualRefreshChannel === 'function') window.manualRefreshChannel(ch);
+                }}
+                className="w-full py-3 text-xs text-primary hover:bg-secondary/50 border-t border-border"
+              >
+                Carregar mais conversas
+              </button>
+            )}
           </div>
         </div>
 
