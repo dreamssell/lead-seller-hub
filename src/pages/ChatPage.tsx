@@ -1222,6 +1222,12 @@ export default function ChatPage() {
           return next;
         });
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lead_assignments' }, (payload) => {
+        const row: any = payload.new || payload.old;
+        if (!row?.owner_id || (activeOwnerIdRef.current && row.owner_id !== activeOwnerIdRef.current)) return;
+        const currentChannel = activeChannelRef.current;
+        if (currentChannel) loadConversations(currentChannel);
+      })
       .subscribe();
 
     // Realtime simulation for delivery receipts
