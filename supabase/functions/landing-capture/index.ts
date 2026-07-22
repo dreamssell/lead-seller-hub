@@ -60,15 +60,84 @@ Deno.serve(async (req) => {
       const ip = pickIp(req);
       const geo = await geoLookup(ip);
 
-      // Log view+click atomically
+      // Dedupe lead creation for same IP+page within 24h (avoids duplicates
+      // when the same visitor clicks the short-link multiple times).
+      let createdLeadId: string | null = null;
+      let stageId: string | null = null;
+      let stageName: string | null = null;
+      let shouldCreateLead = !!page.pipeline_id;
+      if (shouldCreateLead && ip) {
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const { data: prior } = await sb
+          .from('landing_events')
+          .select('id')
+          .eq('page_id', page.id)
+          .eq('type', 'click')
+          .eq('ip_address', ip)
+          .gte('created_at', since)
+          .limit(1);
+        if (prior && prior.length > 0) shouldCreateLead = false;
+      }
+
+      if (shouldCreateLead && page.pipeline_id) {
+        const { data: st } = await sb
+          .from('pipeline_stages').select('id,name,position').eq('pipeline_id', page.pipeline_id)
+          .order('position', { ascending: true }).limit(1).maybeSingle();
+        stageId = st?.id ?? null;
+        stageName = st?.name ?? null;
+
+        const locationParts = [geo?.city, geo?.region, geo?.country].filter(Boolean).join(' / ');
+        const label = page.tracking_label || page.slug;
+        const leadName = `Lead do link · ${label}${locationParts ? ` (${locationParts})` : ''}`;
+        const { data: ld } = await sb.from('leads').insert({
+          name: leadName,
+          status: 'novo',
+          source: `landing-link:${label}`,
+          channel: 'landing',
+          created_by: page.created_by ?? page.owner_id,
+          owner_id: page.owner_id,
+          sub_company_id: page.sub_company_id,
+          pipeline_id: page.pipeline_id,
+          stage_id: stageId,
+          notes: `Origem: link curto /l/${page.slug}\nDestino: ${page.redirect_url}${locationParts ? `\nLocal aproximado: ${locationParts}` : ''}${ip ? `\nIP: ${ip}` : ''}`,
+        }).select('id').maybeSingle();
+        createdLeadId = ld?.id ?? null;
+
+        // Timeline event visível no CRM 360
+        if (createdLeadId) {
+          await sb.from('lead_events').insert({
+            lead_id: createdLeadId,
+            owner_id: page.owner_id,
+            sub_company_id: page.sub_company_id,
+            type: 'created_from_landing_link',
+            to_stage_id: stageId,
+            to_stage_name: stageName,
+            channel: 'landing',
+            source: `landing-link:${label}`,
+            metadata: {
+              page_id: page.id,
+              slug: page.slug,
+              redirect_url: page.redirect_url,
+              ip,
+              ...(geo || {}),
+              referrer: req.headers.get('referer'),
+              user_agent: req.headers.get('user-agent'),
+            },
+          });
+        }
+      }
+
+      // Log view+click atomically (link the click event to the lead, se criado)
       await sb.from('landing_events').insert([
         { page_id: page.id, type: 'view', referrer: req.headers.get('referer'), user_agent: req.headers.get('user-agent'), ip_address: ip, ...(geo || {}) },
-        { page_id: page.id, type: 'click', referrer: req.headers.get('referer'), user_agent: req.headers.get('user-agent'), ip_address: ip, ...(geo || {}) },
+        { page_id: page.id, type: 'click', lead_id: createdLeadId, referrer: req.headers.get('referer'), user_agent: req.headers.get('user-agent'), ip_address: ip, ...(geo || {}) },
       ]);
-      await sb.from('landing_pages').update({
+      const updates: Record<string, number> = {
         view_count: (page.view_count || 0) + 1,
         click_count: (page.click_count || 0) + 1,
-      }).eq('id', page.id);
+      };
+      if (createdLeadId) updates.lead_count = (page.lead_count || 0) + 1;
+      await sb.from('landing_pages').update(updates).eq('id', page.id);
 
       return new Response(null, {
         status: 302,
