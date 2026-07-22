@@ -139,6 +139,8 @@ async function writeWahaAudit(
     messageId?: string | null;
     errorMessage?: string | null;
     payload?: Record<string, any>;
+    requestId?: string | null;
+    clientMsgId?: string | null;
   },
 ) {
   if (!conn.owner_id) return;
@@ -158,11 +160,27 @@ async function writeWahaAudit(
       waha_session_id: input.wahaSessionId ?? null,
       message_id: input.messageId ?? null,
       error_message: input.errorMessage ?? null,
-      payload: input.payload ?? {},
+      payload: {
+        ...(input.payload ?? {}),
+        request_id: input.requestId ?? null,
+        client_msg_id: input.clientMsgId ?? null,
+      },
     });
   } catch (e) {
     console.warn('[WAHA] audit log falhou', e);
   }
+}
+
+// Módulo-level dedup: uma mesma client_msg_id nunca gera dois POST /api/sendText
+// no mesmo tab (StrictMode, double-click, retry rápido do usuário). Mapeia
+// client_msg_id → Promise da chamada em andamento OU resultado final por 5min.
+const inflightSends = new Map<string, Promise<any>>();
+const recentSends = new Map<string, { at: number; result: any }>();
+function recallRecent(clientMsgId: string) {
+  const hit = recentSends.get(clientMsgId);
+  if (!hit) return null;
+  if (Date.now() - hit.at > 5 * 60_000) { recentSends.delete(clientMsgId); return null; }
+  return hit.result;
 }
 
 // Upload an outbound media/audio blob to the private `chat-media` bucket so
@@ -324,89 +342,112 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
     conn: WhatsAppConnection,
     customerId: string,
     content: string,
-    _correlationId?: string,
+    correlationId?: string,
     opts: WahaSendOptions = {}
   ) {
     const url = normalizeUrl(conn.metadata?.url);
     const token = conn.metadata?.token || '';
     if (!url) throw new Error('URL WAHA ausente.');
 
-    const { data: customer, error: custErr } = await supabase
-      .from('customers')
-      .select('phone')
-      .eq('id', customerId)
-      .single();
-    if (custErr || !customer?.phone) throw new Error('Cliente sem telefone cadastrado.');
+    // client_msg_id vem via correlationId (ChatPage/FocusedChatPage). É a chave
+    // idempotente ponta-a-ponta: se já existe um envio em voo OU um envio
+    // concluído nos últimos 5min para essa chave, retornamos o resultado sem
+    // tocar WAHA de novo — WAHA não aceita idempotency key própria.
+    const clientMsgId = correlationId || null;
+    if (clientMsgId) {
+      const cached = recallRecent(clientMsgId);
+      if (cached) return { ...cached, duplicated: true };
+      const inflight = inflightSends.get(clientMsgId);
+      if (inflight) return inflight.then((r) => ({ ...r, duplicated: true }));
 
-    // Apply agent-name template when the config toggle is on. Mirrors the
-    // WAHA/Chatwoot App override `chatwoot.to.whatsapp.message.text`.
-    let text = String(content ?? '');
-    if (conn.metadata?.templates_with_agent_name) {
+      // Verificação persistente: se a mesma client_msg_id já foi persistida
+      // com um provider id, é retry após reload — não reenviar.
+      const { data: existing } = await (supabase as any)
+        .from('chat_messages')
+        .select('uaz_msg_id, metadata')
+        .eq('client_msg_id', clientMsgId)
+        .maybeSingle();
+      if (existing?.uaz_msg_id) {
+        const cached = { ok: true, provider: 'waha', message_id: existing.uaz_msg_id, duplicated: true, raw: existing.metadata?.waha_response ?? null };
+        recentSends.set(clientMsgId, { at: Date.now(), result: cached });
+        return cached;
+      }
+    }
+
+    const promise = (async () => {
+      const requestId = (globalThis.crypto?.randomUUID?.() ?? `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
+
+      const { data: customer, error: custErr } = await supabase
+        .from('customers')
+        .select('phone')
+        .eq('id', customerId)
+        .single();
+      if (custErr || !customer?.phone) throw new Error('Cliente sem telefone cadastrado.');
+
+      // Apply agent-name template when the config toggle is on.
+      let text = String(content ?? '');
+      if (conn.metadata?.templates_with_agent_name) {
+        try {
+          const { data: authUser } = await supabase.auth.getUser();
+          const agentName = authUser?.user?.user_metadata?.display_name
+            || authUser?.user?.user_metadata?.full_name
+            || authUser?.user?.email?.split('@')[0]
+            || '';
+          const tpl = conn.metadata?.language_overrides_text || DEFAULT_WAHA_TEXT_TEMPLATE;
+          text = renderWahaTemplate(tpl, { content: text, chatwoot: { sender: { name: agentName } } });
+        } catch { /* best-effort */ }
+      }
+
+      const rawPayload: Record<string, unknown> = {
+        session: this.sessionOf(conn),
+        chatId: normalizeChatId(customer.phone),
+        text,
+      };
+      if (opts.replyTo) rawPayload.reply_to = String(opts.replyTo);
+      const parsed = WahaSendTextSchema.safeParse(rawPayload);
+      if (!parsed.success) {
+        throw new Error(`WAHA payload inválido: ${parsed.error.issues.map((i) => i.message).join(', ')}`);
+      }
+
+      await writeWahaAudit(conn, {
+        action: 'send_text', status: 'started', customerId,
+        wahaSessionId: parsed.data.session, requestId, clientMsgId,
+        payload: { chatId: parsed.data.chatId, length: parsed.data.text.length, reply_to: parsed.data.reply_to ?? null },
+      });
       try {
-        const { data: authUser } = await supabase.auth.getUser();
-        const agentName = authUser?.user?.user_metadata?.display_name
-          || authUser?.user?.user_metadata?.full_name
-          || authUser?.user?.email?.split('@')[0]
-          || '';
-        const tpl = conn.metadata?.language_overrides_text || DEFAULT_WAHA_TEXT_TEMPLATE;
-        text = renderWahaTemplate(tpl, { content: text, chatwoot: { sender: { name: agentName } } });
-      } catch { /* best-effort — never block send on template errors */ }
-    }
+        const data = await wahaFetch(url, token, '/api/sendText', {
+          method: 'POST',
+          body: parsed.data,
+          timeoutMs: opts.timeoutMs ?? 8_000,
+          // /api/sendText NÃO é idempotente — nunca auto-retry.
+          retries: opts.retries ?? 0,
+          signal: opts.signal,
+        });
+        const messageId = data?.id?._serialized || data?.id || null;
+        await writeWahaAudit(conn, {
+          action: 'send_text', status: 'success', customerId,
+          wahaSessionId: parsed.data.session, messageId, requestId, clientMsgId,
+          payload: { chatId: parsed.data.chatId, raw: data },
+        });
+        const result = { ok: true, provider: 'waha', message_id: messageId, request_id: requestId, raw: data };
+        if (clientMsgId) recentSends.set(clientMsgId, { at: Date.now(), result });
+        return result;
+      } catch (e: any) {
+        await writeWahaAudit(conn, {
+          action: 'send_text', status: 'error', customerId,
+          wahaSessionId: parsed.data.session, requestId, clientMsgId,
+          errorMessage: e?.message || String(e),
+          payload: { chatId: parsed.data.chatId },
+        });
+        throw e;
+      }
+    })();
 
-    const rawPayload: Record<string, unknown> = {
-      session: this.sessionOf(conn),
-      chatId: normalizeChatId(customer.phone),
-      text,
-    };
-    if (opts.replyTo) rawPayload.reply_to = String(opts.replyTo);
-    const parsed = WahaSendTextSchema.safeParse(rawPayload);
-    if (!parsed.success) {
-      throw new Error(`WAHA payload inválido: ${parsed.error.issues.map((i) => i.message).join(', ')}`);
+    if (clientMsgId) {
+      inflightSends.set(clientMsgId, promise);
+      promise.finally(() => { inflightSends.delete(clientMsgId); });
     }
-
-    await writeWahaAudit(conn, {
-      action: 'send_text',
-      status: 'started',
-      customerId,
-      wahaSessionId: parsed.data.session,
-      payload: { chatId: parsed.data.chatId, length: parsed.data.text.length, reply_to: parsed.data.reply_to ?? null },
-    });
-    try {
-      const data = await wahaFetch(url, token, '/api/sendText', {
-        method: 'POST',
-        body: parsed.data,
-        // Snappier defaults: WAHA usually responds in <1s. Waiting 15s with 2
-        // retries makes the UI sit on "enviando pelo servidor" forever whenever
-        // WAHA is momentarily slow.
-        timeoutMs: opts.timeoutMs ?? 8_000,
-        // IMPORTANT: /api/sendText is NOT idempotent. If WAHA already dispatched
-        // the message and only the HTTP response was lost/slow, a retry causes
-        // the recipient to receive the SAME message twice. Never auto-retry
-        // sends — surface the timeout to the caller instead.
-        retries: opts.retries ?? 0,
-        signal: opts.signal,
-      });
-      const messageId = data?.id?._serialized || data?.id || null;
-      await writeWahaAudit(conn, {
-        action: 'send_text',
-        status: 'success',
-        customerId,
-        wahaSessionId: parsed.data.session,
-        messageId,
-        payload: { chatId: parsed.data.chatId, raw: data },
-      });
-      return { ok: true, provider: 'waha', message_id: messageId, raw: data };
-    } catch (e: any) {
-      await writeWahaAudit(conn, {
-        action: 'send_text',
-        status: 'error',
-        customerId,
-        wahaSessionId: parsed.data.session,
-        errorMessage: e?.message || String(e),
-        payload: { chatId: parsed.data.chatId },
-      });
-      throw e;
-    }
+    return promise;
   }
 
   async sendMedia(conn: WhatsAppConnection, customerId: string, file: File, caption?: string) {
@@ -418,9 +459,7 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       .from('customers').select('phone').eq('id', customerId).single();
     if (!customer?.phone) throw new Error('Cliente sem telefone cadastrado.');
 
-    // Validate session is actually WORKING before wasting a base64 upload —
-    // this is why images/audios "aparecem enviados mas não chegam": WAHA answers
-    // 200 to sendImage even when the underlying socket is FAILED/STOPPED.
+    // Validate session is actually WORKING before wasting a base64 upload
     const st = await this.getStatus(conn);
     if (!st.connected) {
       throw new Error(`WAHA fora do ar (${st.status || 'desconhecido'}): reconecte a sessão antes de enviar mídia.`);

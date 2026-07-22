@@ -17,6 +17,7 @@ import UazAuditTab from '@/components/settings/UazAuditTab';
 import { WhatsAppConnectionCard } from '@/components/whatsapp/WhatsAppConnectionCard';
 import { EvolutionAuditAggregatePanel } from '@/components/whatsapp/EvolutionAuditAggregatePanel';
 import { WahaMonitorPanel } from '@/components/whatsapp/WahaMonitorPanel';
+import { WahaOwnerStatusPanel } from '@/components/whatsapp/WahaOwnerStatusPanel';
 import { ReconnectSessionDialog } from '@/components/whatsapp/ReconnectSessionDialog';
 import { WhatsAppConnection, WhatsAppProvider } from '@/components/whatsapp/types';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
@@ -235,8 +236,9 @@ export default function WhatsAppPage() {
           )}
 
 
-          <TabsContent value="waha" className="mt-0">
+          <TabsContent value="waha" className="mt-0 space-y-4">
             <WahaMonitorPanel />
+            <WahaOwnerStatusPanel />
           </TabsContent>
 
           <TabsContent value="aggregate" className="mt-0">
