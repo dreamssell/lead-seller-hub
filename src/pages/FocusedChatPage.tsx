@@ -1175,6 +1175,38 @@ export default function FocusedChatPage() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
+                          onClick={async () => {
+                            if (!selectedConv) return;
+                            if (!window.confirm('Encerrar este atendimento? A conversa será enviada para Finalizados.')) return;
+                            try {
+                              const { data: u } = await supabase.auth.getUser();
+                              const meta = (u.user?.user_metadata || {}) as any;
+                              const actorName = meta.full_name || meta.name || u.user?.email || null;
+                              const ownerId = (selectedConv as any)?.ownerId || u.user?.id || null;
+                              if (!ownerId) { sonnerToast.error('Sem contexto de empresa'); return; }
+                              await closeConversation({
+                                customerId: selectedConv.id,
+                                ownerId,
+                                actorId: u.user?.id ?? null,
+                                actorName,
+                              });
+                              sonnerToast.success('Atendimento encerrado e enviado para Finalizados');
+                            } catch (e: any) {
+                              sonnerToast.error(e?.message || 'Falha ao encerrar');
+                            }
+                          }}
+                          className="px-2.5 h-8 rounded-lg border border-emerald-200 dark:border-emerald-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition text-xs font-medium inline-flex items-center gap-1.5 text-emerald-600 hover:text-emerald-700"
+                          aria-label="Encerrar atendimento"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Encerrar
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Encerrar o atendimento e enviar para Finalizados</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
                           onClick={() => setSearchOpen(true)}
                           className="p-2 rounded-lg hover:bg-secondary transition text-muted-foreground"
                           aria-label="Buscar no histórico"
