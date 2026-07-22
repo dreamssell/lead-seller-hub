@@ -6814,6 +6814,17 @@ export type Database = {
           user_id: string
         }[]
       }
+      log_conversation_transfer: {
+        Args: {
+          p_customer_id: string
+          p_notice_type: string
+          p_reason?: string
+          p_target_label: string
+          p_target_stage?: string
+          p_target_user_id?: string
+        }
+        Returns: number
+      }
       log_video_action: {
         Args: {
           p_action: string

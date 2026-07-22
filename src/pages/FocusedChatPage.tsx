@@ -129,6 +129,8 @@ export default function FocusedChatPage() {
   const [filter, setFilter] = useState('');
   const [selected, setSelected] = useState<string | null>(initialConv);
   const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [msgFilter, setMsgFilter] = useState<'all' | 'client' | 'notes'>('all');
+
   const [loading, setLoading] = useState(true);
   const [conn, setConn] = useState<WhatsAppConnection | null>(null);
   const [connOnline, setConnOnline] = useState(false);
@@ -658,14 +660,26 @@ export default function FocusedChatPage() {
 
   const toggleTool = (t: Tool) => setTool(prev => (prev === t ? null : t));
 
+  // ---- Filtro (Tudo / Só cliente / Só notas internas) ---------------------
+  const visibleMsgs = useMemo(() => {
+    if (msgFilter === 'all') return msgs;
+    return msgs.filter((m) => {
+      const meta = (m as any).metadata;
+      const isNote = isInternalNoticeMessage(meta);
+      if (msgFilter === 'notes') return isNote;
+      return !isNote && !isCallEventMessage(meta);
+    });
+  }, [msgs, msgFilter]);
+
   // ---- Virtualização do histórico ------------------------------------------
   const virtualizer = useVirtualizer({
-    count: msgs.length,
+    count: visibleMsgs.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 72,
     overscan: 8,
-    getItemKey: (i) => msgs[i]?.id ?? i,
+    getItemKey: (i) => visibleMsgs[i]?.id ?? i,
   });
+
 
   // Ao carregar mensagens antigas (prepend), preserva a posição visual do usuário.
   useEffect(() => {
@@ -842,12 +856,24 @@ export default function FocusedChatPage() {
                     </Avatar>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium truncate">{c.name}</span>
+                        <span className="text-sm font-medium truncate flex items-center gap-1">
+                          {c.name}
+                          {(() => {
+                            const msg = String((c as any).last_message || '');
+                            const transferred = msg.startsWith('Conversa transferida') || msg.startsWith('Conversa movida');
+                            return transferred ? (
+                              <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 border-primary/40 text-primary shrink-0" title={msg}>
+                                Transferida
+                              </Badge>
+                            ) : null;
+                          })()}
+                        </span>
                         <span className="text-[10px] text-muted-foreground shrink-0 inline-flex items-center gap-0.5">
                           {formatTime(c.last_at)}
                           <MoveToFlowMenu customerId={c.id} />
                         </span>
                       </div>
+
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground truncate">{c.last_message}</span>
                         {c.unread > 0 && (
@@ -1071,16 +1097,37 @@ export default function FocusedChatPage() {
                     ) : null}
                   </div>
 
-                  {msgs.length === 0 ? (
+                  <div className="sticky top-0 z-10 bg-background/80 backdrop-blur border-b border-border/40 px-3 py-1.5 flex items-center gap-1 text-[10px] mb-1">
+                    <span className="text-muted-foreground uppercase tracking-wide">Ver:</span>
+                    {(['all','client','notes'] as const).map(k => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setMsgFilter(k)}
+                        className={cn(
+                          'px-2 py-0.5 rounded-full border transition-colors',
+                          msgFilter === k
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'border-border hover:bg-secondary text-muted-foreground',
+                        )}
+                      >
+                        {k === 'all' ? 'Tudo' : k === 'client' ? 'Só cliente' : 'Só notas internas'}
+                      </button>
+                    ))}
+                  </div>
+
+                  {visibleMsgs.length === 0 ? (
                     <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-                      Nenhuma mensagem ainda — envie a primeira.
+                      {msgs.length === 0 ? 'Nenhuma mensagem ainda — envie a primeira.' : 'Nenhuma mensagem para este filtro.'}
                     </div>
                   ) : (
+
                     <div
                       style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}
                     >
                       {virtualizer.getVirtualItems().map((vi) => {
-                        const m = msgs[vi.index];
+                        const m = visibleMsgs[vi.index];
+
                         if (!m) return null;
                         const _meta = (m as any).metadata;
                         const isCallEvt = isCallEventMessage(_meta);
