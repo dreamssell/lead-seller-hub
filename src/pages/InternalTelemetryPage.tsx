@@ -37,6 +37,9 @@ type TelemetryRow = {
 const TYPE_OPTIONS = [
   { value: 'all', label: 'Todos os tipos' },
   { value: 'auth_only', label: '★ Somente eventos do AuthContext' },
+  { value: 'perf_only', label: '⚡ Somente performance (page load + realtime)' },
+  { value: 'perf.page_load', label: '⚡ Perf · tempo de carregamento por página' },
+  { value: 'perf.realtime_impact', label: '⚡ Perf · impacto de realtime na lista' },
   { value: 'route_404', label: '404 (rota não encontrada)' },
   { value: 'protected_route_blocked', label: 'ProtectedRoute · bloqueado' },
   { value: 'protected_route_unauthenticated', label: 'ProtectedRoute · sem sessão' },
