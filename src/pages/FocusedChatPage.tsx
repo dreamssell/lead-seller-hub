@@ -1370,6 +1370,14 @@ export default function FocusedChatPage() {
                     text={composerText}
                     onChangeText={setComposerText}
                     onSendText={async (t) => { await handleSend(t); setComposerText(''); }}
+                    onSendAudio={async (blob, durationSec) => {
+                      // Modo Foco: reaproveita o pipeline de mídia. O nome
+                      // .ogg + MIME audio/ogg é o que o wahaAdapter espera
+                      // para tratar como voice note (opus) no WhatsApp.
+                      const file = new File([blob], `audio-${Date.now()}.ogg`, { type: blob.type || 'audio/ogg; codecs=opus' });
+                      (file as any).durationSec = durationSec;
+                      await handleSendMedia(file, 'audio');
+                    }}
                     recentMessages={msgs.slice(-20).map(m => ({ sender_type: m.sender_type, content: m.content }))}
                     contactName={selectedConv.name}
                   />
