@@ -178,7 +178,7 @@ export function CollaborationBar({ customerId, onOpenTransfer, onClose, isSuperv
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900"
+                  className="h-7 gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 border-red-200 dark:border-red-900"
                   onClick={onClose}
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" /> Encerrar
