@@ -421,7 +421,8 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
           reprodução: alguns objetos do Supabase Storage respondem lentamente
           a Range requests, então em vez de deixar o browser buscar em pedaços
           conforme toca, forçamos o download antecipado do arquivo inteiro. */}
-      <audio ref={audioRef} src={url} preload="auto" crossOrigin="anonymous" className="hidden" />
+      <audio ref={audioRef} src={blobUrl ?? undefined} preload="auto" crossOrigin="anonymous" className="hidden" />
+
 
       <button
         type="button"
