@@ -69,7 +69,7 @@ export function AudioRecorder({ onSend }: Props) {
       recorderRef.current = rec;
 
       rec.ondataavailable = (typedArray: Uint8Array) => {
-        const oggBlob = new Blob([typedArray], { type: 'audio/ogg; codecs=opus' });
+        const oggBlob = new Blob([typedArray.slice().buffer], { type: 'audio/ogg; codecs=opus' });
         setBlob(oggBlob);
         if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
         previewUrl.current = URL.createObjectURL(oggBlob);
