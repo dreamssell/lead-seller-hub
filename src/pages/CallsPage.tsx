@@ -406,6 +406,7 @@ export default function CallsPage() {
         auto_record: sipConfig.autoRecord,
       });
       toast({ title: 'Configuração SIP salva', description: 'Credenciais criptografadas armazenadas no backend.' });
+      try { window.dispatchEvent(new CustomEvent('sip:reload')); } catch {}
       setSipAudit(await listSipAudit());
     } catch (e: any) {
       const status: number = e?.status ?? 0;

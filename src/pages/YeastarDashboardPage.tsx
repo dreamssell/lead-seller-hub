@@ -177,6 +177,9 @@ export default function YeastarDashboardPage() {
         password: cfg.password,
         displayName: cfg.display_name,
       });
+      // Notifica outras abas/janelas (Chat Completo, Modo Foco) para
+      // recarregar o VoipContext e atualizar o botão azul em tempo real.
+      try { window.dispatchEvent(new CustomEvent('sip:reload')); } catch {}
     } catch (e: any) {
       toast({ title: 'Falha ao salvar tronco SIP', description: e?.message || 'Erro desconhecido', variant: 'destructive' });
     } finally {

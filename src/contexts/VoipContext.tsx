@@ -192,20 +192,20 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Carrega configurações SIP salvas ao iniciar o app (apenas admin autenticado).
+  // Carrega configurações SIP salvas ao iniciar o app.
+  // Qualquer usuário autenticado do tenant pode conectar: o backend
+  // manage-sip-config resolve o owner_id do tenant e devolve a config
+  // compartilhada. Assim CEOs/coordenadores/agentes veem o botão azul
+  // (VoIP SIP) como "pronto" em tempo real quando o ramal está configurado.
   // Legado: purga localStorage antigo para não deixar credenciais em disco.
   useEffect(() => {
     try { localStorage.removeItem('sipConfig'); } catch {}
     let cancelled = false;
-    (async () => {
+
+    const tryConnect = async () => {
       try {
         const { data: userData } = await supabase.auth.getUser();
         if (!userData?.user) return;
-        const { data: isAdmin } = await supabase.rpc('has_role', {
-          _user_id: userData.user.id,
-          _role: 'admin' as any,
-        });
-        if (isAdmin !== true) return;
         const { fetchSipConfig } = await import('@/lib/sipConfig');
         const cfg = await fetchSipConfig();
         if (cancelled || !cfg) return;
@@ -222,9 +222,23 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.error('SIP autoload failed', e);
       }
-    })();
-    return () => { cancelled = true; disconnect(); };
-  },[]);
+    };
+
+    tryConnect();
+
+    // Recarrega após salvar novas credenciais em Ferramentas → SIP.
+    const onReload = () => {
+      disconnect();
+      setTimeout(tryConnect, 300);
+    };
+    window.addEventListener('sip:reload', onReload);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('sip:reload', onReload);
+      disconnect();
+    };
+  }, []);
 
 
   return (
