@@ -49,10 +49,26 @@ function expectedWebhookUrl(connectionId: string): string {
   return `${supabaseUrl}/functions/v1/waha-inbound?connection=${connectionId}`;
 }
 
+// Events we require WAHA to forward to waha-inbound. Kept in sync with the
+// `events` array inside applyWebhookConfig() below. When any of them is
+// missing on the remote WAHA session config we treat the webhook as
+// "outdated" and force a re-apply so features like missed-call bubbles
+// start working on already-registered sessions.
+const REQUIRED_WAHA_EVENTS = [
+  "message", "message.any", "message.ack",
+  "session.status",
+  "call.received", "call.rejected", "call.missed",
+];
+
 function sessionHasOurWebhook(sessionData: any, connectionId: string): boolean {
   const target = expectedWebhookUrl(connectionId);
   const hooks: any[] = sessionData?.config?.webhooks ?? [];
-  return Array.isArray(hooks) && hooks.some((h) => String(h?.url ?? "").trim() === target);
+  const ours = Array.isArray(hooks)
+    ? hooks.find((h) => String(h?.url ?? "").trim() === target)
+    : null;
+  if (!ours) return false;
+  const subscribed = new Set<string>((ours.events ?? []).map((e: any) => String(e).toLowerCase()));
+  return REQUIRED_WAHA_EVENTS.every((e) => subscribed.has(e));
 }
 
 // Same canonical dedup rule as waha-inbound: collapse `@c.us`/`@lid` variants
@@ -157,7 +173,17 @@ async function applyWebhookConfig(
     webhooks: [
       {
         url: expectedWebhookUrl(connectionId),
-        events: ["message", "message.any", "message.ack", "session.status"],
+        // Subscribe to every event our waha-inbound handler processes.
+        // Missing `call.*` here was the root cause of missed WhatsApp voice
+        // calls never appearing in the platform chat.
+        events: [
+          "message", "message.any", "message.ack", "message.reaction",
+          "message.edited", "message.revoked", "session.status",
+          "call.received", "call.accepted", "call.rejected", "call.missed", "call.terminated",
+          "presence.update", "contact.update", "contact.blocked", "contact.unblocked",
+          "label.upsert", "label.deleted", "label.chat.added", "label.chat.deleted",
+          "chat.archive", "chat.unarchive", "chat.mute", "chat.unmute",
+        ],
         hmac: null,
         retries: { policy: "linear", delaySeconds: 2, attempts: 3 },
         customHeaders: [{ name: "X-Api-Key", value: token }],

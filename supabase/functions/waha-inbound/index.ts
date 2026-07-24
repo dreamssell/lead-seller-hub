@@ -71,9 +71,14 @@ function normalizePhone(from?: string | null): string | null {
 // Classifies the incoming event into one of our three logical buckets, using
 // both the top-level `event` string and the shape of the payload so we work
 // with WEBJS ("message") and GOWS ("gows.MessageEventData") equally well.
-function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'presence' | 'contact' | 'label' | 'chat_meta' | 'ignore' {
+function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'presence' | 'contact' | 'label' | 'chat_meta' | 'call' | 'ignore' {
   const e = event.toLowerCase();
   if (e === 'session.status' || e === 'status.instance') return 'session';
+  // WhatsApp voice/video calls — WAHA emits call.received / call.accepted /
+  // call.rejected / call.missed / call.terminated. Some GOWS builds wrap them
+  // as *.calleventdata. We surface every state to render a bubble like the
+  // native WhatsApp ("Ligação de voz perdida", etc).
+  if (e === 'call' || e.startsWith('call.') || e.endsWith('.calleventdata')) return 'call';
   if (e === 'message.ack' || e === 'ack' || e.endsWith('.receipteventdata')) return 'ack';
   // Reactions: WEBJS emits `message.reaction`; GOWS wraps a `reactionMessage`
   // inside a normal MessageEventData, or emits `*.reactioneventdata`.
@@ -799,6 +804,133 @@ Deno.serve(async (req) => {
       },
     }).eq('id', msgRow.id);
     return json({ ok: true, revoked: revokedId });
+  }
+
+  // ── CALL EVENTS ──────────────────────────────────────────────────────────
+  // Map WAHA call.* webhooks to a chat bubble so agents see missed voice
+  // calls exactly like WhatsApp native ("Ligação de voz perdida"). We insert
+  // on receive and update in place as the call transitions to accepted or
+  // rejected. Wavoip has its own pipeline; this only fires for WAHA.
+  if (bucket === 'call') {
+    try {
+      const evLower = String(event || '').toLowerCase();
+      const dataAttrs = webPayload?._data?.Data?.Attrs || gowsData?.Data?.Attrs || {};
+      const callId: string =
+        webPayload?.id ||
+        webPayload?._data?.CallID ||
+        gowsData?.CallID ||
+        dataAttrs['call-id'] ||
+        `waha_${Date.now()}`;
+      const providerCallMsgId = `call_${String(callId).replace(/[^a-zA-Z0-9]/g, '')}`.slice(0, 120);
+
+      // Caller phone: prefer the real caller number (caller_pn), fall back to
+      // sender_alt / from. @lid alone is never a real phone number.
+      const rawCallerFrom: string | undefined =
+        webPayload?.from || webPayload?._data?.From || gowsData?.From;
+      const callerPn: string | undefined =
+        dataAttrs.caller_pn || webPayload?._data?.CallCreatorAlt || gowsData?.CallCreatorAlt;
+      const callerAlt: string | undefined =
+        webPayload?._data?.SenderAlt || gowsData?.SenderAlt || callerPn;
+      const callerPhone = normalizePhone(callerAlt) || normalizePhone(callerPn) || normalizePhone(rawCallerFrom);
+      if (!callerPhone) {
+        return json({ ok: true, skipped: 'call_no_phone', event: evLower });
+      }
+
+      // Reuse (or create) the customer for this phone under this owner.
+      let callCustomerId: string | null = null;
+      const { data: existingCust } = await supabase
+        .from('customers').select('id')
+        .eq('owner_id', conn.owner_id).eq('phone', callerPhone).maybeSingle();
+      if (existingCust?.id) {
+        callCustomerId = existingCust.id;
+      } else {
+        const { data: created } = await supabase
+          .from('customers').insert({
+            name: callerPhone,
+            phone: callerPhone,
+            channel: 'whatsapp',
+            created_by: conn.owner_id,
+            owner_id: conn.owner_id,
+            sub_company_id: conn.sub_company_id,
+            origin_connection_id: conn.id,
+          }).select('id').single();
+        callCustomerId = created?.id ?? null;
+      }
+      if (!callCustomerId) return json({ ok: true, skipped: 'call_customer_missing' });
+
+      // Map WAHA call state → CallEventBubble status.
+      const reason = String(
+        webPayload?._data?.Reason || gowsData?.Reason || dataAttrs.reason || '',
+      ).toLowerCase();
+      const isReceived = evLower.endsWith('call.received') || evLower === 'call';
+      const isAccepted = evLower.endsWith('call.accepted');
+      const isRejected = evLower.endsWith('call.rejected') || evLower.endsWith('call.terminated');
+      const isMissed = evLower.endsWith('call.missed') || (isRejected && /timeout|no.?answer|missed/.test(reason));
+
+      const callStatus = isMissed ? 'missed'
+        : isAccepted ? 'answered'
+        : isRejected ? 'rejected'
+        : 'ringing';
+      const isVideo = webPayload?.isVideo === true || webPayload?._data?.Video === true;
+
+      // Idempotent upsert-like flow keyed by our synthetic call message id.
+      const { data: existingRow } = await supabase
+        .from('chat_messages')
+        .select('id, metadata')
+        .eq('uaz_msg_id', providerCallMsgId)
+        .maybeSingle();
+
+      const baseMeta = {
+        kind: 'call_event' as const,
+        provider: 'waha' as const,
+        call_status: callStatus,
+        direction: 'inbound' as const,
+        wavoip_call_id: null,
+        phone: callerPhone,
+        call_id: callId,
+        is_video: isVideo,
+        connection_id: conn.id,
+        owner_id: conn.owner_id,
+        event,
+        duration_seconds: null as number | null,
+      };
+
+      if (existingRow?.id) {
+        const prev = (existingRow.metadata as any) || {};
+        // Never downgrade a finalized call back to "ringing".
+        const finalRank: Record<string, number> = { ringing: 0, answered: 1, missed: 2, rejected: 2 };
+        const nextStatus = (finalRank[callStatus] ?? 0) >= (finalRank[prev.call_status] ?? 0)
+          ? callStatus : prev.call_status;
+        await supabase.from('chat_messages').update({
+          content: nextStatus === 'missed' ? 'Ligação de voz perdida'
+            : nextStatus === 'answered' ? 'Ligação de voz recebida'
+            : nextStatus === 'rejected' ? 'Ligação de voz recusada'
+            : 'Ligação de voz',
+          metadata: { ...prev, ...baseMeta, call_status: nextStatus },
+        }).eq('id', existingRow.id);
+        return json({ ok: true, call_updated: true, id: existingRow.id, status: nextStatus });
+      }
+
+      const { data: insertedCall, error: callErr } = await supabase.from('chat_messages').insert({
+        customer_id: callCustomerId,
+        sender_type: 'client',
+        channel: 'whatsapp',
+        connection_id: conn.id,
+        sub_company_id: conn.sub_company_id,
+        uaz_msg_id: providerCallMsgId,
+        content: callStatus === 'missed' ? 'Ligação de voz perdida'
+          : callStatus === 'answered' ? 'Ligação de voz recebida'
+          : callStatus === 'rejected' ? 'Ligação de voz recusada'
+          : 'Ligação de voz',
+        metadata: baseMeta,
+      }).select('id').single();
+      if (callErr && callErr.code !== '23505') {
+        return json({ error: 'call_insert_failed', detail: callErr.message }, 500);
+      }
+      return json({ ok: true, call_inserted: true, id: insertedCall?.id, status: callStatus });
+    } catch (e: any) {
+      return json({ ok: true, call_error: e?.message || String(e) });
+    }
   }
 
   // ── INBOUND MESSAGE ──────────────────────────────────────────────────────
