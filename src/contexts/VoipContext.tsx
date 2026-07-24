@@ -54,11 +54,15 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
 
   const connect = (config: any) => {
     if (!config.server || !config.username || !config.password) {
+      setLastError('Configurações SIP incompletas (servidor, usuário ou senha ausentes).');
+      setStatus('error');
       toast.error('Configurações SIP incompletas.');
       return;
     }
 
+    setLastError(null);
     setStatus('connecting');
+    setLastCheckedAt(Date.now());
 
     const wsUri = config.wsUri || `wss://${config.server}:7443`;
     const socket = new JsSIP.WebSocketInterface(wsUri);
