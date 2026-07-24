@@ -19,6 +19,7 @@ interface VoipContextType {
   connect: (config: any) => void;
   disconnect: () => void;
   reloadConfig: () => Promise<void>;
+  testConnection: () => Promise<'connected' | 'error' | 'disconnected' | 'connecting'>;
   makeCall: (target: string, isVideo?: boolean) => void;
   answerCall: () => void;
   rejectCall: () => void;
