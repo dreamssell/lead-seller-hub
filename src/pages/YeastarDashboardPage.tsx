@@ -239,10 +239,26 @@ export default function YeastarDashboardPage() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2"><PlugZap className="w-4 h-4" /> Tronco SIP (VoIP)</CardTitle>
           <CardDescription>
-            Credenciais do Yeastar usadas pelo webphone integrado. Ao salvar,
-            o botão azul de telefone (WhatsApp Completo e Modo Foco) passa a
-            discar via este tronco.
+            Cada Empresa/Sub-empresa registra suas próprias credenciais do
+            Yeastar — ficam disponíveis para todos os usuários da mesma conta
+            e nunca são compartilhadas entre tenants. Ao salvar, o botão azul
+            de telefone (WhatsApp Completo e Modo Foco) passa a discar via
+            este tronco.
           </CardDescription>
+          <div className="pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setServer('pbx.suaempresa.yeastar.com');
+                setWsUri('wss://pbx.suaempresa.yeastar.com:8089/ws');
+                setDisplayName(displayName || 'Atendente');
+              }}
+            >
+              Usar modelo Yeastar (WSS :8089/ws)
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-1.5">
