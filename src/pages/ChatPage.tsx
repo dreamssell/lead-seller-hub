@@ -2846,8 +2846,21 @@ export default function ChatPage() {
                             <Headphones className="h-4 w-4" />
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent>VoIP (SIP) · {voip.status === 'connected' ? 'pronto' : 'desconectado'}</TooltipContent>
+                        <TooltipContent className="max-w-[260px] text-xs">
+                          <div className="font-medium">VoIP (SIP) · {voip.status === 'connected' ? 'pronto' : voip.status === 'connecting' ? 'conectando…' : voip.status === 'error' ? 'falhou' : 'desconectado'}</div>
+                          <div className="text-muted-foreground mt-0.5">
+                            {voip.status === 'connecting'
+                              ? 'Registrando ramal no servidor SIP…'
+                              : voip.status === 'error'
+                                ? (voip.lastError || 'Falha ao conectar ao servidor SIP.')
+                                : voip.status !== 'connected'
+                                  ? 'Ramal SIP desconectado — configure em Ferramentas → SIP.'
+                                  : 'Ramal registrado. Clique para discar.'}
+                          </div>
+                        </TooltipContent>
                       </Tooltip>
+                      <SipStatusDot />
+
 
                       <Tooltip>
                         <TooltipTrigger asChild>
