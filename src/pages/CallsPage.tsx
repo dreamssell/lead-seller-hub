@@ -277,6 +277,38 @@ export default function CallsPage() {
     return () => { cancelled = true; };
   }, [isOwner, access?.owner_id]);
 
+  // Recarrega credenciais/auditoria quando o VoipContext dispara sip:reload
+  // (config salva em outra aba, mudança de tenant, etc.), garantindo que a
+  // lista de recursos e o formulário fiquem consistentes entre telas.
+  useEffect(() => {
+    const onReload = async () => {
+      try {
+        const { fetchSipConfig, listSipAudit } = await import('@/lib/sipConfig');
+        const cfg = await fetchSipConfig({ owner_id: access?.owner_id });
+        if (cfg) {
+          setSipConfig(prev => ({
+            ...prev,
+            server: cfg.server,
+            port: cfg.port || prev.port,
+            wsUri: cfg.ws_uri || prev.wsUri,
+            username: cfg.username,
+            password: cfg.password,
+            displayName: cfg.display_name || prev.displayName,
+            transport: cfg.transport || prev.transport,
+            autoRecord: cfg.auto_record ?? prev.autoRecord,
+          }));
+        }
+        if (isOwner) {
+          try { setSipAudit(await listSipAudit({ owner_id: access?.owner_id })); } catch {}
+        }
+      } catch (e) {
+        console.warn('sip:reload refresh failed', e);
+      }
+    };
+    window.addEventListener('sip:reload', onReload);
+    return () => window.removeEventListener('sip:reload', onReload);
+  }, [isOwner, access?.owner_id]);
+
   // Auto-registra no Wavoip assim que as credenciais estiverem em memória
   // (qualquer usuário do tenant — agentes precisam poder ligar).
   useEffect(() => {
