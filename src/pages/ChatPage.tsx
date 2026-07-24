@@ -41,6 +41,7 @@ import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import { WhatsAppConnection } from '@/components/whatsapp/types';
 import { useVoip } from '@/contexts/VoipContext';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
+import { SipStatusDot } from '@/components/voip/SipStatusDot';
 import { ChatRightPanel } from '@/components/chat/ChatRightPanel';
 import { MediaMessageContent } from '@/components/chat/MediaMessageContent';
 import { CallEventBubble, isCallEventMessage } from '@/components/chat/CallEventBubble';
