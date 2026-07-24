@@ -892,12 +892,47 @@ Deno.serve(async (req) => {
   // canonical id so the message always lands on the real thread.
   let customerId: string | null = null;
   {
-    const { data: existingCustomer } = await supabase
+    // Merge oportunista: se o telefone real veio nesta mensagem E existe um
+    // pseudo-contato `lid_<digits>` para o mesmo LID, promovemos/mesclamos
+    // antes de gravar — assim o histórico "Contato WhatsApp (nº oculto)"
+    // se junta ao contato real automaticamente.
+    if (!lidPseudoPhone && senderLid) {
+      const lidDigits = senderLid.replace(/\D/g, '');
+      const pseudoPhone = lidDigits ? `lid_${lidDigits}` : null;
+      if (pseudoPhone) {
+        const { data: pseudo } = await supabase
+          .from('customers').select('id')
+          .eq('owner_id', conn.owner_id).eq('phone', pseudoPhone).maybeSingle();
+        if (pseudo?.id) {
+          const { data: real } = await supabase
+            .from('customers').select('id')
+            .eq('owner_id', conn.owner_id).eq('phone', phone).maybeSingle();
+          if (!real?.id) {
+            await supabase.from('customers')
+              .update({ phone, notes: null }).eq('id', pseudo.id);
+            customerId = pseudo.id;
+          } else if (real.id !== pseudo.id) {
+            await supabase.from('chat_messages')
+              .update({ customer_id: real.id }).eq('customer_id', pseudo.id);
+            await supabase.from('customers').delete().eq('id', pseudo.id);
+            customerId = real.id;
+          }
+          console.log('[waha-inbound] lid_merged_inline', JSON.stringify({
+            owner_id: conn.owner_id, lid: senderLid, phone, real_id: customerId,
+          }));
+        }
+      }
+    }
+
+    const { data: existingCustomer } = customerId
+      ? { data: { id: customerId, name: null } as any }
+      : await supabase
       .from('customers')
       .select('id, name')
       .eq('phone', phone)
       .eq('owner_id', conn.owner_id)
       .maybeSingle();
+
 
     if (existingCustomer?.id) {
       customerId = existingCustomer.id;
