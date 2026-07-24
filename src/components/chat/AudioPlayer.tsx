@@ -385,7 +385,11 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
           the stream and Chromium outputs zeroes ("MediaElementAudioSource
           outputs zeroes due to CORS access restrictions"). That is the root
           cause of "áudio não toca" reports even though the UI progresses. */}
-      <audio ref={audioRef} src={url} preload="metadata" crossOrigin="anonymous" className="hidden" />
+      {/* preload="auto" evita "picos de mudo" (buffer underrun) durante a
+          reprodução: alguns objetos do Supabase Storage respondem lentamente
+          a Range requests, então em vez de deixar o browser buscar em pedaços
+          conforme toca, forçamos o download antecipado do arquivo inteiro. */}
+      <audio ref={audioRef} src={url} preload="auto" crossOrigin="anonymous" className="hidden" />
 
       <button
         type="button"
