@@ -90,11 +90,18 @@ export async function deleteSipConfig(scope: SipScope = {}) {
   return invoke('delete', { scope });
 }
 
-export async function listSipAudit(scope: SipScope = {}, limit = 50) {
-  const data = await invoke('audit_list', { scope, limit });
+export async function listSipAudit(
+  scope: SipScope = {},
+  limit = 50,
+  opts: { all?: boolean } = {},
+) {
+  const data = await invoke('audit_list', { scope, limit, all: opts.all === true });
   return (data?.entries ?? []) as Array<{
     id: string;
     action: string;
+    owner_id: string | null;
+    sub_company_id: string | null;
+    client_company_id: string | null;
     changed_by: string | null;
     changed_by_email: string | null;
     created_at: string;
