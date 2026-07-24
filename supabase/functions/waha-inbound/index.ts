@@ -608,7 +608,54 @@ Deno.serve(async (req) => {
         gowsData?.JID || gowsData?.From || gowsData?.Chat || gowsData?.Contact;
       const contactChat = webChatId || gowsJid || null;
       const contactPhone = normalizePhone(contactChat);
+
+      // Merge LID → telefone real: se o payload trouxer também um JID @lid
+      // (ou LID em SenderAlt), procuramos o pseudo-contato `lid_<digits>` e
+      // migramos mensagens/atribuições para o contato real.
+      const contactLid: string | null = (() => {
+        const cands = [
+          webPayload?.lid, webPayload?.wid, webPayload?.id, webPayload?.contactId,
+          gowsData?.LID, gowsData?.SenderAlt, gowsData?.RecipientAlt, gowsJid,
+        ];
+        for (const c of cands) {
+          if (typeof c === 'string' && c.includes('@lid')) return c;
+        }
+        return null;
+      })();
+      if (contactPhone && contactLid) {
+        const lidDigits = contactLid.replace(/\D/g, '');
+        const pseudoPhone = lidDigits ? `lid_${lidDigits}` : null;
+        if (pseudoPhone) {
+          const { data: pseudo } = await supabase
+            .from('customers').select('id')
+            .eq('owner_id', conn.owner_id).eq('phone', pseudoPhone).maybeSingle();
+          if (pseudo?.id) {
+            const { data: real } = await supabase
+              .from('customers').select('id')
+              .eq('owner_id', conn.owner_id).eq('phone', contactPhone).maybeSingle();
+            let realId = real?.id as string | undefined;
+            if (!realId) {
+              // Promove o pseudo ao telefone real (evita perder histórico).
+              await supabase.from('customers')
+                .update({ phone: contactPhone, notes: null })
+                .eq('id', pseudo.id);
+              realId = pseudo.id;
+            } else if (realId !== pseudo.id) {
+              // Move mensagens e limpa o pseudo.
+              await supabase.from('chat_messages')
+                .update({ customer_id: realId }).eq('customer_id', pseudo.id);
+              await supabase.from('customers').delete().eq('id', pseudo.id);
+            }
+            console.log('[waha-inbound] lid_merged', JSON.stringify({
+              owner_id: conn.owner_id, lid: contactLid, phone: contactPhone,
+              pseudo_id: pseudo.id, real_id: realId,
+            }));
+          }
+        }
+      }
+
       if (!contactPhone) return json({ ok: true, skipped: 'contact_no_phone' });
+
 
       const patch: Record<string, any> = { profile_synced_at: new Date().toISOString() };
       const pic = webPayload?.profilePictureUrl || webPayload?.profilePicUrl
