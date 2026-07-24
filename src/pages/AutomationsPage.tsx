@@ -43,7 +43,7 @@ const DEFAULT_FLOWS: Flow[] = [
 const FLOWS_KEY = 'automations.flows.v1';
 const INTEG_KEY = 'automations.integrations.v1';
 
-type IntegrationId = 'holmes' | 'dealerspace' | '3cx';
+type IntegrationId = 'holmes' | 'dealerspace' | '3cx' | 'yeastar';
 
 type IntegrationConfig = {
   enabled: boolean;
@@ -117,6 +117,21 @@ const INTEGRATIONS: Array<{
       { key: 'extension', label: 'Ramal padrão (opcional)', placeholder: '101' },
     ],
   },
+  {
+    id: 'yeastar',
+    name: 'Yeastar',
+    url: 'https://help.yeastar.com/en/k2-developer/api/api_introduction.html',
+    category: 'Telefonia',
+    desc: 'PBX Yeastar (K2 / P-Series) — KPIs de ligações e tronco SIP para o webphone integrado.',
+    icon: Phone,
+    color: 'from-orange-500/20 to-amber-500/20',
+    fields: [
+      { key: 'pbxUrl', label: 'URL do PBX', type: 'url', placeholder: 'https://sopropabx.ras.yeastar.com', helper: 'Base da API OpenAPI do Yeastar' },
+      { key: 'username', label: 'Usuário / Extensão', placeholder: '55008137460254' },
+      { key: 'password', label: 'Senha', type: 'password' },
+      { key: 'extension', label: 'Ramal padrão (opcional)', placeholder: '1001' },
+    ],
+  },
 ];
 
 function loadJSON<T>(key: string, fallback: T): T {
@@ -126,7 +141,7 @@ function loadJSON<T>(key: string, fallback: T): T {
 export default function AutomationsPage() {
   const [flows, setFlows] = useState<Flow[]>(() => loadJSON(FLOWS_KEY, DEFAULT_FLOWS));
   const [integrations, setIntegrations] = useState<Record<IntegrationId, IntegrationConfig>>(() =>
-    loadJSON(INTEG_KEY, { holmes: { enabled: false }, dealerspace: { enabled: false }, '3cx': { enabled: false } })
+    loadJSON(INTEG_KEY, { holmes: { enabled: false }, dealerspace: { enabled: false }, '3cx': { enabled: false }, yeastar: { enabled: false } })
   );
 
   const [actionOpen, setActionOpen] = useState(false);
@@ -143,7 +158,7 @@ export default function AutomationsPage() {
     setLogsOpen(true);
   };
   const [tests, setTests] = useState<Record<IntegrationId, TestState>>({
-    holmes: { status: 'idle' }, dealerspace: { status: 'idle' }, '3cx': { status: 'idle' },
+    holmes: { status: 'idle' }, dealerspace: { status: 'idle' }, '3cx': { status: 'idle' }, yeastar: { status: 'idle' },
   });
 
   const [mappingFor, setMappingFor] = useState<IntegrationId | null>(null);
@@ -425,6 +440,11 @@ export default function AutomationsPage() {
                   {it.id === '3cx' && (
                     <Button size="sm" variant="secondary" asChild>
                       <a href="/3cx"><Phone className="w-4 h-4 mr-2" /> Abrir painel</a>
+                    </Button>
+                  )}
+                  {it.id === 'yeastar' && (
+                    <Button size="sm" variant="secondary" asChild>
+                      <a href="/yeastar"><Phone className="w-4 h-4 mr-2" /> Abrir painel</a>
                     </Button>
                   )}
                 </div>

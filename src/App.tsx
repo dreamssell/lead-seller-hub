@@ -46,6 +46,7 @@ const VideoJoinPage = lazy(() => import("./pages/VideoJoinPage"));
 const SignaturePortalPage = lazy(() => import("./pages/SignaturePortalPage"));
 const SignaturesPage = lazy(() => import("./pages/SignaturesPage"));
 const ThreeCxDashboardPage = lazy(() => import("./pages/ThreeCxDashboardPage"));
+const YeastarDashboardPage = lazy(() => import("./pages/YeastarDashboardPage"));
 const LeadsCapturePage = lazy(() => import("./pages/ceo/LeadsCapturePage"));
 const CallsPerformancePage = lazy(() => import("./pages/ceo/CallsPerformancePage"));
 const SignaturesPerformancePage = lazy(() => import("./pages/ceo/SignaturesPerformancePage"));
@@ -146,6 +147,7 @@ const App = () => (
               <Route path="/video" element={<ProtectedRoute ownerOnly><VideoCallsPage /></ProtectedRoute>} />
               <Route path="/automations" element={<ProtectedRoute><AutomationsPage /></ProtectedRoute>} />
               <Route path="/3cx" element={<ProtectedRoute><ThreeCxDashboardPage /></ProtectedRoute>} />
+              <Route path="/yeastar" element={<ProtectedRoute><YeastarDashboardPage /></ProtectedRoute>} />
               <Route path="/cadastros" element={<ProtectedRoute><CadastrosPage /></ProtectedRoute>} />
               <Route path="/ceo" element={<ProtectedRoute pageKey="ceo"><CEODashboardPage /></ProtectedRoute>} />
               <Route path="/ceo/leads-capture" element={<ProtectedRoute pageKey="ceo"><LeadsCapturePage /></ProtectedRoute>} />
