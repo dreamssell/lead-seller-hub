@@ -16,6 +16,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend,
 } from 'recharts';
 import { toast } from '@/hooks/use-toast';
+import { Helmet } from 'react-helmet-async';
 import { saveSipConfig, fetchSipConfig, type SipConfig } from '@/lib/sipConfig';
 import { useVoip } from '@/contexts/VoipContext';
 
@@ -186,7 +187,20 @@ export default function YeastarDashboardPage() {
   const refreshNow = () => setTick((t) => t + 1);
 
   return (
-    <AppLayout title="Yeastar — KPIs & Tronco SIP" subtitle="Painel de ligações e integração com PBX Yeastar (K2 / P-Series)">
+    <>
+      <Helmet>
+        <title>VoIP — KPIs & Métricas | Lead Seller</title>
+        <meta name="description" content="Painel de ligações da empresa, equipes e agentes — KPIs de telefonia VoIP com integração Yeastar (K2 / P-Series) e configuração do tronco SIP." />
+        <link rel="canonical" href="https://connecto-center.lovable.app/yeastar" />
+        <meta property="og:title" content="VoIP — KPIs & Métricas" />
+        <meta property="og:description" content="Painel de ligações da empresa, equipes e agentes." />
+        <meta property="og:url" content="https://connecto-center.lovable.app/yeastar" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content="VoIP — KPIs & Métricas" />
+        <meta name="twitter:description" content="Painel de ligações da empresa, equipes e agentes." />
+      </Helmet>
+    <AppLayout title="VoIP — KPIs & Métricas" subtitle="Painel de ligações da empresa, equipes e agentes">
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <div className="flex items-center gap-2 flex-wrap">
           <Phone className="w-4 h-4 text-primary" />
@@ -356,6 +370,7 @@ export default function YeastarDashboardPage() {
         </Card>
       </div>
     </AppLayout>
+    </>
   );
 }
 
