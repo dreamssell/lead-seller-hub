@@ -576,9 +576,10 @@ export class WahaAdapter implements WhatsAppProviderAdapter {
       throw new Error(`WAHA fora do ar (${st.status || 'desconhecido'}): reconecte a sessão antes de enviar áudio.`);
     }
 
-    // WhatsApp voice notes MUST be OGG/Opus. Browsers record audio/webm;codecs=opus by
-    // default, and WAHA returns 200 for webm but the message never reaches the
-    // recipient. Coerce the container hint to audio/ogg so WAHA re-muxes it.
+    // WhatsApp voice notes MUST be OGG/Opus REAIS. O gravador do frontend
+    // (src/components/chat/AudioRecorder.tsx) usa opus-recorder (libopus WASM)
+    // para produzir um container OGG/Opus verdadeiro. Aqui só reforçamos o MIME.
+
     const rawPayload = {
       session: this.sessionOf(conn),
       chatId: normalizeChatId(customer.phone),
