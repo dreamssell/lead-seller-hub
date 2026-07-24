@@ -370,6 +370,7 @@ export default function YeastarDashboardPage() {
         </Card>
       </div>
     </AppLayout>
+    </>
   );
 }
 
