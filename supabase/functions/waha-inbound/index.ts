@@ -861,13 +861,18 @@ Deno.serve(async (req) => {
       const { data: created, error: createErr } = await supabase
         .from('customers')
         .insert({
-          name: pushName || (lidPseudoPhone ? `Contato ${(senderLid ?? '').replace(/\D/g, '').slice(-6) || 'novo'}` : phone),
+          name: pushName || (lidPseudoPhone
+            ? `Contato WhatsApp (nº oculto)`
+            : phone),
           phone,
           channel: 'whatsapp',
           created_by: conn.owner_id,
           owner_id: conn.owner_id,
           sub_company_id: conn.sub_company_id,
           origin_connection_id: conn.id,
+          // Guarda a referência LID em `notes` para permitir merge posterior
+          // quando o telefone real for descoberto via contact.update.
+          notes: lidPseudoPhone ? `__lid_ref__:${senderLid ?? ''}` : null,
         })
         .select('id')
         .single();
