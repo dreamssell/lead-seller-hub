@@ -7,6 +7,9 @@ import * as JsSIP from 'jssip';
 
 interface VoipContextType {
   status: 'disconnected' | 'connecting' | 'connected' | 'error';
+  lastError: string | null;
+  lastCheckedAt: number | null;
+  hasConfig: boolean;
   session: any | null; // JsSIP.RTCSession
   incomingSession: any | null;
   isMuted: boolean;
@@ -15,6 +18,7 @@ interface VoipContextType {
   setDialerOpen: (val: boolean) => void;
   connect: (config: any) => void;
   disconnect: () => void;
+  reloadConfig: () => Promise<void>;
   makeCall: (target: string, isVideo?: boolean) => void;
   answerCall: () => void;
   rejectCall: () => void;
@@ -27,6 +31,9 @@ const VoipContext = createContext<VoipContextType | null>(null);
 
 export function VoipProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<VoipContextType['status']>('disconnected');
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
+  const [hasConfig, setHasConfig] = useState(false);
   const[session, setSession] = useState<any | null>(null);
   const [incomingSession, setIncomingSession] = useState<any | null>(null);
   const [isMuted, setIsMuted] = useState(false);
@@ -47,11 +54,15 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
 
   const connect = (config: any) => {
     if (!config.server || !config.username || !config.password) {
+      setLastError('Configurações SIP incompletas (servidor, usuário ou senha ausentes).');
+      setStatus('error');
       toast.error('Configurações SIP incompletas.');
       return;
     }
 
+    setLastError(null);
     setStatus('connecting');
+    setLastCheckedAt(Date.now());
 
     const wsUri = config.wsUri || `wss://${config.server}:7443`;
     const socket = new JsSIP.WebSocketInterface(wsUri);
@@ -69,16 +80,23 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     ua.on('disconnected', (e) => {
       console.warn('VoIP WebSocket Desconectado', e);
       setStatus('disconnected');
+      setLastError('Conexão WebSocket SIP encerrada.');
+      setLastCheckedAt(Date.now());
     });
-    
+
     ua.on('registered', () => {
       setStatus('connected');
+      setLastError(null);
+      setLastCheckedAt(Date.now());
       toast.success('VoIP Conectado com sucesso');
     });
-    
+
     ua.on('registrationFailed', (e) => {
       setStatus('error');
-      toast.error(`Falha no registro SIP: ${e?.cause || 'Erro desconhecido'}`);
+      const reason = e?.cause || 'Erro desconhecido';
+      setLastError(`Falha no registro SIP: ${reason}`);
+      setLastCheckedAt(Date.now());
+      toast.error(`Falha no registro SIP: ${reason}`);
     });
 
     // Lidando com chamadas (Recebidas e Feitas)
@@ -193,51 +211,85 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Carrega configurações SIP salvas ao iniciar o app.
-  // Qualquer usuário autenticado do tenant pode conectar: o backend
-  // manage-sip-config resolve o owner_id do tenant e devolve a config
-  // compartilhada. Assim CEOs/coordenadores/agentes veem o botão azul
-  // (VoIP SIP) como "pronto" em tempo real quando o ramal está configurado.
-  // Legado: purga localStorage antigo para não deixar credenciais em disco.
+  // Qualquer usuário autenticado do tenant pode conectar (backend resolve
+  // owner_id via user_account_access). Polling revalida periodicamente para
+  // capturar mudanças feitas em outro dispositivo/sessão.
+  const lastCfgSigRef = useRef<string>('');
+
+  const reloadConfig = React.useCallback(async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) return;
+      const { fetchSipConfig } = await import('@/lib/sipConfig');
+      let cfg: any = null;
+      try {
+        cfg = await fetchSipConfig();
+      } catch (e: any) {
+        setLastError(e?.message || 'Falha ao consultar credenciais SIP.');
+        setLastCheckedAt(Date.now());
+        // Só marca error se ainda não estamos conectados (não derrubar UA ativo).
+        setStatus((s) => (s === 'connected' ? s : 'error'));
+        return;
+      }
+      setLastCheckedAt(Date.now());
+      if (!cfg || !cfg.server || !cfg.username) {
+        setHasConfig(false);
+        if (uaRef.current) { try { uaRef.current.stop(); } catch {} uaRef.current = null; }
+        setStatus('disconnected');
+        setLastError('Nenhum ramal SIP configurado para este tenant.');
+        lastCfgSigRef.current = '';
+        return;
+      }
+      setHasConfig(true);
+      const sig = `${cfg.server}|${cfg.username}|${cfg.password}|${cfg.ws_uri || ''}`;
+      const changed = sig !== lastCfgSigRef.current;
+      const needsConnect = !uaRef.current || status === 'disconnected' || status === 'error' || changed;
+      if (needsConnect) {
+        lastCfgSigRef.current = sig;
+        if (uaRef.current) { try { uaRef.current.stop(); } catch {} uaRef.current = null; }
+        connect({
+          server: cfg.server,
+          port: cfg.port,
+          wsUri: cfg.ws_uri,
+          username: cfg.username,
+          password: cfg.password,
+          displayName: cfg.display_name,
+        });
+      }
+    } catch (e: any) {
+      console.error('SIP reloadConfig failed', e);
+      setLastError(e?.message || 'Erro inesperado ao recarregar SIP.');
+      setLastCheckedAt(Date.now());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
+
   useEffect(() => {
     try { localStorage.removeItem('sipConfig'); } catch {}
-    let cancelled = false;
+    reloadConfig();
 
-    const tryConnect = async () => {
-      try {
-        const { data: userData } = await supabase.auth.getUser();
-        if (!userData?.user) return;
-        const { fetchSipConfig } = await import('@/lib/sipConfig');
-        const cfg = await fetchSipConfig();
-        if (cancelled || !cfg) return;
-        if (cfg.server && cfg.username) {
-          connect({
-            server: cfg.server,
-            port: cfg.port,
-            wsUri: cfg.ws_uri,
-            username: cfg.username,
-            password: cfg.password,
-            displayName: cfg.display_name,
-          });
-        }
-      } catch (e) {
-        console.error('SIP autoload failed', e);
-      }
-    };
-
-    tryConnect();
-
-    // Recarrega após salvar novas credenciais em Ferramentas → SIP.
     const onReload = () => {
-      disconnect();
-      setTimeout(tryConnect, 300);
+      lastCfgSigRef.current = '';
+      if (uaRef.current) { try { uaRef.current.stop(); } catch {} uaRef.current = null; }
+      setStatus('disconnected');
+      setTimeout(() => { reloadConfig(); }, 300);
     };
     window.addEventListener('sip:reload', onReload);
 
+    // Polling: revalida credenciais e estado a cada 60s.
+    const interval = window.setInterval(() => { reloadConfig(); }, 60_000);
+
+    // Reconecta ao voltar a foco (mudança de aba/mobile).
+    const onFocus = () => { reloadConfig(); };
+    window.addEventListener('focus', onFocus);
+
     return () => {
-      cancelled = true;
       window.removeEventListener('sip:reload', onReload);
+      window.removeEventListener('focus', onFocus);
+      window.clearInterval(interval);
       disconnect();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
@@ -245,6 +297,9 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     <VoipContext.Provider
       value={{
         status,
+        lastError,
+        lastCheckedAt,
+        hasConfig,
         session,
         incomingSession,
         isMuted,
@@ -253,6 +308,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
         setDialerOpen,
         connect,
         disconnect,
+        reloadConfig,
         makeCall,
         answerCall,
         rejectCall,

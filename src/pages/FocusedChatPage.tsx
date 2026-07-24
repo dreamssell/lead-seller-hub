@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useVoip } from '@/contexts/VoipContext';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
+import { SipStatusDot } from '@/components/voip/SipStatusDot';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { supabase } from '@/integrations/supabase/client';
 import { insertChatMessageDedup } from '@/lib/dedupChatInsert';
@@ -1110,16 +1111,21 @@ export default function FocusedChatPage() {
                         </button>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-[240px] text-xs" role="tooltip">
-                        <div className="font-medium">Ligar por VoIP (SIP)</div>
+                        <div className="font-medium">Ligar por VoIP (SIP) · {voip.status === 'connected' ? 'pronto' : voip.status === 'connecting' ? 'conectando…' : voip.status === 'error' ? 'falhou' : 'desconectado'}</div>
                         <div className="text-muted-foreground mt-0.5">
-                          {voip.status !== 'connected'
-                            ? 'Ramal SIP desconectado — configure em Ferramentas → SIP para habilitar.'
-                            : lineBusy
-                              ? 'A linha Wavoip está em uso por outro usuário. Sua ligação SIP ainda pode ser realizada normalmente — o ícone fica vermelho apenas para sinalizar ocupação do canal WhatsApp.'
-                              : 'Discagem via ramal SIP (tronco VoIP).'}
+                          {voip.status === 'connecting'
+                            ? 'Registrando ramal no servidor SIP…'
+                            : voip.status === 'error'
+                              ? (voip.lastError || 'Falha ao conectar ao servidor SIP.')
+                              : voip.status !== 'connected'
+                                ? 'Ramal SIP desconectado — configure em Ferramentas → SIP para habilitar.'
+                                : lineBusy
+                                  ? 'A linha Wavoip está em uso por outro usuário. Sua ligação SIP ainda pode ser realizada normalmente — o ícone fica vermelho apenas para sinalizar ocupação do canal WhatsApp.'
+                                  : 'Discagem via ramal SIP (tronco VoIP).'}
                         </div>
                       </TooltipContent>
                     </Tooltip>
+                    <SipStatusDot />
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
