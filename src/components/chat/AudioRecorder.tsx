@@ -2,6 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { Mic, Square, Trash2, Send, Pause, Play, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+// opus-recorder produz OGG/Opus REAL (libopus WASM), o único container/codec
+// que o WhatsApp aceita para voice notes. Antes usávamos MediaRecorder do
+// browser que gera audio/webm;codecs=opus — mesmo re-rotulando o MIME para
+// audio/ogg antes de enviar, o container continuava sendo WebM (EBML) e o
+// destinatário via a mensagem como "áudio que não pode ser ouvido".
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore — sem tipagens oficiais
+import Recorder from 'opus-recorder';
+import encoderPath from 'opus-recorder/dist/encoderWorker.min.js?url';
 
 interface Props {
   onSend: (blob: Blob, durationSec: number) => Promise<void> | void;
@@ -15,9 +24,8 @@ export function AudioRecorder({ onSend }: Props) {
   const [blob, setBlob] = useState<Blob | null>(null);
   const [sending, setSending] = useState(false);
   const [bars, setBars] = useState<number[]>([]);
-  const mediaRef = useRef<MediaRecorder | null>(null);
+  const recorderRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const chunksRef = useRef<BlobPart[]>([]);
   const tickRef = useRef<number | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -27,15 +35,16 @@ export function AudioRecorder({ onSend }: Props) {
   useEffect(() => () => cleanup(), []);
 
   const cleanup = () => {
-    try { streamRef.current?.getTracks().forEach(t => t.stop()); } catch {}
-    try { audioCtxRef.current?.close(); } catch {}
+    try { recorderRef.current?.close?.(); } catch { /* noop */ }
+    try { streamRef.current?.getTracks().forEach(t => t.stop()); } catch { /* noop */ }
+    try { audioCtxRef.current?.close(); } catch { /* noop */ }
     if (tickRef.current) window.clearInterval(tickRef.current);
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
     streamRef.current = null;
     audioCtxRef.current = null;
     analyserRef.current = null;
-    mediaRef.current = null;
+    recorderRef.current = null;
   };
 
   const start = async () => {
@@ -45,19 +54,30 @@ export function AudioRecorder({ onSend }: Props) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const mr = new MediaRecorder(stream, { mimeType: pickMime() });
-      mediaRef.current = mr;
-      chunksRef.current = [];
-      mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      mr.onstop = () => {
-        const b = new Blob(chunksRef.current, { type: mr.mimeType });
-        setBlob(b);
-        if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
-        previewUrl.current = URL.createObjectURL(b);
-      };
-      mr.start(100);
 
-      // analyser
+      // Configuração alinhada ao WhatsApp: mono, 48kHz, VoIP application, ~32kbps.
+      const rec = new Recorder({
+        encoderPath,
+        encoderSampleRate: 48000,
+        numberOfChannels: 1,
+        streamPages: false,
+        encoderApplication: 2048, // VoIP
+        encoderBitRate: 32000,
+        resampleQuality: 3,
+        sourceNode: undefined,
+      });
+      recorderRef.current = rec;
+
+      rec.ondataavailable = (typedArray: Uint8Array) => {
+        const oggBlob = new Blob([typedArray], { type: 'audio/ogg; codecs=opus' });
+        setBlob(oggBlob);
+        if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+        previewUrl.current = URL.createObjectURL(oggBlob);
+      };
+
+      await rec.start();
+
+      // Analyser para waveform ao vivo (independente do encoder).
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       audioCtxRef.current = ctx;
       const src = ctx.createMediaStreamSource(stream);
@@ -87,25 +107,20 @@ export function AudioRecorder({ onSend }: Props) {
     }
   };
 
-  const pickMime = () => {
-    const cands = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
-    for (const c of cands) if (MediaRecorder.isTypeSupported?.(c)) return c;
-    return '';
-  };
-
-  const stop = () => {
-    try { mediaRef.current?.stop(); } catch {}
+  const stop = async () => {
+    try { await recorderRef.current?.stop?.(); } catch { /* noop */ }
     if (tickRef.current) { window.clearInterval(tickRef.current); tickRef.current = null; }
     if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
-    try { streamRef.current?.getTracks().forEach(t => t.stop()); } catch {}
+    try { streamRef.current?.getTracks().forEach(t => t.stop()); } catch { /* noop */ }
     setRecording(false);
     setPaused(false);
   };
 
   const pause = () => {
-    if (!mediaRef.current) return;
-    if (mediaRef.current.state === 'recording') { mediaRef.current.pause(); setPaused(true); }
-    else if (mediaRef.current.state === 'paused') { mediaRef.current.resume(); setPaused(false); }
+    const r = recorderRef.current;
+    if (!r) return;
+    if (r.state === 'recording') { r.pause?.(); setPaused(true); }
+    else if (r.state === 'paused') { r.resume?.(); setPaused(false); }
   };
 
   const discard = () => {
