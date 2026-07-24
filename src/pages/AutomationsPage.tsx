@@ -439,12 +439,12 @@ export default function AutomationsPage() {
                   </Button>
                   {it.id === '3cx' && (
                     <Button size="sm" variant="secondary" asChild>
-                      <a href="/3cx"><Phone className="w-4 h-4 mr-2" /> Abrir painel</a>
+                      <a href="/3cx" title="VoIP — KPIs & Métricas"><Phone className="w-4 h-4 mr-2" /> VoIP — KPIs & Métricas</a>
                     </Button>
                   )}
                   {it.id === 'yeastar' && (
                     <Button size="sm" variant="secondary" asChild>
-                      <a href="/yeastar"><Phone className="w-4 h-4 mr-2" /> Abrir painel</a>
+                      <a href="/yeastar" title="VoIP — KPIs & Métricas"><Phone className="w-4 h-4 mr-2" /> VoIP — KPIs & Métricas</a>
                     </Button>
                   )}
                 </div>
