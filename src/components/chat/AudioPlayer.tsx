@@ -160,7 +160,23 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
     const a = audioRef.current;
     if (!a) return;
     const onLoaded = () => {
-      if (isFinite(a.duration)) setTotal(a.duration);
+      // OGG/Opus gerado pelo opus-recorder (e vários arquivos vindos do WhatsApp)
+      // não carrega a duração no header. O <audio> reporta Infinity até que a
+      // gente force um seek para o fim — aí o browser calcula a duração real e
+      // dispara `durationchange` com o valor correto.
+      if (!isFinite(a.duration) || a.duration === 0) {
+        try {
+          const onSeeked = () => {
+            a.removeEventListener('seeked', onSeeked);
+            try { a.currentTime = 0; } catch {}
+            if (isFinite(a.duration)) setTotal(a.duration);
+          };
+          a.addEventListener('seeked', onSeeked);
+          a.currentTime = 1e101;
+        } catch {}
+      } else {
+        setTotal(a.duration);
+      }
       setLoading(false);
       // Restore last position on first metadata load
       if (!restoredRef.current) {
@@ -169,7 +185,6 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
         const r = rangeRef.current;
         let target = saved;
         if (r) {
-          // Resume inside persisted range; clamp saved position or start at range[0]
           if (target < r[0] || target >= r[1] - 0.2) target = r[0];
         }
         if (target > 0 && isFinite(a.duration) && target < a.duration - 0.5) {
