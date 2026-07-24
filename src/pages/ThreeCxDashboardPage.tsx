@@ -175,7 +175,7 @@ export default function ThreeCxDashboardPage() {
   };
 
   return (
-    <AppLayout title="3CX — KPIs & Métricas" subtitle="Painel de ligações da empresa, equipes e agentes">
+    <AppLayout title="VoIP — KPIs & Métricas" subtitle="Painel de ligações da empresa, equipes e agentes">
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <div className="flex items-center gap-2 flex-wrap">
           <Phone className="w-4 h-4 text-primary" />
