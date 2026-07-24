@@ -84,12 +84,15 @@ export default function YeastarDashboardPage() {
   const abortRef = useRef<AbortController | null>(null);
   const { status: voipStatus, connect: voipConnect } = useVoip();
 
-  // Trunk form — pré-preenchido com as credenciais informadas pelo dono.
-  const [server, setServer] = useState('sopropabx.ras.yeastar.com');
-  const [username, setUsername] = useState('55008137460254');
-  const [password, setPassword] = useState('yo82g5l');
-  const [wsUri, setWsUri] = useState('wss://sopropabx.ras.yeastar.com:8089/ws');
-  const [displayName, setDisplayName] = useState('Lead Seller Agent');
+  // Trunk form — cada Empresa/Sub-empresa registra suas próprias credenciais.
+  // O backend (manage-sip-config) resolve o owner_id do usuário logado via
+  // user_account_access, então o `saveSipConfig`/`fetchSipConfig` já é
+  // automaticamente escopado por tenant — sem vazamento entre empresas.
+  const [server, setServer] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [wsUri, setWsUri] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [saving, setSaving] = useState(false);
   const [loadingCfg, setLoadingCfg] = useState(true);
 
@@ -236,10 +239,26 @@ export default function YeastarDashboardPage() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2"><PlugZap className="w-4 h-4" /> Tronco SIP (VoIP)</CardTitle>
           <CardDescription>
-            Credenciais do Yeastar usadas pelo webphone integrado. Ao salvar,
-            o botão azul de telefone (WhatsApp Completo e Modo Foco) passa a
-            discar via este tronco.
+            Cada Empresa/Sub-empresa registra suas próprias credenciais do
+            Yeastar — ficam disponíveis para todos os usuários da mesma conta
+            e nunca são compartilhadas entre tenants. Ao salvar, o botão azul
+            de telefone (WhatsApp Completo e Modo Foco) passa a discar via
+            este tronco.
           </CardDescription>
+          <div className="pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setServer('pbx.suaempresa.yeastar.com');
+                setWsUri('wss://pbx.suaempresa.yeastar.com:8089/ws');
+                setDisplayName(displayName || 'Atendente');
+              }}
+            >
+              Usar modelo Yeastar (WSS :8089/ws)
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-1.5">
