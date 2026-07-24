@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useVoip } from '@/contexts/VoipContext';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
+import { SipStatusDot } from '@/components/voip/SipStatusDot';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { supabase } from '@/integrations/supabase/client';
 import { insertChatMessageDedup } from '@/lib/dedupChatInsert';
