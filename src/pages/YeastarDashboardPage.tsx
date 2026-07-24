@@ -299,7 +299,35 @@ export default function YeastarDashboardPage() {
             <Label>Nome de exibição</Label>
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Lead Seller Agent" />
           </div>
-          <div className="md:col-span-2 flex justify-end">
+          <div className="md:col-span-2 flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={async () => {
+                if (!server.trim() || !username.trim() || !password.trim()) {
+                  toast({ title: 'Preencha servidor, usuário e senha antes de testar.', variant: 'destructive' });
+                  return;
+                }
+                setTesting(true);
+                try {
+                  const result = await testConnection();
+                  if (result === 'connected') {
+                    toast({ title: 'SIP conectado com sucesso', description: `Servidor: ${server}` });
+                  } else {
+                    toast({
+                      title: 'Falha ao conectar SIP',
+                      description: voipError || `Status final: ${result}. Verifique credenciais e WSS.`,
+                      variant: 'destructive',
+                    });
+                  }
+                } finally {
+                  setTesting(false);
+                }
+              }}
+              disabled={testing || saving || loadingCfg}
+            >
+              {testing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PlugZap className="w-4 h-4 mr-2" />}
+              Testar conexão SIP
+            </Button>
             <Button onClick={saveTrunk} disabled={saving || loadingCfg}>
               {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
               Salvar tronco SIP e reconectar
