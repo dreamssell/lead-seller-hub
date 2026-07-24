@@ -56,6 +56,10 @@ export function AudioRecorder({ onSend }: Props) {
       streamRef.current = stream;
 
       // Configuração alinhada ao WhatsApp: mono, 48kHz, VoIP application, ~32kbps.
+      // IMPORTANTE: NÃO passar `sourceNode` (nem como undefined). O default da
+      // lib é `{ context: null }` e ela lê `config.sourceNode.context` em
+      // initAudioContext — passar undefined dispara "Cannot read properties of
+      // undefined (reading 'context')" e a gravação nunca inicia.
       const rec = new Recorder({
         encoderPath,
         encoderSampleRate: 48000,
@@ -64,7 +68,6 @@ export function AudioRecorder({ onSend }: Props) {
         encoderApplication: 2048, // VoIP
         encoderBitRate: 32000,
         resampleQuality: 3,
-        sourceNode: undefined,
       });
       recorderRef.current = rec;
 
