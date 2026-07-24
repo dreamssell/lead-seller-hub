@@ -342,6 +342,7 @@ export default function ThreeCxDashboardPage() {
         </CardContent>
       </Card>
     </AppLayout>
+    </>
   );
 }
 
