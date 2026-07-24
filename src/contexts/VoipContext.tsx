@@ -356,6 +356,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
         connect,
         disconnect,
         reloadConfig,
+        testConnection,
         makeCall,
         answerCall,
         rejectCall,
