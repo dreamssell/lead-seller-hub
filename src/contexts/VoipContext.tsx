@@ -76,16 +76,23 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     ua.on('disconnected', (e) => {
       console.warn('VoIP WebSocket Desconectado', e);
       setStatus('disconnected');
+      setLastError('Conexão WebSocket SIP encerrada.');
+      setLastCheckedAt(Date.now());
     });
-    
+
     ua.on('registered', () => {
       setStatus('connected');
+      setLastError(null);
+      setLastCheckedAt(Date.now());
       toast.success('VoIP Conectado com sucesso');
     });
-    
+
     ua.on('registrationFailed', (e) => {
       setStatus('error');
-      toast.error(`Falha no registro SIP: ${e?.cause || 'Erro desconhecido'}`);
+      const reason = e?.cause || 'Erro desconhecido';
+      setLastError(`Falha no registro SIP: ${reason}`);
+      setLastCheckedAt(Date.now());
+      toast.error(`Falha no registro SIP: ${reason}`);
     });
 
     // Lidando com chamadas (Recebidas e Feitas)
