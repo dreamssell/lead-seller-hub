@@ -608,7 +608,54 @@ Deno.serve(async (req) => {
         gowsData?.JID || gowsData?.From || gowsData?.Chat || gowsData?.Contact;
       const contactChat = webChatId || gowsJid || null;
       const contactPhone = normalizePhone(contactChat);
+
+      // Merge LID → telefone real: se o payload trouxer também um JID @lid
+      // (ou LID em SenderAlt), procuramos o pseudo-contato `lid_<digits>` e
+      // migramos mensagens/atribuições para o contato real.
+      const contactLid: string | null = (() => {
+        const cands = [
+          webPayload?.lid, webPayload?.wid, webPayload?.id, webPayload?.contactId,
+          gowsData?.LID, gowsData?.SenderAlt, gowsData?.RecipientAlt, gowsJid,
+        ];
+        for (const c of cands) {
+          if (typeof c === 'string' && c.includes('@lid')) return c;
+        }
+        return null;
+      })();
+      if (contactPhone && contactLid) {
+        const lidDigits = contactLid.replace(/\D/g, '');
+        const pseudoPhone = lidDigits ? `lid_${lidDigits}` : null;
+        if (pseudoPhone) {
+          const { data: pseudo } = await supabase
+            .from('customers').select('id')
+            .eq('owner_id', conn.owner_id).eq('phone', pseudoPhone).maybeSingle();
+          if (pseudo?.id) {
+            const { data: real } = await supabase
+              .from('customers').select('id')
+              .eq('owner_id', conn.owner_id).eq('phone', contactPhone).maybeSingle();
+            let realId = real?.id as string | undefined;
+            if (!realId) {
+              // Promove o pseudo ao telefone real (evita perder histórico).
+              await supabase.from('customers')
+                .update({ phone: contactPhone, notes: null })
+                .eq('id', pseudo.id);
+              realId = pseudo.id;
+            } else if (realId !== pseudo.id) {
+              // Move mensagens e limpa o pseudo.
+              await supabase.from('chat_messages')
+                .update({ customer_id: realId }).eq('customer_id', pseudo.id);
+              await supabase.from('customers').delete().eq('id', pseudo.id);
+            }
+            console.log('[waha-inbound] lid_merged', JSON.stringify({
+              owner_id: conn.owner_id, lid: contactLid, phone: contactPhone,
+              pseudo_id: pseudo.id, real_id: realId,
+            }));
+          }
+        }
+      }
+
       if (!contactPhone) return json({ ok: true, skipped: 'contact_no_phone' });
+
 
       const patch: Record<string, any> = { profile_synced_at: new Date().toISOString() };
       const pic = webPayload?.profilePictureUrl || webPayload?.profilePicUrl
@@ -845,12 +892,47 @@ Deno.serve(async (req) => {
   // canonical id so the message always lands on the real thread.
   let customerId: string | null = null;
   {
-    const { data: existingCustomer } = await supabase
+    // Merge oportunista: se o telefone real veio nesta mensagem E existe um
+    // pseudo-contato `lid_<digits>` para o mesmo LID, promovemos/mesclamos
+    // antes de gravar — assim o histórico "Contato WhatsApp (nº oculto)"
+    // se junta ao contato real automaticamente.
+    if (!lidPseudoPhone && senderLid) {
+      const lidDigits = senderLid.replace(/\D/g, '');
+      const pseudoPhone = lidDigits ? `lid_${lidDigits}` : null;
+      if (pseudoPhone) {
+        const { data: pseudo } = await supabase
+          .from('customers').select('id')
+          .eq('owner_id', conn.owner_id).eq('phone', pseudoPhone).maybeSingle();
+        if (pseudo?.id) {
+          const { data: real } = await supabase
+            .from('customers').select('id')
+            .eq('owner_id', conn.owner_id).eq('phone', phone).maybeSingle();
+          if (!real?.id) {
+            await supabase.from('customers')
+              .update({ phone, notes: null }).eq('id', pseudo.id);
+            customerId = pseudo.id;
+          } else if (real.id !== pseudo.id) {
+            await supabase.from('chat_messages')
+              .update({ customer_id: real.id }).eq('customer_id', pseudo.id);
+            await supabase.from('customers').delete().eq('id', pseudo.id);
+            customerId = real.id;
+          }
+          console.log('[waha-inbound] lid_merged_inline', JSON.stringify({
+            owner_id: conn.owner_id, lid: senderLid, phone, real_id: customerId,
+          }));
+        }
+      }
+    }
+
+    const { data: existingCustomer } = customerId
+      ? { data: { id: customerId, name: null } as any }
+      : await supabase
       .from('customers')
       .select('id, name')
       .eq('phone', phone)
       .eq('owner_id', conn.owner_id)
       .maybeSingle();
+
 
     if (existingCustomer?.id) {
       customerId = existingCustomer.id;
@@ -861,13 +943,18 @@ Deno.serve(async (req) => {
       const { data: created, error: createErr } = await supabase
         .from('customers')
         .insert({
-          name: pushName || (lidPseudoPhone ? `Contato ${(senderLid ?? '').replace(/\D/g, '').slice(-6) || 'novo'}` : phone),
+          name: pushName || (lidPseudoPhone
+            ? `Contato WhatsApp (nº oculto)`
+            : phone),
           phone,
           channel: 'whatsapp',
           created_by: conn.owner_id,
           owner_id: conn.owner_id,
           sub_company_id: conn.sub_company_id,
           origin_connection_id: conn.id,
+          // Guarda a referência LID em `notes` para permitir merge posterior
+          // quando o telefone real for descoberto via contact.update.
+          notes: lidPseudoPhone ? `__lid_ref__:${senderLid ?? ''}` : null,
         })
         .select('id')
         .single();
