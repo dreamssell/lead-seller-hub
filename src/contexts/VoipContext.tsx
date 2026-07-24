@@ -7,6 +7,9 @@ import * as JsSIP from 'jssip';
 
 interface VoipContextType {
   status: 'disconnected' | 'connecting' | 'connected' | 'error';
+  lastError: string | null;
+  lastCheckedAt: number | null;
+  hasConfig: boolean;
   session: any | null; // JsSIP.RTCSession
   incomingSession: any | null;
   isMuted: boolean;
@@ -15,6 +18,7 @@ interface VoipContextType {
   setDialerOpen: (val: boolean) => void;
   connect: (config: any) => void;
   disconnect: () => void;
+  reloadConfig: () => Promise<void>;
   makeCall: (target: string, isVideo?: boolean) => void;
   answerCall: () => void;
   rejectCall: () => void;
