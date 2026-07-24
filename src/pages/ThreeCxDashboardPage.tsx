@@ -14,6 +14,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend,
 } from 'recharts';
 import { toast } from '@/hooks/use-toast';
+import { Helmet } from 'react-helmet-async';
 
 type DataSource = 'api' | 'mock' | 'loading';
 const INTEG_KEY = 'automations.integrations.v1';
