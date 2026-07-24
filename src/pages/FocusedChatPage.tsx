@@ -1125,19 +1125,6 @@ export default function FocusedChatPage() {
                       </TooltipContent>
                     </Tooltip>
                     <SipStatusDot />
-
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-[240px] text-xs" role="tooltip">
-                        <div className="font-medium">Ligar por VoIP (SIP)</div>
-                        <div className="text-muted-foreground mt-0.5">
-                          {voip.status !== 'connected'
-                            ? 'Ramal SIP desconectado — configure em Ferramentas → SIP para habilitar.'
-                            : lineBusy
-                              ? 'A linha Wavoip está em uso por outro usuário. Sua ligação SIP ainda pode ser realizada normalmente — o ícone fica vermelho apenas para sinalizar ocupação do canal WhatsApp.'
-                              : 'Discagem via ramal SIP (tronco VoIP).'}
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
