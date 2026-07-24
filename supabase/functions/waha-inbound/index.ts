@@ -71,9 +71,14 @@ function normalizePhone(from?: string | null): string | null {
 // Classifies the incoming event into one of our three logical buckets, using
 // both the top-level `event` string and the shape of the payload so we work
 // with WEBJS ("message") and GOWS ("gows.MessageEventData") equally well.
-function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'presence' | 'contact' | 'label' | 'chat_meta' | 'ignore' {
+function classify(event: string, body: any): 'message' | 'ack' | 'session' | 'reaction' | 'edit' | 'revoke' | 'presence' | 'contact' | 'label' | 'chat_meta' | 'call' | 'ignore' {
   const e = event.toLowerCase();
   if (e === 'session.status' || e === 'status.instance') return 'session';
+  // WhatsApp voice/video calls — WAHA emits call.received / call.accepted /
+  // call.rejected / call.missed / call.terminated. Some GOWS builds wrap them
+  // as *.calleventdata. We surface every state to render a bubble like the
+  // native WhatsApp ("Ligação de voz perdida", etc).
+  if (e === 'call' || e.startsWith('call.') || e.endsWith('.calleventdata')) return 'call';
   if (e === 'message.ack' || e === 'ack' || e.endsWith('.receipteventdata')) return 'ack';
   // Reactions: WEBJS emits `message.reaction`; GOWS wraps a `reactionMessage`
   // inside a normal MessageEventData, or emits `*.reactioneventdata`.
