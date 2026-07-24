@@ -1196,7 +1196,7 @@ export default function FocusedChatPage() {
                               sonnerToast.error(e?.message || 'Falha ao encerrar');
                             }
                           }}
-                          className="px-2.5 h-8 rounded-lg border border-emerald-200 dark:border-emerald-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition text-xs font-medium inline-flex items-center gap-1.5 text-emerald-600 hover:text-emerald-700"
+                          className="px-2.5 h-8 rounded-lg border border-red-200 dark:border-red-900 hover:bg-red-50 dark:hover:bg-red-950/40 transition text-xs font-medium inline-flex items-center gap-1.5 text-red-600 hover:text-red-700"
                           aria-label="Encerrar atendimento"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
