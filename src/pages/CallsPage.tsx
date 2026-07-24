@@ -1551,6 +1551,11 @@ export default function CallsPage() {
 
         </TabsContent>
         )}
+        {isOwner && (
+          <TabsContent value="sip-audit">
+            <SipAuditReport />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Discador Flutuante */}
