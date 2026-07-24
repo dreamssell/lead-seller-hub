@@ -108,6 +108,7 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
   const [retryTick, setRetryTick] = useState(0);
   const [range, setRange] = useState<[number, number] | null>(() => loadRange(url));
   const [dragMode, setDragMode] = useState<'seek' | 'range' | null>(null);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const dragStartRef = useRef<number>(0);
   const restoredRef = useRef(false);
   const rangeRef = useRef<[number, number] | null>(range);
@@ -115,6 +116,37 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
   const gainNodeRef = useRef<GainNode | null>(null);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
   const bars = useBars(url);
+
+  // Baixa o áudio inteiro como blob antes de tocar. Isso elimina os "picos
+  // de mudo" causados por Range requests parciais ao Supabase Storage: o
+  // browser tinha que pausar a decodificação toda vez que o próximo chunk
+  // ainda não havia chegado. Servindo a partir de um object URL local, o
+  // arquivo já está 100% em memória quando o <audio> começa a decodificar.
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setBlobUrl(null);
+    setError(null);
+    (async () => {
+      try {
+        const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
+      } catch (e) {
+        if (cancelled) return;
+        // Fallback: deixa o <audio> baixar direto do url original.
+        setBlobUrl(url);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (objectUrl) { try { URL.revokeObjectURL(objectUrl); } catch {} }
+    };
+  }, [url, retryTick]);
+
 
   useEffect(() => { rangeRef.current = range; }, [range]);
 
@@ -389,7 +421,8 @@ export function AudioPlayer({ url, mine, filename, duration }: Props) {
           reprodução: alguns objetos do Supabase Storage respondem lentamente
           a Range requests, então em vez de deixar o browser buscar em pedaços
           conforme toca, forçamos o download antecipado do arquivo inteiro. */}
-      <audio ref={audioRef} src={url} preload="auto" crossOrigin="anonymous" className="hidden" />
+      <audio ref={audioRef} src={blobUrl ?? undefined} preload="auto" crossOrigin="anonymous" className="hidden" />
+
 
       <button
         type="button"
