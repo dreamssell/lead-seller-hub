@@ -31,6 +31,9 @@ const VoipContext = createContext<VoipContextType | null>(null);
 
 export function VoipProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<VoipContextType['status']>('disconnected');
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
+  const [hasConfig, setHasConfig] = useState(false);
   const[session, setSession] = useState<any | null>(null);
   const [incomingSession, setIncomingSession] = useState<any | null>(null);
   const [isMuted, setIsMuted] = useState(false);
