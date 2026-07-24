@@ -84,12 +84,15 @@ export default function YeastarDashboardPage() {
   const abortRef = useRef<AbortController | null>(null);
   const { status: voipStatus, connect: voipConnect } = useVoip();
 
-  // Trunk form — pré-preenchido com as credenciais informadas pelo dono.
-  const [server, setServer] = useState('sopropabx.ras.yeastar.com');
-  const [username, setUsername] = useState('55008137460254');
-  const [password, setPassword] = useState('yo82g5l');
-  const [wsUri, setWsUri] = useState('wss://sopropabx.ras.yeastar.com:8089/ws');
-  const [displayName, setDisplayName] = useState('Lead Seller Agent');
+  // Trunk form — cada Empresa/Sub-empresa registra suas próprias credenciais.
+  // O backend (manage-sip-config) resolve o owner_id do usuário logado via
+  // user_account_access, então o `saveSipConfig`/`fetchSipConfig` já é
+  // automaticamente escopado por tenant — sem vazamento entre empresas.
+  const [server, setServer] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [wsUri, setWsUri] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [saving, setSaving] = useState(false);
   const [loadingCfg, setLoadingCfg] = useState(true);
 
