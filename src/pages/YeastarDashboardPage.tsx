@@ -16,6 +16,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend,
 } from 'recharts';
 import { toast } from '@/hooks/use-toast';
+import { Helmet } from 'react-helmet-async';
 import { saveSipConfig, fetchSipConfig, type SipConfig } from '@/lib/sipConfig';
 import { useVoip } from '@/contexts/VoipContext';
 
