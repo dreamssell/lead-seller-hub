@@ -19,6 +19,7 @@ interface VoipContextType {
   connect: (config: any) => void;
   disconnect: () => void;
   reloadConfig: () => Promise<void>;
+  testConnection: () => Promise<'connected' | 'error' | 'disconnected' | 'connecting'>;
   makeCall: (target: string, isVideo?: boolean) => void;
   answerCall: () => void;
   rejectCall: () => void;
@@ -264,6 +265,38 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
+  // Toast on status transitions (skip initial mount) so operators see
+  // realtime feedback across all pages that mount the provider.
+  const prevStatusRef = useRef<VoipContextType['status'] | null>(null);
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status;
+    if (prev === null || prev === status) return;
+    if (status === 'connected') toast.success('VoIP conectado');
+    else if (status === 'connecting') toast.message('VoIP conectando…');
+    else if (status === 'error') toast.error(`VoIP falhou${lastError ? `: ${lastError}` : ''}`);
+    else if (status === 'disconnected') toast.message('VoIP desconectado');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
+
+  const testConnection = React.useCallback(async () => {
+    lastCfgSigRef.current = '';
+    if (uaRef.current) { try { uaRef.current.stop(); } catch {} uaRef.current = null; }
+    setStatus('connecting');
+    await reloadConfig();
+    // Aguarda até 8s a estabilização do registro SIP.
+    const deadline = Date.now() + 8000;
+    return new Promise<VoipContextType['status']>((resolve) => {
+      const tick = () => {
+        const s = (uaRef.current && (uaRef.current.isRegistered?.() ? 'connected' : null)) as any;
+        if (s === 'connected') return resolve('connected');
+        if (Date.now() > deadline) return resolve((uaRef.current ? 'error' : 'disconnected'));
+        setTimeout(tick, 400);
+      };
+      tick();
+    });
+  }, [reloadConfig]);
+
   useEffect(() => {
     try { localStorage.removeItem('sipConfig'); } catch {}
     reloadConfig();
@@ -276,17 +309,31 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     };
     window.addEventListener('sip:reload', onReload);
 
-    // Polling: revalida credenciais e estado a cada 60s.
-    const interval = window.setInterval(() => { reloadConfig(); }, 60_000);
+    // Polling com backoff: 60s base; dobra a cada falha consecutiva
+    // (max 300s) para reduzir carga quando SIP está offline. Reseta assim
+    // que voltarmos a 'connected'.
+    let failStreak = 0;
+    let timer: number | null = null;
+    const schedule = () => {
+      const delay = Math.min(300_000, 60_000 * Math.pow(2, failStreak));
+      timer = window.setTimeout(async () => {
+        await reloadConfig();
+        // status é lido via ref implícita — usamos snapshot atual do UA.
+        const registered = !!(uaRef.current && uaRef.current.isRegistered?.());
+        failStreak = registered ? 0 : Math.min(failStreak + 1, 3);
+        schedule();
+      }, delay);
+    };
+    schedule();
 
-    // Reconecta ao voltar a foco (mudança de aba/mobile).
-    const onFocus = () => { reloadConfig(); };
+    // Reconecta ao voltar a foco e força reset do backoff.
+    const onFocus = () => { failStreak = 0; reloadConfig(); };
     window.addEventListener('focus', onFocus);
 
     return () => {
       window.removeEventListener('sip:reload', onReload);
       window.removeEventListener('focus', onFocus);
-      window.clearInterval(interval);
+      if (timer) window.clearTimeout(timer);
       disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -309,6 +356,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
         connect,
         disconnect,
         reloadConfig,
+        testConnection,
         makeCall,
         answerCall,
         rejectCall,

@@ -247,7 +247,10 @@ Deno.serve(async (req) => {
         .select('*')
         .order('created_at', { ascending: false })
         .limit(Number(body.limit) || 50);
-      if (ownerId) q = q.eq('owner_id', ownerId);
+      // Admins may request cross-tenant history via { all: true }; agents are
+      // always scoped to their own tenant.
+      const wantAll = isAdmin === true && body?.all === true;
+      if (!wantAll && ownerId) q = q.eq('owner_id', ownerId);
       const { data, error } = await q;
       if (error) throw error;
       return json(200, { entries: data });

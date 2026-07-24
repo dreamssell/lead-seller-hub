@@ -20,6 +20,7 @@ export function CallsPageTabsList({ isOwner }: { isOwner: boolean }) {
       <TabsTrigger value="queues">Filas & IVR</TabsTrigger>
       <TabsTrigger value="blocked">Bloqueados</TabsTrigger>
       {isOwner && <TabsTrigger value="settings">Configurações SIP</TabsTrigger>}
+      {isOwner && <TabsTrigger value="sip-audit">Auditoria SIP</TabsTrigger>}
     </TabsList>
   );
 }
