@@ -176,6 +176,19 @@ export default function ThreeCxDashboardPage() {
   };
 
   return (
+    <>
+      <Helmet>
+        <title>VoIP — KPIs & Métricas | Lead Seller</title>
+        <meta name="description" content="Painel de ligações da empresa, equipes e agentes — KPIs de telefonia VoIP com integração 3CX." />
+        <link rel="canonical" href="https://connecto-center.lovable.app/3cx" />
+        <meta property="og:title" content="VoIP — KPIs & Métricas" />
+        <meta property="og:description" content="Painel de ligações da empresa, equipes e agentes." />
+        <meta property="og:url" content="https://connecto-center.lovable.app/3cx" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content="VoIP — KPIs & Métricas" />
+        <meta name="twitter:description" content="Painel de ligações da empresa, equipes e agentes." />
+      </Helmet>
     <AppLayout title="VoIP — KPIs & Métricas" subtitle="Painel de ligações da empresa, equipes e agentes">
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <div className="flex items-center gap-2 flex-wrap">
