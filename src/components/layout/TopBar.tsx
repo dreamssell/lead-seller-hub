@@ -1,11 +1,12 @@
 import { useNavigate } from 'react-router-dom';
-import { Sun, Moon, Bell, Search, Menu, Globe, LogIn, CalendarPlus, Settings } from 'lucide-react';
+import { Sun, Moon, Bell, Search, Menu, Globe, LogIn, CalendarPlus, Settings, Stethoscope, Building2 } from 'lucide-react';
 import { NotificationsBell } from '@/components/notifications/NotificationsBell';
 import { useThemeContext } from '@/contexts/ThemeContext';
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -16,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+import { TenantDiagnosticsDialog } from '@/components/diagnostics/TenantDiagnosticsDialog';
 
 interface TopBarProps {
   title: string;
@@ -26,9 +28,13 @@ interface TopBarProps {
 export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useThemeContext();
-  const { user } = useAuth();
+  const { user, access } = useAuth();
+  const { isOwner } = usePlatformOwner();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string>('');
+  const [diagOpen, setDiagOpen] = useState(false);
+
+  const tenantLabel = access?.sub_company_name?.trim() || 'Empresa principal';
 
   useEffect(() => {
     if (!user) return;
@@ -73,7 +79,27 @@ export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
           </button>
           <div className="min-w-0">
             <h1 className="text-base md:text-lg font-semibold text-foreground truncate">{title}</h1>
-            {subtitle && <p className="text-xs text-muted-foreground truncate hidden sm:block">{subtitle}</p>}
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground truncate">
+                <Building2 className="w-3 h-3 shrink-0" aria-hidden />
+                <span className="truncate max-w-[40vw]">{tenantLabel}</span>
+              </span>
+              {isOwner && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => setDiagOpen(true)}
+                      className="p-1 rounded-md hover:bg-secondary transition-colors text-primary"
+                      aria-label="Diagnóstico do tenant"
+                    >
+                      <Stethoscope className="w-3.5 h-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Diagnóstico do tenant (dono)</TooltipContent>
+                </Tooltip>
+              )}
+              {subtitle && <span className="text-xs text-muted-foreground truncate hidden sm:block">· {subtitle}</span>}
+            </div>
           </div>
         </div>
 
@@ -146,6 +172,13 @@ export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
           </Tooltip>
         </div>
       </header>
+      {isOwner && (
+        <TenantDiagnosticsDialog
+          open={diagOpen}
+          onOpenChange={setDiagOpen}
+          tenantLabel={tenantLabel}
+        />
+      )}
     </TooltipProvider>
   );
 }
