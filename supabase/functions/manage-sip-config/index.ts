@@ -175,11 +175,32 @@ Deno.serve(async (req) => {
   try {
     if (action === 'get') {
       const q = admin.from('sip_configurations').select('*').eq('owner_id', ownerId);
-      const { data, error } = subCompanyId
-        ? await q.eq('sub_company_id', subCompanyId).maybeSingle()
-        : clientCompanyId
-          ? await q.eq('client_company_id', clientCompanyId).maybeSingle()
-          : await q.is('sub_company_id', null).is('client_company_id', null).maybeSingle();
+      let data: any = null;
+      let error: any = null;
+      if (subCompanyId) {
+        const exact = await q.eq('sub_company_id', subCompanyId).maybeSingle();
+        data = exact.data;
+        error = exact.error;
+        if (!error && !data) {
+          const inherited = await admin
+            .from('sip_configurations')
+            .select('*')
+            .eq('owner_id', ownerId)
+            .is('sub_company_id', null)
+            .is('client_company_id', null)
+            .maybeSingle();
+          data = inherited.data;
+          error = inherited.error;
+        }
+      } else if (clientCompanyId) {
+        const exact = await q.eq('client_company_id', clientCompanyId).maybeSingle();
+        data = exact.data;
+        error = exact.error;
+      } else {
+        const root = await q.is('sub_company_id', null).is('client_company_id', null).maybeSingle();
+        data = root.data;
+        error = root.error;
+      }
       if (error) throw error;
       if (!data) return json(200, { config: null });
       const password = await decryptPassword(data.password_ciphertext, data.password_iv);

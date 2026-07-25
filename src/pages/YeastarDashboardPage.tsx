@@ -326,7 +326,7 @@ export default function YeastarDashboardPage() {
                     displayName: displayName.trim() || undefined,
                   });
                   if (result === 'connected') {
-                    toast({ title: 'SIP conectado com sucesso', description: `Servidor: ${server}` });
+                    toast({ title: 'SIP conectado com sucesso', description: 'Teste OK. Salve o tronco para liberar o botão azul no chat.' });
                   } else {
                     toast({
                       title: 'Falha ao conectar SIP',
