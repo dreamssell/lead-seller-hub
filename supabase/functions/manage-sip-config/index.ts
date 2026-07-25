@@ -122,13 +122,14 @@ Deno.serve(async (req) => {
   const admin0 = createClient(SUPABASE_URL, SERVICE_ROLE);
   let effectiveOwnerId: string | null = null;
   let effectiveSubCompanyId: string | null = null;
-  const { data: acc } = await admin0
+  const { data: accessRows } = await admin0
     .from('user_account_access')
     .select('owner_id, sub_company_id, is_account_admin, is_owner, created_at')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(20);
+  const accessList = Array.isArray(accessRows) ? accessRows : [];
+  const acc = accessList.find((item: any) => item?.owner_id && item.owner_id !== user.id) || accessList[0] || null;
   const { data: cc } = await admin0
     .from('client_companies')
     .select('id, owner_id, auth_user_id, sub_company_id')
