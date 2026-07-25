@@ -32,6 +32,7 @@ export function normalizeSipWsUri(server?: string | null, wsUri?: string | null)
   const host = normalizeSipServer(server);
   const rawWs = String(wsUri || '').trim();
   const isYeastar = host.toLowerCase().includes('yeastar');
+  const endpointHost = isYeastar ? host.replace(/:(443|8089)$/i, '') : host;
 
   if (rawWs) {
     try {
@@ -47,7 +48,7 @@ export function normalizeSipWsUri(server?: string | null, wsUri?: string | null)
   }
 
   if (!host) return '';
-  return isYeastar ? `wss://${host}/ws` : `wss://${host}:7443`;
+  return isYeastar ? `wss://${endpointHost}/ws` : `wss://${host}:7443`;
 }
 
 export class SipError extends Error {
