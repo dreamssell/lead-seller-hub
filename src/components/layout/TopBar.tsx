@@ -28,9 +28,13 @@ interface TopBarProps {
 export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useThemeContext();
-  const { user } = useAuth();
+  const { user, access } = useAuth();
+  const { isOwner } = usePlatformOwner();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string>('');
+  const [diagOpen, setDiagOpen] = useState(false);
+
+  const tenantLabel = access?.sub_company_name?.trim() || 'Empresa principal';
 
   useEffect(() => {
     if (!user) return;
