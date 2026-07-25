@@ -65,7 +65,12 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     setStatus('connecting');
     setLastCheckedAt(Date.now());
 
-    const wsUri = config.wsUri || `wss://${config.server}:7443`;
+    // Escolhe uma URI WSS coerente com o PBX. Yeastar (K2/P-Series) usa
+    // 8089/ws por padrão; demais SBCs costumam expor 7443. Se o usuário
+    // informou `wsUri` explicitamente, respeitamos.
+    const host = String(config.server || '').toLowerCase();
+    const guess = host.includes('yeastar') ? `wss://${config.server}:8089/ws` : `wss://${config.server}:7443`;
+    const wsUri = config.wsUri || guess;
     const socket = new JsSIP.WebSocketInterface(wsUri);
     
     const ua = new JsSIP.UA({
