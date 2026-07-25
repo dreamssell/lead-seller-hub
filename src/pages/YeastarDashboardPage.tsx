@@ -17,7 +17,7 @@ import {
 } from 'recharts';
 import { toast } from '@/hooks/use-toast';
 import { Helmet } from 'react-helmet-async';
-import { saveSipConfig, fetchSipConfig, type SipConfig, type SipScope } from '@/lib/sipConfig';
+import { normalizeSipServer, normalizeSipWsUri, saveSipConfig, fetchSipConfig, type SipConfig, type SipScope } from '@/lib/sipConfig';
 import { useVoip } from '@/contexts/VoipContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { getActiveOwnerId } from '@/lib/chatTenantScope';
@@ -167,16 +167,19 @@ export default function YeastarDashboardPage() {
       toast({ title: 'Preencha servidor, usuário e senha.', variant: 'destructive' });
       return;
     }
+    const normalizedServer = normalizeSipServer(server);
     setSaving(true);
     try {
       const cfg: SipConfig = {
-        server: server.trim(),
+        server: normalizedServer,
         username: username.trim(),
         password,
-        ws_uri: wsUri.trim() || undefined,
+        ws_uri: normalizeSipWsUri(normalizedServer, wsUri.trim() || undefined),
         display_name: displayName.trim() || undefined,
         transport: 'wss',
       };
+      setServer(cfg.server);
+      setWsUri(cfg.ws_uri || '');
       await saveSipConfig(cfg, sipScope);
       toast({ title: 'Tronco SIP salvo', description: 'Reconectando webphone…' });
       // Reconecta imediatamente para que o botão azul (SIP) fique disponível.
@@ -279,11 +282,11 @@ export default function YeastarDashboardPage() {
               size="sm"
               onClick={() => {
                 setServer('pbx.suaempresa.yeastar.com');
-                setWsUri('wss://pbx.suaempresa.yeastar.com:8089/ws');
+                setWsUri('wss://pbx.suaempresa.yeastar.com/ws');
                 setDisplayName(displayName || 'Atendente');
               }}
             >
-              Usar modelo Yeastar (WSS :8089/ws)
+              Usar modelo Yeastar (WSS /ws)
             </Button>
           </div>
         </CardHeader>
@@ -294,7 +297,7 @@ export default function YeastarDashboardPage() {
           </div>
           <div className="space-y-1.5">
             <Label>WebSocket (WSS URI)</Label>
-            <Input value={wsUri} onChange={(e) => setWsUri(e.target.value)} placeholder="wss://host:8089/ws" />
+            <Input value={wsUri} onChange={(e) => setWsUri(e.target.value)} placeholder="wss://host/ws" />
           </div>
           <div className="space-y-1.5">
             <Label>Usuário / Extensão</Label>
@@ -318,19 +321,23 @@ export default function YeastarDashboardPage() {
                 }
                 setTesting(true);
                 try {
+                  const normalizedServer = normalizeSipServer(server);
+                  const normalizedWsUri = normalizeSipWsUri(normalizedServer, wsUri.trim() || undefined);
+                  setServer(normalizedServer);
+                  setWsUri(normalizedWsUri);
                   const result = await testConnection({
-                    server: server.trim(),
-                    wsUri: wsUri.trim() || undefined,
+                    server: normalizedServer,
+                    wsUri: normalizedWsUri,
                     username: username.trim(),
                     password,
                     displayName: displayName.trim() || undefined,
                   });
-                  if (result === 'connected') {
-                    toast({ title: 'SIP conectado com sucesso', description: 'Teste OK. Salve o tronco para liberar o botão azul no chat.' });
+                  if (result.status === 'connected') {
+                    toast({ title: 'SIP conectado com sucesso', description: `Teste OK via ${result.wsUri || normalizedWsUri}. Salve o tronco para liberar o botão azul no chat.` });
                   } else {
                     toast({
                       title: 'Falha ao conectar SIP',
-                      description: voipError || `Status final: ${result}. Verifique credenciais e WSS.`,
+                      description: result.error || voipError || `Status final: ${result.status}. Verifique credenciais e WSS.`,
                       variant: 'destructive',
                     });
                   }
