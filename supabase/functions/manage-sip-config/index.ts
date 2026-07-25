@@ -37,7 +37,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   method_not_allowed: 'Método HTTP não suportado. Use POST.',
   missing_auth: 'Cabeçalho Authorization ausente ou mal formatado.',
   unauthenticated: 'Sessão inválida ou expirada.',
-  forbidden: 'Apenas o dono da plataforma pode acessar configurações SIP.',
+  forbidden: 'Apenas administradores da Empresa/Sub-empresa podem alterar configurações SIP.',
   invalid_json: 'Corpo da requisição não é um JSON válido.',
   missing_action: 'Campo "action" é obrigatório.',
   unknown_action: 'Ação SIP não reconhecida.',
@@ -115,8 +115,6 @@ Deno.serve(async (req) => {
   const action = String(body?.action || '');
   if (!action) return fail(400, 'missing_action');
 
-  if (action !== 'get' && isAdmin !== true) return fail(403, 'forbidden');
-
   const scope = body?.scope || {};
   // Non-admins can only fetch their OWN tenant SIP — never accept a caller-supplied owner_id.
   // Admins may pass an explicit owner_id when configuring a client tenant; when omitted,
@@ -126,7 +124,7 @@ Deno.serve(async (req) => {
   let effectiveSubCompanyId: string | null = null;
   const { data: acc } = await admin0
     .from('user_account_access')
-    .select('owner_id, sub_company_id, created_at')
+    .select('owner_id, sub_company_id, is_account_admin, is_owner, created_at')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(1)
@@ -136,6 +134,14 @@ Deno.serve(async (req) => {
     .select('id, owner_id, auth_user_id, sub_company_id')
     .eq('auth_user_id', user.id)
     .maybeSingle();
+
+  const canManageTenantSip = Boolean(
+    isAdmin === true
+    || acc?.is_account_admin === true
+    || acc?.is_owner === true
+    || cc?.auth_user_id === user.id
+  );
+  if (action !== 'get' && !canManageTenantSip) return fail(403, 'forbidden');
 
   if (isAdmin === true) {
     effectiveOwnerId = scope.owner_id || acc?.owner_id || (cc ? (cc.auth_user_id === user.id ? user.id : (cc.owner_id || user.id)) : null) || user.id;
