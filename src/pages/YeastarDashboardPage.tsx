@@ -113,10 +113,11 @@ export default function YeastarDashboardPage() {
       try {
         const cfg = await fetchSipConfig(sipScope);
         if (cfg) {
-          if (cfg.server) setServer(cfg.server);
+          const normalizedServer = normalizeSipServer(cfg.server);
+          if (normalizedServer) setServer(normalizedServer);
           if (cfg.username) setUsername(cfg.username);
           if (cfg.password) setPassword(cfg.password);
-          if (cfg.ws_uri) setWsUri(cfg.ws_uri);
+          if (normalizedServer || cfg.ws_uri) setWsUri(normalizeSipWsUri(normalizedServer, cfg.ws_uri));
           if (cfg.display_name) setDisplayName(cfg.display_name);
         }
       } catch {
