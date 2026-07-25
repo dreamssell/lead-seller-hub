@@ -2832,10 +2832,23 @@ export default function ChatPage() {
                             aria-label="Ligar por VoIP SIP"
                             onClick={() => {
                               if (voip.status !== 'connected') {
+                                const reason = voip.lastError
+                                  ? `Motivo: ${voip.lastError}`
+                                  : (voip.hasConfig
+                                      ? 'O ramal SIP ainda não registrou no servidor. Tente reconectar.'
+                                      : 'Nenhum ramal SIP cadastrado. Configure em Automações → Yeastar.');
                                 toast({
-                                  title: 'VoIP desconectado',
-                                  description: 'Configure o SIP/VoIP em Configurações antes de ligar.',
+                                  title: `VoIP ${voip.status === 'connecting' ? 'conectando' : voip.status === 'error' ? 'com falha' : 'desconectado'}`,
+                                  description: reason,
                                   variant: 'destructive',
+                                  action: (
+                                    <button
+                                      onClick={() => { try { window.dispatchEvent(new Event('sip:reload')); } catch {} }}
+                                      className="inline-flex h-8 items-center rounded-md border border-border bg-background px-3 text-xs font-medium hover:bg-accent"
+                                    >
+                                      Reconectar
+                                    </button>
+                                  ) as any,
                                 });
                                 return;
                               }
