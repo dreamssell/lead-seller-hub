@@ -1,11 +1,12 @@
 import { useNavigate } from 'react-router-dom';
-import { Sun, Moon, Bell, Search, Menu, Globe, LogIn, CalendarPlus, Settings } from 'lucide-react';
+import { Sun, Moon, Bell, Search, Menu, Globe, LogIn, CalendarPlus, Settings, Stethoscope, Building2 } from 'lucide-react';
 import { NotificationsBell } from '@/components/notifications/NotificationsBell';
 import { useThemeContext } from '@/contexts/ThemeContext';
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -16,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+import { TenantDiagnosticsDialog } from '@/components/diagnostics/TenantDiagnosticsDialog';
 
 interface TopBarProps {
   title: string;
