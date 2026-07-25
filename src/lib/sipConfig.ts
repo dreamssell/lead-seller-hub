@@ -17,6 +17,40 @@ export type SipScope = {
   client_company_id?: string | null;
 };
 
+export function normalizeSipServer(input?: string | null) {
+  const raw = String(input || '').trim();
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw.includes('://') ? raw : `https://${raw}`);
+    return parsed.host.replace(/\/$/, '');
+  } catch {
+    return raw.replace(/^https?:\/\//i, '').replace(/^wss?:\/\//i, '').replace(/\/.*$/, '').replace(/\/$/, '');
+  }
+}
+
+export function normalizeSipWsUri(server?: string | null, wsUri?: string | null) {
+  const host = normalizeSipServer(server);
+  const rawWs = String(wsUri || '').trim();
+  const isYeastar = host.toLowerCase().includes('yeastar');
+  const endpointHost = isYeastar ? host.replace(/:(443|8089)$/i, '') : host;
+
+  if (rawWs) {
+    try {
+      const parsed = new URL(rawWs);
+      const parsedIsYeastar = parsed.hostname.toLowerCase().includes('yeastar') || isYeastar;
+      if (parsed.protocol === 'wss:' && parsedIsYeastar) {
+        return `wss://${parsed.hostname}/ws`;
+      }
+      return rawWs;
+    } catch {
+      return rawWs;
+    }
+  }
+
+  if (!host) return '';
+  return isYeastar ? `wss://${endpointHost}/ws` : `wss://${host}:7443`;
+}
+
 export class SipError extends Error {
   status: number;
   code: string;

@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useVoip } from '@/contexts/VoipContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { fetchSipConfig, type SipConfig, type SipScope } from '@/lib/sipConfig';
+import { fetchSipConfig, normalizeSipServer, normalizeSipWsUri, type SipConfig, type SipScope } from '@/lib/sipConfig';
 import { getActiveOwnerId } from '@/lib/chatTenantScope';
 import { RefreshCw, Phone, Server, Radio } from 'lucide-react';
 
@@ -23,11 +23,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 function computeWssUri(cfg: SipConfig | null): string {
   if (!cfg?.server) return '—';
-  if (cfg.ws_uri) return cfg.ws_uri;
-  const host = String(cfg.server).toLowerCase();
-  return host.includes('yeastar')
-    ? `wss://${cfg.server}:8089/ws`
-    : `wss://${cfg.server}:7443`;
+  return normalizeSipWsUri(cfg.server, cfg.ws_uri);
 }
 
 /**
@@ -68,7 +64,8 @@ export function TenantDiagnosticsDialog({ open, onOpenChange, tenantLabel }: Pro
   }, [open, scope.owner_id, scope.sub_company_id]);
 
   const wssUri = computeWssUri(cfg);
-  const endpoint = cfg?.server && cfg?.username ? `sip:${cfg.username}@${cfg.server}` : '—';
+  const normalizedServer = normalizeSipServer(cfg?.server);
+  const endpoint = normalizedServer && cfg?.username ? `sip:${cfg.username}@${normalizedServer}` : '—';
   const statusLabel = STATUS_LABEL[voip.status] ?? voip.status;
   const statusColor =
     voip.status === 'connected' ? 'bg-emerald-500'

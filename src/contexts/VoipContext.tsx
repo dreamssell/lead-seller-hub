@@ -1,14 +1,17 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { getActiveOwnerId } from '@/lib/chatTenantScope';
+import { normalizeSipServer, normalizeSipWsUri } from '@/lib/sipConfig';
 
 // Usando require dinâmico/importação para evitar problemas de SSR caso exista
 import * as JsSIP from 'jssip';
 
+type VoipStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+type VoipTestResult = { status: VoipStatus; error: string | null; wsUri?: string };
+
 interface VoipContextType {
-  status: 'disconnected' | 'connecting' | 'connected' | 'error';
+  status: VoipStatus;
   lastError: string | null;
   lastCheckedAt: number | null;
   hasConfig: boolean;
@@ -21,7 +24,7 @@ interface VoipContextType {
   connect: (config: any) => void;
   disconnect: () => void;
   reloadConfig: () => Promise<void>;
-  testConnection: (config?: any) => Promise<'connected' | 'error' | 'disconnected' | 'connecting'>;
+  testConnection: (config?: any) => Promise<VoipTestResult>;
   makeCall: (target: string, isVideo?: boolean) => void;
   answerCall: () => void;
   rejectCall: () => void;
@@ -45,6 +48,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
   const[dialerOpen, setDialerOpen] = useState(false);
 
   const uaRef = useRef<any>(null);
+  const lastErrorRef = useRef<string | null>(null);
   const localAudioRef = useRef<HTMLAudioElement | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const sipScope = React.useMemo(() => {
@@ -63,15 +67,35 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     remoteAudioRef.current.autoplay = true;
   },[]);
 
-  const connect = (config: any) => {
-    if (!config.server || !config.username || !config.password) {
-      setLastError('Configurações SIP incompletas (servidor, usuário ou senha ausentes).');
+  const updateLastError = (message: string | null) => {
+    lastErrorRef.current = message;
+    setLastError(message);
+  };
+
+  const describeSipFailure = (event: any, wsUri: string) => {
+    const cause = String(event?.cause || event?.reason || event?.message || '').trim();
+    const statusCode = event?.response?.status_code || event?.response?.statusCode;
+    if (statusCode === 401 || statusCode === 403) {
+      return `Credenciais recusadas pelo PBX (SIP ${statusCode}). Confira usuário/extensão e senha.`;
+    }
+    if (statusCode) return `Registro SIP recusado pelo PBX (SIP ${statusCode}${cause ? ` · ${cause}` : ''}).`;
+    if (/connection|socket|network|timeout|closed/i.test(cause)) {
+      return `Falha no WebSocket SIP (${wsUri}). Confirme se o WSS está liberado e acessível pelo navegador.`;
+    }
+    return cause ? `Falha no registro SIP: ${cause}` : `Falha no registro SIP usando ${wsUri}.`;
+  };
+
+  const connect = (config: any, opts: { silent?: boolean; onRegistered?: () => void; onFailed?: (message: string) => void } = {}) => {
+    const server = normalizeSipServer(config.server);
+    if (!server || !config.username || !config.password) {
+      updateLastError('Configurações SIP incompletas (servidor, usuário ou senha ausentes).');
       setStatus('error');
-      toast.error('Configurações SIP incompletas.');
+      if (!opts.silent) toast.error('Configurações SIP incompletas.');
+      opts.onFailed?.('Configurações SIP incompletas (servidor, usuário ou senha ausentes).');
       return;
     }
 
-    setLastError(null);
+    updateLastError(null);
     setStatus('connecting');
     setLastCheckedAt(Date.now());
     if (uaRef.current) {
@@ -79,18 +103,17 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
       uaRef.current = null;
     }
 
-    // Escolhe uma URI WSS coerente com o PBX. Yeastar (K2/P-Series) usa
-    // 8089/ws por padrão; demais SBCs costumam expor 7443. Se o usuário
-    // informou `wsUri` explicitamente, respeitamos.
-    const host = String(config.server || '').toLowerCase();
-    const guess = host.includes('yeastar') ? `wss://${config.server}:8089/ws` : `wss://${config.server}:7443`;
-    const wsUri = config.wsUri || guess;
+    // Yeastar Cloud/P-Series expõe o webphone em HTTPS/443 no caminho /ws.
+    // A porta :8089 é comum em instalações locais, mas falha na Mult Seguros.
+    const wsUri = normalizeSipWsUri(server, config.wsUri);
     const socket = new JsSIP.WebSocketInterface(wsUri);
+    let registeredOnce = false;
     
     const ua = new JsSIP.UA({
       sockets: [socket],
-      uri: `sip:${config.username}@${config.server}`,
+      uri: `sip:${config.username}@${server}`,
       password: config.password,
+      authorization_user: config.authUser || config.username,
       display_name: config.displayName || 'Lead Seller Agent',
       register: true,
       session_timers: false,
@@ -99,24 +122,29 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     ua.on('connected', () => console.log('VoIP WebSocket Conectado'));
     ua.on('disconnected', (e) => {
       console.warn('VoIP WebSocket Desconectado', e);
-      setStatus('disconnected');
-      setLastError('Conexão WebSocket SIP encerrada.');
+      const message = registeredOnce ? 'Conexão WebSocket SIP encerrada.' : describeSipFailure(e, wsUri);
+      setStatus(registeredOnce ? 'disconnected' : 'error');
+      updateLastError(message);
       setLastCheckedAt(Date.now());
+      if (!registeredOnce) opts.onFailed?.(message);
     });
 
     ua.on('registered', () => {
+      registeredOnce = true;
       setStatus('connected');
-      setLastError(null);
+      updateLastError(null);
       setLastCheckedAt(Date.now());
-      toast.success('VoIP Conectado com sucesso');
+      if (!opts.silent) toast.success('VoIP Conectado com sucesso');
+      opts.onRegistered?.();
     });
 
     ua.on('registrationFailed', (e) => {
       setStatus('error');
-      const reason = e?.cause || 'Erro desconhecido';
-      setLastError(`Falha no registro SIP: ${reason}`);
+      const message = describeSipFailure(e, wsUri);
+      updateLastError(message);
       setLastCheckedAt(Date.now());
-      toast.error(`Falha no registro SIP: ${reason}`);
+      if (!opts.silent) toast.error(message);
+      opts.onFailed?.(message);
     });
 
     // Lidando com chamadas (Recebidas e Feitas)
@@ -264,16 +292,18 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       setHasConfig(true);
-      const sig = `${cfg.server}|${cfg.username}|${cfg.password}|${cfg.ws_uri || ''}`;
+      const normalizedServer = normalizeSipServer(cfg.server);
+      const normalizedWsUri = normalizeSipWsUri(normalizedServer, cfg.ws_uri);
+      const sig = `${normalizedServer}|${cfg.username}|${cfg.password}|${normalizedWsUri}`;
       const changed = sig !== lastCfgSigRef.current;
       const needsConnect = !uaRef.current || status === 'disconnected' || status === 'error' || changed;
       if (needsConnect) {
         lastCfgSigRef.current = sig;
         if (uaRef.current) { try { uaRef.current.stop(); } catch {} uaRef.current = null; }
         connect({
-          server: cfg.server,
+          server: normalizedServer,
           port: cfg.port,
-          wsUri: cfg.ws_uri,
+          wsUri: normalizedWsUri,
           username: cfg.username,
           password: cfg.password,
           displayName: cfg.display_name,
@@ -312,17 +342,37 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     setStatus('connecting');
     if (config?.server && config?.username && config?.password) {
       setHasConfig(true);
-      connect(config);
+      const normalizedServer = normalizeSipServer(config.server);
+      const wsUri = normalizeSipWsUri(normalizedServer, config.wsUri);
+      return new Promise<VoipTestResult>((resolve) => {
+        let done = false;
+        const finish = (result: VoipTestResult) => {
+          if (done) return;
+          done = true;
+          window.clearTimeout(timer);
+          resolve(result);
+        };
+        const timer = window.setTimeout(() => {
+          const message = `Tempo esgotado aguardando registro SIP em ${wsUri}.`;
+          setStatus('error');
+          updateLastError(message);
+          finish({ status: 'error', error: message, wsUri });
+        }, 15_000);
+        connect({ ...config, server: normalizedServer, wsUri }, {
+          silent: true,
+          onRegistered: () => finish({ status: 'connected', error: null, wsUri }),
+          onFailed: (message) => finish({ status: 'error', error: message, wsUri }),
+        });
+      });
     } else {
       await reloadConfig();
     }
-    // Aguarda até 8s a estabilização do registro SIP.
-    const deadline = Date.now() + 8000;
-    return new Promise<VoipContextType['status']>((resolve) => {
+    const deadline = Date.now() + 15_000;
+    return new Promise<VoipTestResult>((resolve) => {
       const tick = () => {
         const s = (uaRef.current && (uaRef.current.isRegistered?.() ? 'connected' : null)) as any;
-        if (s === 'connected') return resolve('connected');
-        if (Date.now() > deadline) return resolve((uaRef.current ? 'error' : 'disconnected'));
+        if (s === 'connected') return resolve({ status: 'connected', error: null });
+        if (Date.now() > deadline) return resolve({ status: (uaRef.current ? 'error' : 'disconnected'), error: lastErrorRef.current });
         setTimeout(tick, 400);
       };
       tick();

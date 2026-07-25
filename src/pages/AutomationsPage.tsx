@@ -22,7 +22,7 @@ import { AutomationLogsDialog } from '@/components/automations/AutomationLogsDia
 import { FieldMappingDialog } from '@/components/automations/FieldMappingDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { getActiveOwnerId } from '@/lib/chatTenantScope';
-import { saveSipConfig, type SipConfig, type SipScope } from '@/lib/sipConfig';
+import { normalizeSipServer, normalizeSipWsUri, saveSipConfig, type SipConfig, type SipScope } from '@/lib/sipConfig';
 
 type StepStatus = 'pending' | 'running' | 'ok' | 'fail' | 'skip';
 type TestStep = { key: string; label: string; status: StepStatus; detail?: string };
@@ -141,20 +141,14 @@ function loadJSON<T>(key: string, fallback: T): T {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) as T : fallback; } catch { return fallback; }
 }
 
-function normalizePbxHost(pbxUrl?: string) {
-  const raw = String(pbxUrl || '').trim();
-  if (!raw) return '';
-  try { return new URL(raw).host; } catch { return raw.replace(/^https?:\/\//i, '').replace(/\/$/, ''); }
-}
-
 function yeastarToSipConfig(cfg: IntegrationConfig): SipConfig | null {
-  const host = normalizePbxHost(cfg.pbxUrl);
+  const host = normalizeSipServer(cfg.pbxUrl);
   if (!host || !cfg.username?.trim() || !cfg.password?.trim()) return null;
   return {
     server: host,
     username: cfg.username.trim(),
     password: cfg.password,
-    ws_uri: `wss://${host}:8089/ws`,
+    ws_uri: normalizeSipWsUri(host),
     display_name: cfg.extension?.trim() || 'Yeastar',
     transport: 'wss',
   };
