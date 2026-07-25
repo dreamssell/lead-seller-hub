@@ -20,6 +20,9 @@ import {
 } from 'lucide-react';
 import { AutomationLogsDialog } from '@/components/automations/AutomationLogsDialog';
 import { FieldMappingDialog } from '@/components/automations/FieldMappingDialog';
+import { useAuth } from '@/contexts/AuthContext';
+import { getActiveOwnerId } from '@/lib/chatTenantScope';
+import { saveSipConfig, type SipConfig, type SipScope } from '@/lib/sipConfig';
 
 type StepStatus = 'pending' | 'running' | 'ok' | 'fail' | 'skip';
 type TestStep = { key: string; label: string; status: StepStatus; detail?: string };
@@ -138,7 +141,31 @@ function loadJSON<T>(key: string, fallback: T): T {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) as T : fallback; } catch { return fallback; }
 }
 
+function normalizePbxHost(pbxUrl?: string) {
+  const raw = String(pbxUrl || '').trim();
+  if (!raw) return '';
+  try { return new URL(raw).host; } catch { return raw.replace(/^https?:\/\//i, '').replace(/\/$/, ''); }
+}
+
+function yeastarToSipConfig(cfg: IntegrationConfig): SipConfig | null {
+  const host = normalizePbxHost(cfg.pbxUrl);
+  if (!host || !cfg.username?.trim() || !cfg.password?.trim()) return null;
+  return {
+    server: host,
+    username: cfg.username.trim(),
+    password: cfg.password,
+    ws_uri: `wss://${host}:8089/ws`,
+    display_name: cfg.extension?.trim() || 'Yeastar',
+    transport: 'wss',
+  };
+}
+
 export default function AutomationsPage() {
+  const { access, user } = useAuth();
+  const sipScope: SipScope = useMemo(() => {
+    const ownerId = getActiveOwnerId(access?.owner_id, user?.id);
+    return ownerId ? { owner_id: ownerId, sub_company_id: access?.sub_company_id ?? null } : {};
+  }, [access?.owner_id, access?.sub_company_id, user?.id]);
   const [flows, setFlows] = useState<Flow[]>(() => loadJSON(FLOWS_KEY, DEFAULT_FLOWS));
   const [integrations, setIntegrations] = useState<Record<IntegrationId, IntegrationConfig>>(() =>
     loadJSON(INTEG_KEY, { holmes: { enabled: false }, dealerspace: { enabled: false }, '3cx': { enabled: false }, yeastar: { enabled: false } })
@@ -246,9 +273,29 @@ export default function AutomationsPage() {
     // step 3: auth (simulated)
     setStep('auth', { status: 'running' });
     await sleep(500);
-    setStep('auth', { status: 'ok', detail: 'Credenciais aceitas' });
+    if (id === 'yeastar') {
+      const sipCfg = yeastarToSipConfig(cfg);
+      if (!sipCfg) {
+        setStep('auth', { status: 'fail', detail: 'Dados SIP incompletos' });
+        setTests((p) => ({ ...p, [id]: { ...p[id], status: 'fail', message: 'Preencha URL do PBX, usuário e senha.', at: Date.now() } }));
+        toast({ title: 'Yeastar — dados incompletos', description: 'Preencha URL do PBX, usuário e senha.', variant: 'destructive' });
+        return;
+      }
+      try {
+        await saveSipConfig(sipCfg, sipScope);
+        window.dispatchEvent(new CustomEvent('sip:reload', { detail: { scope: sipScope } }));
+        setStep('auth', { status: 'ok', detail: 'Tronco SIP salvo' });
+      } catch (e: any) {
+        setStep('auth', { status: 'fail', detail: e?.message || 'Falha ao salvar tronco SIP' });
+        setTests((p) => ({ ...p, [id]: { ...p[id], status: 'fail', message: e?.message || 'Falha ao salvar tronco SIP', at: Date.now() } }));
+        toast({ title: 'Yeastar — falha ao salvar SIP', description: e?.message, variant: 'destructive' });
+        return;
+      }
+    } else {
+      setStep('auth', { status: 'ok', detail: 'Credenciais aceitas' });
+    }
     setTests((p) => ({ ...p, [id]: { ...p[id], status: 'ok', message: 'Conexão validada com sucesso.', at: Date.now() } }));
-    toast({ title: `${it.name} — Conexão OK`, description: 'Webhook e credenciais validados.' });
+    toast({ title: `${it.name} — Conexão OK`, description: id === 'yeastar' ? 'Tronco SIP salvo e chat reconectando.' : 'Webhook e credenciais validados.' });
   };
 
   useEffect(() => { localStorage.setItem(FLOWS_KEY, JSON.stringify(flows)); }, [flows]);
@@ -293,6 +340,28 @@ export default function AutomationsPage() {
   const copy = (text: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: 'Copiado', description: text });
+  };
+
+  const saveCurrentIntegration = async () => {
+    if (!current || !currentCfg) return;
+    if (current.id === 'yeastar') {
+      const sipCfg = yeastarToSipConfig(currentCfg);
+      if (!sipCfg) {
+        toast({ title: 'Yeastar incompleto', description: 'Preencha URL do PBX, usuário e senha.', variant: 'destructive' });
+        return;
+      }
+      try {
+        await saveSipConfig(sipCfg, sipScope);
+        window.dispatchEvent(new CustomEvent('sip:reload', { detail: { scope: sipScope } }));
+        toast({ title: 'Yeastar salvo', description: 'Tronco SIP salvo e webphone reconectando.' });
+      } catch (e: any) {
+        toast({ title: 'Falha ao salvar Yeastar', description: e?.message || 'Erro desconhecido', variant: 'destructive' });
+        return;
+      }
+    } else {
+      toast({ title: `${current.name} salvo` });
+    }
+    setConfigOpen(null);
   };
 
   return (
@@ -618,7 +687,7 @@ export default function AutomationsPage() {
                   Testar conexão
                 </Button>
                 <Button variant="ghost" onClick={() => setConfigOpen(null)}>Fechar</Button>
-                <Button onClick={() => { setConfigOpen(null); toast({ title: `${current.name} salvo` }); }}>Salvar</Button>
+                <Button onClick={saveCurrentIntegration}>Salvar</Button>
               </DialogFooter>
             </>
           )}

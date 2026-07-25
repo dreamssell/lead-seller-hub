@@ -239,7 +239,7 @@ export default function CallsPage() {
       setSipLoading(true);
       try {
         const { fetchSipConfig, listSipAudit } = await import('@/lib/sipConfig');
-        const cfg = await fetchSipConfig({ owner_id: access?.owner_id });
+        const cfg = await fetchSipConfig({ owner_id: access?.owner_id, sub_company_id: access?.sub_company_id ?? null });
         if (cancelled) return;
         if (cfg) {
           setSipConfig(prev => ({
@@ -257,7 +257,7 @@ export default function CallsPage() {
         // Audit list stays admin-only; skip silently for non-admins.
         if (isOwner) {
           try {
-            const audit = await listSipAudit({ owner_id: access?.owner_id });
+            const audit = await listSipAudit({ owner_id: access?.owner_id, sub_company_id: access?.sub_company_id ?? null });
             if (!cancelled) setSipAudit(audit);
           } catch { /* non-admin: expected 403 */ }
         }
@@ -276,7 +276,7 @@ export default function CallsPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [isOwner, access?.owner_id]);
+  }, [isOwner, access?.owner_id, access?.sub_company_id]);
 
   // Recarrega credenciais/auditoria quando o VoipContext dispara sip:reload
   // (config salva em outra aba, mudança de tenant, etc.), garantindo que a
@@ -285,7 +285,7 @@ export default function CallsPage() {
     const onReload = async () => {
       try {
         const { fetchSipConfig, listSipAudit } = await import('@/lib/sipConfig');
-        const cfg = await fetchSipConfig({ owner_id: access?.owner_id });
+        const cfg = await fetchSipConfig({ owner_id: access?.owner_id, sub_company_id: access?.sub_company_id ?? null });
         if (cfg) {
           setSipConfig(prev => ({
             ...prev,
@@ -300,7 +300,7 @@ export default function CallsPage() {
           }));
         }
         if (isOwner) {
-          try { setSipAudit(await listSipAudit({ owner_id: access?.owner_id })); } catch {}
+          try { setSipAudit(await listSipAudit({ owner_id: access?.owner_id, sub_company_id: access?.sub_company_id ?? null })); } catch {}
         }
       } catch (e) {
         console.warn('sip:reload refresh failed', e);
@@ -308,7 +308,7 @@ export default function CallsPage() {
     };
     window.addEventListener('sip:reload', onReload);
     return () => window.removeEventListener('sip:reload', onReload);
-  }, [isOwner, access?.owner_id]);
+  }, [isOwner, access?.owner_id, access?.sub_company_id]);
 
   // Auto-registra no Wavoip assim que as credenciais estiverem em memória
   // (qualquer usuário do tenant — agentes precisam poder ligar).
@@ -437,10 +437,10 @@ export default function CallsPage() {
         display_name: sipConfig.displayName,
         transport: sipConfig.transport,
         auto_record: sipConfig.autoRecord,
-      });
+      }, { owner_id: access?.owner_id, sub_company_id: access?.sub_company_id ?? null });
       toast({ title: 'Configuração SIP salva', description: 'Credenciais criptografadas armazenadas no backend.' });
       try { window.dispatchEvent(new CustomEvent('sip:reload')); } catch {}
-      setSipAudit(await listSipAudit());
+      setSipAudit(await listSipAudit({ owner_id: access?.owner_id, sub_company_id: access?.sub_company_id ?? null }));
     } catch (e: any) {
       const status: number = e?.status ?? 0;
       const title =

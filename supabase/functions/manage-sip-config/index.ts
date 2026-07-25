@@ -37,7 +37,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   method_not_allowed: 'Método HTTP não suportado. Use POST.',
   missing_auth: 'Cabeçalho Authorization ausente ou mal formatado.',
   unauthenticated: 'Sessão inválida ou expirada.',
-  forbidden: 'Apenas o dono da plataforma pode acessar configurações SIP.',
+  forbidden: 'Apenas administradores da Empresa/Sub-empresa podem alterar configurações SIP.',
   invalid_json: 'Corpo da requisição não é um JSON válido.',
   missing_action: 'Campo "action" é obrigatório.',
   unknown_action: 'Ação SIP não reconhecida.',
@@ -48,6 +48,10 @@ const ERROR_MESSAGES: Record<string, string> = {
 function fail(status: number, code: string, message?: string) {
   const msg = message ?? ERROR_MESSAGES[code] ?? 'Erro desconhecido.';
   return json(status, { error: code, code, message: msg, status });
+}
+
+function hasOwn(obj: unknown, key: string) {
+  return Boolean(obj && Object.prototype.hasOwnProperty.call(obj, key));
 }
 
 
@@ -111,36 +115,50 @@ Deno.serve(async (req) => {
   const action = String(body?.action || '');
   if (!action) return fail(400, 'missing_action');
 
-  if (action !== 'get' && isAdmin !== true) return fail(403, 'forbidden');
-
   const scope = body?.scope || {};
   // Non-admins can only fetch their OWN tenant SIP — never accept a caller-supplied owner_id.
-  // Resolve it from user_account_access; fall back to client_companies if not present.
+  // Admins may pass an explicit owner_id when configuring a client tenant; when omitted,
+  // resolve the same canonical tenant used by the app instead of falling back blindly to user.id.
   const admin0 = createClient(SUPABASE_URL, SERVICE_ROLE);
   let effectiveOwnerId: string | null = null;
+  let effectiveSubCompanyId: string | null = null;
+  const { data: accessRows } = await admin0
+    .from('user_account_access')
+    .select('owner_id, sub_company_id, is_account_admin, is_owner, created_at')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(20);
+  const accessList = Array.isArray(accessRows) ? accessRows : [];
+  const acc = accessList.find((item: any) => item?.owner_id && item.owner_id !== user.id) || accessList[0] || null;
+  const { data: cc } = await admin0
+    .from('client_companies')
+    .select('id, owner_id, auth_user_id, sub_company_id')
+    .eq('auth_user_id', user.id)
+    .maybeSingle();
+
+  const canManageTenantSip = Boolean(
+    isAdmin === true
+    || acc?.is_account_admin === true
+    || acc?.is_owner === true
+    || cc?.auth_user_id === user.id
+  );
+  if (action !== 'get' && !canManageTenantSip) return fail(403, 'forbidden');
+
   if (isAdmin === true) {
-    effectiveOwnerId = scope.owner_id || user.id;
+    effectiveOwnerId = scope.owner_id || acc?.owner_id || (cc ? (cc.auth_user_id === user.id ? user.id : (cc.owner_id || user.id)) : null) || user.id;
+    effectiveSubCompanyId = hasOwn(scope, 'sub_company_id') ? (scope.sub_company_id ?? null) : (acc?.sub_company_id ?? cc?.sub_company_id ?? null);
   } else {
-    const { data: acc } = await admin0
-      .from('user_account_access')
-      .select('owner_id')
-      .eq('user_id', user.id)
-      .limit(1)
-      .maybeSingle();
     if (acc?.owner_id) effectiveOwnerId = acc.owner_id;
-    if (!effectiveOwnerId) {
-      const { data: cc } = await admin0
-        .from('client_companies')
-        .select('owner_id, auth_user_id')
-        .eq('auth_user_id', user.id)
-        .maybeSingle();
-      if (cc) effectiveOwnerId = cc.auth_user_id === user.id ? user.id : (cc.owner_id || user.id);
+    if (acc?.sub_company_id) effectiveSubCompanyId = acc.sub_company_id;
+    if (!effectiveOwnerId && cc) {
+      effectiveOwnerId = cc.auth_user_id === user.id ? user.id : (cc.owner_id || user.id);
+      effectiveSubCompanyId = cc.sub_company_id ?? null;
     }
     if (!effectiveOwnerId) effectiveOwnerId = user.id;
   }
   const ownerId: string | null = effectiveOwnerId;
-  const subCompanyId: string | null = scope.sub_company_id ?? null;
-  const clientCompanyId: string | null = scope.client_company_id ?? null;
+  const subCompanyId: string | null = effectiveSubCompanyId;
+  const clientCompanyId: string | null = isAdmin === true && hasOwn(scope, 'client_company_id') ? (scope.client_company_id ?? null) : null;
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
   const ip = req.headers.get('x-forwarded-for') || '';
@@ -164,11 +182,32 @@ Deno.serve(async (req) => {
   try {
     if (action === 'get') {
       const q = admin.from('sip_configurations').select('*').eq('owner_id', ownerId);
-      const { data, error } = subCompanyId
-        ? await q.eq('sub_company_id', subCompanyId).maybeSingle()
-        : clientCompanyId
-          ? await q.eq('client_company_id', clientCompanyId).maybeSingle()
-          : await q.is('sub_company_id', null).is('client_company_id', null).maybeSingle();
+      let data: any = null;
+      let error: any = null;
+      if (subCompanyId) {
+        const exact = await q.eq('sub_company_id', subCompanyId).maybeSingle();
+        data = exact.data;
+        error = exact.error;
+        if (!error && !data) {
+          const inherited = await admin
+            .from('sip_configurations')
+            .select('*')
+            .eq('owner_id', ownerId)
+            .is('sub_company_id', null)
+            .is('client_company_id', null)
+            .maybeSingle();
+          data = inherited.data;
+          error = inherited.error;
+        }
+      } else if (clientCompanyId) {
+        const exact = await q.eq('client_company_id', clientCompanyId).maybeSingle();
+        data = exact.data;
+        error = exact.error;
+      } else {
+        const root = await q.is('sub_company_id', null).is('client_company_id', null).maybeSingle();
+        data = root.data;
+        error = root.error;
+      }
       if (error) throw error;
       if (!data) return json(200, { config: null });
       const password = await decryptPassword(data.password_ciphertext, data.password_iv);

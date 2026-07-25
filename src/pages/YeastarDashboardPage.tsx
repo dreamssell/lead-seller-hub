@@ -17,8 +17,10 @@ import {
 } from 'recharts';
 import { toast } from '@/hooks/use-toast';
 import { Helmet } from 'react-helmet-async';
-import { saveSipConfig, fetchSipConfig, type SipConfig } from '@/lib/sipConfig';
+import { saveSipConfig, fetchSipConfig, type SipConfig, type SipScope } from '@/lib/sipConfig';
 import { useVoip } from '@/contexts/VoipContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { getActiveOwnerId } from '@/lib/chatTenantScope';
 
 type DataSource = 'api' | 'mock' | 'loading';
 const INTEG_KEY = 'automations.integrations.v1';
@@ -78,6 +80,7 @@ function fmtDuration(sec: number) {
  * possa fazer ligações via VoIP.
  */
 export default function YeastarDashboardPage() {
+  const { access, user } = useAuth();
   const [period, setPeriod] = useState<Period>('7d');
   const [source, setSource] = useState<DataSource>('loading');
   const [lastSync, setLastSync] = useState<Date | null>(null);
@@ -97,12 +100,18 @@ export default function YeastarDashboardPage() {
   const [displayName, setDisplayName] = useState('');
   const [saving, setSaving] = useState(false);
   const [loadingCfg, setLoadingCfg] = useState(true);
+  const sipScope: SipScope = useMemo(() => {
+    const ownerId = getActiveOwnerId(access?.owner_id, user?.id);
+    return ownerId
+      ? { owner_id: ownerId, sub_company_id: access?.sub_company_id ?? null }
+      : {};
+  }, [access?.owner_id, access?.sub_company_id, user?.id]);
 
   // Carrega config SIP salva (apenas o dono terá permissão).
   useEffect(() => {
     (async () => {
       try {
-        const cfg = await fetchSipConfig();
+        const cfg = await fetchSipConfig(sipScope);
         if (cfg) {
           if (cfg.server) setServer(cfg.server);
           if (cfg.username) setUsername(cfg.username);
@@ -116,7 +125,7 @@ export default function YeastarDashboardPage() {
         setLoadingCfg(false);
       }
     })();
-  }, []);
+  }, [sipScope]);
 
   useEffect(() => {
     let cancelled = false;
@@ -168,7 +177,7 @@ export default function YeastarDashboardPage() {
         display_name: displayName.trim() || undefined,
         transport: 'wss',
       };
-      await saveSipConfig(cfg);
+      await saveSipConfig(cfg, sipScope);
       toast({ title: 'Tronco SIP salvo', description: 'Reconectando webphone…' });
       // Reconecta imediatamente para que o botão azul (SIP) fique disponível.
       voipConnect({
@@ -180,7 +189,7 @@ export default function YeastarDashboardPage() {
       });
       // Notifica outras abas/janelas (Chat Completo, Modo Foco) para
       // recarregar o VoipContext e atualizar o botão azul em tempo real.
-      try { window.dispatchEvent(new CustomEvent('sip:reload')); } catch {}
+                try { window.dispatchEvent(new CustomEvent('sip:reload', { detail: { scope: sipScope } })); } catch {}
     } catch (e: any) {
       toast({ title: 'Falha ao salvar tronco SIP', description: e?.message || 'Erro desconhecido', variant: 'destructive' });
     } finally {
@@ -309,9 +318,15 @@ export default function YeastarDashboardPage() {
                 }
                 setTesting(true);
                 try {
-                  const result = await testConnection();
+                  const result = await testConnection({
+                    server: server.trim(),
+                    wsUri: wsUri.trim() || undefined,
+                    username: username.trim(),
+                    password,
+                    displayName: displayName.trim() || undefined,
+                  });
                   if (result === 'connected') {
-                    toast({ title: 'SIP conectado com sucesso', description: `Servidor: ${server}` });
+                    toast({ title: 'SIP conectado com sucesso', description: 'Teste OK. Salve o tronco para liberar o botão azul no chat.' });
                   } else {
                     toast({
                       title: 'Falha ao conectar SIP',

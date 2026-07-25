@@ -238,6 +238,9 @@ export default function FocusedChatPage() {
             : 'Nenhum ramal SIP cadastrado. Configure em Automações → Yeastar.');
       sonnerToast(`SIP ${voip.status === 'connecting' ? 'conectando' : voip.status === 'error' ? 'com falha' : 'desconectado'}`, {
         description: reason,
+        classNames: {
+          actionButton: '!bg-primary !text-primary-foreground !border-primary hover:!bg-primary/90',
+        },
         action: {
           label: 'Reconectar',
           onClick: () => { try { window.dispatchEvent(new Event('sip:reload')); } catch {} },
