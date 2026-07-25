@@ -230,8 +230,19 @@ export default function FocusedChatPage() {
       return;
     }
     if (voip.status !== 'connected') {
-      logCallUi({ event: 'sip_blocked_disconnected', correlationId: corr, metadata: { sipStatus: voip.status } });
-      toast({ title: 'SIP não conectado', description: 'Configure o ramal SIP para realizar ligações VoIP.' });
+      logCallUi({ event: 'sip_blocked_disconnected', correlationId: corr, metadata: { sipStatus: voip.status, lastError: voip.lastError } });
+      const reason = voip.lastError
+        ? `Motivo: ${voip.lastError}`
+        : (voip.hasConfig
+            ? 'O ramal SIP ainda não registrou no servidor. Tente reconectar.'
+            : 'Nenhum ramal SIP cadastrado. Configure em Automações → Yeastar.');
+      sonnerToast(`SIP ${voip.status === 'connecting' ? 'conectando' : voip.status === 'error' ? 'com falha' : 'desconectado'}`, {
+        description: reason,
+        action: {
+          label: 'Reconectar',
+          onClick: () => { try { window.dispatchEvent(new Event('sip:reload')); } catch {} },
+        },
+      });
       return;
     }
     logCallUi({ event: 'sip_dial_start', correlationId: corr, metadata: { target: target.slice(-4) } });
