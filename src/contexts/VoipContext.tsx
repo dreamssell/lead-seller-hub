@@ -286,6 +286,11 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, user?.id, tenantResolved, accessLoading, sipScope?.owner_id, sipScope?.sub_company_id]);
+  const reloadConfigRef = useRef(reloadConfig);
+
+  useEffect(() => {
+    reloadConfigRef.current = reloadConfig;
+  }, [reloadConfig]);
 
   // Toast on status transitions (skip initial mount) so operators see
   // realtime feedback across all pages that mount the provider.
@@ -335,13 +340,13 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try { localStorage.removeItem('sipConfig'); } catch {}
-    reloadConfig();
+    reloadConfigRef.current();
 
     const onReload = () => {
       lastCfgSigRef.current = '';
       if (uaRef.current) { try { uaRef.current.stop(); } catch {} uaRef.current = null; }
       setStatus('disconnected');
-      setTimeout(() => { reloadConfig(); }, 300);
+      setTimeout(() => { reloadConfigRef.current(); }, 300);
     };
     window.addEventListener('sip:reload', onReload);
 
@@ -353,7 +358,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     const schedule = () => {
       const delay = Math.min(300_000, 60_000 * Math.pow(2, failStreak));
       timer = window.setTimeout(async () => {
-        await reloadConfig();
+        await reloadConfigRef.current();
         // status é lido via ref implícita — usamos snapshot atual do UA.
         const registered = !!(uaRef.current && uaRef.current.isRegistered?.());
         failStreak = registered ? 0 : Math.min(failStreak + 1, 3);
@@ -363,7 +368,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     schedule();
 
     // Reconecta ao voltar a foco e força reset do backoff.
-    const onFocus = () => { failStreak = 0; reloadConfig(); };
+    const onFocus = () => { failStreak = 0; reloadConfigRef.current(); };
     window.addEventListener('focus', onFocus);
 
     return () => {

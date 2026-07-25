@@ -50,6 +50,10 @@ function fail(status: number, code: string, message?: string) {
   return json(status, { error: code, code, message: msg, status });
 }
 
+function hasOwn(obj: unknown, key: string) {
+  return Boolean(obj && Object.prototype.hasOwnProperty.call(obj, key));
+}
+
 
 async function getAesKey(): Promise<CryptoKey> {
   const enc = new TextEncoder().encode(ENC_KEY_RAW);
@@ -135,7 +139,7 @@ Deno.serve(async (req) => {
 
   if (isAdmin === true) {
     effectiveOwnerId = scope.owner_id || acc?.owner_id || (cc ? (cc.auth_user_id === user.id ? user.id : (cc.owner_id || user.id)) : null) || user.id;
-    effectiveSubCompanyId = scope.sub_company_id ?? acc?.sub_company_id ?? cc?.sub_company_id ?? null;
+    effectiveSubCompanyId = hasOwn(scope, 'sub_company_id') ? (scope.sub_company_id ?? null) : (acc?.sub_company_id ?? cc?.sub_company_id ?? null);
   } else {
     if (acc?.owner_id) effectiveOwnerId = acc.owner_id;
     if (acc?.sub_company_id) effectiveSubCompanyId = acc.sub_company_id;
@@ -147,7 +151,7 @@ Deno.serve(async (req) => {
   }
   const ownerId: string | null = effectiveOwnerId;
   const subCompanyId: string | null = effectiveSubCompanyId;
-  const clientCompanyId: string | null = isAdmin === true ? (scope.client_company_id ?? null) : null;
+  const clientCompanyId: string | null = isAdmin === true && hasOwn(scope, 'client_company_id') ? (scope.client_company_id ?? null) : null;
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
   const ip = req.headers.get('x-forwarded-for') || '';
