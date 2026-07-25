@@ -79,7 +79,27 @@ export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
           </button>
           <div className="min-w-0">
             <h1 className="text-base md:text-lg font-semibold text-foreground truncate">{title}</h1>
-            {subtitle && <p className="text-xs text-muted-foreground truncate hidden sm:block">{subtitle}</p>}
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground truncate">
+                <Building2 className="w-3 h-3 shrink-0" aria-hidden />
+                <span className="truncate max-w-[40vw]">{tenantLabel}</span>
+              </span>
+              {isOwner && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => setDiagOpen(true)}
+                      className="p-1 rounded-md hover:bg-secondary transition-colors text-primary"
+                      aria-label="Diagnóstico do tenant"
+                    >
+                      <Stethoscope className="w-3.5 h-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Diagnóstico do tenant (dono)</TooltipContent>
+                </Tooltip>
+              )}
+              {subtitle && <span className="text-xs text-muted-foreground truncate hidden sm:block">· {subtitle}</span>}
+            </div>
           </div>
         </div>
 
