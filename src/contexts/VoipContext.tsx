@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { getActiveOwnerId } from '@/lib/chatTenantScope';
 
 // Usando require dinâmico/importação para evitar problemas de SSR caso exista
 import * as JsSIP from 'jssip';
@@ -19,7 +21,7 @@ interface VoipContextType {
   connect: (config: any) => void;
   disconnect: () => void;
   reloadConfig: () => Promise<void>;
-  testConnection: () => Promise<'connected' | 'error' | 'disconnected' | 'connecting'>;
+  testConnection: (config?: any) => Promise<'connected' | 'error' | 'disconnected' | 'connecting'>;
   makeCall: (target: string, isVideo?: boolean) => void;
   answerCall: () => void;
   rejectCall: () => void;
@@ -31,6 +33,7 @@ interface VoipContextType {
 const VoipContext = createContext<VoipContextType | null>(null);
 
 export function VoipProvider({ children }: { children: React.ReactNode }) {
+  const { user, access, accessLoading, tenantResolved } = useAuth();
   const [status, setStatus] = useState<VoipContextType['status']>('disconnected');
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
@@ -44,6 +47,13 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
   const uaRef = useRef<any>(null);
   const localAudioRef = useRef<HTMLAudioElement | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const sipScope = React.useMemo(() => {
+    const ownerId = getActiveOwnerId(access?.owner_id, user?.id);
+    return ownerId
+      ? { owner_id: ownerId, sub_company_id: access?.sub_company_id ?? null }
+      : null;
+  }, [access?.owner_id, access?.sub_company_id, user?.id]);
+  const sipScopeKey = sipScope ? `${sipScope.owner_id}:${sipScope.sub_company_id ?? 'root'}` : '';
 
   // Inicializa as tags de áudio invisíveis na DOM
   useEffect(() => {
@@ -64,6 +74,10 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     setLastError(null);
     setStatus('connecting');
     setLastCheckedAt(Date.now());
+    if (uaRef.current) {
+      try { uaRef.current.stop(); } catch {}
+      uaRef.current = null;
+    }
 
     // Escolhe uma URI WSS coerente com o PBX. Yeastar (K2/P-Series) usa
     // 8089/ws por padrão; demais SBCs costumam expor 7443. Se o usuário
@@ -224,12 +238,15 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
 
   const reloadConfig = React.useCallback(async () => {
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user) return;
+      if (!user?.id) return;
+      if (!tenantResolved || accessLoading) {
+        setLastCheckedAt(Date.now());
+        return;
+      }
       const { fetchSipConfig } = await import('@/lib/sipConfig');
       let cfg: any = null;
       try {
-        cfg = await fetchSipConfig();
+        cfg = await fetchSipConfig(sipScope ?? { owner_id: user.id, sub_company_id: null });
       } catch (e: any) {
         setLastError(e?.message || 'Falha ao consultar credenciais SIP.');
         setLastCheckedAt(Date.now());
@@ -242,7 +259,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
         setHasConfig(false);
         if (uaRef.current) { try { uaRef.current.stop(); } catch {} uaRef.current = null; }
         setStatus('disconnected');
-        setLastError('Nenhum ramal SIP configurado para este tenant.');
+        setLastError('Nenhum ramal SIP configurado para esta Empresa/Sub-empresa.');
         lastCfgSigRef.current = '';
         return;
       }
@@ -268,7 +285,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
       setLastCheckedAt(Date.now());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [status, user?.id, tenantResolved, accessLoading, sipScope?.owner_id, sipScope?.sub_company_id]);
 
   // Toast on status transitions (skip initial mount) so operators see
   // realtime feedback across all pages that mount the provider.
@@ -284,11 +301,16 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
-  const testConnection = React.useCallback(async () => {
+  const testConnection = React.useCallback(async (config?: any) => {
     lastCfgSigRef.current = '';
     if (uaRef.current) { try { uaRef.current.stop(); } catch {} uaRef.current = null; }
     setStatus('connecting');
-    await reloadConfig();
+    if (config?.server && config?.username && config?.password) {
+      setHasConfig(true);
+      connect(config);
+    } else {
+      await reloadConfig();
+    }
     // Aguarda até 8s a estabilização do registro SIP.
     const deadline = Date.now() + 8000;
     return new Promise<VoipContextType['status']>((resolve) => {
@@ -301,6 +323,15 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
       tick();
     });
   }, [reloadConfig]);
+
+  useEffect(() => {
+    if (!tenantResolved || accessLoading || !sipScopeKey) return;
+    lastCfgSigRef.current = '';
+    if (uaRef.current) { try { uaRef.current.stop(); } catch {} uaRef.current = null; }
+    setStatus('disconnected');
+    void reloadConfig();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantResolved, accessLoading, sipScopeKey]);
 
   useEffect(() => {
     try { localStorage.removeItem('sipConfig'); } catch {}

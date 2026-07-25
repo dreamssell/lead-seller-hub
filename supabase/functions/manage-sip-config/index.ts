@@ -115,32 +115,39 @@ Deno.serve(async (req) => {
 
   const scope = body?.scope || {};
   // Non-admins can only fetch their OWN tenant SIP — never accept a caller-supplied owner_id.
-  // Resolve it from user_account_access; fall back to client_companies if not present.
+  // Admins may pass an explicit owner_id when configuring a client tenant; when omitted,
+  // resolve the same canonical tenant used by the app instead of falling back blindly to user.id.
   const admin0 = createClient(SUPABASE_URL, SERVICE_ROLE);
   let effectiveOwnerId: string | null = null;
+  let effectiveSubCompanyId: string | null = null;
+  const { data: acc } = await admin0
+    .from('user_account_access')
+    .select('owner_id, sub_company_id, created_at')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const { data: cc } = await admin0
+    .from('client_companies')
+    .select('id, owner_id, auth_user_id, sub_company_id')
+    .eq('auth_user_id', user.id)
+    .maybeSingle();
+
   if (isAdmin === true) {
-    effectiveOwnerId = scope.owner_id || user.id;
+    effectiveOwnerId = scope.owner_id || acc?.owner_id || (cc ? (cc.auth_user_id === user.id ? user.id : (cc.owner_id || user.id)) : null) || user.id;
+    effectiveSubCompanyId = scope.sub_company_id ?? acc?.sub_company_id ?? cc?.sub_company_id ?? null;
   } else {
-    const { data: acc } = await admin0
-      .from('user_account_access')
-      .select('owner_id')
-      .eq('user_id', user.id)
-      .limit(1)
-      .maybeSingle();
     if (acc?.owner_id) effectiveOwnerId = acc.owner_id;
-    if (!effectiveOwnerId) {
-      const { data: cc } = await admin0
-        .from('client_companies')
-        .select('owner_id, auth_user_id')
-        .eq('auth_user_id', user.id)
-        .maybeSingle();
-      if (cc) effectiveOwnerId = cc.auth_user_id === user.id ? user.id : (cc.owner_id || user.id);
+    if (acc?.sub_company_id) effectiveSubCompanyId = acc.sub_company_id;
+    if (!effectiveOwnerId && cc) {
+      effectiveOwnerId = cc.auth_user_id === user.id ? user.id : (cc.owner_id || user.id);
+      effectiveSubCompanyId = cc.sub_company_id ?? null;
     }
     if (!effectiveOwnerId) effectiveOwnerId = user.id;
   }
   const ownerId: string | null = effectiveOwnerId;
-  const subCompanyId: string | null = scope.sub_company_id ?? null;
-  const clientCompanyId: string | null = scope.client_company_id ?? null;
+  const subCompanyId: string | null = effectiveSubCompanyId;
+  const clientCompanyId: string | null = isAdmin === true ? (scope.client_company_id ?? null) : null;
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
   const ip = req.headers.get('x-forwarded-for') || '';

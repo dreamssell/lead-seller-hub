@@ -2844,7 +2844,7 @@ export default function ChatPage() {
                                   action: (
                                     <button
                                       onClick={() => { try { window.dispatchEvent(new Event('sip:reload')); } catch {} }}
-                                      className="inline-flex h-8 items-center rounded-md border border-border bg-background px-3 text-xs font-medium hover:bg-accent"
+                                      className="inline-flex h-8 items-center rounded-md border border-destructive-foreground/70 bg-destructive-foreground px-3 text-xs font-semibold text-destructive shadow-sm hover:bg-destructive-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive-foreground"
                                     >
                                       Reconectar
                                     </button>
