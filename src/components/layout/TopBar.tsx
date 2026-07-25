@@ -172,6 +172,13 @@ export function TopBar({ title, subtitle, onOpenMenu }: TopBarProps) {
           </Tooltip>
         </div>
       </header>
+      {isOwner && (
+        <TenantDiagnosticsDialog
+          open={diagOpen}
+          onOpenChange={setDiagOpen}
+          tenantLabel={tenantLabel}
+        />
+      )}
     </TooltipProvider>
   );
 }
