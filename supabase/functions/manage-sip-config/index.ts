@@ -219,6 +219,7 @@ Deno.serve(async (req) => {
           port: data.port,
           ws_uri: data.ws_uri,
           username: data.username,
+          auth_username: data.auth_username ?? null,
           password,
           display_name: data.display_name,
           transport: data.transport,
@@ -239,6 +240,7 @@ Deno.serve(async (req) => {
         port: cfg.port ?? null,
         ws_uri: cfg.ws_uri ?? null,
         username: cfg.username,
+        auth_username: cfg.auth_username ?? null,
         password_ciphertext: ciphertext,
         password_iv: iv,
         display_name: cfg.display_name ?? null,
@@ -265,7 +267,7 @@ Deno.serve(async (req) => {
           .select('id')
           .single();
         if (error) throw error;
-        await audit('create', inserted.id, { server: cfg.server, username: cfg.username });
+        await audit('create', inserted.id, { server: cfg.server, username: cfg.username, auth_username: cfg.auth_username ?? null });
         return json(200, { ok: true, id: inserted.id, mode: 'create' });
       }
     }
