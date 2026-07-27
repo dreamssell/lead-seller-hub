@@ -137,6 +137,9 @@ const INTEGRATIONS: Array<{
       { key: 'username', label: 'Usuário / Extensão', placeholder: '55008137460254' },
       { key: 'password', label: 'Senha', type: 'password' },
       { key: 'extension', label: 'Ramal padrão (opcional)', placeholder: '1001' },
+      { key: 'sipPortTcp', label: 'Porta SIP TCP', placeholder: '5060', helper: 'Padrão SIP TCP — normalmente 5060' },
+      { key: 'sipPortUdp', label: 'Porta SIP UDP', placeholder: '5060', helper: 'Padrão SIP UDP — normalmente 5060' },
+      { key: 'rtpPort', label: 'Porta RTP (mídia)', placeholder: '10000', helper: 'Faixa de mídia RTP — normalmente 10000+' },
     ],
   },
 ];
@@ -150,6 +153,7 @@ function yeastarToSipConfig(cfg: IntegrationConfig): SipConfig | null {
   if (!host || !cfg.username?.trim() || !cfg.password?.trim()) return null;
   return {
     server: host,
+    port: cfg.sipPortTcp?.trim() || cfg.sipPortUdp?.trim() || undefined,
     username: cfg.username.trim(),
     password: cfg.password,
     ws_uri: normalizeSipWsUri(host),
@@ -157,6 +161,7 @@ function yeastarToSipConfig(cfg: IntegrationConfig): SipConfig | null {
     transport: 'wss',
   };
 }
+
 
 export default function AutomationsPage() {
   const { access, user } = useAuth();
