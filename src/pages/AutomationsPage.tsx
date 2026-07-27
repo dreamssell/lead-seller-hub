@@ -204,7 +204,7 @@ export default function AutomationsPage() {
 
     // --- per-field validation report ---
     const fields: FieldCheck[] = it.fields.map((f) => {
-      const required = f.key !== 'extension' && f.key !== 'webhookSecret' && f.key !== 'defaultPipelineId';
+      const required = f.key !== 'extension' && f.key !== 'authUsername' && f.key !== 'webhookSecret' && f.key !== 'defaultPipelineId';
       const val = (cfg[f.key] as string) ?? '';
       if (!val.trim()) return { key: String(f.key), label: f.label, status: required ? 'missing' : 'ok', detail: required ? 'Obrigatório' : 'Opcional — não informado' };
       if (f.type === 'url' && !/^https?:\/\//i.test(val)) return { key: String(f.key), label: f.label, status: 'fail', detail: 'URL deve começar com http(s)://' };
