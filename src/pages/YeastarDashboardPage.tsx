@@ -95,6 +95,7 @@ export default function YeastarDashboardPage() {
   // automaticamente escopado por tenant — sem vazamento entre empresas.
   const [server, setServer] = useState('');
   const [username, setUsername] = useState('');
+  const [authUsername, setAuthUsername] = useState('');
   const [password, setPassword] = useState('');
   const [wsUri, setWsUri] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -116,8 +117,9 @@ export default function YeastarDashboardPage() {
           const normalizedServer = normalizeSipServer(cfg.server);
           if (normalizedServer) setServer(normalizedServer);
           if (cfg.username) setUsername(cfg.username);
+          if (cfg.auth_username) setAuthUsername(cfg.auth_username);
           if (cfg.password) setPassword(cfg.password);
-          if (normalizedServer || cfg.ws_uri) setWsUri(normalizeSipWsUri(normalizedServer, cfg.ws_uri));
+          if (normalizedServer || cfg.ws_uri) setWsUri(normalizeSipWsUri(normalizedServer, cfg.ws_uri, cfg.username));
           if (cfg.display_name) setDisplayName(cfg.display_name);
         }
       } catch {
@@ -174,8 +176,9 @@ export default function YeastarDashboardPage() {
       const cfg: SipConfig = {
         server: normalizedServer,
         username: username.trim(),
+        auth_username: authUsername.trim() || username.trim(),
         password,
-        ws_uri: normalizeSipWsUri(normalizedServer, wsUri.trim() || undefined),
+        ws_uri: normalizeSipWsUri(normalizedServer, wsUri.trim() || undefined, username.trim()),
         display_name: displayName.trim() || undefined,
         transport: 'wss',
       };
@@ -188,6 +191,7 @@ export default function YeastarDashboardPage() {
         server: cfg.server,
         wsUri: cfg.ws_uri,
         username: cfg.username,
+        authUser: cfg.auth_username || cfg.username,
         password: cfg.password,
         displayName: cfg.display_name,
       });
@@ -305,6 +309,10 @@ export default function YeastarDashboardPage() {
             <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="55008137460254" />
           </div>
           <div className="space-y-1.5">
+            <Label>Register Name / Auth ID</Label>
+            <Input value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} placeholder="55008137460254" />
+          </div>
+          <div className="space-y-1.5">
             <Label>Senha</Label>
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
@@ -323,13 +331,14 @@ export default function YeastarDashboardPage() {
                 setTesting(true);
                 try {
                   const normalizedServer = normalizeSipServer(server);
-                  const normalizedWsUri = normalizeSipWsUri(normalizedServer, wsUri.trim() || undefined);
+                  const normalizedWsUri = normalizeSipWsUri(normalizedServer, wsUri.trim() || undefined, username.trim());
                   setServer(normalizedServer);
                   setWsUri(normalizedWsUri);
                   const result = await testConnection({
                     server: normalizedServer,
                     wsUri: normalizedWsUri,
                     username: username.trim(),
+                    authUser: authUsername.trim() || username.trim(),
                     password,
                     displayName: displayName.trim() || undefined,
                   });
