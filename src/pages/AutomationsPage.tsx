@@ -253,8 +253,20 @@ export default function AutomationsPage() {
         }
         setStep('reach', { status: 'ok', detail: `HTTP ${res.status}` });
       } else {
-        await fetch(cfg.pbxUrl!, { method: 'HEAD', mode: 'no-cors' });
-        setStep('reach', { status: 'ok', detail: 'PBX alcançável' });
+        // Browser não consegue fazer HEAD cross-origin no PBX (CORS) e, se a
+        // página estiver em HTTPS, uma URL http:// é bloqueada por mixed-content.
+        // Fazemos um "best-effort": upgrade para https e no-cors. Qualquer falha
+        // aqui NÃO é bloqueante — a validação real acontece via registro SIP/WSS.
+        const raw = cfg.pbxUrl!;
+        const upgraded = typeof window !== 'undefined' && window.location.protocol === 'https:' && raw.startsWith('http://')
+          ? raw.replace(/^http:\/\//, 'https://')
+          : raw;
+        try {
+          await fetch(upgraded, { method: 'HEAD', mode: 'no-cors' });
+          setStep('reach', { status: 'ok', detail: 'PBX alcançável' });
+        } catch {
+          setStep('reach', { status: 'skip', detail: 'HEAD bloqueado pelo navegador (CORS/mixed-content) — validação real via WSS' });
+        }
       }
     } catch (e: any) {
       setStep('reach', { status: 'fail', detail: e?.message ?? 'erro de rede' });
