@@ -140,7 +140,9 @@ const App = () => (
               <Route path="/settings" element={<ProtectedRoute><AccountSettingsPage /></ProtectedRoute>} />
               <Route path="/developer" element={<ProtectedRoute pageKey="developer"><DeveloperPage /></ProtectedRoute>} />
               <Route path="/api-keys" element={<ProtectedRoute><APIKeysPage /></ProtectedRoute>} />
-              <Route path="/wavoip" element={<ProtectedRoute pageKey="wavoip"><WavoipPage standalone={true} /></ProtectedRoute>} />
+              {/* Config Wavoip é por usuário (dispositivo pessoal) — liberado a qualquer autenticado. */}
+              <Route path="/wavoip" element={<ProtectedRoute><WavoipPage standalone={true} /></ProtectedRoute>} />
+
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
               <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppPage /></ProtectedRoute>} />
               {/* Meeting é recurso premium — liberado apenas ao dono da plataforma. */}
