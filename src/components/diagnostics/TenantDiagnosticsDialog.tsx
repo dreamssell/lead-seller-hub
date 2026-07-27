@@ -23,7 +23,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 function computeWssUri(cfg: SipConfig | null): string {
   if (!cfg?.server) return '—';
-  return normalizeSipWsUri(cfg.server, cfg.ws_uri);
+  return normalizeSipWsUri(cfg.server, cfg.ws_uri, cfg.username);
 }
 
 /**

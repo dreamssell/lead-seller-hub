@@ -4071,6 +4071,7 @@ export type Database = {
       }
       sip_configurations: {
         Row: {
+          auth_username: string | null
           auto_record: boolean | null
           client_company_id: string | null
           created_at: string
@@ -4090,6 +4091,7 @@ export type Database = {
           ws_uri: string | null
         }
         Insert: {
+          auth_username?: string | null
           auto_record?: boolean | null
           client_company_id?: string | null
           created_at?: string
@@ -4109,6 +4111,7 @@ export type Database = {
           ws_uri?: string | null
         }
         Update: {
+          auth_username?: string | null
           auto_record?: boolean | null
           client_company_id?: string | null
           created_at?: string

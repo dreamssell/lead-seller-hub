@@ -105,15 +105,19 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
 
     // Yeastar Cloud/P-Series expõe o webphone em HTTPS/443 no caminho /ws.
     // A porta :8089 é comum em instalações locais, mas falha na Mult Seguros.
-    const wsUri = normalizeSipWsUri(server, config.wsUri);
+    const authUser = String(config.authUser || config.auth_username || config.authUsername || config.username).trim();
+    const isYeastar = server.toLowerCase().includes('yeastar');
+    const wsUri = normalizeSipWsUri(server, config.wsUri, isYeastar ? config.username : undefined);
     const socket = new JsSIP.WebSocketInterface(wsUri);
     let registeredOnce = false;
+    const contactUri = isYeastar ? `sip:${config.username}@${server};webclient` : undefined;
     
     const ua = new JsSIP.UA({
       sockets: [socket],
       uri: `sip:${config.username}@${server}`,
       password: config.password,
-      authorization_user: config.authUser || config.username,
+      authorization_user: authUser || config.username,
+      ...(contactUri ? { contact_uri: contactUri, user_agent: 'WebClient', register_expires: 1800 } : {}),
       display_name: config.displayName || 'Lead Seller Agent',
       register: true,
       session_timers: false,
@@ -293,8 +297,9 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
       }
       setHasConfig(true);
       const normalizedServer = normalizeSipServer(cfg.server);
-      const normalizedWsUri = normalizeSipWsUri(normalizedServer, cfg.ws_uri);
-      const sig = `${normalizedServer}|${cfg.username}|${cfg.password}|${normalizedWsUri}`;
+      const normalizedWsUri = normalizeSipWsUri(normalizedServer, cfg.ws_uri, cfg.username);
+      const authUser = cfg.auth_username || cfg.authUsername || cfg.authUser || cfg.username;
+      const sig = `${normalizedServer}|${cfg.username}|${authUser}|${cfg.password}|${normalizedWsUri}`;
       const changed = sig !== lastCfgSigRef.current;
       const needsConnect = !uaRef.current || status === 'disconnected' || status === 'error' || changed;
       if (needsConnect) {
@@ -305,6 +310,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
           port: cfg.port,
           wsUri: normalizedWsUri,
           username: cfg.username,
+          authUser,
           password: cfg.password,
           displayName: cfg.display_name,
         });
@@ -343,7 +349,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     if (config?.server && config?.username && config?.password) {
       setHasConfig(true);
       const normalizedServer = normalizeSipServer(config.server);
-      const wsUri = normalizeSipWsUri(normalizedServer, config.wsUri);
+      const wsUri = normalizeSipWsUri(normalizedServer, config.wsUri, config.username);
       return new Promise<VoipTestResult>((resolve) => {
         let done = false;
         const finish = (result: VoipTestResult) => {

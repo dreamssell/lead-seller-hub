@@ -222,6 +222,7 @@ export default function CallsPage() {
     port: '5060',
     wsUri: 'wss://sipv2.wavoip.com:7443',
     username: 'e552c166-cc90-40df-9600-7930e4ea0a46',
+    authUsername: '',
     password: 'e552c166-cc90-40df-9600-7930e4ea0a46',
     displayName: 'Lead Seller',
     transport: 'WSS',
@@ -248,6 +249,7 @@ export default function CallsPage() {
             port: cfg.port || prev.port,
             wsUri: cfg.ws_uri || prev.wsUri,
             username: cfg.username,
+            authUsername: cfg.auth_username || '',
             password: cfg.password,
             displayName: cfg.display_name || prev.displayName,
             transport: cfg.transport || prev.transport,
@@ -293,6 +295,7 @@ export default function CallsPage() {
             port: cfg.port || prev.port,
             wsUri: cfg.ws_uri || prev.wsUri,
             username: cfg.username,
+            authUsername: cfg.auth_username || '',
             password: cfg.password,
             displayName: cfg.display_name || prev.displayName,
             transport: cfg.transport || prev.transport,
@@ -433,6 +436,7 @@ export default function CallsPage() {
         port: sipConfig.port,
         ws_uri: sipConfig.wsUri,
         username: sipConfig.username,
+        auth_username: sipConfig.authUsername || sipConfig.username,
         password: sipConfig.password,
         display_name: sipConfig.displayName,
         transport: sipConfig.transport,
@@ -464,12 +468,17 @@ export default function CallsPage() {
       // @ts-ignore
       const JsSIP = (await import('jssip')).default;
       try { sipRef.current?.stop?.(); } catch {}
-      const wsUri = sipConfig.wsUri || `wss://${sipConfig.server}:7443`;
+      const { normalizeSipServer, normalizeSipWsUri } = await import('@/lib/sipConfig');
+      const normalizedServer = normalizeSipServer(sipConfig.server);
+      const isYeastar = normalizedServer.toLowerCase().includes('yeastar');
+      const wsUri = normalizeSipWsUri(normalizedServer, sipConfig.wsUri, isYeastar ? sipConfig.username : undefined);
       const socket = new JsSIP.WebSocketInterface(wsUri);
       const ua = new JsSIP.UA({
         sockets: [socket],
-        uri: `sip:${sipConfig.username}@${sipConfig.server}`,
+        uri: `sip:${sipConfig.username}@${normalizedServer}`,
         password: sipConfig.password,
+        authorization_user: sipConfig.authUsername || sipConfig.username,
+        ...(isYeastar ? { contact_uri: `sip:${sipConfig.username}@${normalizedServer};webclient`, user_agent: 'WebClient', register_expires: 1800 } : {}),
         display_name: sipConfig.displayName || undefined,
         register: true,
         session_timers: false,
@@ -496,7 +505,7 @@ export default function CallsPage() {
       ua.on('registered', () => {
         clearTimeout(timeout);
         setSipStatus('connected');
-        setSipMessage(`Registrado com sucesso em ${sipConfig.server} como ${sipConfig.username}`);
+        setSipMessage(`Registrado com sucesso em ${normalizedServer} como ${sipConfig.username}`);
         toast({ title: 'Conexão SIP estabelecida', description: 'Pronto para fazer chamadas.' });
       });
       ua.on('registrationFailed', (e: any) => {
@@ -1464,6 +1473,10 @@ export default function CallsPage() {
               <div className="space-y-2">
                 <Label htmlFor="username">Usuário / Ramal</Label>
                 <Input id="username" placeholder="1001" value={sipConfig.username} onChange={(e) => setSipConfig({ ...sipConfig, username: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="authUsername">Register Name / Auth ID</Label>
+                <Input id="authUsername" placeholder="Opcional — usa o ramal se vazio" value={sipConfig.authUsername} onChange={(e) => setSipConfig({ ...sipConfig, authUsername: e.target.value })} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Senha</Label>

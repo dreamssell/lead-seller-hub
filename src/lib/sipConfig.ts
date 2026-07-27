@@ -5,6 +5,7 @@ export type SipConfig = {
   port?: string;
   ws_uri?: string;
   username: string;
+  auth_username?: string | null;
   password: string;
   display_name?: string;
   transport?: string;
@@ -28,18 +29,30 @@ export function normalizeSipServer(input?: string | null) {
   }
 }
 
-export function normalizeSipWsUri(server?: string | null, wsUri?: string | null) {
+export function normalizeSipWsUri(server?: string | null, wsUri?: string | null, username?: string | null) {
   const host = normalizeSipServer(server);
   const rawWs = String(wsUri || '').trim();
   const isYeastar = host.toLowerCase().includes('yeastar');
   const endpointHost = isYeastar ? host.replace(/:(443|8089)$/i, '') : host;
+  const extension = String(username || '').trim();
+
+  const withYeastarExten = (uri: string) => {
+    if (!extension) return uri;
+    try {
+      const parsed = new URL(uri);
+      if (!parsed.searchParams.has('exten')) parsed.searchParams.set('exten', extension);
+      return parsed.toString();
+    } catch {
+      return uri.includes('?') ? `${uri}&exten=${encodeURIComponent(extension)}` : `${uri}?exten=${encodeURIComponent(extension)}`;
+    }
+  };
 
   if (rawWs) {
     try {
       const parsed = new URL(rawWs);
       const parsedIsYeastar = parsed.hostname.toLowerCase().includes('yeastar') || isYeastar;
       if (parsed.protocol === 'wss:' && parsedIsYeastar) {
-        return `wss://${parsed.hostname}/ws`;
+        return withYeastarExten(`wss://${parsed.hostname}/ws${parsed.search || ''}`);
       }
       return rawWs;
     } catch {
@@ -48,7 +61,7 @@ export function normalizeSipWsUri(server?: string | null, wsUri?: string | null)
   }
 
   if (!host) return '';
-  return isYeastar ? `wss://${endpointHost}/ws` : `wss://${host}:7443`;
+  return isYeastar ? withYeastarExten(`wss://${endpointHost}/ws`) : `wss://${host}:7443`;
 }
 
 export class SipError extends Error {

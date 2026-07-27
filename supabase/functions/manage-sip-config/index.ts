@@ -4,12 +4,7 @@
 // - Encrypts password at rest with AES-GCM using SIP_ENCRYPTION_KEY
 // - Records every read/write in sip_config_audit
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -219,6 +214,7 @@ Deno.serve(async (req) => {
           port: data.port,
           ws_uri: data.ws_uri,
           username: data.username,
+          auth_username: data.auth_username ?? null,
           password,
           display_name: data.display_name,
           transport: data.transport,
@@ -239,6 +235,7 @@ Deno.serve(async (req) => {
         port: cfg.port ?? null,
         ws_uri: cfg.ws_uri ?? null,
         username: cfg.username,
+        auth_username: cfg.auth_username ?? null,
         password_ciphertext: ciphertext,
         password_iv: iv,
         display_name: cfg.display_name ?? null,
@@ -265,7 +262,7 @@ Deno.serve(async (req) => {
           .select('id')
           .single();
         if (error) throw error;
-        await audit('create', inserted.id, { server: cfg.server, username: cfg.username });
+        await audit('create', inserted.id, { server: cfg.server, username: cfg.username, auth_username: cfg.auth_username ?? null });
         return json(200, { ok: true, id: inserted.id, mode: 'create' });
       }
     }

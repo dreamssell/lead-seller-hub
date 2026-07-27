@@ -57,6 +57,7 @@ type IntegrationConfig = {
   // 3CX / Yeastar
   pbxUrl?: string;
   username?: string;
+  authUsername?: string;
   password?: string;
   extension?: string;
   sipPortTcp?: string;
@@ -134,9 +135,10 @@ const INTEGRATIONS: Array<{
     color: 'from-orange-500/20 to-amber-500/20',
     fields: [
       { key: 'pbxUrl', label: 'URL do PBX', type: 'url', placeholder: 'https://sopropabx.ras.yeastar.com', helper: 'Base da API OpenAPI do Yeastar' },
-      { key: 'username', label: 'Usuário / Extensão', placeholder: '55008137460254' },
+      { key: 'username', label: 'Extensão SIP', placeholder: '55008137460254', helper: 'Número/ramal usado no endereço SIP.' },
+      { key: 'authUsername', label: 'Register Name / Auth ID', placeholder: '55008137460254', helper: 'Login de autenticação no Yeastar. Se vazio, usa a extensão.' },
       { key: 'password', label: 'Senha', type: 'password' },
-      { key: 'extension', label: 'Ramal padrão (opcional)', placeholder: '1001' },
+      { key: 'extension', label: 'Nome de exibição (opcional)', placeholder: 'Atendente' },
       { key: 'sipPortTcp', label: 'Porta SIP TCP', placeholder: '5060', helper: 'Padrão SIP TCP — normalmente 5060' },
       { key: 'sipPortUdp', label: 'Porta SIP UDP', placeholder: '5060', helper: 'Padrão SIP UDP — normalmente 5060' },
       { key: 'rtpPort', label: 'Porta RTP (mídia)', placeholder: '10000', helper: 'Faixa de mídia RTP — normalmente 10000+' },
@@ -155,8 +157,9 @@ function yeastarToSipConfig(cfg: IntegrationConfig): SipConfig | null {
     server: host,
     port: cfg.sipPortTcp?.trim() || cfg.sipPortUdp?.trim() || undefined,
     username: cfg.username.trim(),
+    auth_username: cfg.authUsername?.trim() || cfg.username.trim(),
     password: cfg.password,
-    ws_uri: normalizeSipWsUri(host),
+    ws_uri: normalizeSipWsUri(host, undefined, cfg.username.trim()),
     display_name: cfg.extension?.trim() || 'Yeastar',
     transport: 'wss',
   };
@@ -201,7 +204,7 @@ export default function AutomationsPage() {
 
     // --- per-field validation report ---
     const fields: FieldCheck[] = it.fields.map((f) => {
-      const required = f.key !== 'extension' && f.key !== 'webhookSecret' && f.key !== 'defaultPipelineId';
+      const required = f.key !== 'extension' && f.key !== 'authUsername' && f.key !== 'webhookSecret' && f.key !== 'defaultPipelineId';
       const val = (cfg[f.key] as string) ?? '';
       if (!val.trim()) return { key: String(f.key), label: f.label, status: required ? 'missing' : 'ok', detail: required ? 'Obrigatório' : 'Opcional — não informado' };
       if (f.type === 'url' && !/^https?:\/\//i.test(val)) return { key: String(f.key), label: f.label, status: 'fail', detail: 'URL deve começar com http(s)://' };
