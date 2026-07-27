@@ -54,12 +54,16 @@ type IntegrationConfig = {
   apiKey?: string;
   webhookSecret?: string;
   defaultPipelineId?: string;
-  // 3CX
+  // 3CX / Yeastar
   pbxUrl?: string;
   username?: string;
   password?: string;
   extension?: string;
+  sipPortTcp?: string;
+  sipPortUdp?: string;
+  rtpPort?: string;
 };
+
 
 const PROJECT_ID = (import.meta as any).env?.VITE_SUPABASE_PROJECT_ID ?? 'gcjaeoxjhcfeispehmga';
 const INBOUND_BASE = `https://${PROJECT_ID}.functions.supabase.co/handle-inbound-webhook`;
