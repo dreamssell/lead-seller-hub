@@ -824,8 +824,9 @@ export default function AutomationsPage() {
               </div>
 
               <DialogFooter className="gap-2 sm:gap-2 shrink-0 border-t border-border px-6 py-4 bg-background">
-
+                <Button
                   variant="outline"
+
                   disabled={tests[current.id].status === 'running'}
                   onClick={() => runConnectionTest(current.id)}
                   className="mr-auto"
