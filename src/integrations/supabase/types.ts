@@ -4083,6 +4083,7 @@ export type Database = {
           password_iv: string
           port: string | null
           server: string
+          sip_domain: string | null
           sub_company_id: string | null
           transport: string | null
           updated_at: string
@@ -4106,6 +4107,7 @@ export type Database = {
           password_iv: string
           port?: string | null
           server: string
+          sip_domain?: string | null
           sub_company_id?: string | null
           transport?: string | null
           updated_at?: string
@@ -4129,6 +4131,7 @@ export type Database = {
           password_iv?: string
           port?: string | null
           server?: string
+          sip_domain?: string | null
           sub_company_id?: string | null
           transport?: string | null
           updated_at?: string
