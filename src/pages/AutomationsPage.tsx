@@ -313,6 +313,7 @@ export default function AutomationsPage() {
         if (res.status >= 500) {
           setStep('reach', { status: 'fail', detail: `Webhook HTTP ${res.status}` });
           setStep('auth', { status: 'skip' });
+          if (id === 'yeastar') { setStep('wss', { status: 'skip' }); setStep('sipreg', { status: 'skip' }); }
           setTests((p) => ({ ...p, [id]: { ...p[id], status: 'fail', message: `Webhook falhou (HTTP ${res.status})`, at: Date.now() } }));
           toast({ title: `${it.name} — falha no webhook`, description: `HTTP ${res.status}`, variant: 'destructive' });
           return;
