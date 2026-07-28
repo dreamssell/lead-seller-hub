@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { getActiveOwnerId } from '@/lib/chatTenantScope';
-import { normalizeSipServer, normalizeSipWsUri } from '@/lib/sipConfig';
+import { fetchYeastarWebrtcRegisterInfo, getSipHostname, normalizeSipServer, normalizeSipWsUri } from '@/lib/sipConfig';
 
 // Usando require dinâmico/importação para evitar problemas de SSR caso exista
 import * as JsSIP from 'jssip';
@@ -75,8 +75,11 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
   const describeSipFailure = (event: any, wsUri: string) => {
     const cause = String(event?.cause || event?.reason || event?.message || '').trim();
     const statusCode = event?.response?.status_code || event?.response?.statusCode;
-    if (statusCode === 401 || statusCode === 403) {
-      return `Credenciais recusadas pelo PBX (SIP ${statusCode}). Confira usuário/extensão e senha.`;
+    if (statusCode === 401) {
+      return 'PBX Yeastar recusou a autenticação WebRTC (SIP 401). Para navegador, use o usuário Linkus e a assinatura/secret do Linkus SDK; a senha SIP que funciona no MicroSIP pode não registrar via WSS.';
+    }
+    if (statusCode === 403) {
+      return 'PBX Yeastar bloqueou o registro (SIP 403). Confira Register Name/Auth ID, permissão WebRTC/Linkus da extensão e se o login Linkus pertence ao mesmo ramal.';
     }
     if (statusCode) return `Registro SIP recusado pelo PBX (SIP ${statusCode}${cause ? ` · ${cause}` : ''}).`;
     if (/connection|socket|network|timeout|closed/i.test(cause)) {
@@ -105,18 +108,21 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
 
     // Yeastar Cloud/P-Series expõe o webphone em HTTPS/443 no caminho /ws.
     // A porta :8089 é comum em instalações locais, mas falha na Mult Seguros.
-    const authUser = String(config.authUser || config.auth_username || config.authUsername || config.username).trim();
+    const authUser = String(config.webrtc?.registername || config.authUser || config.auth_username || config.authUsername || config.username).trim();
     const isYeastar = server.toLowerCase().includes('yeastar');
     const wsUri = normalizeSipWsUri(server, config.wsUri, isYeastar ? config.username : undefined);
     const socket = new JsSIP.WebSocketInterface(wsUri);
     let registeredOnce = false;
-    const contactUri = isYeastar ? `sip:${config.username}@${server};webclient` : undefined;
+    const sipHost = getSipHostname(server) || server;
+    const contactUri = isYeastar ? `sip:${config.username}@${sipHost};nat;webclient` : undefined;
+    const passwordOrHa1 = config.webrtc?.registerpassword || config.password;
+    const realm = config.webrtc?.realm;
     
     const ua = new JsSIP.UA({
       sockets: [socket],
       uri: `sip:${config.username}@${server}`,
-      password: config.password,
       authorization_user: authUser || config.username,
+      ...(config.webrtc?.registerpassword ? { ha1: passwordOrHa1, realm } : { password: passwordOrHa1 }),
       ...(contactUri ? { contact_uri: contactUri, user_agent: 'WebClient', register_expires: 1800 } : {}),
       display_name: config.displayName || 'Lead Seller Agent',
       register: true,
@@ -298,8 +304,12 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
       setHasConfig(true);
       const normalizedServer = normalizeSipServer(cfg.server);
       const normalizedWsUri = normalizeSipWsUri(normalizedServer, cfg.ws_uri, cfg.username);
-      const authUser = cfg.auth_username || cfg.authUsername || cfg.authUser || cfg.username;
-      const sig = `${normalizedServer}|${cfg.username}|${authUser}|${cfg.password}|${normalizedWsUri}`;
+      let webrtc = cfg.webrtc ?? null;
+      if (!webrtc && (cfg.webrtc_secret_configured || cfg.webrtc_secret)) {
+        try { webrtc = await fetchYeastarWebrtcRegisterInfo(sipScope ?? { owner_id: user.id, sub_company_id: null }, cfg); } catch (e) { console.warn('Yeastar WebRTC register info unavailable', e); }
+      }
+      const authUser = webrtc?.registername || cfg.auth_username || cfg.authUsername || cfg.authUser || cfg.username;
+      const sig = `${normalizedServer}|${cfg.username}|${authUser}|${cfg.password}|${normalizedWsUri}|${webrtc?.registerpassword ?? ''}|${webrtc?.realm ?? ''}`;
       const changed = sig !== lastCfgSigRef.current;
       const needsConnect = !uaRef.current || status === 'disconnected' || status === 'error' || changed;
       if (needsConnect) {
@@ -312,6 +322,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
           username: cfg.username,
           authUser,
           password: cfg.password,
+          webrtc,
           displayName: cfg.display_name,
         });
       }
@@ -350,6 +361,20 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
       setHasConfig(true);
       const normalizedServer = normalizeSipServer(config.server);
       const wsUri = normalizeSipWsUri(normalizedServer, config.wsUri, config.username);
+      let registerConfig = { ...config, server: normalizedServer, wsUri };
+      if (!registerConfig.webrtc && (config.webrtc_username || config.webrtc_secret || config.webrtc_secret_configured)) {
+        try {
+          registerConfig = {
+            ...registerConfig,
+            webrtc: await fetchYeastarWebrtcRegisterInfo(sipScope ?? {}, registerConfig),
+          };
+        } catch (e: any) {
+          const message = e?.message || 'Falha ao obter credenciais WebRTC Yeastar.';
+          setStatus('error');
+          updateLastError(message);
+          return { status: 'error' as VoipStatus, error: message, wsUri };
+        }
+      }
       return new Promise<VoipTestResult>((resolve) => {
         let done = false;
         const finish = (result: VoipTestResult) => {
@@ -364,7 +389,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
           updateLastError(message);
           finish({ status: 'error', error: message, wsUri });
         }, 15_000);
-        connect({ ...config, server: normalizedServer, wsUri }, {
+        connect(registerConfig, {
           silent: true,
           onRegistered: () => finish({ status: 'connected', error: null, wsUri }),
           onFailed: (message) => finish({ status: 'error', error: message, wsUri }),

@@ -22,7 +22,7 @@ import { AutomationLogsDialog } from '@/components/automations/AutomationLogsDia
 import { FieldMappingDialog } from '@/components/automations/FieldMappingDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { getActiveOwnerId } from '@/lib/chatTenantScope';
-import { normalizeSipServer, normalizeSipWsUri, saveSipConfig, type SipConfig, type SipScope } from '@/lib/sipConfig';
+import { fetchYeastarWebrtcRegisterInfo, normalizeSipServer, normalizeSipWsUri, saveSipConfig, type SipConfig, type SipScope } from '@/lib/sipConfig';
 import { useVoip } from '@/contexts/VoipContext';
 
 // Traduz o erro cru do JsSIP/PBX em uma mensagem clara com dica de campo.
@@ -103,6 +103,8 @@ type IntegrationConfig = {
   username?: string;
   authUsername?: string;
   password?: string;
+  webrtcUsername?: string;
+  webrtcSecret?: string;
   extension?: string;
   sipPortTcp?: string;
   sipPortUdp?: string;
@@ -182,6 +184,8 @@ const INTEGRATIONS: Array<{
       { key: 'username', label: 'Extensão SIP', placeholder: '55008137460254', helper: 'Número/ramal usado no endereço SIP.' },
       { key: 'authUsername', label: 'Register Name / Auth ID', placeholder: '55008137460254', helper: 'Login de autenticação no Yeastar. Se vazio, usa a extensão.' },
       { key: 'password', label: 'Senha', type: 'password' },
+      { key: 'webrtcUsername', label: 'Usuário Linkus/WebRTC', placeholder: 'usuário Linkus', helper: 'Necessário para registrar chamadas no navegador via WSS.' },
+      { key: 'webrtcSecret', label: 'Secret/assinatura Linkus SDK', type: 'password', helper: 'Diferente da senha SIP do MicroSIP. Usado para obter registerpassword/HA1.' },
       { key: 'extension', label: 'Nome de exibição (opcional)', placeholder: 'Atendente' },
       { key: 'sipPortTcp', label: 'Porta SIP TCP', placeholder: '5060', helper: 'Padrão SIP TCP — normalmente 5060' },
       { key: 'sipPortUdp', label: 'Porta SIP UDP', placeholder: '5060', helper: 'Padrão SIP UDP — normalmente 5060' },
@@ -203,6 +207,8 @@ function yeastarToSipConfig(cfg: IntegrationConfig): SipConfig | null {
     username: cfg.username.trim(),
     auth_username: cfg.authUsername?.trim() || cfg.username.trim(),
     password: cfg.password,
+    webrtc_username: cfg.webrtcUsername?.trim() || undefined,
+    webrtc_secret: cfg.webrtcSecret?.trim() || undefined,
     ws_uri: normalizeSipWsUri(host, undefined, cfg.username.trim()),
     display_name: cfg.extension?.trim() || 'Yeastar',
     transport: 'wss',
@@ -359,6 +365,10 @@ export default function AutomationsPage() {
       }
       try {
         await saveSipConfig(sipCfg, sipScope);
+        if (sipCfg.webrtc_username || sipCfg.webrtc_secret) {
+          setStep('auth', { status: 'running', detail: 'Obtendo registerpassword WebRTC/HA1 no Yeastar' });
+          sipCfg.webrtc = await fetchYeastarWebrtcRegisterInfo(sipScope, sipCfg);
+        }
         window.dispatchEvent(new CustomEvent('sip:reload', { detail: { scope: sipScope } }));
         setStep('auth', { status: 'ok', detail: 'Tronco SIP salvo no tenant' });
       } catch (e: any) {
@@ -382,6 +392,9 @@ export default function AutomationsPage() {
           username: sipCfg.username,
           authUser: sipCfg.auth_username,
           password: sipCfg.password,
+          webrtc: sipCfg.webrtc,
+          webrtc_username: sipCfg.webrtc_username,
+          webrtc_secret: sipCfg.webrtc_secret,
           displayName: sipCfg.display_name,
         });
       } catch (e: any) {

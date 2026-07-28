@@ -17,7 +17,7 @@ import {
 } from 'recharts';
 import { toast } from '@/hooks/use-toast';
 import { Helmet } from 'react-helmet-async';
-import { normalizeSipServer, normalizeSipWsUri, saveSipConfig, fetchSipConfig, type SipConfig, type SipScope } from '@/lib/sipConfig';
+import { fetchYeastarWebrtcRegisterInfo, normalizeSipServer, normalizeSipWsUri, saveSipConfig, fetchSipConfig, type SipConfig, type SipScope } from '@/lib/sipConfig';
 import { useVoip } from '@/contexts/VoipContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { getActiveOwnerId } from '@/lib/chatTenantScope';
@@ -97,6 +97,8 @@ export default function YeastarDashboardPage() {
   const [username, setUsername] = useState('');
   const [authUsername, setAuthUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [webrtcUsername, setWebrtcUsername] = useState('');
+  const [webrtcSecret, setWebrtcSecret] = useState('');
   const [wsUri, setWsUri] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -119,6 +121,7 @@ export default function YeastarDashboardPage() {
           if (cfg.username) setUsername(cfg.username);
           if (cfg.auth_username) setAuthUsername(cfg.auth_username);
           if (cfg.password) setPassword(cfg.password);
+          if (cfg.webrtc_username) setWebrtcUsername(cfg.webrtc_username);
           if (normalizedServer || cfg.ws_uri) setWsUri(normalizeSipWsUri(normalizedServer, cfg.ws_uri, cfg.username));
           if (cfg.display_name) setDisplayName(cfg.display_name);
         }
@@ -178,6 +181,8 @@ export default function YeastarDashboardPage() {
         username: username.trim(),
         auth_username: authUsername.trim() || username.trim(),
         password,
+        webrtc_username: webrtcUsername.trim() || undefined,
+        webrtc_secret: webrtcSecret.trim() || undefined,
         ws_uri: normalizeSipWsUri(normalizedServer, wsUri.trim() || undefined, username.trim()),
         display_name: displayName.trim() || undefined,
         transport: 'wss',
@@ -185,6 +190,9 @@ export default function YeastarDashboardPage() {
       setServer(cfg.server);
       setWsUri(cfg.ws_uri || '');
       await saveSipConfig(cfg, sipScope);
+      if (cfg.webrtc_username || cfg.webrtc_secret) {
+        cfg.webrtc = await fetchYeastarWebrtcRegisterInfo(sipScope, cfg);
+      }
       toast({ title: 'Tronco SIP salvo', description: 'Reconectando webphone…' });
       // Reconecta imediatamente para que o botão azul (SIP) fique disponível.
       voipConnect({
@@ -193,6 +201,9 @@ export default function YeastarDashboardPage() {
         username: cfg.username,
         authUser: cfg.auth_username || cfg.username,
         password: cfg.password,
+        webrtc: cfg.webrtc,
+        webrtc_username: cfg.webrtc_username,
+        webrtc_secret: cfg.webrtc_secret,
         displayName: cfg.display_name,
       });
       // Notifica outras abas/janelas (Chat Completo, Modo Foco) para
@@ -316,6 +327,14 @@ export default function YeastarDashboardPage() {
             <Label>Senha</Label>
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
+          <div className="space-y-1.5">
+            <Label>Usuário Linkus/WebRTC</Label>
+            <Input value={webrtcUsername} onChange={(e) => setWebrtcUsername(e.target.value)} placeholder="usuário Linkus" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Secret/assinatura Linkus SDK</Label>
+            <Input type="password" value={webrtcSecret} onChange={(e) => setWebrtcSecret(e.target.value)} placeholder="Secret WebRTC" />
+          </div>
           <div className="space-y-1.5 md:col-span-2">
             <Label>Nome de exibição</Label>
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Lead Seller Agent" />
@@ -340,6 +359,8 @@ export default function YeastarDashboardPage() {
                     username: username.trim(),
                     authUser: authUsername.trim() || username.trim(),
                     password,
+                    webrtc_username: webrtcUsername.trim() || undefined,
+                    webrtc_secret: webrtcSecret.trim() || undefined,
                     displayName: displayName.trim() || undefined,
                   });
                   if (result.status === 'connected') {

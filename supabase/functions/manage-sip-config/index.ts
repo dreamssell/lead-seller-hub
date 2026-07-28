@@ -37,6 +37,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   missing_action: 'Campo "action" é obrigatório.',
   unknown_action: 'Ação SIP não reconhecida.',
   missing_fields: 'Preencha "server" e "username" antes de salvar.',
+  missing_webrtc_secret: 'Informe a assinatura/secret do Linkus SDK para registrar o WebRTC Yeastar no navegador.',
+  pbx_auth_failed: 'Yeastar recusou a autenticação Linkus SDK. Verifique o usuário Linkus e a assinatura/secret WebRTC.',
+  pbx_api_failed: 'Yeastar respondeu com erro ao consultar as credenciais WebRTC.',
+  pbx_network_failed: 'Não foi possível consultar o PBX Yeastar pelo backend.',
   internal: 'Falha interna ao processar credenciais SIP.',
 };
 
@@ -81,6 +85,65 @@ async function decryptPassword(ciphertext: string, iv: string): Promise<string> 
     b64decode(ciphertext),
   );
   return new TextDecoder().decode(pt);
+}
+
+function normalizeHost(input: string) {
+  const raw = String(input || '').trim();
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw.includes('://') ? raw : `https://${raw}`);
+    return parsed.host.replace(/\/$/, '');
+  } catch {
+    return raw.replace(/^https?:\/\//i, '').replace(/^wss?:\/\//i, '').replace(/\/.*$/, '').replace(/\/$/, '');
+  }
+}
+
+function pbxOrigin(server: string) {
+  const host = normalizeHost(server);
+  if (!host) return '';
+  return `https://${host}`;
+}
+
+async function fetchYeastarRegisterInfo(server: string, username: string, secret: string) {
+  const origin = pbxOrigin(server);
+  if (!origin || !username || !secret) throw new Error('missing_webrtc_secret');
+
+  let token = '';
+  try {
+    const loginRes = await fetch(`${origin}/api/v1.0/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password: secret }),
+    });
+    const loginJson = await loginRes.json().catch(() => null) as any;
+    if (!loginRes.ok) throw new Error(`http_${loginRes.status}`);
+    if (Number(loginJson?.errcode ?? 0) !== 0 || !loginJson?.access_token) {
+      throw new Error(String(loginJson?.errmsg || loginJson?.errcode || 'pbx_auth_failed'));
+    }
+    token = String(loginJson.access_token);
+  } catch (e: any) {
+    if (e?.message === 'missing_webrtc_secret') throw e;
+    throw new Error(`pbx_auth_failed:${e?.message || e}`);
+  }
+
+  try {
+    const infoRes = await fetch(`${origin}/api/v1.0/extension/getregisterinfo`, {
+      method: 'GET',
+      headers: { Authorization: token },
+    });
+    const infoJson = await infoRes.json().catch(() => null) as any;
+    if (!infoRes.ok) throw new Error(`http_${infoRes.status}`);
+    const data = infoJson?.data ?? infoJson;
+    const registername = String(data?.registername || '').trim();
+    const registerpassword = String(data?.registerpassword || '').trim();
+    const realm = String(data?.realm || 'YSAsterisk').trim() || 'YSAsterisk';
+    if (!registername || !registerpassword) {
+      throw new Error(String(infoJson?.errmsg || infoJson?.errcode || 'missing_register_info'));
+    }
+    return { registername, registerpassword, realm };
+  } catch (e: any) {
+    throw new Error(`pbx_api_failed:${e?.message || e}`);
+  }
 }
 
 Deno.serve(async (req) => {
@@ -137,7 +200,7 @@ Deno.serve(async (req) => {
     || acc?.is_owner === true
     || cc?.auth_user_id === user.id
   );
-  if (action !== 'get' && !canManageTenantSip) return fail(403, 'forbidden');
+  if (action !== 'get' && action !== 'webrtc_register_info' && !canManageTenantSip) return fail(403, 'forbidden');
 
   if (isAdmin === true) {
     effectiveOwnerId = scope.owner_id || acc?.owner_id || (cc ? (cc.auth_user_id === user.id ? user.id : (cc.owner_id || user.id)) : null) || user.id;
@@ -216,6 +279,8 @@ Deno.serve(async (req) => {
           username: data.username,
           auth_username: data.auth_username ?? null,
           password,
+          webrtc_username: data.webrtc_username ?? null,
+          webrtc_secret_configured: Boolean(data.webrtc_secret_ciphertext && data.webrtc_secret_iv),
           display_name: data.display_name,
           transport: data.transport,
           auto_record: data.auto_record,
@@ -223,10 +288,57 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === 'webrtc_register_info') {
+      const cfg = body.config || {};
+      let data: any = null;
+      if (!cfg.server || !cfg.webrtc_username || !cfg.webrtc_secret) {
+        let q = admin.from('sip_configurations').select('*').eq('owner_id', ownerId);
+        q = subCompanyId ? q.eq('sub_company_id', subCompanyId) : q.is('sub_company_id', null);
+        q = clientCompanyId ? q.eq('client_company_id', clientCompanyId) : q.is('client_company_id', null);
+        const db = await q.maybeSingle();
+        if (db.error) throw db.error;
+        data = db.data;
+        if (!data && subCompanyId) {
+          const inherited = await admin
+            .from('sip_configurations')
+            .select('*')
+            .eq('owner_id', ownerId)
+            .is('sub_company_id', null)
+            .is('client_company_id', null)
+            .maybeSingle();
+          if (inherited.error) throw inherited.error;
+          data = inherited.data;
+        }
+      }
+      const server = String(cfg.server || data?.server || '');
+      const webrtcUsername = String(cfg.webrtc_username || data?.webrtc_username || data?.username || '').trim();
+      let webrtcSecret = String(cfg.webrtc_secret || '').trim();
+      if (!webrtcSecret && data?.webrtc_secret_ciphertext && data?.webrtc_secret_iv) {
+        webrtcSecret = await decryptPassword(data.webrtc_secret_ciphertext, data.webrtc_secret_iv);
+      }
+      if (!server || !webrtcUsername || !webrtcSecret) return fail(400, 'missing_webrtc_secret');
+      try {
+        const webrtc = await fetchYeastarRegisterInfo(server, webrtcUsername, webrtcSecret);
+        await audit('webrtc_register_info', data?.id ?? null, { server: normalizeHost(server), webrtc_username: webrtcUsername });
+        return json(200, { webrtc });
+      } catch (e: any) {
+        const msg = String(e?.message || e);
+        if (msg.startsWith('pbx_auth_failed')) return fail(502, 'pbx_auth_failed', ERROR_MESSAGES.pbx_auth_failed);
+        if (msg.startsWith('pbx_api_failed')) return fail(502, 'pbx_api_failed', ERROR_MESSAGES.pbx_api_failed);
+        return fail(502, 'pbx_network_failed', ERROR_MESSAGES.pbx_network_failed);
+      }
+    }
+
     if (action === 'upsert') {
       const cfg = body.config || {};
       if (!cfg.server || !cfg.username) return fail(400, 'missing_fields');
       const { ciphertext, iv } = await encryptPassword(String(cfg.password || ''));
+      let existingQ = admin.from('sip_configurations').select('id, webrtc_secret_ciphertext, webrtc_secret_iv').eq('owner_id', ownerId);
+      existingQ = subCompanyId ? existingQ.eq('sub_company_id', subCompanyId) : existingQ.is('sub_company_id', null);
+      existingQ = clientCompanyId ? existingQ.eq('client_company_id', clientCompanyId) : existingQ.is('client_company_id', null);
+      const { data: existing } = await existingQ.maybeSingle();
+      const hasWebrtcSecret = typeof cfg.webrtc_secret === 'string' && cfg.webrtc_secret.trim().length > 0;
+      const encryptedWebrtc = hasWebrtcSecret ? await encryptPassword(String(cfg.webrtc_secret)) : null;
       const payload = {
         owner_id: ownerId,
         sub_company_id: subCompanyId,
@@ -238,17 +350,14 @@ Deno.serve(async (req) => {
         auth_username: cfg.auth_username ?? null,
         password_ciphertext: ciphertext,
         password_iv: iv,
+        webrtc_username: cfg.webrtc_username ?? null,
+        webrtc_secret_ciphertext: encryptedWebrtc?.ciphertext ?? existing?.webrtc_secret_ciphertext ?? null,
+        webrtc_secret_iv: encryptedWebrtc?.iv ?? existing?.webrtc_secret_iv ?? null,
         display_name: cfg.display_name ?? null,
         transport: cfg.transport ?? 'WSS',
         auto_record: cfg.auto_record ?? true,
         updated_by: user.id,
       };
-
-      // Find existing to distinguish create vs update
-      let existingQ = admin.from('sip_configurations').select('id').eq('owner_id', ownerId);
-      existingQ = subCompanyId ? existingQ.eq('sub_company_id', subCompanyId) : existingQ.is('sub_company_id', null);
-      existingQ = clientCompanyId ? existingQ.eq('client_company_id', clientCompanyId) : existingQ.is('client_company_id', null);
-      const { data: existing } = await existingQ.maybeSingle();
 
       if (existing) {
         const { error } = await admin.from('sip_configurations').update(payload).eq('id', existing.id);
