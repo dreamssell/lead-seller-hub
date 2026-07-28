@@ -290,6 +290,7 @@ export default function AutomationsPage() {
       setStep('creds', { status: 'fail', detail: hasMissing ? 'Campos obrigatórios faltando' : 'Campos inválidos' });
       setStep('reach', { status: 'skip' });
       setStep('auth', { status: 'skip' });
+      if (id === 'yeastar') { setStep('wss', { status: 'skip' }); setStep('sipreg', { status: 'skip' }); }
       const msg = hasMissing
         ? `Faltando: ${fields.filter((f) => f.status === 'missing').map((f) => f.label).join(', ')}`
         : `Inválidos: ${fields.filter((f) => f.status === 'fail').map((f) => f.label).join(', ')}`;
