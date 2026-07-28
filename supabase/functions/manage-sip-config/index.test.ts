@@ -39,6 +39,10 @@ const KNOWN_CODES = new Set([
   'missing_action',
   'unknown_action',
   'missing_fields',
+  'missing_webrtc_secret',
+  'pbx_auth_failed',
+  'pbx_api_failed',
+  'pbx_network_failed',
   'internal',
 ]);
 

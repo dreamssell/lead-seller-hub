@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
     || acc?.is_owner === true
     || cc?.auth_user_id === user.id
   );
-  if (action !== 'get' && !canManageTenantSip) return fail(403, 'forbidden');
+  if (action !== 'get' && action !== 'webrtc_register_info' && !canManageTenantSip) return fail(403, 'forbidden');
 
   if (isAdmin === true) {
     effectiveOwnerId = scope.owner_id || acc?.owner_id || (cc ? (cc.auth_user_id === user.id ? user.id : (cc.owner_id || user.id)) : null) || user.id;
