@@ -721,17 +721,19 @@ export default function AutomationsPage() {
 
       {/* Configurar integração */}
       <Dialog open={!!configOpen} onOpenChange={(v) => !v && setConfigOpen(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90dvh] p-0 gap-0 flex flex-col overflow-hidden">
           {current && currentCfg && (
             <>
-              <DialogHeader>
+              <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-border">
                 <DialogTitle className="flex items-center gap-2">
                   <current.icon className="w-5 h-5" /> {current.name}
                 </DialogTitle>
                 <DialogDescription>{current.desc}</DialogDescription>
               </DialogHeader>
 
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-4 space-y-4">
               <div className="flex items-center justify-between rounded-lg border border-border p-3">
+
                 <div>
                   <p className="text-sm font-medium">Integração ativa</p>
                   <p className="text-xs text-muted-foreground">Ative para começar a receber/enviar dados.</p>
