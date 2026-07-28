@@ -114,13 +114,16 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     const socket = new JsSIP.WebSocketInterface(wsUri);
     let registeredOnce = false;
     const sipHost = getSipHostname(server) || server;
-    const contactUri = isYeastar ? `sip:${config.username}@${sipHost};nat;webclient` : undefined;
+    // Domínio SIP (MicroSIP: campo "Domínio", ex.: 187.60.60.75). Quando informado,
+    // é usado no AOR/Contact e como realm de autenticação — o WSS continua no host do PBX.
+    const sipDomain = getSipHostname(config.sipDomain || config.sip_domain || config.domain) || sipHost;
+    const contactUri = isYeastar ? `sip:${config.username}@${sipDomain};nat;webclient` : undefined;
     const passwordOrHa1 = config.webrtc?.registerpassword || config.password;
-    const realm = config.webrtc?.realm;
-    
+    const realm = config.webrtc?.realm || sipDomain;
+
     const ua = new JsSIP.UA({
       sockets: [socket],
-      uri: `sip:${config.username}@${server}`,
+      uri: `sip:${config.username}@${sipDomain}`,
       authorization_user: authUser || config.username,
       ...(config.webrtc?.registerpassword ? { ha1: passwordOrHa1, realm } : { password: passwordOrHa1 }),
       ...(contactUri ? { contact_uri: contactUri, user_agent: 'WebClient', register_expires: 1800 } : {}),
