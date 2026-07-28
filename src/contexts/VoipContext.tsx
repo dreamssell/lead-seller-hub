@@ -312,7 +312,8 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
         try { webrtc = await fetchYeastarWebrtcRegisterInfo(sipScope ?? { owner_id: user.id, sub_company_id: null }, cfg); } catch (e) { console.warn('Yeastar WebRTC register info unavailable', e); }
       }
       const authUser = webrtc?.registername || cfg.auth_username || cfg.authUsername || cfg.authUser || cfg.username;
-      const sig = `${normalizedServer}|${cfg.username}|${authUser}|${cfg.password}|${normalizedWsUri}|${webrtc?.registerpassword ?? ''}|${webrtc?.realm ?? ''}`;
+      const sipDomain = (cfg as any).sip_domain ?? null;
+      const sig = `${normalizedServer}|${sipDomain ?? ''}|${cfg.username}|${authUser}|${cfg.password}|${normalizedWsUri}|${webrtc?.registerpassword ?? ''}|${webrtc?.realm ?? ''}`;
       const changed = sig !== lastCfgSigRef.current;
       const needsConnect = !uaRef.current || status === 'disconnected' || status === 'error' || changed;
       if (needsConnect) {
@@ -324,6 +325,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
           wsUri: normalizedWsUri,
           username: cfg.username,
           authUser,
+          sipDomain,
           password: cfg.password,
           webrtc,
           displayName: cfg.display_name,
