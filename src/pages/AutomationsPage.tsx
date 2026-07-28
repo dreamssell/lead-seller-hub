@@ -212,6 +212,7 @@ function yeastarToSipConfig(cfg: IntegrationConfig): SipConfig | null {
 
 export default function AutomationsPage() {
   const { access, user } = useAuth();
+  const voip = useVoip();
   const sipScope: SipScope = useMemo(() => {
     const ownerId = getActiveOwnerId(access?.owner_id, user?.id);
     return ownerId ? { owner_id: ownerId, sub_company_id: access?.sub_company_id ?? null } : {};
