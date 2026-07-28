@@ -257,11 +257,19 @@ export default function AutomationsPage() {
       return { key: String(f.key), label: f.label, status: 'ok' };
     });
 
-    const initialSteps: TestStep[] = [
-      { key: 'creds', label: 'Validar credenciais', status: 'pending' },
-      { key: 'reach', label: it.webhookPath ? 'Receber evento de teste no webhook' : 'Alcançar PBX', status: 'pending' },
-      { key: 'auth', label: 'Autenticar com o provedor', status: 'pending' },
-    ];
+    const initialSteps: TestStep[] = id === 'yeastar'
+      ? [
+          { key: 'creds', label: 'Validar credenciais', status: 'pending' },
+          { key: 'reach', label: 'Alcançar PBX (HTTPS)', status: 'pending' },
+          { key: 'auth', label: 'Salvar tronco SIP no tenant', status: 'pending' },
+          { key: 'wss', label: 'Abrir WebSocket SIP (WSS)', status: 'pending' },
+          { key: 'sipreg', label: 'Enviar REGISTER e autenticar no PBX', status: 'pending' },
+        ]
+      : [
+          { key: 'creds', label: 'Validar credenciais', status: 'pending' },
+          { key: 'reach', label: it.webhookPath ? 'Receber evento de teste no webhook' : 'Alcançar PBX', status: 'pending' },
+          { key: 'auth', label: 'Autenticar com o provedor', status: 'pending' },
+        ];
 
     setTests((p) => ({ ...p, [id]: { status: 'running', steps: initialSteps, fields, at: Date.now() } }));
 
