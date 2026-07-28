@@ -577,6 +577,15 @@ export default function YeastarDashboardPage() {
   );
 }
 
+function DiagRow({ label, value }: { label: string; value?: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-border/40 py-1">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span className="font-mono text-right break-all">{value || '—'}</span>
+    </div>
+  );
+}
+
 function KpiCard({ icon: Icon, label, value, accent }: { icon: any; label: string; value: string; accent?: string }) {
   return (
     <Card className="glass-card">
