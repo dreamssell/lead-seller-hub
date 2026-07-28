@@ -348,54 +348,76 @@ export default function YeastarDashboardPage() {
             <Label>Nome de exibição</Label>
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Lead Seller Agent" />
           </div>
-          <div className="md:col-span-2 flex justify-end gap-2">
+          <div className="md:col-span-2 flex flex-wrap justify-end gap-2">
             <Button
               variant="outline"
-              onClick={async () => {
-                if (!server.trim() || !username.trim() || !password.trim()) {
-                  toast({ title: 'Preencha servidor, usuário e senha antes de testar.', variant: 'destructive' });
-                  return;
-                }
-                setTesting(true);
-                try {
-                  const normalizedServer = normalizeSipServer(server);
-                  const normalizedWsUri = normalizeSipWsUri(normalizedServer, wsUri.trim() || undefined, username.trim());
-                  setServer(normalizedServer);
-                  setWsUri(normalizedWsUri);
-                  const result = await testConnection({
-                    server: normalizedServer,
-                    wsUri: normalizedWsUri,
-                    username: username.trim(),
-                    authUser: authUsername.trim() || username.trim(),
-                    sipDomain: sipDomain.trim() || undefined,
-                    password,
-                    webrtc_username: webrtcUsername.trim() || undefined,
-                    webrtc_secret: webrtcSecret.trim() || undefined,
-                    displayName: displayName.trim() || undefined,
-                  });
-                  if (result.status === 'connected') {
-                    toast({ title: 'SIP conectado com sucesso', description: `Teste OK via ${result.wsUri || normalizedWsUri}. Salve o tronco para liberar o botão azul no chat.` });
-                  } else {
-                    toast({
-                      title: 'Falha ao conectar SIP',
-                      description: result.error || voipError || `Status final: ${result.status}. Verifique credenciais e WSS.`,
-                      variant: 'destructive',
-                    });
-                  }
-                } finally {
-                  setTesting(false);
-                }
-              }}
+              onClick={runRegisterTest}
               disabled={testing || saving || loadingCfg}
             >
               {testing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PlugZap className="w-4 h-4 mr-2" />}
-              Testar conexão SIP
+              Testar REGISTER SIP
             </Button>
             <Button onClick={saveTrunk} disabled={saving || loadingCfg}>
               {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
               Salvar tronco SIP e reconectar
             </Button>
           </div>
+
+          {(testing || regTest) && (
+            <div className="md:col-span-2 rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  {testing ? (
+                    <><Loader2 className="w-4 h-4 animate-spin text-primary" /> Enviando REGISTER…</>
+                  ) : regTest?.ok ? (
+                    <><CheckCircle2 className="w-4 h-4 text-emerald-500" /> REGISTER aceito pelo PBX</>
+                  ) : (
+                    <><XCircle className="w-4 h-4 text-destructive" /> REGISTER recusado / sem resposta</>
+                  )}
+                </div>
+                {regTest && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant={regTest.ok ? 'default' : 'destructive'}>{regTest.status}</Badge>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(JSON.stringify(regTest, null, 2));
+                        toast({ title: 'Diagnóstico copiado' });
+                      }}
+                    >
+                      <Copy className="w-3.5 h-3.5 mr-1.5" /> Copiar
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {regTest && (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+                    <DiagRow label="AOR (SIP URI)" value={regTest.aor} />
+                    <DiagRow label="Auth ID / Login" value={regTest.authUser} />
+                    <DiagRow label="Realm / Domínio" value={regTest.realm} />
+                    <DiagRow label="WSS" value={regTest.wsUri} />
+                    <DiagRow label="Transporte" value="WSS + DTLS-SRTP (WebRTC)" />
+                    <DiagRow label="Servidor" value={regTest.server} />
+                    <DiagRow label="Credencial WebRTC" value={regTest.webrtc ? 'Linkus SDK' : 'senha do ramal'} />
+                    <DiagRow label="Duração do teste" value={`${(regTest.durationMs / 1000).toFixed(1)}s`} />
+                    <DiagRow label="Horário" value={new Date(regTest.at).toLocaleString('pt-BR')} />
+                  </div>
+                  {regTest.error && (
+                    <p className="text-xs text-destructive break-words">{regTest.error}</p>
+                  )}
+                  {!regTest.ok && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Dica: o navegador registra apenas via WSS (porta 443, caminho <code>/ws</code>). As portas 5060/10000 valem só para softphones externos como o MicroSIP.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
         </CardContent>
       </Card>
 
