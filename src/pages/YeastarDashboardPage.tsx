@@ -88,6 +88,7 @@ export default function YeastarDashboardPage() {
   const abortRef = useRef<AbortController | null>(null);
   const { status: voipStatus, connect: voipConnect, testConnection, lastError: voipError } = useVoip();
   const [testing, setTesting] = useState(false);
+  const [regTest, setRegTest] = useState<RegisterTestResult | null>(null);
 
   // Trunk form — cada Empresa/Sub-empresa registra suas próprias credenciais.
   // O backend (manage-sip-config) resolve o owner_id do usuário logado via
