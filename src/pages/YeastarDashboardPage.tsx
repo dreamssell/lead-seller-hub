@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/select';
 import {
   Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, Clock, TrendingUp, Users, Building2, RefreshCw,
-  Wifi, WifiOff, Loader2, PlugZap, Save,
+  Wifi, WifiOff, Loader2, PlugZap, Save, CheckCircle2, XCircle, Copy,
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend,
