@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/select';
 import {
   Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, Clock, TrendingUp, Users, Building2, RefreshCw,
-  Wifi, WifiOff, Loader2, PlugZap, Save,
+  Wifi, WifiOff, Loader2, PlugZap, Save, CheckCircle2, XCircle, Copy,
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend,
@@ -24,6 +24,21 @@ import { getActiveOwnerId } from '@/lib/chatTenantScope';
 
 type DataSource = 'api' | 'mock' | 'loading';
 const INTEG_KEY = 'automations.integrations.v1';
+
+/** Diagnóstico detalhado do teste de REGISTER SIP exibido na tela. */
+type RegisterTestResult = {
+  ok: boolean;
+  status: string;
+  aor: string;
+  authUser: string;
+  realm: string;
+  wsUri: string;
+  server: string;
+  webrtc: boolean;
+  durationMs: number;
+  at: string;
+  error: string | null;
+};
 
 type Period = '24h' | '7d' | '30d' | '90d';
 const PERIOD_DAYS: Record<Period, number> = { '24h': 1, '7d': 7, '30d': 30, '90d': 90 };
@@ -88,6 +103,7 @@ export default function YeastarDashboardPage() {
   const abortRef = useRef<AbortController | null>(null);
   const { status: voipStatus, connect: voipConnect, testConnection, lastError: voipError } = useVoip();
   const [testing, setTesting] = useState(false);
+  const [regTest, setRegTest] = useState<RegisterTestResult | null>(null);
 
   // Trunk form — cada Empresa/Sub-empresa registra suas próprias credenciais.
   // O backend (manage-sip-config) resolve o owner_id do usuário logado via
@@ -169,6 +185,76 @@ export default function YeastarDashboardPage() {
   }, [period, tick]);
 
   const m = useMemo(() => buildMetrics(period), [period]);
+
+  /** Dispara um REGISTER real via WSS e guarda o diagnóstico detalhado. */
+  const runRegisterTest = async () => {
+    if (!server.trim() || !username.trim() || !password.trim()) {
+      toast({ title: 'Preencha servidor, usuário e senha antes de testar.', variant: 'destructive' });
+      return;
+    }
+    setTesting(true);
+    setRegTest(null);
+    const startedAt = Date.now();
+    const normalizedServer = normalizeSipServer(server);
+    const normalizedWsUri = normalizeSipWsUri(normalizedServer, wsUri.trim() || undefined, username.trim());
+    const realm = sipDomain.trim() || normalizedServer;
+    setServer(normalizedServer);
+    setWsUri(normalizedWsUri);
+    try {
+      const result = await testConnection({
+        server: normalizedServer,
+        wsUri: normalizedWsUri,
+        username: username.trim(),
+        authUser: authUsername.trim() || username.trim(),
+        sipDomain: sipDomain.trim() || undefined,
+        password,
+        webrtc_username: webrtcUsername.trim() || undefined,
+        webrtc_secret: webrtcSecret.trim() || undefined,
+        displayName: displayName.trim() || undefined,
+      });
+      const ok = result.status === 'connected';
+      setRegTest({
+        ok,
+        status: ok ? 'REGISTERED (200 OK)' : `Falha (${result.status})`,
+        aor: `sip:${username.trim()}@${realm}`,
+        authUser: authUsername.trim() || username.trim(),
+        realm,
+        wsUri: result.wsUri || normalizedWsUri,
+        server: normalizedServer,
+        webrtc: Boolean(webrtcUsername.trim() || webrtcSecret.trim()),
+        durationMs: Date.now() - startedAt,
+        at: new Date().toISOString(),
+        error: ok ? null : (result.error || voipError || 'Sem detalhes retornados pelo PBX.'),
+      });
+      if (ok) {
+        toast({ title: 'REGISTER aceito', description: `Registrado via ${result.wsUri || normalizedWsUri}.` });
+      } else {
+        toast({
+          title: 'Falha no REGISTER SIP',
+          description: result.error || voipError || `Status final: ${result.status}.`,
+          variant: 'destructive',
+        });
+      }
+    } catch (e: any) {
+      const message = e?.message || 'Erro inesperado no teste de registro.';
+      setRegTest({
+        ok: false,
+        status: 'Erro',
+        aor: `sip:${username.trim()}@${realm}`,
+        authUser: authUsername.trim() || username.trim(),
+        realm,
+        wsUri: normalizedWsUri,
+        server: normalizedServer,
+        webrtc: Boolean(webrtcUsername.trim() || webrtcSecret.trim()),
+        durationMs: Date.now() - startedAt,
+        at: new Date().toISOString(),
+        error: message,
+      });
+      toast({ title: 'Falha no REGISTER SIP', description: message, variant: 'destructive' });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const saveTrunk = async () => {
     if (!server.trim() || !username.trim() || !password.trim()) {
@@ -348,54 +434,76 @@ export default function YeastarDashboardPage() {
             <Label>Nome de exibição</Label>
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Lead Seller Agent" />
           </div>
-          <div className="md:col-span-2 flex justify-end gap-2">
+          <div className="md:col-span-2 flex flex-wrap justify-end gap-2">
             <Button
               variant="outline"
-              onClick={async () => {
-                if (!server.trim() || !username.trim() || !password.trim()) {
-                  toast({ title: 'Preencha servidor, usuário e senha antes de testar.', variant: 'destructive' });
-                  return;
-                }
-                setTesting(true);
-                try {
-                  const normalizedServer = normalizeSipServer(server);
-                  const normalizedWsUri = normalizeSipWsUri(normalizedServer, wsUri.trim() || undefined, username.trim());
-                  setServer(normalizedServer);
-                  setWsUri(normalizedWsUri);
-                  const result = await testConnection({
-                    server: normalizedServer,
-                    wsUri: normalizedWsUri,
-                    username: username.trim(),
-                    authUser: authUsername.trim() || username.trim(),
-                    sipDomain: sipDomain.trim() || undefined,
-                    password,
-                    webrtc_username: webrtcUsername.trim() || undefined,
-                    webrtc_secret: webrtcSecret.trim() || undefined,
-                    displayName: displayName.trim() || undefined,
-                  });
-                  if (result.status === 'connected') {
-                    toast({ title: 'SIP conectado com sucesso', description: `Teste OK via ${result.wsUri || normalizedWsUri}. Salve o tronco para liberar o botão azul no chat.` });
-                  } else {
-                    toast({
-                      title: 'Falha ao conectar SIP',
-                      description: result.error || voipError || `Status final: ${result.status}. Verifique credenciais e WSS.`,
-                      variant: 'destructive',
-                    });
-                  }
-                } finally {
-                  setTesting(false);
-                }
-              }}
+              onClick={runRegisterTest}
               disabled={testing || saving || loadingCfg}
             >
               {testing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PlugZap className="w-4 h-4 mr-2" />}
-              Testar conexão SIP
+              Testar REGISTER SIP
             </Button>
             <Button onClick={saveTrunk} disabled={saving || loadingCfg}>
               {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
               Salvar tronco SIP e reconectar
             </Button>
           </div>
+
+          {(testing || regTest) && (
+            <div className="md:col-span-2 rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  {testing ? (
+                    <><Loader2 className="w-4 h-4 animate-spin text-primary" /> Enviando REGISTER…</>
+                  ) : regTest?.ok ? (
+                    <><CheckCircle2 className="w-4 h-4 text-emerald-500" /> REGISTER aceito pelo PBX</>
+                  ) : (
+                    <><XCircle className="w-4 h-4 text-destructive" /> REGISTER recusado / sem resposta</>
+                  )}
+                </div>
+                {regTest && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant={regTest.ok ? 'default' : 'destructive'}>{regTest.status}</Badge>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(JSON.stringify(regTest, null, 2));
+                        toast({ title: 'Diagnóstico copiado' });
+                      }}
+                    >
+                      <Copy className="w-3.5 h-3.5 mr-1.5" /> Copiar
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {regTest && (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+                    <DiagRow label="AOR (SIP URI)" value={regTest.aor} />
+                    <DiagRow label="Auth ID / Login" value={regTest.authUser} />
+                    <DiagRow label="Realm / Domínio" value={regTest.realm} />
+                    <DiagRow label="WSS" value={regTest.wsUri} />
+                    <DiagRow label="Transporte" value="WSS + DTLS-SRTP (WebRTC)" />
+                    <DiagRow label="Servidor" value={regTest.server} />
+                    <DiagRow label="Credencial WebRTC" value={regTest.webrtc ? 'Linkus SDK' : 'senha do ramal'} />
+                    <DiagRow label="Duração do teste" value={`${(regTest.durationMs / 1000).toFixed(1)}s`} />
+                    <DiagRow label="Horário" value={new Date(regTest.at).toLocaleString('pt-BR')} />
+                  </div>
+                  {regTest.error && (
+                    <p className="text-xs text-destructive break-words">{regTest.error}</p>
+                  )}
+                  {!regTest.ok && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Dica: o navegador registra apenas via WSS (porta 443, caminho <code>/ws</code>). As portas 5060/10000 valem só para softphones externos como o MicroSIP.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
         </CardContent>
       </Card>
 
@@ -466,6 +574,15 @@ export default function YeastarDashboardPage() {
       </div>
     </AppLayout>
     </>
+  );
+}
+
+function DiagRow({ label, value }: { label: string; value?: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-border/40 py-1">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span className="font-mono text-right break-all">{value || '—'}</span>
+    </div>
   );
 }
 
