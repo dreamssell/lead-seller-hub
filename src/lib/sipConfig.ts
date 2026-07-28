@@ -6,6 +6,8 @@ export type SipConfig = {
   ws_uri?: string;
   username: string;
   auth_username?: string | null;
+  /** Domínio/realm SIP (ex.: 187.60.60.75). Se vazio, usa o host do servidor. */
+  sip_domain?: string | null;
   password: string;
   webrtc_username?: string | null;
   webrtc_secret?: string | null;

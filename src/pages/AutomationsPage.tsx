@@ -102,6 +102,7 @@ type IntegrationConfig = {
   pbxUrl?: string;
   username?: string;
   authUsername?: string;
+  sipDomain?: string;
   password?: string;
   webrtcUsername?: string;
   webrtcSecret?: string;
@@ -181,8 +182,9 @@ const INTEGRATIONS: Array<{
     color: 'from-orange-500/20 to-amber-500/20',
     fields: [
       { key: 'pbxUrl', label: 'URL do PBX', type: 'url', placeholder: 'https://sopropabx.ras.yeastar.com', helper: 'Base da API OpenAPI do Yeastar' },
-      { key: 'username', label: 'Extensão SIP', placeholder: '55008137460254', helper: 'Número/ramal usado no endereço SIP.' },
-      { key: 'authUsername', label: 'Register Name / Auth ID', placeholder: '55008137460254', helper: 'Login de autenticação no Yeastar. Se vazio, usa a extensão.' },
+      { key: 'username', label: 'Usuário / Extensão SIP', placeholder: '5527998973430', helper: 'Campo "Usuário" do MicroSIP — o número do ramal.' },
+      { key: 'sipDomain', label: 'Domínio SIP', placeholder: '187.60.60.75', helper: 'Campo "Domínio" do MicroSIP (IP ou host do PBX). Se vazio, usa o servidor.' },
+      { key: 'authUsername', label: 'Login (Register Name / Auth ID)', placeholder: '55008137460254', helper: 'Campo "Login" do MicroSIP. Se vazio, usa a extensão.' },
       { key: 'password', label: 'Senha', type: 'password' },
       { key: 'webrtcUsername', label: 'Usuário Linkus/WebRTC', placeholder: 'usuário Linkus', helper: 'Necessário para registrar chamadas no navegador via WSS.' },
       { key: 'webrtcSecret', label: 'Secret/assinatura Linkus SDK', type: 'password', helper: 'Diferente da senha SIP do MicroSIP. Usado para obter registerpassword/HA1.' },
@@ -206,6 +208,7 @@ function yeastarToSipConfig(cfg: IntegrationConfig): SipConfig | null {
     port: cfg.sipPortTcp?.trim() || cfg.sipPortUdp?.trim() || undefined,
     username: cfg.username.trim(),
     auth_username: cfg.authUsername?.trim() || cfg.username.trim(),
+    sip_domain: cfg.sipDomain?.trim() || undefined,
     password: cfg.password,
     webrtc_username: cfg.webrtcUsername?.trim() || undefined,
     webrtc_secret: cfg.webrtcSecret?.trim() || undefined,
@@ -255,7 +258,7 @@ export default function AutomationsPage() {
 
     // --- per-field validation report ---
     const fields: FieldCheck[] = it.fields.map((f) => {
-      const required = f.key !== 'extension' && f.key !== 'authUsername' && f.key !== 'webhookSecret' && f.key !== 'defaultPipelineId';
+      const required = f.key !== 'extension' && f.key !== 'authUsername' && f.key !== 'sipDomain' && f.key !== 'webhookSecret' && f.key !== 'defaultPipelineId';
       const val = (cfg[f.key] as string) ?? '';
       if (!val.trim()) return { key: String(f.key), label: f.label, status: required ? 'missing' : 'ok', detail: required ? 'Obrigatório' : 'Opcional — não informado' };
       if (f.type === 'url' && !/^https?:\/\//i.test(val)) return { key: String(f.key), label: f.label, status: 'fail', detail: 'URL deve começar com http(s)://' };
@@ -391,6 +394,7 @@ export default function AutomationsPage() {
           wsUri: sipCfg.ws_uri,
           username: sipCfg.username,
           authUser: sipCfg.auth_username,
+          sipDomain: sipCfg.sip_domain,
           password: sipCfg.password,
           webrtc: sipCfg.webrtc,
           webrtc_username: sipCfg.webrtc_username,

@@ -114,13 +114,16 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     const socket = new JsSIP.WebSocketInterface(wsUri);
     let registeredOnce = false;
     const sipHost = getSipHostname(server) || server;
-    const contactUri = isYeastar ? `sip:${config.username}@${sipHost};nat;webclient` : undefined;
+    // Domínio SIP (MicroSIP: campo "Domínio", ex.: 187.60.60.75). Quando informado,
+    // é usado no AOR/Contact e como realm de autenticação — o WSS continua no host do PBX.
+    const sipDomain = getSipHostname(config.sipDomain || config.sip_domain || config.domain) || sipHost;
+    const contactUri = isYeastar ? `sip:${config.username}@${sipDomain};nat;webclient` : undefined;
     const passwordOrHa1 = config.webrtc?.registerpassword || config.password;
-    const realm = config.webrtc?.realm;
-    
+    const realm = config.webrtc?.realm || sipDomain;
+
     const ua = new JsSIP.UA({
       sockets: [socket],
-      uri: `sip:${config.username}@${server}`,
+      uri: `sip:${config.username}@${sipDomain}`,
       authorization_user: authUser || config.username,
       ...(config.webrtc?.registerpassword ? { ha1: passwordOrHa1, realm } : { password: passwordOrHa1 }),
       ...(contactUri ? { contact_uri: contactUri, user_agent: 'WebClient', register_expires: 1800 } : {}),
@@ -309,7 +312,8 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
         try { webrtc = await fetchYeastarWebrtcRegisterInfo(sipScope ?? { owner_id: user.id, sub_company_id: null }, cfg); } catch (e) { console.warn('Yeastar WebRTC register info unavailable', e); }
       }
       const authUser = webrtc?.registername || cfg.auth_username || cfg.authUsername || cfg.authUser || cfg.username;
-      const sig = `${normalizedServer}|${cfg.username}|${authUser}|${cfg.password}|${normalizedWsUri}|${webrtc?.registerpassword ?? ''}|${webrtc?.realm ?? ''}`;
+      const sipDomain = (cfg as any).sip_domain ?? null;
+      const sig = `${normalizedServer}|${sipDomain ?? ''}|${cfg.username}|${authUser}|${cfg.password}|${normalizedWsUri}|${webrtc?.registerpassword ?? ''}|${webrtc?.realm ?? ''}`;
       const changed = sig !== lastCfgSigRef.current;
       const needsConnect = !uaRef.current || status === 'disconnected' || status === 'error' || changed;
       if (needsConnect) {
@@ -321,6 +325,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
           wsUri: normalizedWsUri,
           username: cfg.username,
           authUser,
+          sipDomain,
           password: cfg.password,
           webrtc,
           displayName: cfg.display_name,

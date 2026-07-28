@@ -1,0 +1,1 @@
+ALTER TABLE public.sip_configurations ADD COLUMN IF NOT EXISTS sip_domain text;

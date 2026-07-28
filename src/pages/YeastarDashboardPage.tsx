@@ -96,6 +96,7 @@ export default function YeastarDashboardPage() {
   const [server, setServer] = useState('');
   const [username, setUsername] = useState('');
   const [authUsername, setAuthUsername] = useState('');
+  const [sipDomain, setSipDomain] = useState('');
   const [password, setPassword] = useState('');
   const [webrtcUsername, setWebrtcUsername] = useState('');
   const [webrtcSecret, setWebrtcSecret] = useState('');
@@ -120,6 +121,7 @@ export default function YeastarDashboardPage() {
           if (normalizedServer) setServer(normalizedServer);
           if (cfg.username) setUsername(cfg.username);
           if (cfg.auth_username) setAuthUsername(cfg.auth_username);
+          if (cfg.sip_domain) setSipDomain(cfg.sip_domain);
           if (cfg.password) setPassword(cfg.password);
           if (cfg.webrtc_username) setWebrtcUsername(cfg.webrtc_username);
           if (normalizedServer || cfg.ws_uri) setWsUri(normalizeSipWsUri(normalizedServer, cfg.ws_uri, cfg.username));
@@ -180,6 +182,7 @@ export default function YeastarDashboardPage() {
         server: normalizedServer,
         username: username.trim(),
         auth_username: authUsername.trim() || username.trim(),
+        sip_domain: sipDomain.trim() || undefined,
         password,
         webrtc_username: webrtcUsername.trim() || undefined,
         webrtc_secret: webrtcSecret.trim() || undefined,
@@ -200,6 +203,7 @@ export default function YeastarDashboardPage() {
         wsUri: cfg.ws_uri,
         username: cfg.username,
         authUser: cfg.auth_username || cfg.username,
+        sipDomain: cfg.sip_domain,
         password: cfg.password,
         webrtc: cfg.webrtc,
         webrtc_username: cfg.webrtc_username,
@@ -317,10 +321,15 @@ export default function YeastarDashboardPage() {
           </div>
           <div className="space-y-1.5">
             <Label>Usuário / Extensão</Label>
-            <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="55008137460254" />
+            <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="5527998973430" />
           </div>
           <div className="space-y-1.5">
-            <Label>Register Name / Auth ID</Label>
+            <Label>Domínio SIP</Label>
+            <Input value={sipDomain} onChange={(e) => setSipDomain(e.target.value)} placeholder="187.60.60.75" />
+            <p className="text-[11px] text-muted-foreground">Campo "Domínio" do MicroSIP. Se vazio, usa o servidor.</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Login (Register Name / Auth ID)</Label>
             <Input value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} placeholder="55008137460254" />
           </div>
           <div className="space-y-1.5">
@@ -358,6 +367,7 @@ export default function YeastarDashboardPage() {
                     wsUri: normalizedWsUri,
                     username: username.trim(),
                     authUser: authUsername.trim() || username.trim(),
+                    sipDomain: sipDomain.trim() || undefined,
                     password,
                     webrtc_username: webrtcUsername.trim() || undefined,
                     webrtc_secret: webrtcSecret.trim() || undefined,
