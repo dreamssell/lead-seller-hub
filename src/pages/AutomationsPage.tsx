@@ -344,13 +344,15 @@ export default function AutomationsPage() {
       return;
     }
 
-    // step 3: auth (simulated)
+    // step 3: auth (save) — yeastar salva o tronco SIP no tenant
     setStep('auth', { status: 'running' });
-    await sleep(500);
+    await sleep(300);
     if (id === 'yeastar') {
       const sipCfg = yeastarToSipConfig(cfg);
       if (!sipCfg) {
         setStep('auth', { status: 'fail', detail: 'Dados SIP incompletos' });
+        setStep('wss', { status: 'skip' });
+        setStep('sipreg', { status: 'skip' });
         setTests((p) => ({ ...p, [id]: { ...p[id], status: 'fail', message: 'Preencha URL do PBX, usuário e senha.', at: Date.now() } }));
         toast({ title: 'Yeastar — dados incompletos', description: 'Preencha URL do PBX, usuário e senha.', variant: 'destructive' });
         return;
@@ -358,18 +360,75 @@ export default function AutomationsPage() {
       try {
         await saveSipConfig(sipCfg, sipScope);
         window.dispatchEvent(new CustomEvent('sip:reload', { detail: { scope: sipScope } }));
-        setStep('auth', { status: 'ok', detail: 'Tronco SIP salvo' });
+        setStep('auth', { status: 'ok', detail: 'Tronco SIP salvo no tenant' });
       } catch (e: any) {
         setStep('auth', { status: 'fail', detail: e?.message || 'Falha ao salvar tronco SIP' });
+        setStep('wss', { status: 'skip' });
+        setStep('sipreg', { status: 'skip' });
         setTests((p) => ({ ...p, [id]: { ...p[id], status: 'fail', message: e?.message || 'Falha ao salvar tronco SIP', at: Date.now() } }));
         toast({ title: 'Yeastar — falha ao salvar SIP', description: e?.message, variant: 'destructive' });
         return;
       }
+
+      // step 4 + 5: WSS handshake + SIP REGISTER (autenticação real no PBX)
+      setStep('wss', { status: 'running', detail: sipCfg.ws_uri });
+      const t0 = Date.now();
+      let result;
+      try {
+        result = await voip.testConnection({
+          server: sipCfg.server,
+          port: sipCfg.port,
+          wsUri: sipCfg.ws_uri,
+          username: sipCfg.username,
+          authUser: sipCfg.auth_username,
+          password: sipCfg.password,
+          displayName: sipCfg.display_name,
+        });
+      } catch (e: any) {
+        result = { status: 'error' as const, error: e?.message || 'Falha no teste SIP', wsUri: sipCfg.ws_uri };
+      }
+      const elapsed = `${((Date.now() - t0) / 1000).toFixed(1)}s`;
+      const wsUri = (result as any).wsUri ?? sipCfg.ws_uri;
+      const rawErr = (result as any).error as string | null;
+      const isSocketErr = !!rawErr && /websocket|socket|connection|network|closed|failed to connect|mixed content|handshake/i.test(rawErr);
+
+      if (result.status === 'connected') {
+        setStep('wss', { status: 'ok', detail: `Handshake em ${elapsed}` });
+        setStep('sipreg', { status: 'ok', detail: `PBX aceitou REGISTER (${sipCfg.auth_username}@${sipCfg.server}) em ${elapsed}` });
+        setTests((p) => ({ ...p, [id]: { ...p[id], status: 'ok', message: 'Registro SIP validado no PBX Yeastar.', at: Date.now() } }));
+        toast({ title: 'Yeastar — Conexão OK', description: `Registrado em ${wsUri} (${elapsed}).` });
+        return;
+      }
+
+      const t = translateYeastarSipError(rawErr, wsUri);
+      // Se o erro é claramente de socket/WSS, o handshake falhou; caso contrário, o WSS abriu e o PBX recusou o REGISTER.
+      if (isSocketErr) {
+        setStep('wss', { status: 'fail', detail: t.detail });
+        setStep('sipreg', { status: 'skip', detail: 'Sem WSS não há como enviar REGISTER' });
+      } else {
+        setStep('wss', { status: 'ok', detail: `Handshake OK em ${elapsed}` });
+        setStep('sipreg', { status: 'fail', detail: t.detail });
+      }
+      // Anexa dica ao passo de auth para o operador ver imediatamente qual campo revisar
+      if (t.hint) {
+        setTests((p) => {
+          const cur = p[id];
+          const fields = (cur.fields ?? []).map((f) => {
+            if (t.fields?.includes(f.key)) return { ...f, status: 'fail' as const, detail: `Provavelmente incorreto — ${t.hint}` };
+            return f;
+          });
+          return { ...p, [id]: { ...cur, fields } };
+        });
+      }
+      const finalMsg = t.hint ? `${t.detail} · ${t.hint}` : t.detail;
+      setTests((p) => ({ ...p, [id]: { ...p[id], status: 'fail', message: finalMsg, at: Date.now() } }));
+      toast({ title: 'Yeastar — falha no registro SIP', description: finalMsg, variant: 'destructive' });
+      return;
     } else {
       setStep('auth', { status: 'ok', detail: 'Credenciais aceitas' });
     }
     setTests((p) => ({ ...p, [id]: { ...p[id], status: 'ok', message: 'Conexão validada com sucesso.', at: Date.now() } }));
-    toast({ title: `${it.name} — Conexão OK`, description: id === 'yeastar' ? 'Tronco SIP salvo e chat reconectando.' : 'Webhook e credenciais validados.' });
+    toast({ title: `${it.name} — Conexão OK`, description: 'Webhook e credenciais validados.' });
   };
 
   useEffect(() => { localStorage.setItem(FLOWS_KEY, JSON.stringify(flows)); }, [flows]);
