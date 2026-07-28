@@ -25,6 +25,21 @@ import { getActiveOwnerId } from '@/lib/chatTenantScope';
 type DataSource = 'api' | 'mock' | 'loading';
 const INTEG_KEY = 'automations.integrations.v1';
 
+/** Diagnóstico detalhado do teste de REGISTER SIP exibido na tela. */
+type RegisterTestResult = {
+  ok: boolean;
+  status: string;
+  aor: string;
+  authUser: string;
+  realm: string;
+  wsUri: string;
+  server: string;
+  webrtc: boolean;
+  durationMs: number;
+  at: string;
+  error: string | null;
+};
+
 type Period = '24h' | '7d' | '30d' | '90d';
 const PERIOD_DAYS: Record<Period, number> = { '24h': 1, '7d': 7, '30d': 30, '90d': 90 };
 
