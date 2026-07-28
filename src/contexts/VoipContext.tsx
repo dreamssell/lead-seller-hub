@@ -372,7 +372,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
           const message = e?.message || 'Falha ao obter credenciais WebRTC Yeastar.';
           setStatus('error');
           updateLastError(message);
-          return { status: 'error', error: message, wsUri };
+          return { status: 'error' as VoipStatus, error: message, wsUri };
         }
       }
       return new Promise<VoipTestResult>((resolve) => {
