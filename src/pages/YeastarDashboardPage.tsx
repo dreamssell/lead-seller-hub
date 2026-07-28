@@ -186,6 +186,76 @@ export default function YeastarDashboardPage() {
 
   const m = useMemo(() => buildMetrics(period), [period]);
 
+  /** Dispara um REGISTER real via WSS e guarda o diagnóstico detalhado. */
+  const runRegisterTest = async () => {
+    if (!server.trim() || !username.trim() || !password.trim()) {
+      toast({ title: 'Preencha servidor, usuário e senha antes de testar.', variant: 'destructive' });
+      return;
+    }
+    setTesting(true);
+    setRegTest(null);
+    const startedAt = Date.now();
+    const normalizedServer = normalizeSipServer(server);
+    const normalizedWsUri = normalizeSipWsUri(normalizedServer, wsUri.trim() || undefined, username.trim());
+    const realm = sipDomain.trim() || normalizedServer;
+    setServer(normalizedServer);
+    setWsUri(normalizedWsUri);
+    try {
+      const result = await testConnection({
+        server: normalizedServer,
+        wsUri: normalizedWsUri,
+        username: username.trim(),
+        authUser: authUsername.trim() || username.trim(),
+        sipDomain: sipDomain.trim() || undefined,
+        password,
+        webrtc_username: webrtcUsername.trim() || undefined,
+        webrtc_secret: webrtcSecret.trim() || undefined,
+        displayName: displayName.trim() || undefined,
+      });
+      const ok = result.status === 'connected';
+      setRegTest({
+        ok,
+        status: ok ? 'REGISTERED (200 OK)' : `Falha (${result.status})`,
+        aor: `sip:${username.trim()}@${realm}`,
+        authUser: authUsername.trim() || username.trim(),
+        realm,
+        wsUri: result.wsUri || normalizedWsUri,
+        server: normalizedServer,
+        webrtc: Boolean(webrtcUsername.trim() || webrtcSecret.trim()),
+        durationMs: Date.now() - startedAt,
+        at: new Date().toISOString(),
+        error: ok ? null : (result.error || voipError || 'Sem detalhes retornados pelo PBX.'),
+      });
+      if (ok) {
+        toast({ title: 'REGISTER aceito', description: `Registrado via ${result.wsUri || normalizedWsUri}.` });
+      } else {
+        toast({
+          title: 'Falha no REGISTER SIP',
+          description: result.error || voipError || `Status final: ${result.status}.`,
+          variant: 'destructive',
+        });
+      }
+    } catch (e: any) {
+      const message = e?.message || 'Erro inesperado no teste de registro.';
+      setRegTest({
+        ok: false,
+        status: 'Erro',
+        aor: `sip:${username.trim()}@${realm}`,
+        authUser: authUsername.trim() || username.trim(),
+        realm,
+        wsUri: normalizedWsUri,
+        server: normalizedServer,
+        webrtc: Boolean(webrtcUsername.trim() || webrtcSecret.trim()),
+        durationMs: Date.now() - startedAt,
+        at: new Date().toISOString(),
+        error: message,
+      });
+      toast({ title: 'Falha no REGISTER SIP', description: message, variant: 'destructive' });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const saveTrunk = async () => {
     if (!server.trim() || !username.trim() || !password.trim()) {
       toast({ title: 'Preencha servidor, usuário e senha.', variant: 'destructive' });
