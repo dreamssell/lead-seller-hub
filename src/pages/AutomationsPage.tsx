@@ -23,6 +23,50 @@ import { FieldMappingDialog } from '@/components/automations/FieldMappingDialog'
 import { useAuth } from '@/contexts/AuthContext';
 import { getActiveOwnerId } from '@/lib/chatTenantScope';
 import { normalizeSipServer, normalizeSipWsUri, saveSipConfig, type SipConfig, type SipScope } from '@/lib/sipConfig';
+import { useVoip } from '@/contexts/VoipContext';
+
+// Traduz o erro cru do JsSIP/PBX em uma mensagem clara com dica de campo.
+// Yeastar responde com 403 quando o Register Name (Auth ID) não bate com a
+// extensão configurada, e com 401 quando a senha está errada. Timeouts e
+// falhas de socket normalmente são WSS bloqueado (firewall/porta/HTTPS).
+function translateYeastarSipError(raw: string | null | undefined, wsUri?: string): { detail: string; hint?: string; fields?: string[] } {
+  const msg = String(raw || '').trim();
+  if (!msg) return { detail: 'Falha desconhecida no registro SIP.' };
+  const m403 = /\bSIP\s*403\b|\b403\b/i.test(msg);
+  const m401 = /\bSIP\s*401\b|\b401\b|unauthorized/i.test(msg);
+  const m404 = /\bSIP\s*404\b|\b404\b|not\s*found/i.test(msg);
+  const m408 = /\bSIP\s*408\b|\b408\b|timeout/i.test(msg);
+  const m503 = /\bSIP\s*503\b|\b503\b|service\s*unavailable/i.test(msg);
+  const mSock = /websocket|socket|connection|network|closed|failed to connect|mixed content|handshake/i.test(msg);
+  if (m403) return {
+    detail: `PBX recusou o registro (SIP 403 — Forbidden). ${msg}`,
+    hint: 'Provável causa: Register Name/Auth ID divergente da extensão OU a extensão não está autorizada a registrar deste IP/WebRTC. Confira no Yeastar → Extension → User Password E o campo "Register Name / Auth ID" aqui.',
+    fields: ['authUsername', 'username'],
+  };
+  if (m401) return {
+    detail: `Senha rejeitada pelo PBX (SIP 401 — Unauthorized). ${msg}`,
+    hint: 'Provável causa: senha SIP (User Password da extensão) incorreta. Reset no Yeastar → Extensions → Edit → User Password.',
+    fields: ['password'],
+  };
+  if (m404) return {
+    detail: `Extensão não encontrada no PBX (SIP 404). ${msg}`,
+    hint: 'Confira o campo "Extensão SIP" — o número/ramal precisa existir no Yeastar.',
+    fields: ['username'],
+  };
+  if (m408) return {
+    detail: `Tempo esgotado aguardando resposta do PBX (SIP 408). ${msg}`,
+    hint: 'PBX recebeu o REGISTER mas não respondeu. Verifique se a extensão está online e sem bloqueio de firewall/IP Auto Defense.',
+  };
+  if (m503) return {
+    detail: `PBX indisponível (SIP 503). ${msg}`,
+    hint: 'Serviço SIP do Yeastar fora do ar ou em manutenção. Aguarde e tente novamente.',
+  };
+  if (mSock) return {
+    detail: `Falha no WebSocket SIP${wsUri ? ` (${wsUri})` : ''}. ${msg}`,
+    hint: 'WSS bloqueado ou porta errada. Yeastar Cloud usa wss://<host>/ws na porta 443; instalações locais podem usar :8089. Confirme com o admin do PBX e se o navegador está em HTTPS.',
+  };
+  return { detail: msg };
+}
 
 type StepStatus = 'pending' | 'running' | 'ok' | 'fail' | 'skip';
 type TestStep = { key: string; label: string; status: StepStatus; detail?: string };
