@@ -7,9 +7,19 @@ export type SipConfig = {
   username: string;
   auth_username?: string | null;
   password: string;
+  webrtc_username?: string | null;
+  webrtc_secret?: string | null;
+  webrtc_secret_configured?: boolean;
+  webrtc?: YeastarWebrtcRegisterInfo | null;
   display_name?: string;
   transport?: string;
   auto_record?: boolean;
+};
+
+export type YeastarWebrtcRegisterInfo = {
+  registername: string;
+  registerpassword: string;
+  realm: string;
 };
 
 export type SipScope = {
@@ -33,7 +43,9 @@ export function normalizeSipWsUri(server?: string | null, wsUri?: string | null,
   const host = normalizeSipServer(server);
   const rawWs = String(wsUri || '').trim();
   const isYeastar = host.toLowerCase().includes('yeastar');
-  const endpointHost = isYeastar ? host.replace(/:(443|8089)$/i, '') : host;
+  const endpointHost = isYeastar && /\.ras\.yeastar\.com(?::(443|8089))?$/i.test(host)
+    ? host.replace(/:(443|8089)$/i, '')
+    : host;
   const extension = String(username || '').trim();
 
   const withYeastarExten = (uri: string) => {
@@ -52,7 +64,9 @@ export function normalizeSipWsUri(server?: string | null, wsUri?: string | null,
       const parsed = new URL(rawWs);
       const parsedIsYeastar = parsed.hostname.toLowerCase().includes('yeastar') || isYeastar;
       if (parsed.protocol === 'wss:' && parsedIsYeastar) {
-        return withYeastarExten(`wss://${parsed.hostname}/ws${parsed.search || ''}`);
+        const dropCloudPort = /\.ras\.yeastar\.com$/i.test(parsed.hostname) && /^(443|8089)$/.test(parsed.port);
+        const wsHost = dropCloudPort ? parsed.hostname : parsed.host;
+        return withYeastarExten(`wss://${wsHost}/ws${parsed.search || ''}`);
       }
       return rawWs;
     } catch {
@@ -62,6 +76,16 @@ export function normalizeSipWsUri(server?: string | null, wsUri?: string | null,
 
   if (!host) return '';
   return isYeastar ? withYeastarExten(`wss://${endpointHost}/ws`) : `wss://${host}:7443`;
+}
+
+export function getSipHostname(input?: string | null) {
+  const host = normalizeSipServer(input);
+  if (!host) return '';
+  try {
+    return new URL(`https://${host}`).hostname;
+  } catch {
+    return host.replace(/:\d+$/, '');
+  }
 }
 
 export class SipError extends Error {
@@ -83,6 +107,10 @@ const MESSAGES: Record<string, string> = {
   missing_fields: 'Preencha servidor e usuário antes de salvar.',
   unknown_action: 'Ação SIP não reconhecida pelo servidor.',
   internal: 'Falha interna ao processar credenciais SIP. Verifique a chave de criptografia (SIP_ENCRYPTION_KEY).',
+  missing_webrtc_secret: 'Informe a assinatura/secret do Linkus SDK para registrar o WebRTC Yeastar no navegador.',
+  pbx_auth_failed: 'Yeastar recusou a autenticação Linkus SDK. Verifique o usuário Linkus e a assinatura/secret WebRTC.',
+  pbx_api_failed: 'Yeastar respondeu com erro ao consultar as credenciais WebRTC.',
+  pbx_network_failed: 'Não foi possível consultar o PBX Yeastar pelo backend.',
 };
 
 function describe(status: number, code: string, fallback?: string) {
@@ -127,6 +155,14 @@ async function invoke(action: string, payload: Record<string, unknown> = {}) {
 export async function fetchSipConfig(scope: SipScope = {}): Promise<SipConfig | null> {
   const data = await invoke('get', { scope });
   return data?.config ?? null;
+}
+
+export async function fetchYeastarWebrtcRegisterInfo(
+  scope: SipScope = {},
+  config?: Partial<SipConfig>,
+): Promise<YeastarWebrtcRegisterInfo> {
+  const data = await invoke('webrtc_register_info', { scope, config });
+  return data?.webrtc;
 }
 
 export async function saveSipConfig(config: SipConfig, scope: SipScope = {}) {

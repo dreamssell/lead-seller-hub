@@ -4088,6 +4088,9 @@ export type Database = {
           updated_at: string
           updated_by: string | null
           username: string
+          webrtc_secret_ciphertext: string | null
+          webrtc_secret_iv: string | null
+          webrtc_username: string | null
           ws_uri: string | null
         }
         Insert: {
@@ -4108,6 +4111,9 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           username: string
+          webrtc_secret_ciphertext?: string | null
+          webrtc_secret_iv?: string | null
+          webrtc_username?: string | null
           ws_uri?: string | null
         }
         Update: {
@@ -4128,6 +4134,9 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           username?: string
+          webrtc_secret_ciphertext?: string | null
+          webrtc_secret_iv?: string | null
+          webrtc_username?: string | null
           ws_uri?: string | null
         }
         Relationships: [
