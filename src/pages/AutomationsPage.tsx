@@ -721,17 +721,19 @@ export default function AutomationsPage() {
 
       {/* Configurar integração */}
       <Dialog open={!!configOpen} onOpenChange={(v) => !v && setConfigOpen(null)}>
-        <DialogContent className="max-w-lg max-h-[90dvh] p-0 gap-0 flex flex-col overflow-hidden">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-lg max-h-[92dvh] sm:max-h-[90dvh] p-0 gap-0 flex flex-col overflow-hidden">
           {current && currentCfg && (
             <>
-              <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-border">
-                <DialogTitle className="flex items-center gap-2">
-                  <current.icon className="w-5 h-5" /> {current.name}
+              <DialogHeader className="shrink-0 border-b border-border px-4 pt-4 pb-3 sm:px-6 sm:pt-6 sm:pb-4 text-left space-y-1.5">
+                <DialogTitle className="flex items-start gap-2 pr-8 text-base sm:text-lg leading-tight">
+                  <current.icon className="w-5 h-5 shrink-0 mt-0.5" />
+                  <span className="min-w-0 break-words">{current.name}</span>
                 </DialogTitle>
-                <DialogDescription>{current.desc}</DialogDescription>
+                <DialogDescription className="text-xs sm:text-sm break-words">{current.desc}</DialogDescription>
               </DialogHeader>
 
-              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-4 space-y-4">
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 space-y-4">
+
               <div className="flex items-center justify-between rounded-lg border border-border p-3">
 
                 <div>
@@ -823,22 +825,22 @@ export default function AutomationsPage() {
               })()}
               </div>
 
-              <DialogFooter className="gap-2 sm:gap-2 shrink-0 border-t border-border px-6 py-4 bg-background">
+              <DialogFooter className="shrink-0 border-t border-border bg-background px-4 py-3 sm:px-6 sm:py-4 flex-col-reverse gap-2 sm:flex-row sm:gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                 <Button
                   variant="outline"
-
                   disabled={tests[current.id].status === 'running'}
                   onClick={() => runConnectionTest(current.id)}
-                  className="mr-auto"
+                  className="w-full sm:w-auto sm:mr-auto"
                 >
                   {tests[current.id].status === 'running'
                     ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     : <PlugZap className="w-4 h-4 mr-2" />}
                   Testar conexão
                 </Button>
-                <Button variant="ghost" onClick={() => setConfigOpen(null)}>Fechar</Button>
-                <Button onClick={saveCurrentIntegration}>Salvar</Button>
+                <Button variant="ghost" className="w-full sm:w-auto" onClick={() => setConfigOpen(null)}>Fechar</Button>
+                <Button className="w-full sm:w-auto" onClick={saveCurrentIntegration}>Salvar</Button>
               </DialogFooter>
+
             </>
           )}
         </DialogContent>
