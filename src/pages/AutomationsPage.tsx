@@ -338,6 +338,7 @@ export default function AutomationsPage() {
     } catch (e: any) {
       setStep('reach', { status: 'fail', detail: e?.message ?? 'erro de rede' });
       setStep('auth', { status: 'skip' });
+      if (id === 'yeastar') { setStep('wss', { status: 'skip' }); setStep('sipreg', { status: 'skip' }); }
       setTests((p) => ({ ...p, [id]: { ...p[id], status: 'fail', message: e?.message ?? 'Erro de rede', at: Date.now() } }));
       toast({ title: `${it.name} — falha de rede`, description: e?.message, variant: 'destructive' });
       return;
