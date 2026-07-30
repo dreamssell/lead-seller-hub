@@ -232,13 +232,6 @@ Deno.serve(async (req) => {
 
         responseBody = JSON.stringify({ success: true, lead_id: insertedLead?.id, source, owner_id: ownerId });
         responseStatus = 200;
-        await supabaseAdmin.from("webhook_logs").insert({
-          webhook_id: webhookId,
-          event_type: String(eventType),
-          payload,
-          response_status: 200,
-          direction: "inbound",
-        }).then(() => {}, () => {});
         return new Response(responseBody, { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     }
