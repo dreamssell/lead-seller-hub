@@ -133,13 +133,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!ownerId && webhookId) {
+    let webhookRow: any = null;
+    if (webhookId) {
       const { data: wh } = await supabaseAdmin
         .from("webhooks")
-        .select("created_by")
+        .select("id, name, created_by, owner_id, sub_company_id")
         .eq("id", webhookId)
         .maybeSingle();
-      if (wh) ownerId = wh.created_by;
+      webhookRow = wh || null;
+      if (wh) {
+        ownerId = ownerId || wh.owner_id || wh.created_by;
+        subCompanyId = subCompanyId ?? wh.sub_company_id ?? null;
+      }
     }
 
     // ---------- Lookup routing rule ----------
@@ -154,6 +159,90 @@ Deno.serve(async (req) => {
         .order("sub_company_id", { ascending: false, nullsFirst: false });
       routing = (rs || []).find((r: any) => r.sub_company_id === subCompanyId) || (rs || [])[0] || null;
     }
+
+    // ---------- Generic CRM lead payload (Holmes / DealerSpace / n8n / Zapier) ----------
+    // Any payload that is not a WhatsApp/Evolution message event but carries
+    // lead-ish fields is persisted in public.leads so it feeds "Captura de Leads".
+    const isMessageEvent = /^(messages?\.|presence|send\.message|status|chats?\.|contacts?\.)/i.test(String(eventType)) ||
+      Boolean(payload?.data?.key?.remoteJid || payload?.data?.message);
+    const leadCandidate = payload?.lead || payload?.data?.lead || (!isMessageEvent ? (payload?.data && typeof payload.data === "object" && !Array.isArray(payload.data) ? { ...payload, ...payload.data } : payload) : null);
+    const pick = (obj: any, keys: string[]) => {
+      for (const k of keys) {
+        const v = obj?.[k];
+        if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
+      }
+      return null;
+    };
+
+    if (!isMessageEvent && leadCandidate && typeof leadCandidate === "object") {
+      const leadName = pick(leadCandidate, ["name", "nome", "full_name", "fullName", "cliente", "customer_name", "contact_name"]);
+      const leadEmail = pick(leadCandidate, ["email", "e-mail", "mail"]);
+      const leadPhoneRaw = pick(leadCandidate, ["phone", "telefone", "celular", "whatsapp", "phone_number", "mobile"]);
+      const leadPhone = leadPhoneRaw ? normalizePhone(leadPhoneRaw) : null;
+
+      if (leadName || leadEmail || leadPhone) {
+        const source = pick(leadCandidate, ["source", "origem", "origin", "utm_source"]) || webhookRow?.name || "webhook";
+        const status = pick(leadCandidate, ["status", "situacao", "stage"]) || "novo";
+        const valueRaw = pick(leadCandidate, ["estimated_value", "valor", "value", "amount", "ticket"]);
+        const estimatedValue = valueRaw ? Number(String(valueRaw).replace(/[^\d.,-]/g, "").replace(/\.(?=\d{3}\b)/g, "").replace(",", ".")) : 0;
+        const leadChannel = pick(leadCandidate, ["channel", "canal"]) || channel || "webhook";
+
+        let pipelineId: string | null = routing?.pipeline_id || null;
+        let stageId: string | null = routing?.stage_id || null;
+        if (!pipelineId && ownerId) {
+          const { data: pl } = await supabaseAdmin
+            .from("pipelines")
+            .select("id")
+            .eq("owner_id", ownerId)
+            .order("created_at", { ascending: true })
+            .limit(1);
+          pipelineId = pl?.[0]?.id || null;
+        }
+        if (pipelineId && !stageId) {
+          const { data: st } = await supabaseAdmin
+            .from("pipeline_stages")
+            .select("id")
+            .eq("pipeline_id", pipelineId)
+            .order("position", { ascending: true })
+            .limit(1);
+          stageId = st?.[0]?.id || null;
+        }
+
+        const { data: insertedLead, error: leadError } = await supabaseAdmin
+          .from("leads")
+          .insert({
+            name: leadName || leadEmail || leadPhone,
+            email: leadEmail,
+            phone: leadPhone,
+            source,
+            status,
+            channel: leadChannel,
+            estimated_value: Number.isFinite(estimatedValue) ? estimatedValue : 0,
+            owner_id: ownerId,
+            sub_company_id: subCompanyId,
+            pipeline_id: pipelineId,
+            stage_id: stageId,
+            created_by: ownerId || "00000000-0000-0000-0000-000000000000",
+            notes: `Lead recebido via webhook${webhookRow?.name ? ` "${webhookRow.name}"` : ""}.`,
+          })
+          .select("id")
+          .maybeSingle();
+
+        if (leadError) throw leadError;
+
+        responseBody = JSON.stringify({ success: true, lead_id: insertedLead?.id, source, owner_id: ownerId });
+        responseStatus = 200;
+        await supabaseAdmin.from("webhook_logs").insert({
+          webhook_id: webhookId,
+          event_type: String(eventType),
+          payload,
+          response_status: 200,
+          direction: "inbound",
+        }).then(() => {}, () => {});
+        return new Response(responseBody, { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
 
     // ---------- Presence updates (online/typing/recording/offline) ----------
     if (eventType === "presence.update" || eventType === "presence") {
