@@ -6431,10 +6431,12 @@ export type Database = {
           last_rotated_at: string | null
           max_retries: number | null
           name: string | null
+          owner_id: string
           payload_schema: Json | null
           previous_secret: string | null
           secret: string | null
           secret_version: number | null
+          sub_company_id: string | null
           timeout_seconds: number | null
           type: string | null
           updated_at: string
@@ -6456,10 +6458,12 @@ export type Database = {
           last_rotated_at?: string | null
           max_retries?: number | null
           name?: string | null
+          owner_id: string
           payload_schema?: Json | null
           previous_secret?: string | null
           secret?: string | null
           secret_version?: number | null
+          sub_company_id?: string | null
           timeout_seconds?: number | null
           type?: string | null
           updated_at?: string
@@ -6481,10 +6485,12 @@ export type Database = {
           last_rotated_at?: string | null
           max_retries?: number | null
           name?: string | null
+          owner_id?: string
           payload_schema?: Json | null
           previous_secret?: string | null
           secret?: string | null
           secret_version?: number | null
+          sub_company_id?: string | null
           timeout_seconds?: number | null
           type?: string | null
           updated_at?: string
@@ -6496,6 +6502,13 @@ export type Database = {
             columns: ["api_key_id"]
             isOneToOne: false
             referencedRelation: "api_keys"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webhooks_sub_company_id_fkey"
+            columns: ["sub_company_id"]
+            isOneToOne: false
+            referencedRelation: "sub_companies"
             referencedColumns: ["id"]
           },
         ]

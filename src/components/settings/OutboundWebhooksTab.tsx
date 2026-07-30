@@ -40,6 +40,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -103,6 +104,7 @@ function randomSecret() {
 }
 
 export default function OutboundWebhooksTab() {
+  const { access } = useAuth();
   const [items, setItems] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -235,6 +237,8 @@ export default function OutboundWebhooksTab() {
       idempotency_header: form.idempotency_header,
       idempotency_missing_behavior: form.idempotency_missing_behavior,
       created_by: user.id,
+      owner_id: access?.owner_id ?? user.id,
+      sub_company_id: access?.sub_company_id ?? null,
       type: 'outbound'
     };
 
