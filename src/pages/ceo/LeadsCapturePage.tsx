@@ -11,8 +11,10 @@ import { TopRanking } from '@/components/ceo/TopRanking';
 import { supabase } from '@/integrations/supabase/client';
 import { downloadCsv, downloadPdf } from '@/lib/ceoExport';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
-import { Inbox, CheckCircle2, TrendingUp, Globe, Link as LinkIcon, Download, FileText } from 'lucide-react';
+import { Inbox, CheckCircle2, TrendingUp, Globe, Link as LinkIcon, Download, FileText, FileSearch } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LeadsDetailDialog } from '@/components/ceo/LeadsDetailDialog';
+import { LeadDossierDialog } from '@/components/leads/LeadDossierDialog';
 import { leadSourceLabel } from '@/lib/leadSource';
 
 const CHART_COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
@@ -158,6 +160,15 @@ export default function LeadsCapturePage() {
       return true;
     });
   }, [leads, filters, sourceTab]);
+
+  const [tableLimit, setTableLimit] = useState(25);
+  const [dossier, setDossier] = useState<{ open: boolean; lead: any | null }>({ open: false, lead: null });
+  useEffect(() => { setTableLimit(25); }, [sourceTab, filters.period]);
+  const tableLeads = useMemo(
+    () => [...filtered].sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at)).slice(0, tableLimit),
+    [filtered, tableLimit],
+  );
+
 
   const won = filtered.filter(l => l.status === 'ganho');
   const closed = filtered.filter(l => ['ganho', 'perdido'].includes(l.status));
@@ -364,6 +375,70 @@ export default function LeadsCapturePage() {
             </div>
           </CardContent>
         </Card>
+        <Card className="glass-card">
+          <CardHeader>
+            <CardTitle className="text-base">
+              Leads recebidos {sourceTab !== 'all' ? `· ${sourceTab}` : '· todos os canais'}
+            </CardTitle>
+            <CardDescription>
+              Cada Lead capturado pelo webhook, em ordem de chegada. Abra a ficha para ver dados de compra e todo o payload recebido.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Lead</TableHead>
+                    <TableHead>Contato</TableHead>
+                    <TableHead>Origem</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Valor</TableHead>
+                    <TableHead>Recebido em</TableHead>
+                    <TableHead className="text-right">Ficha</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tableLeads.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-10">
+                        Nenhum lead recebido neste canal no período.
+                      </TableCell>
+                    </TableRow>
+                  ) : tableLeads.map(l => (
+                    <TableRow key={l.id}>
+                      <TableCell className="font-medium">{l.name || '—'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        <div>{l.email || '—'}</div>
+                        <div>{l.phone || '—'}</div>
+                      </TableCell>
+                      <TableCell><Badge variant="outline" className="text-[10px]">{classify(l.source)}</Badge></TableCell>
+                      <TableCell className="text-xs">{l.status}</TableCell>
+                      <TableCell className="text-right tabular-nums text-xs">
+                        R$ {Number(l.estimated_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {new Date(l.created_at).toLocaleString('pt-BR')}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button size="sm" variant="outline" onClick={() => setDossier({ open: true, lead: l })}>
+                          <FileSearch className="w-3.5 h-3.5 mr-1.5" /> Ver ficha do Lead
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            {filtered.length > tableLeads.length && (
+              <div className="flex justify-center py-3 border-t border-border">
+                <Button variant="ghost" size="sm" onClick={() => setTableLimit(c => c + 25)}>
+                  Carregar mais ({filtered.length - tableLeads.length} restantes)
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <LeadsDetailDialog
@@ -376,6 +451,13 @@ export default function LeadsCapturePage() {
         profileName={profileName}
         initialOrigin={detail.origin}
       />
+      <LeadDossierDialog
+        open={dossier.open}
+        onOpenChange={(v) => setDossier(d => ({ ...d, open: v }))}
+        lead={dossier.lead}
+        leadId={dossier.lead?.id}
+      />
+
     </AppLayout>
   );
 }

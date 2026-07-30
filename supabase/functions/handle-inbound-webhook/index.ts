@@ -50,6 +50,41 @@ const applyNullableScope = (query: any, column: string, value: string | null | u
   value ? query.eq(column, value) : query.is(column, null)
 );
 
+// Espelha public.canonical_lead_source() / src/lib/leadSource.ts.
+const SOURCE_RULES: Array<[RegExp, string]> = [
+  [/holmes/, "holmes"],
+  [/dealer[\s_\-.]*space|\bds[\s_-]?space\b/, "dealerspace"],
+  [/n8n/, "n8n"],
+  [/zapier/, "zapier"],
+  [/make\.com|\bmake\b|integromat/, "make"],
+  [/typebot/, "typebot"],
+  [/rd[\s_-]?station|\brdstation\b/, "rdstation"],
+  [/hubspot/, "hubspot"],
+  [/pipedrive/, "pipedrive"],
+  [/google[\s_-]?ads|adwords|\bgoogle\b/, "google_ads"],
+  [/(meta|facebook|fb)[\s_-]?(ads|lead)|\bfacebook\b|\bmeta\b/, "meta_ads"],
+  [/instagram|\big\b/, "instagram"],
+  [/tiktok/, "tiktok"],
+  [/linkedin/, "linkedin"],
+  [/whats|\bwaha\b|\buaz\b|evolution/, "whatsapp"],
+  [/telegram/, "telegram"],
+  [/landing|\bsite\b|website|formul(a|á)rio|\bform\b/, "site"],
+  [/indica|referr?al/, "indicacao"],
+  [/telefone|\bcall\b|yeastar|3cx|wavoip/, "telefone"],
+];
+
+const canonicalSource = (raw?: string | null): string | null => {
+  let s = String(raw ?? "").trim().toLowerCase();
+  if (!s) return null;
+  s = s
+    .replace(/^(webhook|inbound|integra(c|ç)(a|ã)o|integration|api|crm)[:_\-\s/]+/g, "")
+    .replace(/[:_\-\s/]+(webhook|inbound|api|crm|integration)$/g, "");
+  for (const [re, slug] of SOURCE_RULES) if (re.test(s)) return slug;
+  const slug = s.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return slug || null;
+};
+
+
 const extractStatusMessageId = (data: any) => (
   data?.key?.id ||
   data?.id ||
@@ -186,9 +221,22 @@ Deno.serve(async (req) => {
         const valueRaw = pick(leadCandidate, ["estimated_value", "valor", "value", "amount", "ticket"]);
         const estimatedValue = valueRaw ? Number(String(valueRaw).replace(/[^\d.,-]/g, "").replace(/\.(?=\d{3}\b)/g, "").replace(",", ".")) : 0;
         const leadChannel = pick(leadCandidate, ["channel", "canal"]) || channel || "webhook";
+        const provider = canonicalSource(source);
 
-        let pipelineId: string | null = routing?.pipeline_id || null;
-        let stageId: string | null = routing?.stage_id || null;
+        // ---------- Ações configuradas por plataforma (Holmes/DealerSpace/…) ----------
+        let settings: any = null;
+        if (ownerId && provider) {
+          const { data: setRows } = await supabaseAdmin
+            .from("lead_integration_settings")
+            .select("*")
+            .eq("owner_id", ownerId)
+            .eq("provider", provider)
+            .eq("enabled", true);
+          settings = (setRows || []).find((s: any) => s.sub_company_id === subCompanyId) || (setRows || [])[0] || null;
+        }
+
+        let pipelineId: string | null = settings?.pipeline_id || routing?.pipeline_id || null;
+        let stageId: string | null = settings?.stage_id || (settings?.pipeline_id ? null : routing?.stage_id) || null;
         if (!pipelineId && ownerId) {
           const { data: pl } = await supabaseAdmin
             .from("pipelines")
@@ -215,20 +263,112 @@ Deno.serve(async (req) => {
             email: leadEmail,
             phone: leadPhone,
             source,
-            status,
+            status: settings?.default_status || status,
             channel: leadChannel,
             estimated_value: Number.isFinite(estimatedValue) ? estimatedValue : 0,
             owner_id: ownerId,
             sub_company_id: subCompanyId,
             pipeline_id: pipelineId,
             stage_id: stageId,
+            raw_payload: payload,
             created_by: ownerId || "00000000-0000-0000-0000-000000000000",
             notes: `Lead recebido via webhook${webhookRow?.name ? ` "${webhookRow.name}"` : ""}.`,
           })
-          .select("id, duplicate_of")
+          .select("id, duplicate_of, pipeline_id, stage_id, customer_id")
           .maybeSingle();
 
         if (leadError) throw leadError;
+
+        const targetLeadId = insertedLead?.duplicate_of || insertedLead?.id || null;
+        const actions: Record<string, unknown> = {};
+
+        // 1) Salvar contato na agenda (customers) e vincular ao lead
+        let customerId: string | null = insertedLead?.customer_id || null;
+        if (settings?.save_contact !== false && ownerId && (leadPhone || leadEmail)) {
+          try {
+            let findQuery = supabaseAdmin
+              .from("customers")
+              .select("id")
+              .eq("owner_id", ownerId)
+              .order("updated_at", { ascending: false })
+              .limit(1);
+            findQuery = leadPhone ? findQuery.eq("phone", leadPhone) : findQuery.eq("email", leadEmail as string);
+            findQuery = applyNullableScope(findQuery, "sub_company_id", subCompanyId);
+            const { data: existingCustomer } = await findQuery;
+            customerId = existingCustomer?.[0]?.id || null;
+
+            if (!customerId) {
+              const { data: newCustomer } = await supabaseAdmin
+                .from("customers")
+                .insert({
+                  name: leadName || leadEmail || leadPhone,
+                  phone: leadPhone,
+                  email: leadEmail,
+                  channel: leadChannel,
+                  owner_id: ownerId,
+                  sub_company_id: subCompanyId,
+                  created_by: ownerId,
+                })
+                .select("id")
+                .maybeSingle();
+              customerId = newCustomer?.id || null;
+            }
+            if (customerId && targetLeadId) {
+              await supabaseAdmin.from("leads").update({ customer_id: customerId }).eq("id", targetLeadId);
+            }
+            actions.contact_saved = Boolean(customerId);
+          } catch (e) {
+            console.error("save_contact failed", (e as Error).message);
+          }
+        }
+
+        // 2) Registro automático no CRM 360 (timeline do lead)
+        if (settings?.create_crm_event !== false && ownerId && targetLeadId) {
+          try {
+            await supabaseAdmin.from("lead_events").insert({
+              lead_id: targetLeadId,
+              owner_id: ownerId,
+              sub_company_id: subCompanyId,
+              type: insertedLead?.duplicate_of ? "webhook_merge" : "created",
+              to_stage_id: stageId,
+              channel: leadChannel,
+              source,
+              metadata: { provider, webhook: webhookRow?.name || null, payload },
+            });
+            actions.crm_event = true;
+          } catch (e) {
+            console.error("crm_event failed", (e as Error).message);
+          }
+        }
+
+        // 3) Enviar ao Fluxo de Atendimento (padrão: "Distribuição" = auto)
+        if (settings?.create_attendance !== false && ownerId && customerId) {
+          try {
+            const { data: openAssignment } = await supabaseAdmin
+              .from("lead_assignments")
+              .select("id")
+              .eq("customer_id", customerId)
+              .neq("stage", "closed")
+              .limit(1);
+            if (!openAssignment?.length) {
+              await supabaseAdmin.from("lead_assignments").insert({
+                customer_id: customerId,
+                owner_id: ownerId,
+                sub_company_id: subCompanyId,
+                queue_id: settings?.queue_id || null,
+                stage: settings?.attendance_stage || "auto",
+                origin: `webhook:${provider || "generic"}`,
+                first_note: `Lead recebido via ${provider || "webhook"}.`,
+                metadata: { lead_id: targetLeadId, provider },
+              });
+              actions.attendance_stage = settings?.attendance_stage || "auto";
+            } else {
+              actions.attendance_stage = "already_open";
+            }
+          } catch (e) {
+            console.error("attendance failed", (e as Error).message);
+          }
+        }
 
         responseBody = JSON.stringify({
           success: true,
@@ -236,11 +376,14 @@ Deno.serve(async (req) => {
           duplicate_of: insertedLead?.duplicate_of ?? null,
           deduplicated: Boolean(insertedLead?.duplicate_of),
           source,
+          provider,
+          actions,
           owner_id: ownerId,
         });
         responseStatus = 200;
         return new Response(responseBody, { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
+
     }
 
 

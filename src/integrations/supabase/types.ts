@@ -2473,6 +2473,60 @@ export type Database = {
           },
         ]
       }
+      lead_integration_settings: {
+        Row: {
+          attendance_stage: string
+          create_attendance: boolean
+          create_crm_event: boolean
+          created_at: string
+          default_status: string
+          enabled: boolean
+          id: string
+          owner_id: string
+          pipeline_id: string | null
+          provider: string
+          queue_id: string | null
+          save_contact: boolean
+          stage_id: string | null
+          sub_company_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          attendance_stage?: string
+          create_attendance?: boolean
+          create_crm_event?: boolean
+          created_at?: string
+          default_status?: string
+          enabled?: boolean
+          id?: string
+          owner_id: string
+          pipeline_id?: string | null
+          provider: string
+          queue_id?: string | null
+          save_contact?: boolean
+          stage_id?: string | null
+          sub_company_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attendance_stage?: string
+          create_attendance?: boolean
+          create_crm_event?: boolean
+          created_at?: string
+          default_status?: string
+          enabled?: boolean
+          id?: string
+          owner_id?: string
+          pipeline_id?: string | null
+          provider?: string
+          queue_id?: string | null
+          save_contact?: boolean
+          stage_id?: string | null
+          sub_company_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           assigned_to: string | null
@@ -2493,6 +2547,7 @@ export type Database = {
           phone: string | null
           phone_norm: string | null
           pipeline_id: string | null
+          raw_payload: Json | null
           source: string | null
           stage_id: string | null
           status: string
@@ -2518,6 +2573,7 @@ export type Database = {
           phone?: string | null
           phone_norm?: string | null
           pipeline_id?: string | null
+          raw_payload?: Json | null
           source?: string | null
           stage_id?: string | null
           status?: string
@@ -2543,6 +2599,7 @@ export type Database = {
           phone?: string | null
           phone_norm?: string | null
           pipeline_id?: string | null
+          raw_payload?: Json | null
           source?: string | null
           stage_id?: string | null
           status?: string
