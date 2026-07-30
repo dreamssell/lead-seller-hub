@@ -83,7 +83,17 @@ Deno.serve(async (req) => {
   const qConnectionId = url.searchParams.get("connection_id");
   const qSubCompanyId = url.searchParams.get("sub_company_id");
   const qChannel = url.searchParams.get("channel") || "whatsapp";
-  const webhookId = req.headers.get("X-Webhook-ID") || req.headers.get("x-webhook-id");
+  // The webhook identity can arrive via header (legacy) OR via query string /
+  // trailing path segment, so the public URL alone is enough for tools like
+  // n8n/Zapier/Make that cannot easily add custom headers.
+  const pathId = url.pathname.split("/").filter(Boolean).pop() || "";
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pathId);
+  const webhookId =
+    req.headers.get("X-Webhook-ID") ||
+    req.headers.get("x-webhook-id") ||
+    url.searchParams.get("webhook_id") ||
+    url.searchParams.get("wh") ||
+    (isUuid ? pathId : null);
 
   const startTime = Date.now();
   let responseStatus = 200;
