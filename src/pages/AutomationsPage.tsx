@@ -22,6 +22,7 @@ import { AutomationLogsDialog } from '@/components/automations/AutomationLogsDia
 import { FieldMappingDialog } from '@/components/automations/FieldMappingDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { getActiveOwnerId } from '@/lib/chatTenantScope';
+import { LeadIntegrationActionsCard } from '@/components/automations/LeadIntegrationActionsCard';
 import { fetchYeastarWebrtcRegisterInfo, normalizeSipServer, normalizeSipWsUri, saveSipConfig, type SipConfig, type SipScope } from '@/lib/sipConfig';
 import { useVoip } from '@/contexts/VoipContext';
 
@@ -774,6 +775,11 @@ export default function AutomationsPage() {
                   </div>
                 ))}
               </div>
+
+              {(current.id === 'holmes' || current.id === 'dealerspace') && (
+                <LeadIntegrationActionsCard provider={current.id} providerName={current.name} />
+              )}
+
 
               {(() => {
                 const t = tests[current.id];

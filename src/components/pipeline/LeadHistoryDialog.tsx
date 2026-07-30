@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { LeadDossierDialog } from '@/components/leads/LeadDossierDialog';
+import { leadSourceLabel } from '@/lib/leadSource';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -71,6 +73,20 @@ const PAGE_SIZE = 100;
 
 export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Props) {
   const [loading, setLoading] = useState(false);
+  const [leadRow, setLeadRow] = useState<any>(null);
+  const [dossierOpen, setDossierOpen] = useState(false);
+
+  // Carrega o lead para exibir a origem (Holmes, DealerSpace…) no CRM 360
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!open || !leadId) return;
+      const { data } = await supabase.from('leads').select('*').eq('id', leadId).maybeSingle();
+      if (!cancelled) setLeadRow(data);
+    })();
+    return () => { cancelled = true; };
+  }, [open, leadId]);
+
   const [loadingMore, setLoadingMore] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
   const [total, setTotal] = useState(0);
@@ -807,12 +823,28 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
 
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><History className="w-4 h-4" /> Histórico do lead</DialogTitle>
           <DialogDescription>{leadName || 'Eventos e mudanças de etapa'}</DialogDescription>
         </DialogHeader>
+
+        {leadRow?.source && (
+          <div className="flex items-center gap-2 text-xs -mt-1">
+            <span className="text-muted-foreground">Origem do lead:</span>
+            <button
+              type="button"
+              onClick={() => setDossierOpen(true)}
+              className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 font-medium text-primary hover:bg-primary/20 transition"
+              title="Ver todas as informações capturadas via webhook"
+            >
+              {leadSourceLabel(leadRow.source)}
+            </button>
+          </div>
+        )}
+
 
         <div className="flex flex-wrap items-end gap-2 rounded-md border p-3 mb-2">
           <div className="flex flex-col">
@@ -1049,5 +1081,8 @@ export function LeadHistoryDialog({ open, onOpenChange, leadId, leadName }: Prop
         )}
       </DialogContent>
     </Dialog>
+    <LeadDossierDialog open={dossierOpen} onOpenChange={setDossierOpen} leadId={leadId} lead={leadRow} />
+    </>
   );
 }
+
