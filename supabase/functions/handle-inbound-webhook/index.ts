@@ -225,12 +225,19 @@ Deno.serve(async (req) => {
             created_by: ownerId || "00000000-0000-0000-0000-000000000000",
             notes: `Lead recebido via webhook${webhookRow?.name ? ` "${webhookRow.name}"` : ""}.`,
           })
-          .select("id")
+          .select("id, duplicate_of")
           .maybeSingle();
 
         if (leadError) throw leadError;
 
-        responseBody = JSON.stringify({ success: true, lead_id: insertedLead?.id, source, owner_id: ownerId });
+        responseBody = JSON.stringify({
+          success: true,
+          lead_id: insertedLead?.id,
+          duplicate_of: insertedLead?.duplicate_of ?? null,
+          deduplicated: Boolean(insertedLead?.duplicate_of),
+          source,
+          owner_id: ownerId,
+        });
         responseStatus = 200;
         return new Response(responseBody, { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
