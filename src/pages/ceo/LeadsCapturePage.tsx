@@ -252,7 +252,10 @@ export default function LeadsCapturePage() {
               }`} />
               {rtStatus === 'live' ? 'Tempo real ativo' : rtStatus === 'error' ? 'Sem conexão em tempo real' : 'Conectando…'}
             </span>
-            <span className="text-muted-foreground">Novos leads Holmes/DealerSpace aparecem automaticamente.</span>
+            <span className="text-muted-foreground">
+              Novos leads (Holmes, DealerSpace, n8n e demais canais) aparecem automaticamente.
+              {duplicatesCount > 0 && ` ${duplicatesCount} duplicado(s) consolidado(s) por telefone/e-mail e fora das métricas.`}
+            </span>
           </div>
         </div>
 
