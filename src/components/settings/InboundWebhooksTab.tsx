@@ -143,6 +143,8 @@ export default function InboundWebhooksTab() {
       secret: form.secret,
       is_active: form.is_active,
       created_by: user.id,
+      owner_id: access?.owner_id ?? user.id,
+      sub_company_id: access?.sub_company_id ?? null,
       type: 'inbound',
       url: 'internal_lead_handler', 
       events: ['lead.received']
