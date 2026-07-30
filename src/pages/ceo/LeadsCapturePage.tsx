@@ -13,19 +13,12 @@ import { downloadCsv, downloadPdf } from '@/lib/ceoExport';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Inbox, CheckCircle2, TrendingUp, Globe, Link as LinkIcon, Download, FileText } from 'lucide-react';
 import { LeadsDetailDialog } from '@/components/ceo/LeadsDetailDialog';
-
-const SOURCE_GROUPS: Record<string, RegExp> = {
-  Holmes: /holmes/i,
-  DealerSpace: /dealer[\s_-]?space/i,
-};
+import { leadSourceLabel } from '@/lib/leadSource';
 
 const CHART_COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
-function classify(source?: string | null) {
-  if (!source) return 'Sem origem';
-  for (const [k, re] of Object.entries(SOURCE_GROUPS)) if (re.test(source)) return k;
-  return source;
-}
+const classify = (source?: string | null) => leadSourceLabel(source);
+
 
 function Kpi({ icon: Icon, label, value, hint, onClick }: any) {
   const interactive = !!onClick;
