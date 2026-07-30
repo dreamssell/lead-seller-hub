@@ -2480,14 +2480,18 @@ export type Database = {
           created_at: string
           created_by: string
           customer_id: string | null
+          duplicate_of: string | null
           email: string | null
+          email_norm: string | null
           estimated_value: number | null
           id: string
+          merged_at: string | null
           name: string
           notes: string | null
           origin_connection_id: string | null
           owner_id: string | null
           phone: string | null
+          phone_norm: string | null
           pipeline_id: string | null
           source: string | null
           stage_id: string | null
@@ -2501,14 +2505,18 @@ export type Database = {
           created_at?: string
           created_by: string
           customer_id?: string | null
+          duplicate_of?: string | null
           email?: string | null
+          email_norm?: string | null
           estimated_value?: number | null
           id?: string
+          merged_at?: string | null
           name: string
           notes?: string | null
           origin_connection_id?: string | null
           owner_id?: string | null
           phone?: string | null
+          phone_norm?: string | null
           pipeline_id?: string | null
           source?: string | null
           stage_id?: string | null
@@ -2522,14 +2530,18 @@ export type Database = {
           created_at?: string
           created_by?: string
           customer_id?: string | null
+          duplicate_of?: string | null
           email?: string | null
+          email_norm?: string | null
           estimated_value?: number | null
           id?: string
+          merged_at?: string | null
           name?: string
           notes?: string | null
           origin_connection_id?: string | null
           owner_id?: string | null
           phone?: string | null
+          phone_norm?: string | null
           pipeline_id?: string | null
           source?: string | null
           stage_id?: string | null
@@ -2543,6 +2555,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_duplicate_of_fkey"
+            columns: ["duplicate_of"]
+            isOneToOne: false
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
           {
@@ -6702,6 +6721,7 @@ export type Database = {
         Args: { p_owner_id: string; p_sub_company_id: string }
         Returns: boolean
       }
+      canonical_lead_source: { Args: { _raw: string }; Returns: string }
       cleanup_connection_events: { Args: never; Returns: undefined }
       cleanup_expired_idempotency_keys: {
         Args: { ttl_hours?: number }
@@ -6882,6 +6902,7 @@ export type Database = {
         Args: { p_sub_company_id: string }
         Returns: boolean
       }
+      lead_source_label: { Args: { _canonical: string }; Returns: string }
       list_audit_actors: {
         Args: { p_owner?: string }
         Returns: {
