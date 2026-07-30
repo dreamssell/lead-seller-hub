@@ -32,6 +32,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
+
+/** Endpoint público real do backend que recebe os webhooks de entrada. */
+const inboundWebhookUrl = (id: string) =>
+  `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-inbound-webhook?webhook_id=${id}`;
 import { 
   Table, 
   TableBody, 
@@ -274,13 +278,13 @@ export default function InboundWebhooksTab() {
                       <div className="flex gap-2 mt-2">
                         <Input 
                           readOnly 
-                          value={`https://api.plataforma.com/v1/inbound/wh/${selectedWebhook.id}`} 
+                          value={inboundWebhookUrl(selectedWebhook.id)} 
                           className="bg-background/50 font-mono text-xs"
                         />
                         <Button 
                           variant="outline" 
                           size="icon"
-                          onClick={() => copyToClipboard(`https://api.plataforma.com/v1/inbound/wh/${selectedWebhook.id}`, 'url')}
+                          onClick={() => copyToClipboard(inboundWebhookUrl(selectedWebhook.id), 'url')}
                         >
                           {copiedId === 'url' ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                         </Button>
@@ -464,7 +468,7 @@ export default function InboundWebhooksTab() {
                         variant="ghost" 
                         size="icon" 
                         className="h-6 w-6"
-                        onClick={() => copyToClipboard(`https://api.plataforma.com/v1/inbound/wh/${w.id}`, w.id)}
+                        onClick={() => copyToClipboard(inboundWebhookUrl(w.id), w.id)}
                       >
                         {copiedId === w.id ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                       </Button>
