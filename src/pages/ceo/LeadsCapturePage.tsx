@@ -67,8 +67,14 @@ export default function LeadsCapturePage() {
     });
   };
 
+  // mantém o período atual acessível dentro do canal de realtime (deps vazias)
+  const periodRef = useRef(filters.period);
+  periodRef.current = filters.period;
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [duplicatesCount, setDuplicatesCount] = useState(0);
+
   const loadReport = async () => {
-    const start = periodStart(filters.period);
+    const start = periodStart(periodRef.current);
     const { data, error } = await supabase.rpc('get_leads_capture_report', {
       p_owner: null,
       p_from: start ? start.toISOString() : null,
@@ -77,42 +83,66 @@ export default function LeadsCapturePage() {
     if (!error) setReport((data as any) || []);
   };
 
+  // agrupa rajadas de eventos (webhook em lote) em um único recálculo
+  const scheduleReload = () => {
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => { loadReport(); }, 400);
+  };
+
   useEffect(() => {
     (async () => {
-      const [l, p] = await Promise.all([
-        supabase.from('leads').select('*'),
+      const [l, p, dup] = await Promise.all([
+        // apenas registros consolidados (duplicados ficam vinculados ao original)
+        supabase.from('leads').select('*').is('duplicate_of', null),
         supabase.from('profiles').select('user_id,display_name'),
+        supabase.from('leads').select('id', { count: 'exact', head: true }).not('duplicate_of', 'is', null),
       ]);
       setLeads((l.data as any) || []);
       setProfiles((p.data as any) || []);
+      setDuplicatesCount(dup.count || 0);
     })();
     loadReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.period]);
 
-  // Realtime: novos leads (Holmes/DealerSpace/qualquer canal) refletem imediatamente
+  // Realtime: novos leads (Holmes/DealerSpace/n8n/qualquer canal) refletem imediatamente
   useEffect(() => {
     const channel = supabase
       .channel('leads-capture-realtime')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads' }, (payload) => {
-        setLeads(prev => (prev.some(x => x.id === (payload.new as any).id) ? prev : [payload.new as any, ...prev]));
-        loadReport();
+        const row = payload.new as any;
+        if (row?.duplicate_of) {
+          setDuplicatesCount(c => c + 1);
+        } else {
+          setLeads(prev => (prev.some(x => x.id === row.id) ? prev : [row, ...prev]));
+        }
+        scheduleReload();
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leads' }, (payload) => {
-        setLeads(prev => prev.map(x => x.id === (payload.new as any).id ? { ...x, ...(payload.new as any) } : x));
-        loadReport();
+        const row = payload.new as any;
+        setLeads(prev => {
+          if (row?.duplicate_of) return prev.filter(x => x.id !== row.id);
+          return prev.some(x => x.id === row.id)
+            ? prev.map(x => (x.id === row.id ? { ...x, ...row } : x))
+            : [row, ...prev];
+        });
+        scheduleReload();
       })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'leads' }, (payload) => {
         setLeads(prev => prev.filter(x => x.id !== (payload.old as any).id));
-        loadReport();
+        scheduleReload();
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') setRtStatus('live');
         else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setRtStatus('error');
       });
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      supabase.removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
 
   const profileName = (uid?: string | null) =>
     !uid ? '—' : (profiles.find(p => p.user_id === uid)?.display_name || uid.slice(0, 8) + '…');
