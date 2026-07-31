@@ -154,7 +154,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
       setStatus('connected');
       updateLastError(null);
       setLastCheckedAt(Date.now());
-      if (!opts.silent) toast.success('VoIP Conectado com sucesso');
+      if (!opts.silent && isOwnerRef.current) toast.success('VoIP Conectado com sucesso');
       opts.onRegistered?.();
     });
 
