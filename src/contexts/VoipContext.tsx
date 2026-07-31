@@ -100,7 +100,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     if (!server || !config.username || !config.password) {
       updateLastError('Configurações SIP incompletas (servidor, usuário ou senha ausentes).');
       setStatus('error');
-      if (!opts.silent) toast.error('Configurações SIP incompletas.');
+      if (!opts.silent && isOwnerRef.current) toast.error('Configurações SIP incompletas.');
       opts.onFailed?.('Configurações SIP incompletas (servidor, usuário ou senha ausentes).');
       return;
     }
