@@ -60,7 +60,9 @@ export default function MasterSupportPage() {
     // Recomputa a cada minuto para atualizar contadores de SLA
     const iv = setInterval(() => setTickets((prev) => [...prev]), 60000);
     return () => { supabase.removeChannel(ch); clearInterval(iv); };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
 
   const filtered = useMemo(() => tickets.filter(t => {
     if (filterDept !== 'all' && t.department !== filterDept) return false;
