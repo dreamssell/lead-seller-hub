@@ -15,6 +15,8 @@ import { Button } from '@/components/ui/button';
 import { describeSupabaseError } from '@/lib/supabaseErrorMessage';
 import { NotificationTemplatesDialog } from '@/components/support/NotificationTemplatesDialog';
 import { useAuth } from '@/contexts/AuthContext';
+import { loadSupportAgents } from '@/lib/supportAgents';
+
 
 type Ticket = {
   id: string; number: number; title: string; status: SupportStatus; priority: SupportPriority;
@@ -38,16 +40,15 @@ export default function MasterSupportPage() {
 
   async function load() {
     setLoading(true);
-    const [{ data: t }, { data: a }] = await Promise.all([
+    const [{ data: t }, a] = await Promise.all([
       supabase.from('support_tickets' as any).select('*').order('created_at', { ascending: false }).limit(300),
-      supabase.from('user_roles').select('user_id, profiles!inner(display_name, email)').eq('role', 'admin' as any),
+      loadSupportAgents(user?.id),
     ]);
     setTickets((t as any) || []);
-    setAgents((a as any || []).map((r: any) => ({
-      user_id: r.user_id, display_name: r.profiles?.display_name, email: r.profiles?.email,
-    })));
+    setAgents(a);
     setLoading(false);
   }
+
 
   useEffect(() => {
     void load();
@@ -59,7 +60,9 @@ export default function MasterSupportPage() {
     // Recomputa a cada minuto para atualizar contadores de SLA
     const iv = setInterval(() => setTickets((prev) => [...prev]), 60000);
     return () => { supabase.removeChannel(ch); clearInterval(iv); };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
 
   const filtered = useMemo(() => tickets.filter(t => {
     if (filterDept !== 'all' && t.department !== filterDept) return false;
