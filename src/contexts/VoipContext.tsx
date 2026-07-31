@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { getActiveOwnerId } from '@/lib/chatTenantScope';
 import { fetchYeastarWebrtcRegisterInfo, getSipHostname, normalizeSipServer, normalizeSipWsUri } from '@/lib/sipConfig';
 
