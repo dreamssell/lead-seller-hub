@@ -163,7 +163,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
       const message = describeSipFailure(e, wsUri);
       updateLastError(message);
       setLastCheckedAt(Date.now());
-      if (!opts.silent) toast.error(message);
+      if (!opts.silent && isOwnerRef.current) toast.error(message);
       opts.onFailed?.(message);
     });
 
