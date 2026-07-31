@@ -38,6 +38,12 @@ const VoipContext = createContext<VoipContextType | null>(null);
 
 export function VoipProvider({ children }: { children: React.ReactNode }) {
   const { user, access, accessLoading, tenantResolved } = useAuth();
+  // Avisos automáticos de VoIP/SIP (Yeastar) são instrumentação técnica:
+  // apenas o dono da plataforma recebe os toasts. A equipe de atendimento
+  // nunca é interrompida por eles.
+  const { isOwner } = usePlatformOwner();
+  const isOwnerRef = useRef(isOwner);
+  isOwnerRef.current = isOwner;
   const [status, setStatus] = useState<VoipContextType['status']>('disconnected');
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
