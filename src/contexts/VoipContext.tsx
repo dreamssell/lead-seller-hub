@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 import { getActiveOwnerId } from '@/lib/chatTenantScope';
 import { fetchYeastarWebrtcRegisterInfo, getSipHostname, normalizeSipServer, normalizeSipWsUri } from '@/lib/sipConfig';
 
@@ -37,6 +38,12 @@ const VoipContext = createContext<VoipContextType | null>(null);
 
 export function VoipProvider({ children }: { children: React.ReactNode }) {
   const { user, access, accessLoading, tenantResolved } = useAuth();
+  // Avisos automáticos de VoIP/SIP (Yeastar) são instrumentação técnica:
+  // apenas o dono da plataforma recebe os toasts. A equipe de atendimento
+  // nunca é interrompida por eles.
+  const { isOwner } = usePlatformOwner();
+  const isOwnerRef = useRef(isOwner);
+  isOwnerRef.current = isOwner;
   const [status, setStatus] = useState<VoipContextType['status']>('disconnected');
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
@@ -93,7 +100,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     if (!server || !config.username || !config.password) {
       updateLastError('Configurações SIP incompletas (servidor, usuário ou senha ausentes).');
       setStatus('error');
-      if (!opts.silent) toast.error('Configurações SIP incompletas.');
+      if (!opts.silent && isOwnerRef.current) toast.error('Configurações SIP incompletas.');
       opts.onFailed?.('Configurações SIP incompletas (servidor, usuário ou senha ausentes).');
       return;
     }
@@ -147,7 +154,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
       setStatus('connected');
       updateLastError(null);
       setLastCheckedAt(Date.now());
-      if (!opts.silent) toast.success('VoIP Conectado com sucesso');
+      if (!opts.silent && isOwnerRef.current) toast.success('VoIP Conectado com sucesso');
       opts.onRegistered?.();
     });
 
@@ -156,7 +163,7 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
       const message = describeSipFailure(e, wsUri);
       updateLastError(message);
       setLastCheckedAt(Date.now());
-      if (!opts.silent) toast.error(message);
+      if (!opts.silent && isOwnerRef.current) toast.error(message);
       opts.onFailed?.(message);
     });
 
@@ -351,10 +358,12 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     const prev = prevStatusRef.current;
     prevStatusRef.current = status;
     if (prev === null || prev === status) return;
+    if (!isOwnerRef.current) return; // equipe não recebe avisos técnicos do Yeastar/SIP
     if (status === 'connected') toast.success('VoIP conectado');
     else if (status === 'connecting') toast.message('VoIP conectando…');
     else if (status === 'error') toast.error(`VoIP falhou${lastError ? `: ${lastError}` : ''}`);
     else if (status === 'disconnected') toast.message('VoIP desconectado');
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
