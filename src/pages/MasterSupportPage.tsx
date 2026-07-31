@@ -15,6 +15,8 @@ import { Button } from '@/components/ui/button';
 import { describeSupabaseError } from '@/lib/supabaseErrorMessage';
 import { NotificationTemplatesDialog } from '@/components/support/NotificationTemplatesDialog';
 import { useAuth } from '@/contexts/AuthContext';
+import { loadSupportAgents } from '@/lib/supportAgents';
+
 
 type Ticket = {
   id: string; number: number; title: string; status: SupportStatus; priority: SupportPriority;
