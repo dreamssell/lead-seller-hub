@@ -358,10 +358,12 @@ export function VoipProvider({ children }: { children: React.ReactNode }) {
     const prev = prevStatusRef.current;
     prevStatusRef.current = status;
     if (prev === null || prev === status) return;
+    if (!isOwnerRef.current) return; // equipe não recebe avisos técnicos do Yeastar/SIP
     if (status === 'connected') toast.success('VoIP conectado');
     else if (status === 'connecting') toast.message('VoIP conectando…');
     else if (status === 'error') toast.error(`VoIP falhou${lastError ? `: ${lastError}` : ''}`);
     else if (status === 'disconnected') toast.message('VoIP desconectado');
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
