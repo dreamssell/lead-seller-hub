@@ -11,6 +11,8 @@ import { toast } from '@/hooks/use-toast';
 import { STATUS_META, PRIORITY_META, DEPARTMENT_META, formatTicketNumber, slaState, SLA_META, slaRemainingLabel, type SupportStatus } from '@/lib/supportHelpers';
 import { describeSupabaseError } from '@/lib/supabaseErrorMessage';
 import { usePlatformOwner } from '@/hooks/usePlatformOwner';
+import { loadSupportAgents } from '@/lib/supportAgents';
+
 import { ArrowLeft, Send, StickyNote, Paperclip, Star, Download, UserCircle2, History, Save, Bell, CheckCircle2, XCircle, Clock, BellOff, RefreshCw } from 'lucide-react';
 
 type Ticket = any;
