@@ -38,16 +38,15 @@ export default function MasterSupportPage() {
 
   async function load() {
     setLoading(true);
-    const [{ data: t }, { data: a }] = await Promise.all([
+    const [{ data: t }, a] = await Promise.all([
       supabase.from('support_tickets' as any).select('*').order('created_at', { ascending: false }).limit(300),
-      supabase.from('user_roles').select('user_id, profiles!inner(display_name, email)').eq('role', 'admin' as any),
+      loadSupportAgents(user?.id),
     ]);
     setTickets((t as any) || []);
-    setAgents((a as any || []).map((r: any) => ({
-      user_id: r.user_id, display_name: r.profiles?.display_name, email: r.profiles?.email,
-    })));
+    setAgents(a);
     setLoading(false);
   }
+
 
   useEffect(() => {
     void load();
