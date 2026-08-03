@@ -7,9 +7,9 @@ const corsHeaders = {
 
 const normalizePhone = (value: unknown) => String(value || "").replace(/@s\.whatsapp\.net|@c\.us|@g\.us/gi, "").replace(/\D/g, "");
 
-// Mirrors canonicalMsgId in uaz-send-message / waha-inbound. WhatsApp echoes
+// Mirrors canonicalMsgId in waha-inbound. WhatsApp echoes
 // the same message id in two shapes: `true_<jid>_<HEX>` (fromMe echo) and bare
-// `<HEX>`. Persisting one form while uaz-send-message stored the other breaks
+// `<HEX>`. Persisting one form while the sender stored the other breaks
 // dedup and shows the sender a duplicated bubble even though the recipient
 // only received one message. Always canonicalise to the bare uppercase hex.
 const canonicalMsgId = (raw: unknown): string | null => {
@@ -164,7 +164,7 @@ Deno.serve(async (req) => {
         ownerId = ownerId || conn.owner_id;
         subCompanyId = subCompanyId || conn.sub_company_id;
         connectionPhone = getConnectionPhone(conn);
-        if (conn.provider) channel = channel || (conn.provider === "uaz" || conn.provider === "evolution" ? "whatsapp" : conn.provider);
+        if (conn.provider) channel = channel || (conn.provider === "evolution" ? "whatsapp" : conn.provider);
       }
     }
 
@@ -598,27 +598,12 @@ Deno.serve(async (req) => {
 
     responseBody = JSON.stringify({ success: true, routing_applied: !!routing, channel });
 
-    await supabaseAdmin.from("uaz_audit_logs").insert({
-      event_type: 'webhook',
-      status: 'success',
-      message: `Evento [${eventType}] processado para [${remoteJid}] canal=${channel} sub=${subCompanyId || 'global'}`,
-      payload,
-      latency_ms: Date.now() - startTime
-    });
 
   } catch (err) {
     console.error("Inbound Webhook error:", (err as Error).message);
     responseStatus = 500;
     responseBody = JSON.stringify({ error: (err as Error).message });
 
-    await supabaseAdmin.from("uaz_audit_logs").insert({
-      event_type: 'webhook',
-      status: 'error',
-      message: `Falha no processamento: ${(err as Error).message}`,
-      payload,
-      response: { error: (err as Error).message },
-      latency_ms: Date.now() - startTime
-    });
   } finally {
     if (webhookId) {
       await supabaseAdmin.from("webhook_logs").insert({

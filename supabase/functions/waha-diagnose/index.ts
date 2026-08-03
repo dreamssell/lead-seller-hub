@@ -1,5 +1,5 @@
 // waha-diagnose — Onda 3: consolidated health report for a WAHA connection.
-// Isolated to WAHA; does not touch UAZ / Evolution / Wavoip.
+// Isolated to WAHA; does not touch Evolution / Wavoip.
 //
 // Given { connection_id }, returns a structured diagnostic covering:
 //   - session status (STARTING / SCAN_QR_CODE / WORKING / FAILED / STOPPED)

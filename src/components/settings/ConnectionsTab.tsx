@@ -19,8 +19,8 @@ const sections = [
       {
         icon: <MessageSquare className="w-6 h-6 text-emerald-500" />,
         name: 'Conexões WhatsApp',
-        tags: ['UAZ API', 'API OFICIAL'],
-        desc: 'Gerencie todas as suas conexões WhatsApp em um só lugar (UAZ e API Oficial)',
+        tags: ['WAHA', 'API OFICIAL'],
+        desc: 'Gerencie todas as suas conexões WhatsApp em um só lugar (WAHA e API Oficial)',
         cta: 'Gerenciar Conexões',
         to: '/whatsapp',
         primary: true,

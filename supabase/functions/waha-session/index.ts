@@ -1,5 +1,5 @@
 // waha-session — server-side control for WAHA sessions (multi-tenant).
-// Isolated to WAHA — does not touch UAZ / Evolution / Wavoip.
+// Isolated to WAHA — does not touch Evolution / Wavoip.
 //
 // Actions:
 //   - "status":      probe raw session status
@@ -405,7 +405,7 @@ Deno.serve(async (req) => {
     // messages missing locally. This is what recovers threads that show
     // "Sem mensagens ainda" when the webhook missed delivery. Idempotent by
     // uaz_msg_id + (owner_id, phone), so it can be re-run safely and never
-    // affects UAZ / Evolution / Wavoip data or the live inbound path.
+    // affects Evolution / Wavoip data or the live inbound path.
     // ─── cancel_run ────────────────────────────────────────────────────────
     // Flags a running import so the backfill loop stops on its next check and
     // marks the run as 'cancelled'. RLS on waha_import_runs already restricts

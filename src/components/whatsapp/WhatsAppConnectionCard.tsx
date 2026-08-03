@@ -19,7 +19,6 @@ import {
   PROVIDER_CONFIGS, 
   ConnectionStatus 
 } from './types';
-import { UazStats } from './UazStats';
 import { FacebookDiagnostics } from './FacebookDiagnostics';
 import { WidgetSettings } from './WidgetSettings';
 import { EvolutionWizardDialog } from './EvolutionWizardDialog';
@@ -38,7 +37,6 @@ import { usePlatformOwner } from '@/hooks/usePlatformOwner';
 interface ConnectionCardProps {
   conn: WhatsAppConnection;
   onSaved: () => void;
-  onOpenAudit: (filters?: { tenantId?: string; logId?: string }) => void;
 }
 
 export function statusBadge(status: ConnectionStatus) {
@@ -57,10 +55,10 @@ export function statusBadge(status: ConnectionStatus) {
   );
 }
 
-export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: ConnectionCardProps) {
+export function WhatsAppConnectionCard({ conn, onSaved }: ConnectionCardProps) {
   const { isOwner } = usePlatformOwner();
 
-  const config = PROVIDER_CONFIGS[conn.provider] || PROVIDER_CONFIGS.uaz;
+  const config = PROVIDER_CONFIGS[conn.provider] || PROVIDER_CONFIGS.waha;
   const [url, setUrl] = useState<string>(conn.metadata?.url ?? config.url);
   const [token, setToken] = useState<string>(conn.metadata?.token ?? '');
   const [extra, setExtra] = useState<string>(
@@ -266,13 +264,6 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
           </>
         )}
 
-        {/* Provider Specific Stats/Metrics */}
-        {conn.provider === 'uaz' && conn.status === 'connected' && (
-          <UazStats 
-            conn={conn} 
-            onOpenAudit={onOpenAudit} 
-          />
-        )}
 
         {conn.provider === 'facebook' && isOwner && (
           <FacebookDiagnostics conn={conn} />
@@ -320,7 +311,7 @@ export function WhatsAppConnectionCard({ conn, onSaved, onOpenAudit }: Connectio
               {conn.status === 'connected'
                 ? 'Sessão WAHA ativa — mensagens serão enviadas via /api/sendText, sendImage, sendVideo, sendFile ou sendVoice.'
                 : conn.status === 'error'
-                ? 'Falha na sessão WAHA. O adaptador fará fallback automático com retries e timeout; se persistir, o envio ficará indisponível até a reconexão (não afeta UAZ / Wavoip / Evolution).'
+                ? 'Falha na sessão WAHA. O adaptador fará fallback automático com retries e timeout; se persistir, o envio ficará indisponível até a reconexão (não afeta Wavoip / Evolution).'
                 : conn.status === 'disconnected'
                 ? 'Sessão desconectada. Reautentique o QR na sua instância WAHA — os outros provedores continuam operando normalmente.'
                 : 'Configure URL, X-Api-Key e o nome da sessão. Depois clique em Testar Conexão para validar antes de enviar.'}

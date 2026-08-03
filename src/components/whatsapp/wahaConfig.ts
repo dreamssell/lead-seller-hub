@@ -1,5 +1,5 @@
 // WAHA config schema + helpers.
-// Isolated module — nothing here imports from UAZ/Evolution/Wavoip code paths.
+// Isolated module — nothing here imports from Evolution/Wavoip code paths.
 // Owns:
 //   * The typed shape of what we persist under `whatsapp_connections.metadata`
 //     for a WAHA connection (fields mirror the WAHA/Chatwoot App UI).

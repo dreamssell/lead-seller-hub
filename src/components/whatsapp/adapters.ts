@@ -274,43 +274,6 @@ async function postEvolutionText(ctx: { url: string; token: string; instance: st
 
 
 
-class UazAdapter implements WhatsAppProviderAdapter {
-  async getStatus(conn: WhatsAppConnection) {
-    const { data, error } = await supabase.functions.invoke('whatsapp-status', {
-      body: {
-        connection_id: conn.id,
-        provider: 'uaz',
-        url: conn.metadata?.url,
-        token: conn.metadata?.token,
-      },
-    });
-    if (error) throw error;
-    return data;
-  }
-
-  async sendMessage(conn: WhatsAppConnection, customerId: string, content: string, correlationId?: string) {
-    // client_msg_id MUST be forwarded so the edge function's idempotency check
-    // ("did we already accept this message?") can short-circuit retries and
-    // prevent the recipient from getting the same WhatsApp message twice.
-    const clientMsgId = correlationId ?? (globalThis.crypto?.randomUUID?.() ?? String(Date.now()));
-    const { data, error } = await supabase.functions.invoke('uaz-send-message', {
-      body: {
-        customer_id: customerId,
-        content: content,
-        connection_id: conn.id,
-        client_msg_id: clientMsgId,
-      }
-    });
-    if (error) throw error;
-    return data;
-  }
-
-  async syncContacts(conn: WhatsAppConnection) {
-    // Implement UAZ contact sync logic here
-    return { success: true };
-  }
-}
-
 class WavoipAdapter implements WhatsAppProviderAdapter {
   async getStatus(conn: WhatsAppConnection) {
     const { data, error } = await supabase.functions.invoke('whatsapp-status', {
@@ -330,7 +293,7 @@ class WavoipAdapter implements WhatsAppProviderAdapter {
     // text messages, so we must fail loudly instead of returning a fake
     // success — otherwise messages appear "sent" in the UI while never
     // reaching WhatsApp.
-    throw new Error('Wavoip é um canal de voz e não envia mensagens de WhatsApp. Selecione uma conexão WAHA, Evolution ou UAZ para enviar texto.');
+    throw new Error('Wavoip é um canal de voz e não envia mensagens de WhatsApp. Selecione uma conexão WAHA ou Evolution para enviar texto.');
   }
 
   async syncContacts(conn: WhatsAppConnection) {
@@ -541,8 +504,6 @@ async function sendEvolutionMedia(conn: WhatsAppConnection, customerId: string, 
 
 export const getProviderAdapter = (provider: string): WhatsAppProviderAdapter => {
   switch (provider) {
-    case 'uaz':
-      return new UazAdapter();
     case 'wavoip':
       return new WavoipAdapter();
     case 'evolution':

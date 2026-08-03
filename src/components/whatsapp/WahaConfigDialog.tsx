@@ -1,5 +1,5 @@
 // WAHA Configuration Dialog — mirrors the WAHA VPS/Chatwoot App panel.
-// Standalone: does not import from UAZ/Evolution/Wavoip code. Safe to edit or
+// Standalone: does not import from Evolution/Wavoip code. Safe to edit or
 // remove without impacting other providers.
 
 import { useEffect, useMemo, useState } from 'react';
@@ -253,7 +253,7 @@ export function WahaConfigDialog({ open, onOpenChange, conn, onSaved }: Props) {
         <DialogHeader>
           <DialogTitle>Configurar WAHA (WhatsApp HTTP API)</DialogTitle>
           <DialogDescription>
-            Preencha os mesmos campos do painel WAHA/Chatwoot App. Isolado dos provedores UAZ, Evolution e Wavoip.
+            Preencha os mesmos campos do painel WAHA/Chatwoot App. Isolado dos provedores Evolution e Wavoip.
           </DialogDescription>
         </DialogHeader>
 

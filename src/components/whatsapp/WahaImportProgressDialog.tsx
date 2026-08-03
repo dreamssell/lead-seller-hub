@@ -3,7 +3,7 @@
 // account admin / platform admin. Also shows a "Reprocessar apenas falhas"
 // button that reruns the edge function limited to the failed chats.
 //
-// Isolated to WAHA — does not touch UAZ / Evolution / Wavoip.
+// Isolated to WAHA — does not touch Evolution / Wavoip.
 
 import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -291,7 +291,7 @@ export function WahaImportProgressDialog({ open, onOpenChange, runId, conn, cred
           <DialogDescription>
             {isDryRun
               ? 'Contagem apenas — nenhuma mensagem ou contato é gravado no banco. Use o resultado para decidir se roda a importação real.'
-              : 'Acompanhe em tempo real quantos chats e mensagens foram varridos. A operação não afeta o fluxo ao vivo, nem UAZ, Evolution ou Wavoip.'}
+              : 'Acompanhe em tempo real quantos chats e mensagens foram varridos. A operação não afeta o fluxo ao vivo, nem Evolution ou Wavoip.'}
           </DialogDescription>
         </DialogHeader>
 

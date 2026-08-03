@@ -1,6 +1,6 @@
 // WAHA (WhatsApp HTTP API) adapter — https://waha.devlike.pro/docs/overview/
 // Kept in a standalone module so it can be edited or removed without touching
-// the other WhatsApp providers (UAZ, Evolution, Wavoip, Meta).
+// the other WhatsApp providers (Evolution, Wavoip, Meta).
 //
 // Design goals (see mem://features/architecture):
 //   * NEVER call supabase.functions.invoke — WAHA speaks plain HTTP.

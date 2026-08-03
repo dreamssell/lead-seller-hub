@@ -324,7 +324,7 @@ export default function FocusedChatPage() {
       // silently no-ops through WavoipAdapter's placeholder and the message
       // never reaches WhatsApp, which is exactly what caused CEO/Olenir's
       // sends to "disappear" while Adriele's went through.
-      const WHATSAPP_PROVIDERS = ['waha', 'evolution', 'meta', 'uaz'] as const;
+      const WHATSAPP_PROVIDERS = ['waha', 'evolution', 'meta'] as const;
       const { data } = await supabase
         .from('whatsapp_connections')
         .select('*')

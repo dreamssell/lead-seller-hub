@@ -11,7 +11,7 @@ describe('whatsapp_provider enum ↔ frontend', () => {
   // as a runtime list so the assertion actually checks the *generated* file.
   // If the enum ever drops "waha", TypeScript will fail this line to compile.
   const knownDbEnum: Database['public']['Enums']['whatsapp_provider'][] = [
-    'uaz', 'meta', 'wavoip', 'evolution', 'instagram', 'telegram',
+    'meta', 'wavoip', 'evolution', 'instagram', 'telegram',
     'linkedin', 'tiktok', 'youtube', 'facebook', 'widget', 'waha',
   ];
 

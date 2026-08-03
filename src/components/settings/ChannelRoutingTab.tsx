@@ -37,7 +37,6 @@ const CHANNELS = [
 ];
 
 const CHAT_PROVIDERS = [
-  { value: 'uaz', label: 'UAZ API (chat WhatsApp)' },
   { value: 'evolution', label: 'Evolution API (chat WhatsApp)' },
   { value: 'meta', label: 'Meta Cloud API (oficial)' },
   { value: 'instagram', label: 'Instagram Direct' },
@@ -129,7 +128,7 @@ export default function ChannelRoutingTab() {
         owner_id: ownerId,
         sub_company_id: subScope,
         channel,
-        chat_provider: 'uaz',
+        chat_provider: 'waha',
         voice_provider: channel === 'whatsapp' ? 'wavoip' : null,
         enabled: true,
         ...patch,
@@ -152,7 +151,7 @@ export default function ChannelRoutingTab() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><GitBranch className="w-5 h-5" /> Roteamento Omnichannel</CardTitle>
           <CardDescription>
-            Configure por sub-empresa qual provedor de <b>chat</b> (UAZ ou Evolution) e qual provedor de <b>voz</b> (Wavoip) será usado em cada canal — e em qual funil do CRM os novos leads devem entrar.
+            Configure por sub-empresa qual provedor de <b>chat</b> (WAHA ou Evolution) e qual provedor de <b>voz</b> (Wavoip) será usado em cada canal — e em qual funil do CRM os novos leads devem entrar.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -234,7 +233,7 @@ export default function ChannelRoutingTab() {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
                     <Label className="text-xs">Provedor de chat</Label>
-                    <Select value={r?.chat_provider || 'uaz'} onValueChange={(v) => upsertRouting(ch.value, { chat_provider: v })}>
+                    <Select value={r?.chat_provider || 'waha'} onValueChange={(v) => upsertRouting(ch.value, { chat_provider: v })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {CHAT_PROVIDERS.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
@@ -286,7 +285,7 @@ export default function ChannelRoutingTab() {
           <p className="font-medium mb-1">💡 Como funciona</p>
           <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
             <li><b>Wavoip</b> agora cuida exclusivamente das <b>chamadas de voz</b> do WhatsApp.</li>
-            <li><b>UAZ</b> ou <b>Evolution</b> cuida do <b>chat</b> (mensagens) — escolha por canal.</li>
+            <li><b>WAHA</b> ou <b>Evolution</b> cuida do <b>chat</b> (mensagens) — escolha por canal.</li>
             <li>Toda nova conversa cria automaticamente um <b>Lead + Contato no CRM</b> com a <b>origem do canal</b> registrada.</li>
             <li>O lead entra direto no funil/etapa configurado acima.</li>
           </ul>

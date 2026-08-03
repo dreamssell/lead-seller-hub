@@ -135,7 +135,7 @@ export function WahaLiveBadge({ conn }: { conn: WhatsAppConnection }) {
       scheduleRetry();
     } else if ((next === 'disconnected' || next === 'error') && prev !== 'disconnected' && prev !== 'error') {
       const id = toast.warning(`WAHA ${next === 'error' ? 'com falha' : 'desconectada'}`, {
-        description: 'Iniciando reconexão automática com retry progressivo. UAZ, Evolution e Wavoip seguem operando.',
+        description: 'Iniciando reconexão automática com retry progressivo. Evolution e Wavoip seguem operando.',
         duration: 6000,
       });
       disconnectedToastRef.current = id;

@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
  *   1. O dialog de configuração WAHA abre, valida obrigatórios e persiste.
  *   2. O botão "Testar Conexão" chama SOMENTE `whatsapp-status` com provider=waha.
  *   3. O envio via wahaAdapter chega no endpoint `/api/sendText` da WAHA
- *      (não no de UAZ/Evolution/Wavoip).
+ *      (não no de Evolution/Wavoip).
  *   4. Recebido um ACK via `waha-inbound`, o card mostra "Último ACK: Lido".
  *
  * Requer TEST_USER/TEST_PASS ou uma sessão preview autenticada.
@@ -15,7 +15,7 @@ test.describe('WAHA · configuração + envio + ACK', () => {
   test.beforeEach(async ({ page }) => {
     // 1) whatsapp-status: só aceita provider=waha aqui — outras chamadas caem
     //    em route.continue() para garantir que o teste falha se alguma coisa
-    //    tentar rotear UAZ/Evolution/Wavoip por engano.
+    //    tentar rotear Evolution/Wavoip por engano.
     await page.route('**/functions/v1/whatsapp-status', async (route) => {
       const body = route.request().postDataJSON() as any;
       expect(body?.provider).toBe('waha');
@@ -34,7 +34,7 @@ test.describe('WAHA · configuração + envio + ACK', () => {
     // 3) Endpoint WAHA direto (HTTP, sem passar por edge function).
     await page.route('**/api/sendText', async (route) => {
       const body = route.request().postDataJSON() as any;
-      // Contrato: session + chatId + text; nada de headers de UAZ/Evolution.
+      // Contrato: session + chatId + text; nada de headers de Evolution.
       expect(body).toEqual(expect.objectContaining({ session: expect.any(String), text: expect.any(String) }));
       expect(String(body.chatId)).toMatch(/@c\.us$/);
       const headers = route.request().headers();
@@ -46,8 +46,8 @@ test.describe('WAHA · configuração + envio + ACK', () => {
       });
     });
 
-    // 4) Guardas de isolamento: qualquer rota UAZ/Evolution/Wavoip abortada.
-    for (const path of ['**/functions/v1/uaz-send-message', '**/functions/v1/evolution-instance', '**/functions/v1/wavoip-**']) {
+    // 4) Guardas de isolamento: qualquer rota Evolution/Wavoip abortada.
+    for (const path of ['**/functions/v1/evolution-instance', '**/functions/v1/wavoip-**']) {
       await page.route(path, async (route) => {
         throw new Error(`Isolamento violado: WAHA acionou ${route.request().url()}`);
       });

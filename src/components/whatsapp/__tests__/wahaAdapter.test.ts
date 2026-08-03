@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// Isolated mock of Supabase client. WAHA must NOT touch UAZ/Evolution/Wavoip
+// Isolated mock of Supabase client. WAHA must NOT touch Evolution/Wavoip
 // invoke paths — those go through supabase.functions.invoke, which we spy on
 // to assert it is NEVER called by the WAHA adapter.
 const { singleMock, invokeMock } = vi.hoisted(() => ({
@@ -39,7 +39,7 @@ describe('WahaAdapter — auth & sendMessage', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it('is returned by the provider factory as WahaAdapter (isolated from UAZ/Evolution/Wavoip)', () => {
+  it('is returned by the provider factory as WahaAdapter (isolated from Evolution/Wavoip)', () => {
     const adapter = getProviderAdapter('waha');
     expect(adapter).toBeInstanceOf(WahaAdapter);
   });
