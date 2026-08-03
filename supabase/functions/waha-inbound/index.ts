@@ -1,5 +1,5 @@
 // waha-inbound — receives events from a WAHA instance and persists them into
-// Lead Seller. Fully isolated from UAZ/Evolution/Wavoip pipelines: no imports
+// Lead Seller. Fully isolated from Evolution/Wavoip pipelines: no imports
 // or invokes touch other providers.
 //
 // Contract:
@@ -1192,7 +1192,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Outbound-echo dedup: when the platform sends a message via UAZ we insert
+  // Outbound-echo dedup: when the platform sends a message we insert
   // the row locally with a client_msg_id but no uaz_msg_id. WAHA then echoes
   // that same message back with IsFromMe=true and the canonical HASH. Instead
   // of creating a second row, backfill uaz_msg_id onto the existing outbound

@@ -27,7 +27,7 @@ async function callStatus(body: Record<string, unknown>) {
 // The edge function is designed to always answer 200 with a normalized JSON
 // payload — even when the upstream provider is unreachable. These integration
 // tests exercise the contract from the outside so that adding WAHA does not
-// regress the shape returned for UAZ / Evolution / Wavoip.
+// regress the shape returned for Evolution / Wavoip.
 
 Deno.test("whatsapp-status: waha provider is accepted and returns a normalized payload", async () => {
   const { status, json } = await callStatus({
@@ -55,17 +55,6 @@ Deno.test("whatsapp-status: unknown provider is still rejected after adding waha
   assertEquals(status, 200);
   assertEquals(json.connected, false);
   assert(String(json.error || "").toLowerCase().includes("provedor"));
-});
-
-Deno.test("whatsapp-status: uaz contract still returns normalized fields", async () => {
-  const { status, json } = await callStatus({
-    provider: "uaz",
-    url: "https://uaz.invalid.example",
-    token: "fake",
-  });
-  assertEquals(status, 200);
-  assertEquals(typeof json.connected, "boolean");
-  assertEquals(json.connected, false);
 });
 
 Deno.test("whatsapp-status: evolution contract untouched by waha addition", async () => {

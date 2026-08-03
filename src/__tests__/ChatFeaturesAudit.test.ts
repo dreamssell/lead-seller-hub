@@ -53,18 +53,4 @@ describe('Chat Features Audit — WhatsApp send pipeline', () => {
     await expect(adapter.sendMessage(conn as any, 'cust-1', 'oi')).rejects.toThrow(/mentioned/i);
   });
 
-  it('UAZ adapter routes through uaz-send-message edge function with customer_id + content', async () => {
-    invokeMock.mockResolvedValueOnce({ data: { success: true, data: { id: 'uaz-1' } }, error: null });
-    const adapter = getProviderAdapter('uaz');
-    const conn = { id: 'u-1', provider: 'uaz', metadata: { url: 'https://uaz', token: 'ut' } };
-    const res = await adapter.sendMessage(conn as any, 'cust-9', 'hi');
-    expect(res.success).toBe(true);
-    expect(invokeMock).toHaveBeenCalledWith('uaz-send-message', expect.objectContaining({
-      body: expect.objectContaining({
-        customer_id: 'cust-9',
-        content: 'hi',
-        connection_id: 'u-1',
-      }),
-    }));
-  });
 });

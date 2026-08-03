@@ -16,13 +16,13 @@ import { WahaAdapter } from '../wahaAdapter';
 // must ALSO extend the type + provider config + adapter factory — this
 // contract test guards against silent drift.
 const UI_PROVIDERS: WhatsAppProvider[] = [
-  'uaz', 'waha', 'evolution', 'wavoip', 'meta',
+  'waha', 'evolution', 'wavoip', 'meta',
   'instagram', 'facebook', 'telegram', 'linkedin', 'tiktok', 'youtube', 'widget',
 ];
 
 // Adapter-backed providers: only these must resolve through getProviderAdapter.
 // Other channels (instagram/telegram/etc.) are configured via other codepaths.
-const ADAPTER_PROVIDERS: WhatsAppProvider[] = ['uaz', 'waha', 'evolution', 'wavoip'];
+const ADAPTER_PROVIDERS: WhatsAppProvider[] = ['waha', 'evolution', 'wavoip'];
 
 describe('WhatsAppPage provider contract', () => {
   it('every provider exposed by the UI has a PROVIDER_CONFIGS entry with the required fields', () => {
@@ -37,11 +37,11 @@ describe('WhatsAppPage provider contract', () => {
     }
   });
 
-  it('WAHA config is present and marks itself as WAHA (not UAZ / Evolution / Wavoip)', () => {
+  it('WAHA config is present and marks itself as WAHA (not Evolution / Wavoip)', () => {
     const cfg = PROVIDER_CONFIGS.waha;
     expect(cfg.name).toMatch(/waha/i);
     // Isolation: token label / description must NOT mix providers.
-    expect(cfg.description.toLowerCase()).not.toMatch(/uaz|evolution|wavoip/);
+    expect(cfg.description.toLowerCase()).not.toMatch(/evolution|wavoip/);
   });
 
   it('getProviderAdapter dispatches each provider to its OWN adapter class', () => {

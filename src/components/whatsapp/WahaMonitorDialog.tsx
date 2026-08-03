@@ -2,7 +2,7 @@
 // histórico de estados (SCAN_QR_CODE / CONNECTED / DISCONNECTED / FAILED) e
 // rotina de manutenção que sugere/aplica delete de sessões ociosas.
 // Totalmente isolado: consome apenas connection_events + waha-session
-// e nunca invoca funções de UAZ/Evolution/Wavoip.
+// e nunca invoca funções de Evolution/Wavoip.
 
 import { useEffect, useMemo, useState } from 'react';
 import {

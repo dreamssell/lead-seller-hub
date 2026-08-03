@@ -12,10 +12,6 @@ interface CheckResult {
   detail?: string;
 }
 
-import UazStatusPanel from '@/components/settings/UazStatusPanel';
-import UazAlertsAuditTab from '@/components/settings/UazAlertsAuditTab';
-import UazRemediationTab from '@/components/settings/UazRemediationTab';
-import UazIncidentsTab from '@/components/settings/UazIncidentsTab';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { AlertCircle, MoreHorizontal, User } from 'lucide-react';
@@ -117,21 +113,7 @@ export default function BackendStatusPage() {
       results.push({ label: 'Edge Functions', status: 'fail', detail: String(e) });
     }
 
-    // 6) UAZ Integration Health
-    const t5 = performance.now();
-    try {
-      const { data: uazHealth } = await supabase.functions.invoke('uaz-healthcheck');
-      results.push({ 
-        label: 'Integração UAZ WhatsApp', 
-        status: uazHealth?.status === 'online' ? 'ok' : 'fail',
-        latencyMs: Math.round(performance.now() - t5),
-        detail: uazHealth?.status === 'online' ? `Operacional (${uazHealth.latency_ms}ms)` : 'Instável ou offline'
-      });
-    } catch (e) {
-      results.push({ label: 'Integração UAZ WhatsApp', status: 'fail', detail: 'Erro ao conectar' });
-    }
-
-    // 7) Permissões do usuário (admin?)
+    // 6) Permissões do usuário (admin?)
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -200,35 +182,7 @@ export default function BackendStatusPage() {
           <TabsTrigger value="overview" className="gap-2">
             <Activity className="w-4 h-4" /> Geral
           </TabsTrigger>
-          <TabsTrigger value="uaz-status" className="gap-2">
-            <Zap className="w-4 h-4" /> Status UAZ
-          </TabsTrigger>
-          <TabsTrigger value="uaz-alerts" className="gap-2">
-            <AlertTriangle className="w-4 h-4" /> Alertas UAZ
-          </TabsTrigger>
-          <TabsTrigger value="uaz-remediation" className="gap-2">
-            <HistoryIcon className="w-4 h-4" /> Auditoria Remediação
-          </TabsTrigger>
-          <TabsTrigger value="uaz-incidents" className="gap-2">
-            <AlertCircle className="w-4 h-4" /> Incidentes Críticos
-          </TabsTrigger>
         </TabsList>
-
-        <TabsContent value="uaz-remediation">
-          <UazRemediationTab />
-        </TabsContent>
-
-        <TabsContent value="uaz-status">
-          <UazStatusPanel />
-        </TabsContent>
-
-        <TabsContent value="uaz-alerts">
-          <UazAlertsAuditTab />
-        </TabsContent>
-
-        <TabsContent value="uaz-incidents">
-          <UazIncidentsTab />
-        </TabsContent>
 
         <TabsContent value="overview" className="space-y-6">
         {/* Header status */}

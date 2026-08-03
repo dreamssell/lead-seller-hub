@@ -1,6 +1,6 @@
 // Manual restart button for a WAHA session. Invokes the waha-session edge
 // function (action: "restart") which stops and starts the WAHA session.
-// Isolated to WAHA — does not touch UAZ / Evolution / Wavoip.
+// Isolated to WAHA — does not touch Evolution / Wavoip.
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2, Power } from 'lucide-react';

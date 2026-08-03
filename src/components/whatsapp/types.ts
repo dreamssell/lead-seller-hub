@@ -1,6 +1,6 @@
 import { MessageSquare, Phone, ShieldCheck, LucideIcon, Globe, ThumbsUp } from 'lucide-react';
 
-export type WhatsAppProvider = 'uaz' | 'waha' | 'meta' | 'wavoip' | 'evolution' | 'instagram' | 'telegram' | 'linkedin' | 'tiktok' | 'youtube' | 'facebook' | 'widget';
+export type WhatsAppProvider = 'waha' | 'meta' | 'wavoip' | 'evolution' | 'instagram' | 'telegram' | 'linkedin' | 'tiktok' | 'youtube' | 'facebook' | 'widget';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'error';
 
@@ -33,14 +33,6 @@ export interface ProviderConfig {
 }
 
 export const PROVIDER_CONFIGS: Record<WhatsAppProvider, ProviderConfig> = {
-  uaz: {
-    name: 'UAZ API',
-    description: 'Conexão via QR Code com API multi-dispositivo.',
-    icon: MessageSquare,
-    color: 'text-emerald-500',
-    url: 'https://api.uazapi.dev',
-    tokenLabel: 'API Token / Key',
-  },
   waha: {
     name: 'WAHA',
     description: 'WhatsApp HTTP API self-hosted (waha.devlike.pro).',

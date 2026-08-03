@@ -2,7 +2,6 @@
 // - Lists all disconnected/error connections owned by the caller
 // - Live status via Realtime subscription on whatsapp_connections
 // - WAHA: reuses WahaQrCard + restart/logout controls (QR auto-refresh)
-// - UAZ: runs whatsapp-status probe, shows guided re-pair steps
 // - Kept isolated from send/receive code paths.
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -35,19 +34,17 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
 export function ReconnectSessionDialog({ open, onOpenChange, connections, onChanged }: Props) {
   // Reconnect-worthy list: everything not currently connected.
   const targets = useMemo(
-    () => connections.filter((c) => ['uaz', 'waha'].includes(c.provider) && c.status !== 'connected'),
+    () => connections.filter((c) => c.provider === 'waha' && c.status !== 'connected'),
     [connections],
   );
   const [selectedId, setSelectedId] = useState<string | null>(targets[0]?.id ?? null);
   const [liveStatus, setLiveStatus] = useState<Record<string, ConnectionStatus>>({});
   const [busy, setBusy] = useState<string | null>(null);
-  const [uazProbe, setUazProbe] = useState<{ ok: boolean; msg: string } | null>(null);
 
   // Auto-select first target when dialog opens.
   useEffect(() => {
     if (open) {
       setSelectedId((prev) => prev && targets.some((t) => t.id === prev) ? prev : (targets[0]?.id ?? null));
-      setUazProbe(null);
     }
   }, [open, targets]);
 
@@ -95,37 +92,6 @@ export function ReconnectSessionDialog({ open, onOpenChange, connections, onChan
       onChanged();
     } catch (e: any) {
       toast.error(`Falha: ${label}`, { id: toastId, description: e?.message ?? String(e) });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const probeUaz = async () => {
-    if (!selected) return;
-    setBusy('uaz-probe');
-    setUazProbe(null);
-    try {
-      const { data, error } = await supabase.functions.invoke('whatsapp-status', {
-        body: {
-          connection_id: selected.id,
-          provider: 'uaz',
-          url: selected.metadata?.url,
-          token: selected.metadata?.token,
-        },
-      });
-      if (error) throw new Error(error.message);
-      if (data?.connected) {
-        setUazProbe({ ok: true, msg: `Conectado — ${data.phone ?? 'dispositivo ativo'}` });
-        toast.success('UAZ conectado');
-      } else {
-        setUazProbe({
-          ok: false,
-          msg: data?.error || data?.raw_error || `Instância ainda não pareada (código ${data?.status_code ?? '—'})`,
-        });
-      }
-      onChanged();
-    } catch (e: any) {
-      setUazProbe({ ok: false, msg: e?.message ?? 'Falha ao consultar UAZ' });
     } finally {
       setBusy(null);
     }
@@ -207,7 +173,7 @@ export function ReconnectSessionDialog({ open, onOpenChange, connections, onChan
                     {currentStatus && statusBadge(currentStatus)}
                   </div>
 
-                  {selected.provider === 'waha' ? (
+                  {selected.provider === 'waha' && (
                     <>
                       <WahaQrCard conn={selected} />
                       <div className="flex flex-wrap gap-2">
@@ -246,46 +212,6 @@ export function ReconnectSessionDialog({ open, onOpenChange, connections, onChan
                         Fluxo: <b>Deslogar</b> → aguarde o card acima trocar para <b>SCAN_QR_CODE</b> → escaneie no celular.
                         A janela detecta a conexão em tempo real.
                       </p>
-                    </>
-                  ) : (
-                    // UAZ path — provider requires re-pair no painel externo do provedor.
-                    <>
-                      <Alert>
-                        <AlertCircle className="w-4 h-4" />
-                        <AlertTitle>Reconexão UAZ</AlertTitle>
-                        <AlertDescription className="text-xs leading-relaxed">
-                          A UAZ API não expõe QR interno pelo Lead Seller. Reautentique no painel do provedor e depois clique em <b>Testar sessão</b> para revalidar aqui.
-                          <ol className="list-decimal ml-4 mt-2 space-y-0.5">
-                            <li>Abra o painel UAZ ({selected.metadata?.url || 'URL não configurada'}).</li>
-                            <li>Escaneie o QR da instância no WhatsApp do número.</li>
-                            <li>Volte aqui e clique em <b>Testar sessão</b>.</li>
-                          </ol>
-                        </AlertDescription>
-                      </Alert>
-                      <div className="flex flex-wrap gap-2">
-                        <Button size="sm" onClick={probeUaz} disabled={busy !== null} className="gap-1">
-                          {busy === 'uaz-probe' ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                          Testar sessão
-                        </Button>
-                        {selected.metadata?.url && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            asChild
-                            className="gap-1"
-                          >
-                            <a href={selected.metadata.url} target="_blank" rel="noreferrer">
-                              <ExternalLink className="w-3 h-3" /> Abrir painel UAZ
-                            </a>
-                          </Button>
-                        )}
-                      </div>
-                      {uazProbe && (
-                        <Alert variant={uazProbe.ok ? 'default' : 'destructive'}>
-                          {uazProbe.ok ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <AlertCircle className="w-4 h-4" />}
-                          <AlertDescription className="text-xs">{uazProbe.msg}</AlertDescription>
-                        </Alert>
-                      )}
                     </>
                   )}
                 </>

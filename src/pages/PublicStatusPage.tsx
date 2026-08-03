@@ -26,17 +26,35 @@ export default function PublicStatusPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const { data: hData, error: hErr } = await supabase.functions.invoke('uaz-healthcheck');
-      if (hErr) throw hErr;
-      setHealth(hData);
+      const { data: conns } = await supabase
+        .from('whatsapp_connections')
+        .select('id, provider, status')
+        .in('provider', ['waha', 'evolution', 'meta']);
 
-      const { data: logs } = await supabase
-        .from('uaz_audit_logs')
-        .select('id, message, status, event_type, created_at, response, payload')
+      const total = conns?.length ?? 0;
+      const online = (conns ?? []).filter((c) => c.status === 'connected').length;
+      setHealth({
+        status: total === 0 || online > 0 ? 'online' : 'degraded',
+        latency_ms: 0,
+      });
+
+      const { data: events } = await supabase
+        .from('message_events')
+        .select('id, stage, status, detail, created_at')
         .order('created_at', { ascending: false })
         .limit(20);
-      
-      setRecentLogs(logs || []);
+
+      setRecentLogs(
+        (events ?? []).map((e: any) => ({
+          id: e.id,
+          message: e.status ?? e.stage,
+          status: e.stage === 'failed' || e.status === 'error' ? 'error' : 'success',
+          event_type: e.stage,
+          created_at: e.created_at,
+          response: e.detail,
+          payload: e.detail,
+        })),
+      );
     } catch (err) {
       console.error(err);
     } finally {
@@ -62,7 +80,7 @@ export default function PublicStatusPage() {
               <span className="text-[10px] font-bold uppercase tracking-widest text-primary">System Status</span>
             </div>
             <h1 className="text-3xl font-bold tracking-tight">Status da Plataforma</h1>
-            <p className="text-muted-foreground mt-1">Monitoramento em tempo real da integração WhatsApp (UAZ).</p>
+            <p className="text-muted-foreground mt-1">Monitoramento em tempo real da integração WhatsApp (WAHA).</p>
           </div>
           
           <Badge variant="outline" className={`h-10 px-4 gap-2 text-sm font-medium ${isHealthy ? 'text-success border-success/30' : 'text-destructive border-destructive/30'}`}>

@@ -70,15 +70,33 @@ async function loadTemplate(admin: any, ownerId: string, subCompanyId: string | 
   return fallback ? { id: null, body_template: fallback, extra_recipients: [], enabled: true } : null;
 }
 
-/** Send one WhatsApp message via the UAZ edge function. */
+/** Send one WhatsApp message directly through the WAHA connection. */
 async function sendWhatsApp(admin: any, phone: string, body: string): Promise<{ ok: boolean; msgId: string | null; error: string | null }> {
   try {
-    const res = await admin.functions.invoke("uaz-send-message", {
-      body: { phone, content: body, source: "support" },
+    const { data: conn } = await admin
+      .from("whatsapp_connections")
+      .select("metadata, status")
+      .eq("provider", "waha")
+      .eq("status", "connected")
+      .limit(1)
+      .maybeSingle();
+
+    const url = String(conn?.metadata?.url || "").replace(/\/$/, "");
+    const token = conn?.metadata?.token;
+    const session = conn?.metadata?.session || "default";
+    if (!url || !token) return { ok: false, msgId: null, error: "waha_connection_unavailable" };
+
+    const digits = String(phone || "").replace(/\D/g, "");
+    if (!digits) return { ok: false, msgId: null, error: "invalid_phone" };
+
+    const res = await fetch(`${url}/api/sendText`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Api-Key": token },
+      body: JSON.stringify({ session, chatId: `${digits}@c.us`, text: body }),
     });
-    if (res.error) return { ok: false, msgId: null, error: res.error?.message || 'send_failed' };
-    const msgId = (res.data as any)?.message_id ?? null;
-    return { ok: true, msgId, error: null };
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, msgId: null, error: `waha_${res.status}` };
+    return { ok: true, msgId: json?.id?._serialized ?? json?.id ?? null, error: null };
   } catch (e: any) {
     return { ok: false, msgId: null, error: String(e?.message || e) };
   }

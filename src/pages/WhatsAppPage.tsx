@@ -6,14 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   PlusCircle, RefreshCw, MessageCircle, Activity, 
-  History, ShieldCheck, Phone, Plug, Loader2, Smartphone
+  ShieldCheck, Phone, Plug, Loader2, Smartphone
 } from 'lucide-react';
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 
 import { toast } from 'sonner';
-import UazAuditTab from '@/components/settings/UazAuditTab';
 import { WhatsAppConnectionCard } from '@/components/whatsapp/WhatsAppConnectionCard';
 import { EvolutionAuditAggregatePanel } from '@/components/whatsapp/EvolutionAuditAggregatePanel';
 import { WahaMonitorPanel } from '@/components/whatsapp/WahaMonitorPanel';
@@ -29,12 +28,11 @@ export default function WhatsAppPage() {
 
   const [connections, setConnections] = useState<WhatsAppConnection[]>([]);
   const [loading, setLoading] = useState(true);
-  const [auditFilters, setAuditFilters] = useState<{ tenantId?: string; logId?: string } | null>(null);
   const [activeTab, setActiveTab] = useState('connections');
   const [reconnectOpen, setReconnectOpen] = useState(false);
 
   const disconnectedCount = connections.filter(
-    (c) => ['uaz', 'waha'].includes(c.provider) && c.status !== 'connected',
+    (c) => c.provider === 'waha' && c.status !== 'connected',
   ).length;
 
   const loadConnections = async () => {
@@ -55,11 +53,6 @@ export default function WhatsAppPage() {
   useEffect(() => {
     loadConnections();
   }, []);
-
-  const handleOpenAudit = (filters?: { tenantId?: string; logId?: string }) => {
-    setAuditFilters(filters || null);
-    setActiveTab('audit');
-  };
 
   const [isAddingConnection, setIsAddingConnection] = useState(false);
 
@@ -135,12 +128,6 @@ export default function WhatsAppPage() {
                 <Plug className="w-4 h-4" />
                 Conexões
               </TabsTrigger>
-              {isOwner && (
-                <TabsTrigger value="audit" className="gap-2">
-                  <History className="w-4 h-4" />
-                  Auditoria & Logs
-                </TabsTrigger>
-              )}
               <TabsTrigger value="waha" className="gap-2">
                 <Smartphone className="w-4 h-4" />
                 WAHA Monitor
@@ -173,7 +160,6 @@ export default function WhatsAppPage() {
                   <SelectValue placeholder="Adicionar Canal" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="uaz">WhatsApp (UAZ API)</SelectItem>
                   <SelectItem value="waha">WhatsApp (WAHA)</SelectItem>
                   <SelectItem value="evolution">WhatsApp (Evolution API)</SelectItem>
                   <SelectItem value="wavoip">WhatsApp (Wavoip)</SelectItem>
@@ -205,9 +191,9 @@ export default function WhatsAppPage() {
                   </div>
                   <CardTitle className="mb-2">Nenhuma conexão encontrada</CardTitle>
                   <CardDescription className="max-w-xs mb-6">
-                    Você ainda não configurou nenhuma integração com WhatsApp. Comece adicionando uma nova conexão UAZ.
+                    Você ainda não configurou nenhuma integração com WhatsApp. Comece adicionando uma nova conexão WAHA.
                   </CardDescription>
-                  <Button onClick={() => addConnection('uaz')}>
+                  <Button onClick={() => addConnection('waha')}>
                     Configurar Primeira Conexão
                   </Button>
                 </CardContent>
@@ -219,21 +205,12 @@ export default function WhatsAppPage() {
                     key={conn.id} 
                     conn={conn} 
                     onSaved={loadConnections}
-                    onOpenAudit={handleOpenAudit}
                   />
                 ))}
               </div>
             )}
           </TabsContent>
 
-          {isOwner && (
-            <TabsContent value="audit" className="mt-0">
-              <UazAuditTab
-                initialLogId={auditFilters?.logId}
-                initialTenantId={auditFilters?.tenantId}
-              />
-            </TabsContent>
-          )}
 
 
           <TabsContent value="waha" className="mt-0 space-y-4">
@@ -254,7 +231,7 @@ export default function WhatsAppPage() {
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {[
-                    { name: 'UAZ API', status: 'online', icon: Plug, color: 'text-primary' },
+                    { name: 'WAHA API', status: 'online', icon: Plug, color: 'text-primary' },
                     { name: 'Meta Cloud API', status: 'online', icon: ShieldCheck, color: 'text-primary' },
                     { name: 'Wavoip Network', status: 'online', icon: Phone, color: 'text-emerald-500' }
                   ].map((p) => (

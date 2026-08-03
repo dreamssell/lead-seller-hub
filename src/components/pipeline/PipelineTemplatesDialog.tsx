@@ -98,7 +98,7 @@ export function PipelineTemplatesDialog({
       } else {
         await supabase.from('channel_routing').insert({
           owner_id: ownerId, sub_company_id: scope, channel,
-          chat_provider: 'uaz', voice_provider: channel === 'whatsapp' ? 'wavoip' : null,
+          chat_provider: 'waha', voice_provider: channel === 'whatsapp' ? 'wavoip' : null,
           pipeline_id: pip.id, enabled: true,
         });
       }
