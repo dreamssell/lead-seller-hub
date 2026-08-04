@@ -1722,6 +1722,7 @@ export type Database = {
           origin_connection_id: string | null
           owner_id: string | null
           phone: string | null
+          pipeline_id: string | null
           presence: string | null
           presence_updated_at: string | null
           priority: string
@@ -1732,6 +1733,7 @@ export type Database = {
           sla_first_response_due_at: string | null
           sla_next_response_due_at: string | null
           sla_resolution_due_at: string | null
+          stage_id: string | null
           sub_company_id: string | null
           tags: string[]
           ticket_status: string
@@ -1762,6 +1764,7 @@ export type Database = {
           origin_connection_id?: string | null
           owner_id?: string | null
           phone?: string | null
+          pipeline_id?: string | null
           presence?: string | null
           presence_updated_at?: string | null
           priority?: string
@@ -1772,6 +1775,7 @@ export type Database = {
           sla_first_response_due_at?: string | null
           sla_next_response_due_at?: string | null
           sla_resolution_due_at?: string | null
+          stage_id?: string | null
           sub_company_id?: string | null
           tags?: string[]
           ticket_status?: string
@@ -1802,6 +1806,7 @@ export type Database = {
           origin_connection_id?: string | null
           owner_id?: string | null
           phone?: string | null
+          pipeline_id?: string | null
           presence?: string | null
           presence_updated_at?: string | null
           priority?: string
@@ -1812,6 +1817,7 @@ export type Database = {
           sla_first_response_due_at?: string | null
           sla_next_response_due_at?: string | null
           sla_resolution_due_at?: string | null
+          stage_id?: string | null
           sub_company_id?: string | null
           tags?: string[]
           ticket_status?: string
@@ -1823,6 +1829,20 @@ export type Database = {
             columns: ["origin_connection_id"]
             isOneToOne: false
             referencedRelation: "whatsapp_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
             referencedColumns: ["id"]
           },
           {
