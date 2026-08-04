@@ -300,6 +300,12 @@ const extractOutboundMediaMeta = (data: any) => {
 export default function ChatPage() {
   const [activeChannel, setActiveChannel] = useState<ChannelKey | null>(null);
   const [convs, setConvs] = useState(conversationsByChannel);
+  // Diretório para rótulos das conversas: nome do atendente, funil e etapa.
+  const [directory, setDirectory] = useState<{
+    agents: Record<string, string>;
+    pipelines: Record<string, string>;
+    stages: Record<string, string>;
+  }>({ agents: {}, pipelines: {}, stages: {} });
   const CONV_PAGE_SIZE = 200;
   const [convLimits, setConvLimits] = useState<Record<string, number>>({});
   const [convHasMore, setConvHasMore] = useState<Record<string, boolean>>({});
@@ -1063,10 +1069,16 @@ export default function ChatPage() {
             }
           });
         }
+        // Regras de atendimento (Nível Atendente):
+        //  - Distribuição (auto), Aguardando (waiting) e Finalizados (closed)
+        //    são visíveis para todos.
+        //  - "Em Atendimento" (active) fica exclusivo de quem está com o
+        //    Lead/Cliente até encerrar; supervisão/CEO vê tudo.
         const scopedCustomers = channelCustomers.filter((c) => {
           if (isSupervisor) return true;
           const asg = assignmentByCustomer.get(c.id);
           if (!asg || !asg.assigned_to) return true;
+          if (asg.stage !== 'active') return true;
           return asg.assigned_to === currentUserId;
         });
 
@@ -1094,7 +1106,11 @@ export default function ChatPage() {
             presence: (c as any).presence || null,
             lastSeenAt: (c as any).last_seen_at || null,
             botEnabled: false,
-            assignedTo: '',
+            assignedTo: (c as any).assigned_to || assignmentByCustomer.get(c.id)?.assigned_to || '',
+            attendanceStage: assignmentByCustomer.get(c.id)?.stage || null,
+            ticketStatus: (c as any).ticket_status || 'open',
+            pipelineId: (c as any).pipeline_id || null,
+            stageId: (c as any).stage_id || null,
             phone: c.phone,
             owner_id: (c as any).owner_id || null,
             sub_company_id: (c as any).sub_company_id || null,
@@ -1233,7 +1249,7 @@ export default function ChatPage() {
           (Object.keys(next) as ChannelKey[]).forEach(k => {
             next[k] = next[k].map((conv: any) =>
               conv.id === c.id
-                ? { ...conv, name: (typeof c.name === 'string' && c.name.trim()) ? c.name : conv.name, avatar_url: c.avatar_url ?? conv.avatar_url, online: pres.online, presenceLabel: pres.label, presence: c.presence, lastSeenAt: c.last_seen_at, is_archived: !!c.is_archived, is_muted: !!c.is_muted, muted_until: c.muted_until || null, label_ids: Array.isArray(c.label_ids) ? c.label_ids : conv.label_ids }
+                ? { ...conv, name: (typeof c.name === 'string' && c.name.trim()) ? c.name : conv.name, avatar_url: c.avatar_url ?? conv.avatar_url, online: pres.online, presenceLabel: pres.label, presence: c.presence, lastSeenAt: c.last_seen_at, is_archived: !!c.is_archived, is_muted: !!c.is_muted, muted_until: c.muted_until || null, label_ids: Array.isArray(c.label_ids) ? c.label_ids : conv.label_ids, ticketStatus: c.ticket_status ?? conv.ticketStatus, assignedTo: c.assigned_to ?? conv.assignedTo, pipelineId: c.pipeline_id ?? null, stageId: c.stage_id ?? null }
                 : conv
             );
           });
@@ -2712,7 +2728,18 @@ export default function ChatPage() {
                   <p className="text-xs text-muted-foreground truncate">{c.msg}</p>
 
                   <div className="flex items-center gap-1 mt-1 flex-wrap">
-                    {(c as any).presenceLabel && (() => {
+                    {(() => {
+                      // Status do atendimento escolhido no chat (tempo real).
+                      const meta = TICKET_STATUS_META[(c as any).ticketStatus || 'open'] || TICKET_STATUS_META.open;
+                      const Icon = meta.icon;
+                      return (
+                        <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 gap-0.5">
+                          <Icon className={`w-2.5 h-2.5 ${meta.color}`} />
+                          {meta.label}
+                        </Badge>
+                      );
+                    })()}
+                    {(c as any).presenceLabel && (c as any).presenceLabel !== 'Sem status' && (() => {
                       const p = String((c as any).presence || '').toLowerCase();
                       const isTyping = p === 'composing';
                       const isRecording = p === 'recording';
@@ -2740,12 +2767,32 @@ export default function ChatPage() {
                         <Bot className="w-2.5 h-2.5" />
                         IA
                       </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 gap-0.5">
-                        <UserCog className="w-2.5 h-2.5" />
-                        {humanAgents.find((h) => h.id === c.assignedTo)?.name.split(' ')[0] || 'Humano'}
-                      </Badge>
-                    )}
+                    ) : (() => {
+                      // Nome do atendente que está com o Lead/Cliente.
+                      const uid = (c as any).assignedTo as string;
+                      const full = uid ? directory.agents[uid] : '';
+                      const short = full ? full.split(/[\s@]/)[0] : '';
+                      return (
+                        <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 gap-0.5" title={full || 'Sem atendente'}>
+                          <UserCog className="w-2.5 h-2.5" />
+                          {short || 'Sem atendente'}
+                        </Badge>
+                      );
+                    })()}
+                    {(() => {
+                      // Funil (e etapa) ao qual a conversa pertence.
+                      const pid = (c as any).pipelineId as string | null;
+                      if (!pid) return null;
+                      const pname = directory.pipelines[pid];
+                      if (!pname) return null;
+                      const sname = (c as any).stageId ? directory.stages[(c as any).stageId] : '';
+                      return (
+                        <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 gap-0.5 border-primary/40 text-primary" title={sname ? `${pname} · ${sname}` : pname}>
+                          <GitBranch className="w-2.5 h-2.5" />
+                          {sname ? `${pname} · ${sname}` : pname}
+                        </Badge>
+                      );
+                    })()}
                   </div>
                 </div>
               </button>
