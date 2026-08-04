@@ -376,7 +376,7 @@ export default function FocusedChatPage() {
     });
     // Oculta conversas com assignment aberto atribuído a outro usuário
     // (visão do atendente). Supervisores continuam vendo tudo.
-    const assignmentByCustomer = new Map<string, { assigned_to: string | null }>();
+    const assignmentByCustomer = new Map<string, { assigned_to: string | null; stage: string }>();
     if (ids.length) {
       const { data: assigns } = await supabase
         .from('lead_assignments')
@@ -386,7 +386,7 @@ export default function FocusedChatPage() {
         .order('assigned_at', { ascending: false });
       (assigns || []).forEach((a: any) => {
         if (!assignmentByCustomer.has(a.customer_id)) {
-          assignmentByCustomer.set(a.customer_id, { assigned_to: a.assigned_to });
+          assignmentByCustomer.set(a.customer_id, { assigned_to: a.assigned_to, stage: a.stage });
         }
       });
     }
@@ -397,6 +397,8 @@ export default function FocusedChatPage() {
         if (isSupervisor) return true;
         const asg = assignmentByCustomer.get(c.id);
         if (!asg || !asg.assigned_to) return true;
+        // Só "Em Atendimento" (active) é exclusivo do atendente responsável.
+        if (asg.stage !== 'active') return true;
         return asg.assigned_to === meId;
       })
       .map((c: any) => ({

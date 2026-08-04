@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { PrioritySelect } from './PrioritySelect';
 import { TicketStatusSelect } from './TicketStatusSelect';
 import { TagPicker } from './TagPicker';
+import { FunnelSelect } from './FunnelSelect';
 import { SlaTimer } from './SlaTimer';
 import { Button } from '@/components/ui/button';
 import { Bot, UserCog, Sparkles, Eye, CheckCircle2 } from 'lucide-react';
@@ -21,6 +22,9 @@ interface CustomerRow {
   sla_next_response_due_at: string | null;
   sla_resolution_due_at: string | null;
   ai_handoff: any;
+  sub_company_id: string | null;
+  pipeline_id: string | null;
+  stage_id: string | null;
 }
 
 interface Props {
@@ -39,17 +43,33 @@ export function CollaborationBar({ customerId, onOpenTransfer, onClose, isSuperv
     const { data } = await supabase
       .from('customers')
       .select(
-        'id, owner_id, assigned_to, queue_id, priority, ticket_status, tags, sla_first_response_due_at, sla_next_response_due_at, sla_resolution_due_at, ai_handoff',
+        'id, owner_id, sub_company_id, assigned_to, queue_id, priority, ticket_status, tags, pipeline_id, stage_id, sla_first_response_due_at, sla_next_response_due_at, sla_resolution_due_at, ai_handoff',
       )
       .eq('id', customerId)
       .maybeSingle();
     if (data) {
-      setRow(data as any);
-      if ((data as any).assigned_to) {
+      // Fallback: se `customers.assigned_to` estiver vazio (transferências
+      // antigas gravaram apenas em lead_assignments), resolve o atendente
+      // pelo assignment aberto — assim o header sempre mostra quem está
+      // com o Lead/Cliente.
+      let assignedTo: string | null = (data as any).assigned_to || null;
+      if (!assignedTo) {
+        const { data: asg } = await supabase
+          .from('lead_assignments')
+          .select('assigned_to, stage, assigned_at')
+          .eq('customer_id', customerId)
+          .neq('stage', 'closed')
+          .order('assigned_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        assignedTo = (asg as any)?.assigned_to || null;
+      }
+      setRow({ ...(data as any), assigned_to: assignedTo });
+      if (assignedTo) {
         const { data: p } = await supabase
           .from('profiles')
           .select('display_name, email')
-          .eq('user_id', (data as any).assigned_to)
+          .eq('user_id', assignedTo)
           .maybeSingle();
         setAssigneeName(p?.display_name || p?.email || '');
       } else setAssigneeName('');
@@ -134,13 +154,20 @@ export function CollaborationBar({ customerId, onOpenTransfer, onClose, isSuperv
         </div>
         <TagPicker ownerId={row.owner_id} selected={row.tags || []} onChange={(ids) => update({ tags: ids })} />
 
-        {row.assigned_to && (
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-background border text-[11px]">
-            <UserCog className="w-3 h-3 text-primary" />
-            <span className="text-muted-foreground">Atendente:</span>
-            <span className="font-medium">{assigneeName || '—'}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-background border text-[11px]">
+          <UserCog className="w-3 h-3 text-primary" />
+          <span className="text-muted-foreground">Atendente:</span>
+          <span className="font-medium">{assigneeName || 'Sem atendente'}</span>
+        </div>
+
+        <FunnelSelect
+          customerId={customerId}
+          ownerId={row.owner_id}
+          subCompanyId={row.sub_company_id}
+          pipelineId={row.pipeline_id}
+          stageId={row.stage_id}
+          onChanged={(patch) => setRow((r) => (r ? { ...r, ...patch } as any : r))}
+        />
 
         <SlaTimer label="1ª resposta" dueAt={row.sla_first_response_due_at} totalMinutes={15} />
         <SlaTimer label="Próxima" dueAt={row.sla_next_response_due_at} totalMinutes={30} />
