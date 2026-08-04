@@ -6,7 +6,7 @@ import {
   Camera, ThumbsUp, Briefcase, MessageCircle, Globe, Bot, UserCog, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Settings,
   Database, Activity, ShieldAlert, Wifi, WifiOff, Terminal, ChevronDown, ChevronUp, History as HistoryIcon, Bug, Play, Share2,
   FileDown, Filter, Calendar, Clock, Loader2, X, AlertTriangle, Check, SmilePlus, Reply, Pencil, Trash2, Forward as ForwardIcon,
-  Pin, PinOff, Star, StarOff, SearchCode, ExternalLink
+  Pin, PinOff, Star, StarOff, SearchCode, ExternalLink, GitBranch
 } from 'lucide-react';
 import {
   Popover,
@@ -31,6 +31,7 @@ import { toast as sonnerToast } from 'sonner';
 
 import { supabase } from '@/integrations/supabase/client';
 import { insertChatMessageDedup } from '@/lib/dedupChatInsert';
+import { STATUS_META as TICKET_STATUS_META } from '@/components/chat/TicketStatusSelect';
 import { startRealtimeTimer } from '@/lib/perfTelemetry';
 import {
   getCachedConvs, setCachedConvs,
@@ -321,6 +322,26 @@ export default function ChatPage() {
   const [contactsOpen, setContactsOpen] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
   const { isSupervisor, userId: currentUserId } = useIsSupervisor();
+
+  // Carrega os rótulos (atendentes, funis e etapas) usados nos badges da
+  // aba de conversas. Atualizado quando o escopo (empresa) muda.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [{ data: profs }, { data: pipes }, { data: stgs }] = await Promise.all([
+        supabase.from('profiles').select('user_id, display_name, email'),
+        supabase.from('pipelines').select('id, name'),
+        supabase.from('pipeline_stages').select('id, name'),
+      ]);
+      if (cancelled) return;
+      setDirectory({
+        agents: Object.fromEntries((profs || []).map((p: any) => [p.user_id, p.display_name || p.email || ''])),
+        pipelines: Object.fromEntries((pipes || []).map((p: any) => [p.id, p.name])),
+        stages: Object.fromEntries((stgs || []).map((p: any) => [p.id, p.name])),
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [currentUserId]);
   const { access, accessLoading, reloadAccess } = useAuth();
   const { isOwner } = usePlatformOwner();
   const activeOwnerId = getActiveOwnerId(access?.owner_id, null);
