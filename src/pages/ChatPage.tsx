@@ -1119,6 +1119,9 @@ export default function ChatPage() {
             id: c.id,
             name: c.name || c.phone || 'Cliente sem nome',
             msg: lastMsg?.content || 'Sem mensagens ainda',
+            revoked: !!lastMsg?.metadata?.revoked,
+
+
             time: lastMsg
               ? new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               : new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -2746,7 +2749,12 @@ export default function ChatPage() {
                       <MoveToFlowMenu customerId={c.id} ownerId={(c as any).owner_id} />
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">{c.msg}</p>
+                  <p className={`text-xs text-muted-foreground truncate ${(c as any).revoked ? "italic opacity-60" : ""}`}>
+                    {(c as any).revoked && "🚫 "}
+                    {c.msg}
+                  </p>
+
+
 
                   <div className="flex items-center gap-1 mt-1 flex-wrap">
                     {(() => {

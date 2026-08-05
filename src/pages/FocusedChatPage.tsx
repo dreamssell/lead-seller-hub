@@ -16,6 +16,8 @@ import { useSearchParams } from 'react-router-dom';
 import {
   MessageCircle, Search, Info, Images, Pin, Star, StickyNote,
   Bot, Clock8, X, Minimize2, Wifi, WifiOff, CheckCheck, Check, Loader2, Eye, Contact2, Plus, Inbox, ArrowLeftRight, Phone, CheckCircle2,
+  GitBranch, UserCog,
+
 } from 'lucide-react';
 import { useVoip } from '@/contexts/VoipContext';
 import { useWavoipWebphone } from '@/contexts/WavoipWebphoneContext';
@@ -64,6 +66,9 @@ import { AttendanceFlowDialog } from '@/components/chat/AttendanceFlowDialog';
 import { MoveToFlowMenu } from '@/components/chat/MoveToFlowMenu';
 import { TransferConversationDialog } from '@/components/chat/TransferConversationDialog';
 import { closeConversation } from '@/lib/attendanceFlow';
+import { CollaborationBar } from '@/components/chat/CollaborationBar';
+import { STATUS_META as TICKET_STATUS_META } from '@/components/chat/TicketStatusSelect';
+
 
 import { getProviderAdapter } from '@/components/whatsapp/adapters';
 import type { WhatsAppConnection } from '@/components/whatsapp/types';
@@ -84,7 +89,12 @@ interface Conversation {
   last_message: string;
   last_at: string | null;
   unread: number;
+  ticket_status?: string;
+  pipeline_id?: string | null;
+  stage_id?: string | null;
+  assigned_to?: string | null;
 }
+
 
 interface Msg {
   id: string;
@@ -150,6 +160,12 @@ export default function FocusedChatPage() {
   const [connOnline, setConnOnline] = useState(false);
   const [composerText, setComposerText] = useState('');
   const [tool, setTool] = useState<Tool>(initialTool);
+  const [directory, setDirectory] = useState<{
+    agents: Record<string, string>;
+    pipelines: Record<string, string>;
+    stages: Record<string, string>;
+  }>({ agents: {}, pipelines: {}, stages: {} });
+
   const [olderLoading, setOlderLoading] = useState(false);
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -338,7 +354,28 @@ export default function FocusedChatPage() {
     return () => { cancelled = true; };
   }, []);
 
+  // Carrega os rótulos (atendentes, funis e etapas) usados nos badges da
+  // aba de conversas.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [{ data: profs }, { data: pipes }, { data: stgs }] = await Promise.all([
+        supabase.from('profiles').select('user_id, display_name, email'),
+        supabase.from('pipelines').select('id, name'),
+        supabase.from('pipeline_stages').select('id, name'),
+      ]);
+      if (cancelled) return;
+      setDirectory({
+        agents: Object.fromEntries((profs || []).map((p: any) => [p.user_id, p.display_name || p.email || ''])),
+        pipelines: Object.fromEntries((pipes || []).map((p: any) => [p.id, p.name])),
+        stages: Object.fromEntries((stgs || []).map((p: any) => [p.id, p.name])),
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
   // Load conversation list (customers with last message).
+
   const loadConvs = useCallback(async () => {
     const reads = getAllLastReads(user?.id);
     // Hidratação instantânea a partir do cache local (IndexedDB).
@@ -353,7 +390,7 @@ export default function FocusedChatPage() {
     const currentLimit = convLimitRef.current || CONV_PAGE_SIZE;
     const { data: customersRaw } = await supabase
       .from('customers')
-      .select('id,name,phone,avatar_url,presence,is_archived')
+      .select('id,name,phone,avatar_url,presence,is_archived,ticket_status,pipeline_id,stage_id,assigned_to')
       .eq('channel', 'whatsapp')
       .order('updated_at', { ascending: false })
       .limit(currentLimit + 1);
@@ -394,13 +431,18 @@ export default function FocusedChatPage() {
     const list: Conversation[] = customers
       .filter((c: any) => !c.is_archived)
       .filter((c: any) => {
+        // Regras de atendimento (Nível Atendente):
+        //  - Distribuição (auto), Aguardando (waiting) e Finalizados (closed)
+        //    são visíveis para todos.
+        //  - "Em Atendimento" (active) fica exclusivo de quem está com o
+        //    Lead/Cliente até encerrar; supervisão/CEO vê tudo.
         if (isSupervisor) return true;
         const asg = assignmentByCustomer.get(c.id);
         if (!asg || !asg.assigned_to) return true;
-        // Só "Em Atendimento" (active) é exclusivo do atendente responsável.
         if (asg.stage !== 'active') return true;
         return asg.assigned_to === meId;
       })
+
       .map((c: any) => ({
         id: c.id,
         name: c.name || c.phone || 'Sem nome',
@@ -410,7 +452,12 @@ export default function FocusedChatPage() {
         last_message: lastByCustomer.get(c.id)?.content?.slice(0, 80) || 'Sem mensagem ainda',
         last_at: lastByCustomer.get(c.id)?.created_at || null,
         unread: computeUnread(lastByCustomer.get(c.id)?.created_at || null, reads[c.id] || null),
+        ticket_status: c.ticket_status,
+        pipeline_id: c.pipeline_id,
+        stage_id: c.stage_id,
+        assigned_to: c.assigned_to || assignmentByCustomer.get(c.id)?.assigned_to || null,
       }))
+
       .sort((a, b) => (b.last_at || '').localeCompare(a.last_at || ''));
     setConvs(list);
     setLoading(false);
@@ -550,7 +597,20 @@ export default function FocusedChatPage() {
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'lead_assignments' },
         () => { const _t = startRealtimeTimer('focus_conversations', 'lead_assignments.change'); const _before = convsRef.current.length; loadConvs().then(() => _t.done(_before, convsRef.current.length)); })
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'customers' },
+        (payload) => {
+          const updated = payload.new as any;
+          setConvs(prev => prev.map(c => c.id === updated.id ? { 
+            ...c, 
+            ticket_status: updated.ticket_status,
+            pipeline_id: updated.pipeline_id,
+            stage_id: updated.stage_id,
+            assigned_to: updated.assigned_to || c.assigned_to
+          } : c));
+        })
       .subscribe();
+
     return () => { supabase.removeChannel(channel); };
   }, [user, selected, readerInfo]);
 
@@ -1019,6 +1079,47 @@ export default function FocusedChatPage() {
                             <Badge className="h-4 min-w-4 px-1 text-[10px] bg-emerald-500 text-white">{c.unread}</Badge>
                           )}
                         </div>
+
+                        <div className="flex items-center gap-1 mt-1 flex-wrap">
+                          {(() => {
+                            // Status do atendimento real
+                            const meta = TICKET_STATUS_META[c.ticket_status || 'open'] || TICKET_STATUS_META.open;
+                            const Icon = meta.icon;
+                            return (
+                              <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 gap-0.5">
+                                <Icon className={`w-2.5 h-2.5 ${meta.color}`} />
+                                {meta.label}
+                              </Badge>
+                            );
+                          })()}
+                          {(() => {
+                            // Nome do atendente
+                            const uid = c.assigned_to;
+                            const full = uid ? directory.agents[uid] : '';
+                            const short = full ? full.split(/[\s@]/)[0] : '';
+                            return (
+                              <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 gap-0.5" title={full || 'Sem atendente'}>
+                                <UserCog className="w-2.5 h-2.5" />
+                                {short || 'Sem atendente'}
+                              </Badge>
+                            );
+                          })()}
+                          {(() => {
+                            // Funil e etapa
+                            const pid = c.pipeline_id;
+                            if (!pid) return null;
+                            const pname = directory.pipelines[pid];
+                            if (!pname) return null;
+                            const sname = c.stage_id ? directory.stages[c.stage_id] : '';
+                            return (
+                              <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 gap-0.5 border-primary/40 text-primary" title={sname ? `${pname} · ${sname}` : pname}>
+                                <GitBranch className="w-2.5 h-2.5" />
+                                {sname ? `${pname} · ${sname}` : pname}
+                              </Badge>
+                            );
+                          })()}
+                        </div>
+
                       </div>
                     </div>
                   ))}
@@ -1362,9 +1463,13 @@ export default function FocusedChatPage() {
                                     onOpen={mediaType === 'image' ? (u) => setLightboxUrl(u) : undefined}
                                   />
                                 )}
-                                {m.content && m.content !== '[mídia]' && (
-                                  <div>{renderWhatsAppText(m.content || '')}</div>
-                                )}
+                                 {m.content && m.content !== '[mídia]' && (
+                                   <div className={cn(meta.revoked && "italic text-muted-foreground/60")}>
+                                     {meta.revoked && "🚫 Mensagem apagada · "}
+                                     {renderWhatsAppText(m.content || '')}
+                                   </div>
+                                 )}
+
                                 <div className={cn(
                                   'flex items-center gap-1 mt-1 text-[10px] opacity-70',
                                   isMe ? 'justify-end' : 'justify-start',
@@ -1385,8 +1490,33 @@ export default function FocusedChatPage() {
                   )}
                 </div>
 
-                {/* Composer */}
+                {/* Collaboration Bar & Composer */}
+                <CollaborationBar
+                  customerId={selectedConv.id}
+                  onOpenTransfer={() => setTransferOpen(true)}
+                  onClose={async () => {
+                    if (!window.confirm('Encerrar este atendimento? A conversa será enviada para Finalizados.')) return;
+                    try {
+                      const { data: u } = await supabase.auth.getUser();
+                      const meta = (u.user?.user_metadata || {}) as any;
+                      const actorName = meta.full_name || meta.name || u.user?.email || null;
+                      const ownerId = (selectedConv as any)?.ownerId || u.user?.id || null;
+                      if (!ownerId) { sonnerToast.error('Sem contexto de empresa'); return; }
+                      await closeConversation({
+                        customerId: selectedConv.id,
+                        ownerId,
+                        actorId: u.user?.id ?? null,
+                        actorName,
+                      });
+                      sonnerToast.success('Atendimento encerrado');
+                      setSelected(null);
+                    } catch (e: any) { sonnerToast.error(e?.message || 'Falha ao encerrar'); }
+                  }}
+                  isSupervisor={isSupervisor}
+                  currentUserId={user?.id || null}
+                />
                 <div className="border-t border-border bg-card/40 p-3">
+
                   <ChatComposer
                     conversationId={selectedConv.id}
                     text={composerText}
