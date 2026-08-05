@@ -1119,6 +1119,8 @@ export default function ChatPage() {
             id: c.id,
             name: c.name || c.phone || 'Cliente sem nome',
             msg: lastMsg?.content || 'Sem mensagens ainda',
+            revoked: !!lastMsg?.metadata?.revoked,
+
             time: lastMsg
               ? new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               : new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
