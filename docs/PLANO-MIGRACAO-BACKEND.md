@@ -2,7 +2,7 @@
 
 Este documento registra o status e o passo a passo da migração da infraestrutura de backend da Lead Seller para a sua conta pessoal do Supabase.
 
-## 🚀 Status Atual da Execução: PASSO 4 EM ANDAMENTO
+## 🚀 Status Atual da Execução: PASSO 3 PENDENTE (AGUARDANDO SECRETS)
 
 ### ✅ Passo 1: Preparação do Ambiente (CONCLUÍDO)
 - **Project ID:** `svonhzqnuqoagknmjkoo`
@@ -17,10 +17,10 @@ Este documento registra o status e o passo a passo da migração da infraestrutu
 - **Estratégia:** Exportar dados da Lovable Cloud e importar no novo banco.
 - **Foco:** Preservar todo o histórico da **Mult Seguros**.
 
-### 🔄 Passo 4: Deploy das Edge Functions (EM EXECUÇÃO)
-- **Funções Detectadas:** 36 funções.
-- **Status:** Iniciando deploy via CLI para o projeto `svonhzqnuqoagknmjkoo`.
-- **Ação:** Preparando o ambiente local para `supabase deploy`.
+### ✅ Passo 4: Deploy das Edge Functions (CONCLUÍDO)
+- **Ação:** Deploy realizado via CLI para o projeto `svonhzqnuqoagknmjkoo`.
+- **Status:** Todas as 36 funções foram publicadas com sucesso.
+- **Próxima Ação Técnica:** Configurar os Secrets (tokens de API) nas configurações do novo projeto.
 
 ---
 
@@ -31,7 +31,7 @@ Este documento registra o status e o passo a passo da migração da infraestrutu
 ## 🛠️ Comandos Executados por Mim
 1. Validação de conectividade com o novo banco de dados.
 2. Execução completa de todas as migrações SQL no novo ambiente.
-3. Mapeamento e preparação das Edge Functions para deploy.
+3. Deploy bem-sucedido das 36 Edge Functions.
 
 ---
 
