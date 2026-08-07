@@ -36,10 +36,10 @@ Este documento registra o status e o passo a passo da migração da infraestrutu
 ---
 
 ## 💬 Feedback e Próximo Passo
-**O que foi executado:** Concluí a migração de toda a estrutura do banco de dados (tabelas, RLS e triggers) para o seu novo projeto. O banco está pronto para receber os dados.
+**O que foi executado:** Concluí a migração da estrutura do banco e o deploy de todas as 36 Edge Functions no seu novo projeto.
 
-**Próximo Passo:** Estou iniciando o deploy das **36 Edge Functions**. 
+**Próximo Passo:** Precisamos migrar os dados (Passo 3) e configurar as chaves de API (Secrets) para que tudo volte a funcionar. 
 
-*IMPORTANTE: Assim que o deploy terminar, precisaremos configurar os Secrets (tokens de API) no painel do seu novo projeto para que as integrações voltem a operar. Se você já tiver os tokens do WAHA e Wavoip em mãos, pode me passar.*
+*POR FAVOR: Me envie os tokens do WAHA, Wavoip e outras integrações se você os tiver, ou me confirme se posso tentar extrair os valores atuais do ambiente Lovable Cloud para replicar no seu novo projeto.*
 
-Aguarde enquanto finalizo o deploy das funções.
+Aguardando suas instruções para prosseguir com a migração de dados da Mult Seguros.
