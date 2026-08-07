@@ -2,25 +2,25 @@
 
 Este documento registra o status e o passo a passo da migração da infraestrutura de backend da Lead Seller para a sua conta pessoal do Supabase.
 
-## 🚀 Status Atual da Execução: PASSO 2 EM ANDAMENTO
+## 🚀 Status Atual da Execução: PASSO 4 EM ANDAMENTO
 
 ### ✅ Passo 1: Preparação do Ambiente (CONCLUÍDO)
 - **Project ID:** `svonhzqnuqoagknmjkoo`
 - **Region:** `sa-east-1` (São Paulo)
 - **Status:** Credenciais recebidas e conexão via `psql` validada com sucesso.
 
-### 🔄 Passo 2: Migração da Estrutura (EM EXECUÇÃO)
+### ✅ Passo 2: Migração da Estrutura (CONCLUÍDO)
 - **Ação:** Aplicação dos scripts SQL de `supabase/migrations/` no novo banco.
-- **Progresso:** As tabelas principais (ai_agents, profiles, customers, leads, sub_companies, etc) já foram criadas.
-- **Próxima Ação Técnica:** Finalizar a sincronização de funções SQL e triggers que podem ter dependências de ordem.
+- **Status:** Todas as tabelas, funções, triggers e políticas de RLS foram aplicadas no projeto `svonhzqnuqoagknmjkoo`.
 
 ### ⏳ Passo 3: Migração de Dados (PENDENTE)
 - **Estratégia:** Exportar dados da Lovable Cloud e importar no novo banco.
 - **Foco:** Preservar todo o histórico da **Mult Seguros**.
 
-### ⏳ Passo 4: Deploy das Edge Functions (PRÓXIMO)
-- **Funções Detectadas:** 36 funções (WAHA, Wavoip, CRM, etc).
-- **Ação:** Realizar o deploy via CLI para o novo Project ID.
+### 🔄 Passo 4: Deploy das Edge Functions (EM EXECUÇÃO)
+- **Funções Detectadas:** 36 funções.
+- **Status:** Iniciando deploy via CLI para o projeto `svonhzqnuqoagknmjkoo`.
+- **Ação:** Preparando o ambiente local para `supabase deploy`.
 
 ---
 
@@ -30,16 +30,16 @@ Este documento registra o status e o passo a passo da migração da infraestrutu
 
 ## 🛠️ Comandos Executados por Mim
 1. Validação de conectividade com o novo banco de dados.
-2. Início da execução sequencial das migrações SQL.
-3. Mapeamento das Edge Functions locais.
+2. Execução completa de todas as migrações SQL no novo ambiente.
+3. Mapeamento e preparação das Edge Functions para deploy.
 
 ---
 
 ## 💬 Feedback e Próximo Passo
-**O que foi executado:** Já estabeleci a conexão com seu novo banco e comecei a "subir" as tabelas. O esquema básico já está lá.
+**O que foi executado:** Concluí a migração de toda a estrutura do banco de dados (tabelas, RLS e triggers) para o seu novo projeto. O banco está pronto para receber os dados.
 
-**Próximo Passo:** Vou preparar o deploy das 36 **Edge Functions** para que suas automações e o WhatsApp continuem funcionando. 
+**Próximo Passo:** Estou iniciando o deploy das **36 Edge Functions**. 
 
-*Atenção: Para o passo 4, precisarei configurar os "Secrets" (tokens de API do WAHA, Wavoip, etc) no seu novo painel. Se você tiver essas chaves guardadas, me avise, senão teremos que coletá-las das configurações atuais.*
+*IMPORTANTE: Assim que o deploy terminar, precisaremos configurar os Secrets (tokens de API) no painel do seu novo projeto para que as integrações voltem a operar. Se você já tiver os tokens do WAHA e Wavoip em mãos, pode me passar.*
 
-Deseja que eu prossiga com o deploy das Edge Functions agora?
+Aguarde enquanto finalizo o deploy das funções.
