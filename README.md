@@ -34,3 +34,6 @@ Lead Seller is an omnichannel customer service platform built with a modern tech
 - **Monitoring**: Automated error reporting and logging system
 - **Testing**: Vitest for unit tests and Playwright for E2E flows
 - **Performance**: Image optimization (HEIC conversion) and virtualized chat lists
+
+## Documentação de Suporte
+- [Plano de Migração de Backend](docs/PLANO-MIGRACAO-BACKEND.md) - Guia passo a passo para migrar do Lovable Cloud para Supabase Próprio.
