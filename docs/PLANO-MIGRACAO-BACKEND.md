@@ -2,7 +2,8 @@
 
 Este documento registra o status e o passo a passo da migração da infraestrutura de backend da Lead Seller para a sua conta pessoal do Supabase.
 
-## 🚀 Status Atual da Execução: PASSO 3 PENDENTE (AGUARDANDO SECRETS)
+## 🚀 Status Atual da Execução: PASSO 3 EM ANDAMENTO (MIGRAÇÃO DE DADOS)
+
 
 ### ✅ Passo 1: Preparação do Ambiente (CONCLUÍDO)
 - **Project ID:** `svonhzqnuqoagknmjkoo`
@@ -40,6 +41,4 @@ Este documento registra o status e o passo a passo da migração da infraestrutu
 
 **Próximo Passo:** Precisamos migrar os dados (Passo 3) e configurar as chaves de API (Secrets) para que tudo volte a funcionar. 
 
-*POR FAVOR: Me envie os tokens do WAHA, Wavoip e outras integrações se você os tiver, ou me confirme se posso tentar extrair os valores atuais do ambiente Lovable Cloud para replicar no seu novo projeto.*
-
-Aguardando suas instruções para prosseguir com a migração de dados da Mult Seguros.
+*STATUS: Chaves extraídas e salvas em `SECRETS.md`. Replicando secrets no novo projeto e preparando dump da Mult Seguros.*
