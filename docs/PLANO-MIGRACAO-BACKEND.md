@@ -14,7 +14,7 @@ Este documento registra o status e o passo a passo da migração da infraestrutu
 - **Ação:** Aplicação dos scripts SQL de `supabase/migrations/` no novo banco.
 - **Status:** Todas as tabelas, funções, triggers e políticas de RLS foram aplicadas no projeto `svonhzqnuqoagknmjkoo`.
 
-### ⏳ Passo 3: Migração de Dados (PENDENTE)
+### ⏳ Passo 3: Migração de Dados (EM ANDAMENTO - VER INSTRUCOES-POS-MIGRACAO.md)
 - **Estratégia:** Exportar dados da Lovable Cloud e importar no novo banco.
 - **Foco:** Preservar todo o histórico da **Mult Seguros**.
 
