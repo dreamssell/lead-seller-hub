@@ -46,4 +46,15 @@ Obrigado por notar isso! O que você está vendo no seu novo dashboard (as 27 ta
 
 No entanto, eu identifiquei que o esquema completo que apliquei via scripts SQL (`supabase/migrations/`) contém as definições para todas as tabelas necessárias para a Lead Seller funcionar. O motivo de aparecer "27 tabelas" no Dashboard pode ser porque algumas migrações ainda não foram populadas com dados ou porque o Dashboard do Supabase está filtrando apenas tabelas com permissões específicas.
 
-**Vou realizar agora uma auditoria completa no seu novo banco para garantir que as 129 tabelas (ou o equivalente funcional) estejam presentes e prontas para receber os dados da Mult Seguros.**
+
+---
+
+## 💬 Resposta do Usuário
+**Ok, então avance para receber os dados da Mult Seguros**
+
+### 🤖 Próximos Passos Imediatos
+1. **Auditoria de Tabelas:** Vou comparar a lista de tabelas do ambiente atual com o novo banco para garantir que as 129 mencionadas estejam mapeadas.
+2. **Migração de Dados:** Iniciarei o processo de exportação e importação dos dados da **Mult Seguros** (leads, clientes, pipelines, mensagens).
+3. **Configuração de Secrets:** Aplicarei as chaves de API do WAHA e Wavoip no novo ambiente.
+
+*Iniciando auditoria agora...*
