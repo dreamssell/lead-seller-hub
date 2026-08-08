@@ -63,3 +63,6 @@ No entanto, eu identifiquei que o esquema completo que apliquei via scripts SQL 
 
 ## 💬 Pergunta do Usuário
 **terminou a auditoria?**
+
+**Precioso que você seja profissional e aja com mais clareza.**
+**Não consigo acompanhar em que etapa estamos nesse processo migratório. Estou analisando os arquivos no Supabase Novo e nada foi migrado pra dentro das tabelas e pastas criadas**
