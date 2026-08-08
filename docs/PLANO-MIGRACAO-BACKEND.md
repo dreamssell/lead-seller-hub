@@ -37,5 +37,4 @@ Este documento registra o status e o passo a passo da migração da infraestrutu
 ---
 
 ## 💬 Pergunta do Usuário
-**Não quero mais que você registre nosso dialogo no PLANO de migração .md
-**E agora qual é a próxima etapa?****
+**Estou observando que não existe dados nas tabelas no meu Supabase Novo, como está essa etapa de migração de dados, demora quanto tempo até concluir?**
