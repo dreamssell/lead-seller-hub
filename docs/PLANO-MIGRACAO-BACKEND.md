@@ -58,3 +58,8 @@ No entanto, eu identifiquei que o esquema completo que apliquei via scripts SQL 
 3. **Configuração de Secrets:** Aplicarei as chaves de API do WAHA e Wavoip no novo ambiente.
 
 *Iniciando auditoria agora...*
+
+---
+
+## 💬 Pergunta do Usuário
+**terminou a auditoria?**
