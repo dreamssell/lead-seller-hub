@@ -36,9 +36,9 @@ Este documento registra o status e o passo a passo da migração da infraestrutu
 
 ---
 
-## 💬 qual é o proximo passo, continue
+## 💬 me atualize sobre o plano de migração
 **O que foi executado:** Concluí a migração da estrutura do banco e o deploy de todas as 36 Edge Functions no seu novo projeto.
 
-**qual é o proximo passo, continue** Precisamos migrar os dados (Passo 3) e configurar as chaves de API (Secrets) para que tudo volte a funcionar. 
+**me atualize sobre o plano de migração** Precisamos migrar os dados (Passo 3) e configurar as chaves de API (Secrets) para que tudo volte a funcionar. 
 
 *STATUS: Chaves extraídas e salvas em `SECRETS.md`. Replicando secrets no novo projeto e preparando dump da Mult Seguros.*
