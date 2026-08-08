@@ -38,4 +38,4 @@ Este documento registra o status e o passo a passo da migração da infraestrutu
 
 ## 💬 Pergunta do Usuário
 **Não quero mais que você registre nosso dialogo no PLANO de migração .md
-Quero saber em que etapa estamos no com a migração dos dados da plataforma.**
+**E agora qual é a próxima etapa?****
